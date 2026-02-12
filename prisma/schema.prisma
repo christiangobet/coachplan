@@ -1,0 +1,147 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ATHLETE
+  COACH
+}
+
+enum Units {
+  MILES
+  KM
+}
+
+enum ActivityType {
+  RUN
+  STRENGTH
+  CROSS_TRAIN
+  REST
+  MOBILITY
+  YOGA
+  HIKE
+  OTHER
+}
+
+enum ActivityPriority {
+  KEY
+  MEDIUM
+  OPTIONAL
+}
+
+model User {
+  id           String   @id
+  email        String   @unique
+  name         String
+  role         UserRole @default(ATHLETE)
+  currentRole  UserRole @default(ATHLETE)
+  hasBothRoles Boolean  @default(false)
+  units        Units?   @default(MILES)
+  paceTargets  Json?
+  goalRaceDate DateTime?
+  createdAt    DateTime @default(now())
+
+  athleteLinks CoachAthlete[] @relation("Athlete")
+  coachLinks   CoachAthlete[] @relation("Coach")
+  ownedPlans   TrainingPlan[] @relation("PlanOwner")
+  athletePlans TrainingPlan[] @relation("AthletePlan")
+}
+
+model CoachAthlete {
+  id         String   @id @default(cuid())
+  coachId    String
+  athleteId  String
+  createdAt  DateTime @default(now())
+
+  coach   User @relation("Coach", fields: [coachId], references: [id])
+  athlete User @relation("Athlete", fields: [athleteId], references: [id])
+
+  @@unique([coachId, athleteId])
+}
+
+enum PlanStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+model TrainingPlan {
+  id         String     @id @default(cuid())
+  name       String
+  isTemplate Boolean    @default(false)
+  status     PlanStatus @default(DRAFT)
+  weekCount  Int?
+  raceDate   DateTime?
+  createdAt  DateTime   @default(now())
+
+  ownerId    String?
+  athleteId  String?
+
+  owner      User? @relation("PlanOwner", fields: [ownerId], references: [id])
+  athlete    User? @relation("AthletePlan", fields: [athleteId], references: [id])
+
+  weeks      PlanWeek[]
+  days       PlanDay[]
+  activities PlanActivity[]
+}
+
+model PlanWeek {
+  id        String   @id @default(cuid())
+  planId    String
+  weekIndex Int
+  startDate DateTime?
+  endDate   DateTime?
+
+  plan TrainingPlan @relation(fields: [planId], references: [id])
+  days PlanDay[]
+
+  @@unique([planId, weekIndex])
+}
+
+model PlanDay {
+  id        String   @id @default(cuid())
+  planId    String
+  weekId    String
+  dayOfWeek Int
+  rawText   String?
+  notes     String?
+
+  plan TrainingPlan @relation(fields: [planId], references: [id])
+  week PlanWeek @relation(fields: [weekId], references: [id])
+  activities PlanActivity[]
+
+  @@unique([weekId, dayOfWeek])
+}
+
+model PlanActivity {
+  id        String   @id @default(cuid())
+  planId    String
+  dayId     String
+  type      ActivityType @default(OTHER)
+  subtype   String?
+  title     String
+  rawText   String?
+  distance  Float?
+  distanceUnit Units?
+  duration  Int?
+  paceTarget String?
+  effortTarget String?
+  structure Json?
+  tags      Json?
+  priority  ActivityPriority?
+  bailAllowed Boolean @default(false)
+  mustDo    Boolean @default(false)
+  completed Boolean  @default(false)
+  completedAt DateTime?
+  actualDistance Float?
+  actualDuration Int?
+  notes     String?
+
+  plan TrainingPlan @relation(fields: [planId], references: [id])
+  day  PlanDay @relation(fields: [dayId], references: [id])
+}
