@@ -275,15 +275,13 @@ export default async function DashboardPage() {
               <div className="dash-hero-detail">{todayActivity.rawText}</div>
             )}
             <div className="dash-hero-actions">
-              {todayActivity && !isRestDay ? (
+              {todayActivity ? (
                 <>
                   <CompleteWorkoutButton activityId={todayActivity.id} />
                   <a className="dash-btn-secondary" href={`/plans/${activePlan.id}`}>
-                    Log Activity
+                    View Plan
                   </a>
                 </>
-              ) : todayActivity ? (
-                <CompleteWorkoutButton activityId={todayActivity.id} />
               ) : (
                 <a className="dash-btn-secondary" href={`/plans/${activePlan.id}`}>
                   View Plan
