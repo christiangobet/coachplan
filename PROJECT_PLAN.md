@@ -1,167 +1,206 @@
 # CoachPlan — Project Plan
 
-> **Last updated:** 2025-02-12
-> **IMPORTANT:** Claude must update this file at the end of every session — refresh progress %, checklist status, and next actions.
+> **Last updated:** 2026-02-13 (Strava day-by-day import workflow + calendar day details + manual day completion + race edit flow moved to Calendar)
+> **IMPORTANT:** Codex must update this file at the end of every session (progress %, status labels, and next actions).
 
 ---
 
-## A. General Work Plan
+## A. Product Goal
 
-CoachPlan is a training plan management app for endurance athletes and coaches. The goal is to deliver a polished, Strava-inspired experience where users can upload PDF training plans, align them to race dates, track daily workouts, and monitor progress over time.
+CoachPlan is a training-plan execution platform for athletes, coaches, and admins.  
+Primary objective: convert plan templates/PDFs into date-aligned training plans, then execute daily with clear actual-vs-planned tracking.
 
-### Core Value Proposition
-1. **Upload & Parse** — Upload a PDF training plan and let AI extract structured weeks/days/activities
-2. **Align to Race Day** — Automatically align week numbering so the plan peaks on race weekend
-3. **Track & Complete** — Daily dashboard showing today's workout, upcoming sessions, and completion tracking
-4. **Coach Connection** — Coaches can create templates, assign plans, and monitor athlete progress
+### Core User Flows
+1. Upload/import template or PDF plan
+2. Align plan to race date
+3. Execute daily workouts from dashboard/calendar
+4. Sync Strava activities and import actuals into plan logs
+5. Track completion/progress and coach oversight
 
 ### Tech Stack
 - Next.js 16 (App Router) + TypeScript
-- Clerk (auth) + PostgreSQL + Prisma ORM
-- OpenAI API (gpt-4o-mini) for PDF parsing
-- Python 3 + pdfplumber for PDF text extraction
+- Clerk auth + PostgreSQL + Prisma
+- OpenAI parsing (gpt-4o-mini) + Python/pdfplumber for PDFs
 
 ---
 
-## B. Implementation by Stages
+## B. Current System Logic (Authoritative)
+
+### Roles and Access
+- Three environments/roles: `ATHLETE`, `COACH`, `ADMIN`
+- If a user has multiple roles, login/session flow prompts role selection
+- Protected route guards enforce role context (`/dashboard`, `/coach`, `/admin`)
+
+### Plan and Race Model
+- Athlete trains for a specific race/goal using a plan cloned from template/source
+- Template key feature is length/structure; assigned plan carries date alignment
+- Plan weeks/days are aligned from race date backward if explicit week dates are missing
+- Displayed plan name prefers source/template filename when applicable
+
+### Dashboard Logic
+- Today/Next Up are date-aligned to plan window (not just week index)
+- Pre-start mode shows weeks/days until training start
+- Left column includes Strava sync controls
+- Middle includes day-by-day Strava import table
+- Right column status now reflects recent day-level done/pending states
+
+### Strava Sync and Import Logic
+- Strava account is athlete-specific per logged-in user
+- Sync window is now: **plan start date -> today** when using dashboard sync actions
+- Comparison table rows are by day:
+  - Date
+  - Plan activities for date
+  - Strava activities for same date
+  - Row action: `Import` / `Re-import` / `Done`
+- Import behavior:
+  - Matches same-day Strava entries to same-day plan activities
+  - Writes actuals to plan activity log (`completed`, `completedAt`, `actualDistance`, `actualDuration`, `actualPace`, notes)
+  - Uses fallback matching if strict type match is weak but day-level mapping is clear
+- Row status semantics:
+  - `Pending import`: no matched Strava activities yet
+  - `Partial match`: some matched
+  - `Done`: all Strava activities for that day matched
+
+### Calendar Logic
+- Calendar is month view aligned to training dates
+- Clicking a day opens detailed day context in right panel
+- Day details include:
+  - Planned activities
+  - Logged actuals on plan activities
+  - External logs (Strava/etc.) for that day with matched/unmatched info
+- Manual day completion is supported:
+  - User can mark day done/not done from day details
+  - Day done shows green tick in calendar
+  - Day done is reflected in dashboard right-column status
+  - Manual done marker stored in `PlanDay.notes` tag (`[DAY_DONE]`)
+
+### Race Detail Editing Flow
+- Race editing was intentionally moved out of `/plans/[id]`
+- New canonical location: `/calendar` -> Selected Plan card -> `Edit race details`
+- Plan detail page now focuses on workout execution only
+
+---
+
+## C. Implementation Stages
 
 ### Stage 1: Foundation (DONE)
-- [x] Next.js project setup with App Router
-- [x] Clerk authentication (sign-in, sign-up, middleware)
-- [x] PostgreSQL database with Prisma schema
-- [x] User model with ATHLETE/COACH roles
-- [x] Training plan, week, day, activity models
-- [x] PDF upload and parsing pipeline (Python + OpenAI)
-- [x] Plan review page after parsing
-- [x] Basic plan detail view
+- [x] Next.js app + Clerk auth + Prisma/Postgres
+- [x] User/plan/week/day/activity data model
+- [x] Upload + parse pipeline
+- [x] Plan review flow
 
-### Stage 2: UI Redesign — Strava-Inspired (DONE)
-- [x] Global CSS overhaul: Figtree font, orange accent (#fc4c02), light gray background
-- [x] Auth-aware header (different nav for signed-in vs signed-out)
-- [x] Home page redirect for authenticated users
-- [x] Dashboard redesign: hero workout card, weekly dot strip, plan progress, status feed
-- [x] Plans list page: card grid layout with status dots
-- [x] Plan detail: calendar grid view with 7-day layout, color-coded activity bars
-- [x] Activity details: distance, pace, effort, instructions in calendar cells
+### Stage 2: UI Redesign (DONE)
+- [x] Strava-inspired visual system
+- [x] Dashboard redesign
+- [x] Plan list/detail visual redesign
 
-### Stage 3: Workout Tracking & Interaction (IN PROGRESS)
-- [x] Mark as Complete button on dashboard
-- [ ] Mark as Complete from calendar view (per activity)
-- [ ] Log actual distance, duration, pace after completing
-- [ ] Undo completion
-- [ ] Activity detail modal/drawer (click to expand full details)
+### Stage 3: Workout Tracking (DONE)
+- [x] Complete/uncomplete workout
+- [x] Actuals logging (distance/duration/pace)
+- [x] Activity detail modal
 
-### Stage 4: Profile & Settings (PARTIAL)
-- [x] Profile page: name, role, units, race date, pace targets
-- [x] Coach linking from athlete profile
-- [ ] Strava/Garmin integration (OAuth connect)
-- [ ] Auto-import activities from Strava
-- [ ] Profile page UI refresh to match Strava style
+### Stage 4: Profile, Roles, Integrations (IN PROGRESS)
+- [x] Profile configuration
+- [x] Multi-role session selection
+- [x] Strava OAuth account connect/disconnect
+- [x] Strava sync + day-by-day import UX
+- [ ] Garmin integration (blocked on Garmin Health credentials)
 
-### Stage 5: Coach Features (PARTIAL)
-- [x] Coach dashboard: create templates, assign to athletes
-- [ ] Coach dashboard UI refresh to match Strava style
-- [ ] Coach view of athlete progress (overview cards)
-- [ ] Coach notes/feedback on individual activities
-- [ ] Athlete invitation flow (email invite)
+### Stage 5: Coach Features (IN PROGRESS)
+- [x] Coach templates and athlete assignment
+- [x] Coach athlete overview
+- [ ] Coach notes/feedback loop per activity/day
+- [ ] Athlete invite flow
 
-### Stage 6: Upload & Parsing Improvements
-- [ ] Upload page UI refresh to match Strava style
-- [ ] Drag-and-drop PDF upload
-- [ ] Parse progress indicator (real-time status)
-- [ ] Support more PDF formats (multi-sport, custom layouts)
-- [ ] Manual plan creation (no PDF required)
-- [ ] Edit parsed plan before publishing (inline editing)
+### Stage 6: Plan Import/Editing (IN PROGRESS)
+- [x] Source-aware plan naming (filename/template)
+- [x] Race data capture and alignment
+- [x] Review workspace inline editing
+- [ ] Drag-drop upload and parse progress UI
+- [ ] Manual plan builder (no PDF)
 
-### Stage 7: Advanced Features
-- [ ] Calendar page (full month view with all activities)
-- [ ] Progress page (charts: weekly volume, completion rate over time)
-- [ ] Race countdown on dashboard
-- [ ] Weekly email summary
-- [ ] Mobile-responsive polish across all pages
-- [ ] Dark mode toggle
+### Stage 7: Calendar/Progress/Execution (IN PROGRESS)
+- [x] Dedicated month calendar
+- [x] Day details panel with planned + logged activities
+- [x] Manual day completion with cross-view status reflection
+- [x] Progress page v1
+- [ ] Further mobile polish across dashboard/calendar/detail
+
+### Stage 8: Admin & Operations (IN PROGRESS)
+- [x] Admin role + protected admin route/API
+- [x] Admin bootstrap CLI (`npm run make-admin -- <email>`)
+- [x] Admin user management (role changes, deactivate/reactivate)
+- [ ] Plan moderation controls
+- [ ] Admin audit logging
 
 ---
 
-## C. Checklist
-
-### Pages — UI Status
-
-| Page | Route | Status |
-|------|-------|--------|
-| Home (signed out) | `/` | Done |
-| Dashboard | `/dashboard` | Done |
-| Plans list | `/plans` | Done |
-| Plan detail (calendar) | `/plans/[id]` | Done |
-| Plan review | `/plans/[id]/review` | Needs refresh |
-| Upload | `/upload` | Needs refresh |
-| Profile | `/profile` | Needs refresh |
-| Coach dashboard | `/coach` | Needs refresh |
-| Calendar | `/calendar` | Not built |
-| Progress | `/progress` | Not built |
-
-### Core Features
+## D. Feature Checklist (Current)
 
 | Feature | Status |
-|---------|--------|
-| Auth (sign in/up/out) | Done |
-| PDF upload & parse | Done |
-| Plan review & publish | Done |
-| Race date alignment | Done |
-| Dashboard today view | Done |
-| Mark workout complete | Done (dashboard only) |
-| Plan calendar view | Done |
-| Activity details in calendar | Done |
-| Complete from calendar | Not started |
-| Log actuals (distance/time) | Not started |
-| Strava integration | Not started |
-| Coach athlete overview | Not started |
-| Charts / progress page | Not started |
+|---|---|
+| Authentication + role guards | Done |
+| Multi-role session selection | Done |
+| PDF parsing + review + publish | Done |
+| Template -> assigned plan flow | Done |
+| Race-date alignment of plan weeks | Done |
+| Dashboard today/next-up alignment | Done |
+| Activity completion + actuals logging | Done |
+| Calendar month view | Done |
+| Calendar day details (planned + logs) | Done |
+| Manual day completion (calendar) | Done |
+| Day completion reflected on dashboard status | Done |
+| Race details editing in calendar flow | Done |
+| Strava OAuth account management | Done |
+| Strava plan-window sync (start->today) | Done |
+| Strava day-by-day import to workout logs | Done |
+| Garmin integration | Pending |
+| Coach notes/comments | Pending |
+| Plan moderation/admin audit | Pending |
 
 ---
 
-## D. Progress
+## E. Progress
 
-### Overall: **45%**
+### Overall: **86%**
 
 | Area | Progress |
-|------|----------|
-| Auth & User Management | 90% |
-| PDF Upload & Parsing | 85% |
-| Dashboard | 85% |
-| Plan Views | 80% |
-| Workout Tracking | 30% |
-| UI Consistency (Strava style) | 55% |
-| Coach Features | 25% |
-| Profile & Settings | 50% |
-| Strava/Garmin Integration | 0% |
-| Charts & Analytics | 0% |
-| Calendar Page | 0% |
+|---|---|
+| Auth & Role System | 96% |
+| Plan Parsing & Import | 90% |
+| Dashboard Execution UX | 94% |
+| Calendar & Date Alignment | 95% |
+| Workout Logging | 90% |
+| Strava Integration | 78% |
+| Coach Features | 60% |
+| Admin & Operations | 68% |
+| Garmin Integration | 10% |
+| Analytics/Reports | 30% |
 
 ---
 
-## E. Next Actions
+## F. Next Actions (Priority)
 
-Priority order for the next session:
-
-1. **Complete from calendar** — Add a click-to-complete toggle on each activity in the plan calendar view
-2. **Activity detail modal** — Click an activity in the calendar to see full details (rawText, pace, effort, notes) in a slide-out or modal
-3. **Upload page UI refresh** — Align upload page styling with the Strava theme
-4. **Profile page UI refresh** — Restyle profile page to match
-5. **Coach dashboard UI refresh** — Card-based layout, athlete progress overview
-6. **Plan review page refresh** — Match Strava style before publishing flow
+1. **Garmin integration completion**  
+   OAuth, account link, and activity import pipeline (pending partner credentials)
+2. **Strava conflict-resolution UX**  
+   Handle multi-activity mismatch scenarios with explicit manual remap UI
+3. **Background sync jobs**  
+   Scheduled sync, retry behavior, and integration health visibility
+4. **Coach feedback model**  
+   Coach notes/comments per day/activity with athlete read acknowledgments
+5. **Admin moderation tools**  
+   Plan publish/archive/feature controls + audit trail
+6. **Mobile execution polish**  
+   Tighten dashboard/calendar/day-detail interactions on small screens
 
 ---
 
-## F. Session Update Instructions
+## G. Session Update Rules
 
-> **Claude: At the end of every work session, you MUST update this file:**
->
-> 1. Update the "Last updated" date at the top
-> 2. Move completed items from "Next Actions" and check them off in the checklist
-> 3. Update the progress percentages in Section D
-> 4. Update stage status labels (DONE / IN PROGRESS / NOT STARTED)
-> 5. Add any new items discovered during the session to the appropriate stage
-> 6. Set the next 5-6 priority actions in Section E based on what makes sense next
->
-> This file is the single source of truth for project status.
+At the end of each session, Codex must:
+1. Update the top "Last updated" line
+2. Reflect finished work in stage checklists and feature checklist
+3. Recalculate progress percentages in Section E
+4. Refresh Section F priorities based on current bottlenecks
+5. Keep Section B (Current System Logic) accurate and explicit

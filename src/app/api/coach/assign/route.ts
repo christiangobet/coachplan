@@ -1,16 +1,33 @@
 import { NextResponse } from 'next/server';
-import { currentUser } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
+import { alignWeeksToRaceDate, clonePlanStructure } from '@/lib/clone-plan';
+import { requireRoleApi } from '@/lib/role-guards';
+
+function parseRaceDate(input: unknown): Date | null {
+  if (!input || typeof input !== 'string') return null;
+  const d = new Date(input);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function parseRaceName(input: unknown): string | null {
+  if (typeof input !== 'string') return null;
+  const value = input.trim();
+  return value || null;
+}
 
 export async function POST(req: Request) {
-  const user = await currentUser();
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const access = await requireRoleApi('COACH');
+  if (!access.ok) {
+    return NextResponse.json({ error: access.error }, { status: access.status });
+  }
 
   const body = await req.json();
   const templateId = body?.templateId as string;
-  const athleteId = body?.athleteId as string;
-  if (!templateId || !athleteId) {
-    return NextResponse.json({ error: 'templateId and athleteId required' }, { status: 400 });
+  const athleteId = (body?.athleteId as string) || access.context.userId;
+  const explicitRaceDate = parseRaceDate(body?.raceDate);
+  const explicitRaceName = parseRaceName(body?.raceName);
+  if (!templateId) {
+    return NextResponse.json({ error: 'templateId required' }, { status: 400 });
   }
 
   const template = await prisma.trainingPlan.findUnique({
@@ -19,72 +36,42 @@ export async function POST(req: Request) {
       weeks: { include: { days: { include: { activities: true } } } }
     }
   });
-  if (!template) return NextResponse.json({ error: 'Template not found' }, { status: 404 });
+  if (!template || !template.isTemplate) {
+    return NextResponse.json({ error: 'Template not found' }, { status: 404 });
+  }
+
+  const athlete = await prisma.user.findUnique({
+    where: { id: athleteId },
+    select: { goalRaceDate: true }
+  });
+  const resolvedRaceDate = explicitRaceDate || athlete?.goalRaceDate || null;
 
   const newPlan = await prisma.trainingPlan.create({
     data: {
       name: template.name,
+      raceName: explicitRaceName || template.raceName,
       isTemplate: false,
       status: 'ACTIVE',
       weekCount: template.weekCount,
-      ownerId: user.id,
-      athleteId
+      raceDate: resolvedRaceDate,
+      raceType: template.raceType,
+      difficulty: template.difficulty,
+      ownerId: access.context.userId,
+      athleteId,
+      sourceId: template.id,
     }
   });
 
-  const weekMap: Record<string, string> = {};
-  const dayMap: Record<string, string> = {};
-  for (const week of template.weeks) {
-    const created = await prisma.planWeek.create({
-      data: {
-        planId: newPlan.id,
-        weekIndex: week.weekIndex,
-        startDate: week.startDate,
-        endDate: week.endDate
-      }
+  await clonePlanStructure(template, newPlan.id);
+
+  const totalWeeks = template.weeks.length || template.weekCount || 0;
+  if (resolvedRaceDate && totalWeeks > 0) {
+    await alignWeeksToRaceDate(newPlan.id, totalWeeks, resolvedRaceDate);
+  } else {
+    await prisma.planWeek.updateMany({
+      where: { planId: newPlan.id },
+      data: { startDate: null, endDate: null }
     });
-    weekMap[week.id] = created.id;
-
-    for (const day of week.days) {
-      const createdDay = await prisma.planDay.create({
-        data: {
-          planId: newPlan.id,
-          weekId: created.id,
-          dayOfWeek: day.dayOfWeek,
-          rawText: day.rawText || null,
-          notes: day.notes || null
-        }
-      });
-      dayMap[day.id] = createdDay.id;
-    }
-  }
-
-  const activities = template.weeks.flatMap((week) =>
-    week.days.flatMap((day) =>
-      day.activities.map((a) => ({
-        planId: newPlan.id,
-        dayId: dayMap[day.id],
-        type: a.type,
-        subtype: a.subtype || null,
-        title: a.title,
-        rawText: a.rawText || null,
-        distance: a.distance || null,
-        distanceUnit: a.distanceUnit || null,
-        duration: a.duration || null,
-        paceTarget: a.paceTarget || null,
-        effortTarget: a.effortTarget || null,
-        structure: a.structure || undefined,
-        tags: a.tags || undefined,
-        priority: a.priority || null,
-        bailAllowed: a.bailAllowed,
-        mustDo: a.mustDo,
-        notes: a.notes || null
-      }))
-    )
-  );
-
-  if (activities.length) {
-    await prisma.planActivity.createMany({ data: activities });
   }
 
   return NextResponse.json({ assigned: true, planId: newPlan.id });

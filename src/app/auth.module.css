@@ -1,0 +1,190 @@
+.authPage {
+  max-width: none;
+  margin: 0;
+  padding: 28px;
+  min-height: calc(100vh - 56px);
+  display: grid;
+  align-items: center;
+  background:
+    radial-gradient(circle at 8% 0%, rgba(252, 76, 2, 0.18), transparent 36%),
+    radial-gradient(circle at 95% 10%, rgba(37, 120, 255, 0.1), transparent 34%),
+    linear-gradient(180deg, #edf1f6 0%, #e8edf4 100%);
+}
+
+.authShell {
+  width: min(1120px, 100%);
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 430px;
+  border-radius: 24px;
+  overflow: hidden;
+  box-shadow: 0 24px 56px rgba(20, 32, 52, 0.22);
+  background: #ffffff;
+}
+
+.visualPane {
+  position: relative;
+  min-height: 680px;
+  background: linear-gradient(140deg, #152032 0%, #1d2b44 58%, #263855 100%);
+  color: #f2f6ff;
+  overflow: hidden;
+}
+
+.visualImage {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.8;
+}
+
+.visualOverlay {
+  position: relative;
+  z-index: 1;
+  height: 100%;
+  padding: 32px;
+  display: grid;
+  align-content: space-between;
+}
+
+.brandRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.brand {
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.homeLink {
+  color: rgba(242, 246, 255, 0.9);
+  font-size: 13px;
+  font-weight: 600;
+  border: 1px solid rgba(242, 246, 255, 0.3);
+  border-radius: 999px;
+  padding: 6px 12px;
+  transition: all 0.15s ease;
+}
+
+.homeLink:hover {
+  border-color: rgba(252, 76, 2, 0.8);
+  color: #fff;
+}
+
+.visualText h1 {
+  font-size: clamp(28px, 3.3vw, 44px);
+  line-height: 1.08;
+  letter-spacing: -0.03em;
+  max-width: 13ch;
+  color: #f2f6ff;
+}
+
+.visualText p {
+  margin-top: 14px;
+  font-size: 15px;
+  line-height: 1.6;
+  max-width: 38ch;
+  color: rgba(236, 244, 255, 0.82);
+}
+
+.visualBullets {
+  margin-top: 18px;
+  display: grid;
+  gap: 8px;
+}
+
+.visualBullets span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: rgba(236, 244, 255, 0.9);
+}
+
+.visualBullets span::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #fc4c02;
+}
+
+.formPane {
+  display: grid;
+  align-items: center;
+  padding: 28px;
+  background: #f8fafd;
+}
+
+.formCard {
+  border: 1px solid #dbe2ef;
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow: 0 10px 24px rgba(16, 25, 40, 0.08);
+  padding: 20px;
+}
+
+.formCard h2 {
+  font-size: 27px;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+.formCard p {
+  margin-top: 8px;
+  margin-bottom: 16px;
+  color: #667085;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.altLink {
+  margin-top: 14px;
+  font-size: 13px;
+  color: #667085;
+}
+
+.altLink a {
+  color: #fc4c02;
+  font-weight: 700;
+}
+
+.altLink a:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 980px) {
+  .authPage {
+    padding: 16px;
+  }
+
+  .authShell {
+    grid-template-columns: 1fr;
+  }
+
+  .visualPane {
+    min-height: 360px;
+  }
+
+  .visualOverlay {
+    padding: 20px;
+  }
+}
+
+@media (max-width: 640px) {
+  .formPane {
+    padding: 12px;
+  }
+
+  .formCard {
+    padding: 16px;
+  }
+
+  .visualPane {
+    min-height: 310px;
+  }
+}

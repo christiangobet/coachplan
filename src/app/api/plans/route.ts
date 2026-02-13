@@ -6,6 +6,7 @@ import path from 'path';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { parseWeekWithAI } from '@/lib/ai-plan-parser';
+import { alignWeeksToRaceDate } from '@/lib/clone-plan';
 
 const execFileAsync = promisify(execFile);
 const DAY_KEYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
@@ -26,6 +27,24 @@ const RUN_SUBTYPES = new Set([
   'unknown'
 ]);
 
+const SUBTYPE_TITLES: Record<string, string> = {
+  'lrl': 'Long Run',
+  'easy-run': 'Easy Run',
+  'tempo': 'Tempo Run',
+  'hills': 'Hill Workout',
+  'hill-pyramid': 'Hill Pyramid',
+  'incline-treadmill': 'Incline Treadmill',
+  'progression': 'Progression Run',
+  'trail-run': 'Trail Run',
+  'recovery': 'Recovery Run',
+  'fast-finish': 'Fast Finish',
+  'training-race': 'Training Race',
+  'race': 'Race',
+  'strength': 'Strength',
+  'cross-training': 'Cross Training',
+  'hike': 'Hike',
+};
+
 function titleCase(text: string) {
   return text
     .replace(/-/g, ' ')
@@ -35,24 +54,122 @@ function titleCase(text: string) {
     .trim();
 }
 
+function planNameFromFilename(filename: string) {
+  const withoutExt = filename.replace(/\.[^.]+$/, '');
+  const normalized = withoutExt.replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim();
+  return normalized || 'Uploaded Plan';
+}
+
+type DistanceParseResult = {
+  distance: number | null;
+  distanceUnit: 'MILES' | 'KM' | null;
+};
+
+function parseNumber(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string') {
+    const numeric = Number(value);
+    if (Number.isFinite(numeric)) return numeric;
+  }
+  return null;
+}
+
+function asUpperDistanceUnit(token: unknown): 'MILES' | 'KM' | 'M' | null {
+  if (!token || typeof token !== 'string') return null;
+  const unit = token.trim().toLowerCase();
+  if (unit === 'mile' || unit === 'miles' || unit === 'mi') return 'MILES';
+  if (unit === 'km' || unit === 'kms' || unit === 'kilometer' || unit === 'kilometre' || unit === 'kilometers' || unit === 'kilometres') return 'KM';
+  if (unit === 'm' || unit === 'meter' || unit === 'metre' || unit === 'meters' || unit === 'metres') return 'M';
+  return null;
+}
+
+function hasMetersNotation(text: string) {
+  const t = text.toLowerCase();
+  if (/\d+(?:\.\d+)?\s*(?:meters?|metres?)\b/.test(t)) return true;
+  if (/\b(?:reps?|strides?|interval)\b/.test(t) && /\d{2,4}\s*m\b/.test(t)) return true;
+  return /\d{3,4}\s*m\b/.test(t);
+}
+
+function inferDistanceUnitFromText(text: string): 'MILES' | 'KM' | 'M' | null {
+  const t = text.toLowerCase();
+  if (/\d+(?:\.\d+)?\s*(?:miles?|mile|mi)\b/.test(t)) return 'MILES';
+  if (/\d+(?:\.\d+)?\s*(?:km|kms|kilometers?|kilometres?)\b/.test(t)) return 'KM';
+  if (hasMetersNotation(t)) return 'M';
+  return null;
+}
+
+function normalizeDistanceValue(distance: number | null, unit: 'MILES' | 'KM' | 'M' | null): DistanceParseResult {
+  if (distance === null || !Number.isFinite(distance) || distance <= 0 || !unit) {
+    return { distance: null, distanceUnit: null };
+  }
+  if (unit === 'M') {
+    return { distance: distance / 1000, distanceUnit: 'KM' };
+  }
+  return { distance, distanceUnit: unit };
+}
+
+function resolveDistanceFromValueUnit(
+  distanceCandidate: unknown,
+  unitCandidate: unknown,
+  rawText: string
+): DistanceParseResult {
+  const numeric = parseNumber(distanceCandidate);
+  let unit = asUpperDistanceUnit(unitCandidate);
+  if (!unit) unit = inferDistanceUnitFromText(rawText);
+  return normalizeDistanceValue(numeric, unit);
+}
+
+function resolveDistanceFromSegmentMetrics(metrics: Record<string, unknown>, rawText: string): DistanceParseResult {
+  const direct = resolveDistanceFromValueUnit(metrics?.distance_value, metrics?.distance_unit, rawText);
+  if (direct.distance !== null) return direct;
+
+  const fromMiles = resolveDistanceFromValueUnit(
+    metrics?.distance_miles ?? (metrics?.distance_miles_range as number[] | undefined)?.[1] ?? null,
+    'miles',
+    rawText
+  );
+  if (fromMiles.distance !== null) return fromMiles;
+
+  const fromKm = resolveDistanceFromValueUnit(
+    metrics?.distance_km ?? (metrics?.distance_km_range as number[] | undefined)?.[1] ?? null,
+    'km',
+    rawText
+  );
+  if (fromKm.distance !== null) return fromKm;
+
+  const fromMeters = resolveDistanceFromValueUnit(
+    metrics?.distance_meters ?? (metrics?.distance_meters_range as number[] | undefined)?.[1] ?? null,
+    'm',
+    rawText
+  );
+  if (fromMeters.distance !== null) return fromMeters;
+
+  return { distance: null, distanceUnit: null };
+}
+
 function inferSubtype(text: string) {
   const t = text.toLowerCase();
-  if (t.includes('strength')) return 'strength';
-  if (t.includes('rest')) return 'rest';
+  if (t.includes('strength') || /\bst\s*\d/i.test(t)) return 'strength';
+  if (/\brest\s*(day)?\b/.test(t)) return 'rest';
   if (t.includes('cross') || t.includes('xt')) return 'cross-training';
   if (t.includes('training race')) return 'training-race';
-  if (t.includes('race')) return 'race';
+  if (/\brace\b/.test(t)) return 'race';
   if (t.includes('incline treadmill')) return 'incline-treadmill';
   if (t.includes('hill pyramid')) return 'hill-pyramid';
-  if (t.includes('hills')) return 'hills';
-  if (t.includes('tempo')) return 'tempo';
+  if (/\bhills?\b/.test(t)) return 'hills';
+  if (/\btempo\b/.test(t) || /\bT[:\s]\d/.test(text)) return 'tempo';
   if (t.includes('progress')) return 'progression';
-  if (t.includes('recovery')) return 'recovery';
-  if (t.includes('trail')) return 'trail-run';
-  if (t.includes('fast finish')) return 'fast-finish';
-  if (t.includes('lrl')) return 'lrl';
-  if (t.includes('hike')) return 'hike';
-  if (t.includes('easy')) return 'easy-run';
+  if (t.includes('recovery') || /\brec\b/.test(t)) return 'recovery';
+  if (/\btrail\b/.test(t)) return 'trail-run';
+  if (t.includes('fast finish') || /\bff\b/.test(t)) return 'fast-finish';
+  if (/\blrl\b/.test(t) || /\blong run\b/.test(t) || /\blr\b/.test(t)) return 'lrl';
+  if (/\bhike\b/.test(t)) return 'hike';
+  if (/\byoga\b/.test(t)) return 'yoga';
+  if (/\beasy\b/.test(t) || /\be\s+\d/.test(t)) return 'easy-run';
+  // If text contains distance info, likely a run
+  if (/\d+(?:\.\d+)?\s*(?:miles?|mi|km|meters?|metres?)\b/.test(t) || /\d{3,4}\s*m\b/.test(t)) {
+    return 'easy-run';
+  }
   return 'unknown';
 }
 
@@ -61,6 +178,7 @@ function mapActivityType(subtype: string) {
   if (subtype === 'cross-training') return 'CROSS_TRAIN';
   if (subtype === 'rest') return 'REST';
   if (subtype === 'hike') return 'HIKE';
+  if (subtype === 'yoga') return 'OTHER';
   if (RUN_SUBTYPES.has(subtype)) return 'RUN';
   return 'OTHER';
 }
@@ -77,20 +195,29 @@ function parseRange(value: string) {
 
 function parseStructure(text: string) {
   const structure: any = {};
-  const wuMatch = text.match(/(\d+(?:\.\d+)?(?:\s*-\s*\d+(?:\.\d+)?)?)\s*(?:mile|miles|km|kilometer|kilometre)\s*WU/i);
+  const wuMatch = text.match(/(\d+(?:\.\d+)?(?:\s*-\s*\d+(?:\.\d+)?)?)\s*(?:mile|miles|km|kilometer|kilometre|meter|meters|metre|metres|m)\s*WU/i);
   if (wuMatch) {
     const range = parseRange(wuMatch[1].replace(/\s/g, ''));
-    if (range) structure.warmup = { distance: range, unit: wuMatch[0].toLowerCase().includes('km') ? 'km' : 'miles' };
+    if (range) {
+      const matchUnit = inferDistanceUnitFromText(wuMatch[0]) || 'MILES';
+      structure.warmup = { distance: range, unit: matchUnit === 'M' ? 'm' : matchUnit.toLowerCase() };
+    }
   }
-  const cdMatch = text.match(/(\d+(?:\.\d+)?(?:\s*-\s*\d+(?:\.\d+)?)?)\s*(?:mile|miles|km|kilometer|kilometre)\s*CD/i);
+  const cdMatch = text.match(/(\d+(?:\.\d+)?(?:\s*-\s*\d+(?:\.\d+)?)?)\s*(?:mile|miles|km|kilometer|kilometre|meter|meters|metre|metres|m)\s*CD/i);
   if (cdMatch) {
     const range = parseRange(cdMatch[1].replace(/\s/g, ''));
-    if (range) structure.cooldown = { distance: range, unit: cdMatch[0].toLowerCase().includes('km') ? 'km' : 'miles' };
+    if (range) {
+      const matchUnit = inferDistanceUnitFromText(cdMatch[0]) || 'MILES';
+      structure.cooldown = { distance: range, unit: matchUnit === 'M' ? 'm' : matchUnit.toLowerCase() };
+    }
   }
-  const tempoMatch = text.match(/T[:\s]\s*(\d+(?:\.\d+)?(?:\s*-\s*\d+(?:\.\d+)?)?)\s*(?:mile|miles|km|kilometer|kilometre)/i);
+  const tempoMatch = text.match(/T[:\s]\s*(\d+(?:\.\d+)?(?:\s*-\s*\d+(?:\.\d+)?)?)\s*(?:mile|miles|km|kilometer|kilometre|meter|meters|metre|metres|m)/i);
   if (tempoMatch) {
     const range = parseRange(tempoMatch[1].replace(/\s/g, ''));
-    if (range) structure.tempo = { distance: range, unit: tempoMatch[0].toLowerCase().includes('km') ? 'km' : 'miles' };
+    if (range) {
+      const matchUnit = inferDistanceUnitFromText(tempoMatch[0]) || 'MILES';
+      structure.tempo = { distance: range, unit: matchUnit === 'M' ? 'm' : matchUnit.toLowerCase() };
+    }
   }
   const intervalMatch = text.match(/(\d+)\s*x\s*(\d+(?:\.\d+)?)\s*(second|seconds|sec|minute|minutes|min)/i);
   if (intervalMatch) {
@@ -153,18 +280,24 @@ export async function POST(req: Request) {
 
   const contentType = req.headers.get('content-type') || '';
   let name = '';
+  let raceName: string | null = null;
   let raceDate: string | null = null;
   let file: File | null = null;
 
   if (contentType.includes('multipart/form-data')) {
     const form = await req.formData();
     name = String(form.get('name') || '').trim();
+    raceName = form.get('raceName') ? String(form.get('raceName')).trim() : null;
     raceDate = form.get('raceDate') ? String(form.get('raceDate')) : null;
     const maybeFile = form.get('file');
     if (maybeFile instanceof File) file = maybeFile;
+    if (file && file.size > 0 && file.name) {
+      name = planNameFromFilename(file.name);
+    }
   } else {
     const body = await req.json();
     name = String(body?.name || '').trim();
+    raceName = body?.raceName ? String(body.raceName).trim() : null;
     raceDate = body?.raceDate ? String(body.raceDate) : null;
   }
 
@@ -173,6 +306,7 @@ export async function POST(req: Request) {
   const plan = await prisma.trainingPlan.create({
     data: {
       name,
+      raceName: raceName || null,
       raceDate: raceDate ? new Date(raceDate) : null,
       isTemplate: false,
       status: 'DRAFT',
@@ -242,6 +376,11 @@ export async function POST(req: Request) {
           const aiActivities = aiWeek?.days?.[key]?.activities || [];
           if (aiActivities.length) {
             for (const a of aiActivities) {
+              const aiDistance = resolveDistanceFromValueUnit(
+                a.metrics?.distance?.value ?? null,
+                a.metrics?.distance?.unit ?? null,
+                a.raw_text || entry.raw || ''
+              );
               activities.push({
                 planId: plan.id,
                 dayId: day.id,
@@ -249,8 +388,8 @@ export async function POST(req: Request) {
                 subtype: a.subtype || null,
                 title: a.title,
                 rawText: a.raw_text || entry.raw || null,
-                distance: a.metrics?.distance?.value ?? null,
-                distanceUnit: a.metrics?.distance?.unit === 'km' ? 'KM' : a.metrics?.distance?.unit === 'miles' ? 'MILES' : null,
+                distance: aiDistance.distance,
+                distanceUnit: aiDistance.distanceUnit,
                 duration: a.metrics?.duration_min ?? null,
                 paceTarget: a.metrics?.pace_target ?? null,
                 effortTarget: a.metrics?.effort_target ?? null,
@@ -286,10 +425,7 @@ export async function POST(req: Request) {
                 const bailAllowed = originalText.includes('♥');
 
                 const metrics = seg.metrics || {};
-                const distance =
-                  metrics?.distance_miles ??
-                  metrics?.distance_miles_range?.[1] ??
-                  null;
+                const parsedDistance = resolveDistanceFromSegmentMetrics(metrics, originalText);
                 const duration =
                   metrics?.duration_minutes ??
                   metrics?.duration_minutes_range?.[1] ??
@@ -298,8 +434,8 @@ export async function POST(req: Request) {
                 const structure = parseStructure(originalText);
                 const title =
                   activityType === 'REST'
-                    ? 'Rest day'
-                    : titleCase(subtype === 'unknown' ? 'Workout' : subtype);
+                    ? 'Rest Day'
+                    : SUBTYPE_TITLES[subtype] || titleCase(subtype === 'unknown' ? 'Workout' : subtype);
 
                 activities.push({
                   planId: plan.id,
@@ -308,8 +444,8 @@ export async function POST(req: Request) {
                   subtype,
                   title,
                   rawText: cleanText || originalText,
-                  distance,
-                  distanceUnit: distance ? 'MILES' : null,
+                  distance: parsedDistance.distance,
+                  distanceUnit: parsedDistance.distanceUnit,
                   duration,
                   structure: structure || null,
                   priority: mustDo ? 'KEY' : bailAllowed ? 'OPTIONAL' : null,
@@ -333,6 +469,13 @@ export async function POST(req: Request) {
           status: 'DRAFT'
         }
       });
+
+      if (raceDate && weeks.length > 0) {
+        const parsedRaceDate = new Date(raceDate);
+        if (!Number.isNaN(parsedRaceDate.getTime())) {
+          await alignWeeksToRaceDate(plan.id, weeks.length, parsedRaceDate);
+        }
+      }
     } catch (error) {
       return NextResponse.json(
         { error: 'Parse failed', details: (error as Error).message },

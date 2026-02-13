@@ -7,6 +7,66 @@
   padding: 28px 20px 60px;
 }
 
+.plans-page-shell .dash-grid {
+  grid-template-columns: 200px minmax(0, 1fr) 280px;
+}
+
+.plans-shell-header {
+  padding: 18px 20px;
+}
+
+.plans-shell-header .plans-header {
+  margin-bottom: 0;
+}
+
+.plans-shell-section {
+  margin-bottom: 0;
+}
+
+.plans-right-card .dash-card-header {
+  margin-bottom: 10px;
+}
+
+.plans-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.plans-overview-grid div {
+  background: var(--d-raised);
+  border-radius: var(--d-radius-sm);
+  padding: 10px;
+  display: grid;
+  gap: 2px;
+}
+
+.plans-overview-grid strong {
+  font-size: 18px;
+  line-height: 1;
+  color: var(--d-text);
+}
+
+.plans-overview-grid span {
+  font-size: 12px;
+  color: var(--d-text-mid);
+}
+
+.plans-links {
+  display: grid;
+  gap: 10px;
+}
+
+.plans-links a {
+  color: var(--d-text-mid);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.plans-links a:hover {
+  color: var(--d-orange);
+}
+
 .plans-header {
   display: flex;
   align-items: flex-start;
@@ -183,6 +243,65 @@
   margin-top: 4px;
 }
 
+.pcal-plan-source {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.pcal-race-panel {
+  margin: 14px 0 20px;
+  padding: 16px 20px;
+  background: var(--background);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  display: grid;
+  gap: 12px;
+}
+
+.pcal-race-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.pcal-race-panel-head h3 {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.pcal-race-source {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.pcal-race-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.pcal-race-grid label {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.pcal-race-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pcal-race-status {
+  font-size: 13px;
+  color: var(--muted);
+}
+
 /* Stats bar */
 .pcal-stats {
   display: flex;
@@ -261,17 +380,30 @@
 
 .pcal-week {
   display: grid;
-  grid-template-columns: 66px 1fr;
+  grid-template-columns: 126px 1fr;
   gap: 6px;
   align-items: stretch;
+}
+
+.pcal-week-current .pcal-week-grid {
+  box-shadow: inset 0 0 0 1px rgba(252, 76, 2, 0.22);
+  border-radius: var(--radius);
+  padding: 4px;
 }
 
 .pcal-week-label {
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  gap: 2px;
-  padding: 8px 4px;
+  justify-content: flex-start;
+  gap: 4px;
+  padding: 10px 6px;
+}
+
+.pcal-week-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 
 .pcal-week-num {
@@ -280,11 +412,24 @@
   color: var(--ink);
 }
 
-.pcal-week-range {
+.pcal-week-today-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 2px 8px;
   font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--accent);
+  background: rgba(252, 76, 2, 0.12);
+}
+
+.pcal-week-range {
+  font-size: 11px;
   color: var(--muted);
-  font-weight: 500;
-  white-space: nowrap;
+  font-weight: 600;
+  line-height: 1.3;
 }
 
 /* 7-day grid */
@@ -337,6 +482,17 @@
 
 .pcal-cell-today .pcal-cell-date {
   color: var(--accent);
+}
+
+.pcal-cell-today-badge {
+  display: inline-flex;
+  width: fit-content;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--accent);
+  background: rgba(252, 76, 2, 0.08);
+  border-radius: 999px;
+  padding: 1px 7px;
 }
 
 .pcal-cell-empty {
@@ -418,31 +574,47 @@
   top: -1px;
 }
 
-/* Completed state */
-.pcal-activity-done .pcal-activity-title {
-  text-decoration: line-through;
-  color: var(--muted);
+/* Clickable activity */
+.pcal-activity-clickable {
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background 0.15s;
 }
 
-.pcal-activity-done .pcal-activity-bar {
-  opacity: 0.35;
+.pcal-activity-clickable:hover {
+  background: rgba(0, 0, 0, 0.03);
 }
 
-.pcal-activity-check {
-  width: 14px;
-  height: 14px;
+/* Toggle checkbox */
+.pcal-toggle {
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
-  background: var(--green);
+  border: 2px solid var(--border);
+  background: transparent;
   flex-shrink: 0;
-  align-self: center;
+  cursor: pointer;
+  padding: 0;
+  transition: all 0.15s;
   position: relative;
+  align-self: flex-start;
+  margin-top: 2px;
 }
 
-.pcal-activity-check::after {
+.pcal-toggle:hover {
+  border-color: var(--accent);
+}
+
+.pcal-toggle-done {
+  background: var(--green);
+  border-color: var(--green);
+}
+
+.pcal-toggle-done::after {
   content: '';
   position: absolute;
-  top: 3px;
-  left: 4.5px;
+  top: 2px;
+  left: 4px;
   width: 4px;
   height: 7px;
   border: solid #fff;
@@ -450,18 +622,299 @@
   transform: rotate(45deg);
 }
 
+/* Completed state */
+.pcal-activity-done .pcal-activity-title {
+  text-decoration: line-through;
+  color: var(--muted);
+}
+
+.pcal-activity-done .pcal-activity-details {
+  color: var(--muted);
+}
+
+/* ══════════════════════════
+   Activity Detail Modal
+   ══════════════════════════ */
+.pcal-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  animation: pcal-fade-in 0.15s ease;
+}
+
+@keyframes pcal-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes pcal-slide-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.pcal-modal {
+  background: var(--background);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+  max-width: 480px;
+  width: 100%;
+  max-height: 85vh;
+  overflow-y: auto;
+  position: relative;
+  animation: pcal-slide-up 0.2s ease;
+}
+
+.pcal-modal-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.05);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  transition: all 0.15s;
+  z-index: 1;
+}
+
+.pcal-modal-close:hover {
+  background: rgba(0, 0, 0, 0.1);
+  color: var(--ink);
+}
+
+.pcal-modal-type-bar {
+  height: 4px;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+
+.pcal-modal-body {
+  padding: 24px;
+}
+
+.pcal-modal-type {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+  margin-bottom: 4px;
+  display: block;
+}
+
+.pcal-modal-title {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--ink);
+  letter-spacing: -0.02em;
+  margin-bottom: 16px;
+}
+
+.pcal-modal-stats {
+  display: flex;
+  gap: 20px;
+  padding: 16px;
+  background: var(--panel);
+  border-radius: var(--radius);
+  margin-bottom: 20px;
+}
+
+.pcal-modal-stat {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.pcal-modal-stat-value {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--ink);
+  letter-spacing: -0.02em;
+}
+
+.pcal-modal-stat-label {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.pcal-modal-section {
+  margin-bottom: 16px;
+}
+
+.pcal-modal-section-title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.pcal-modal-text {
+  font-size: 14px;
+  color: var(--ink);
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.pcal-modal-actuals-form {
+  display: grid;
+  gap: 10px;
+}
+
+.pcal-modal-actuals-form label {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.pcal-modal-actuals-form input {
+  height: 38px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--background);
+  padding: 0 10px;
+  font-family: inherit;
+  font-size: 14px;
+  color: var(--ink);
+}
+
+.pcal-modal-actuals-form input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(252, 76, 2, 0.12);
+}
+
+.pcal-modal-actuals-save {
+  height: 38px;
+  border: none;
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: #fff;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.pcal-modal-actuals-save:hover {
+  background: var(--accent-strong);
+}
+
+.pcal-modal-actuals-save:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pcal-modal-form-error {
+  margin: 0;
+  font-size: 13px;
+  color: var(--red);
+}
+
+.pcal-modal-actuals-hint {
+  margin: 0;
+  color: var(--muted);
+}
+
+.pcal-modal-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.pcal-modal-tag {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--ink);
+}
+
+.pcal-modal-badge-row {
+  margin-bottom: 16px;
+}
+
+.pcal-modal-badge {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 4px 12px;
+  border-radius: 4px;
+  background: rgba(252, 76, 2, 0.08);
+  color: var(--accent);
+}
+
+.pcal-modal-complete {
+  width: 100%;
+  padding: 12px;
+  border-radius: var(--radius);
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s;
+  margin-top: 8px;
+}
+
+.pcal-modal-complete:hover {
+  background: var(--accent-strong);
+}
+
+.pcal-modal-complete-done {
+  background: var(--green);
+}
+
+.pcal-modal-complete-done:hover {
+  background: #27ae60;
+}
+
 /* ══════════════════════════
    Responsive
    ══════════════════════════ */
 @media (max-width: 900px) {
+  .pcal-race-grid {
+    grid-template-columns: 1fr;
+  }
   .pcal-week {
     grid-template-columns: 1fr;
   }
   .pcal-week-label {
     flex-direction: row;
-    align-items: baseline;
+    align-items: center;
     gap: 8px;
-    padding: 8px 4px 0;
+    padding: 8px 4px 2px;
+  }
+  .pcal-week-head {
+    gap: 8px;
+  }
+  .pcal-week-range {
+    font-size: 12px;
+  }
+  .pcal-week-current .pcal-week-grid {
+    padding: 0;
+    box-shadow: none;
   }
   .pcal-week-grid {
     grid-template-columns: repeat(4, 1fr);
@@ -479,7 +932,18 @@
   .plans-grid { grid-template-columns: 1fr; }
   .plans-header { flex-direction: column; }
   .pcal-header { flex-direction: column; }
+  .pcal-race-panel-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .pcal-race-actions {
+    flex-direction: column;
+    align-items: flex-start;
+  }
   .pcal-week-grid {
     grid-template-columns: repeat(2, 1fr);
+  }
+  .plans-overview-grid {
+    grid-template-columns: 1fr;
   }
 }

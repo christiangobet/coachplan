@@ -75,6 +75,36 @@ main {
   color: var(--accent);
 }
 
+.env-chip {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 2px 9px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border: 1px solid transparent;
+}
+
+.env-chip-athlete {
+  color: var(--accent);
+  background: rgba(252, 76, 2, 0.08);
+  border-color: rgba(252, 76, 2, 0.2);
+}
+
+.env-chip-coach {
+  color: #0b78c2;
+  background: rgba(9, 132, 227, 0.1);
+  border-color: rgba(9, 132, 227, 0.25);
+}
+
+.env-chip-admin {
+  color: #8a3700;
+  background: rgba(243, 156, 18, 0.14);
+  border-color: rgba(243, 156, 18, 0.3);
+}
+
 .nav {
   display: flex;
   gap: 4px;
@@ -93,6 +123,29 @@ main {
 .nav a:hover {
   background: var(--panel);
   color: var(--ink);
+}
+
+.nav a.nav-role-switch {
+  border: 1px solid var(--border);
+  background: var(--background);
+  color: var(--ink);
+}
+
+.nav a.nav-role-switch:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.nav-account-disabled {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: var(--radius);
+  border: 1px solid rgba(231, 76, 60, 0.3);
+  background: rgba(231, 76, 60, 0.08);
+  color: #b93f31;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 /* ── Cards ── */
@@ -446,6 +499,34 @@ td {
 
 tbody tr:nth-child(odd) {
   background: var(--background);
+}
+
+/* ── Account Disabled ── */
+.account-disabled-shell {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 32px 20px 60px;
+}
+
+.account-disabled-card {
+  background: var(--background);
+  border: 1px solid rgba(231, 76, 60, 0.25);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  padding: 24px;
+  display: grid;
+  gap: 10px;
+}
+
+.account-disabled-card h1 {
+  font-size: 24px;
+  letter-spacing: -0.02em;
+  color: #8f2e24;
+}
+
+.account-disabled-card p {
+  color: var(--muted);
+  font-size: 14px;
 }
 
 /* ── Responsive ── */

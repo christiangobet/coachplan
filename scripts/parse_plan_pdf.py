@@ -12,10 +12,16 @@ HEADER_ROW = ['MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY','SUN
 HEADER_ROW_WITH_WEEK = ['WEEK'] + HEADER_ROW
 HEADER_ROW_WITH_WEEK_TWM = ['WEEK'] + HEADER_ROW + ['TWM']
 
-MILES_RE = re.compile(r'(?P<val>\d+(?:\.\d+)?)\s*(?:miles|mile)')
-MIN_RE = re.compile(r'(?P<min>\d+)\s*(?:minute|minutes)')
-RANGE_MIN_RE = re.compile(r'(?P<min1>\d+)\s*[\u2013-]\s*(?P<min2>\d+)\s*minute')
-RANGE_MILES_RE = re.compile(r'(?P<m1>\d+(?:\.\d+)?)\s*[\u2013-]\s*(?P<m2>\d+(?:\.\d+)?)\s*(?:miles|mile)')
+DISTANCE_RE = re.compile(
+    r'(?P<val>\d+(?:\.\d+)?)\s*(?P<unit>miles?|mile|mi|kms?|kilometers?|kilometres?|meters?|metres?|m)\b',
+    re.I
+)
+DISTANCE_RANGE_RE = re.compile(
+    r'(?P<v1>\d+(?:\.\d+)?)\s*[\u2013-]\s*(?P<v2>\d+(?:\.\d+)?)\s*(?P<unit>miles?|mile|mi|kms?|kilometers?|kilometres?|meters?|metres?|m)\b',
+    re.I
+)
+MIN_RE = re.compile(r'(?P<min>\d+)\s*(?:minutes?|mins?|min|m)\b')
+RANGE_MIN_RE = re.compile(r'(?P<min1>\d+)\s*[\u2013-]\s*(?P<min2>\d+)\s*(?:minutes?|mins?|m\b)')
 
 SEGMENT_RULES = [
     ('strength', re.compile(r'^strength\s*\d+', re.I)),
@@ -63,32 +69,104 @@ def clean_cell_text(text):
     return t
 
 
+def normalize_distance_unit(raw_unit, value, full_text):
+    u = (raw_unit or '').strip().lower()
+    if u in ('mile', 'miles', 'mi'):
+        return 'miles'
+    if u in ('km', 'kms', 'kilometer', 'kilometers', 'kilometre', 'kilometres'):
+        return 'km'
+    if u in ('meter', 'meters', 'metre', 'metres'):
+        return 'm'
+    if u == 'm':
+        if value >= 100:
+            return 'm'
+        # For short "m" values, prefer minutes unless interval/rep context strongly suggests meters.
+        meter_context = re.search(r'(\bx\b|\breps?\b|\bstrides?\b|\binterval\b)', full_text, re.I)
+        return 'm' if meter_context else None
+    return None
+
+
+def to_km(value, unit):
+    if value is None:
+        return None
+    if unit == 'km':
+        return float(value)
+    if unit == 'm':
+        return float(value) / 1000.0
+    return None
+
+
 def parse_metrics(text):
     t = text.lower()
     miles = None
     miles_range = None
+    km = None
+    km_range = None
+    meters = None
+    meters_range = None
+    distance_value = None
+    distance_unit = None
+    distance_range = None
     mins = None
     mins_range = None
 
-    rm = RANGE_MILES_RE.search(t)
+    rm = DISTANCE_RANGE_RE.search(t)
+    text_without_distance = t
     if rm:
-        miles_range = [float(rm.group('m1')), float(rm.group('m2'))]
+        v1 = float(rm.group('v1'))
+        v2 = float(rm.group('v2'))
+        unit = normalize_distance_unit(rm.group('unit'), max(v1, v2), t)
+        if unit:
+            distance_range = [v1, v2]
+            distance_unit = unit
+            distance_value = v2
+            if unit == 'miles':
+                miles_range = [v1, v2]
+                miles = v2
+            elif unit == 'km':
+                km_range = [v1, v2]
+                km = v2
+            elif unit == 'm':
+                meters_range = [v1, v2]
+                meters = v2
+                km_range = [round(v1 / 1000.0, 4), round(v2 / 1000.0, 4)]
+                km = round(v2 / 1000.0, 4)
+            text_without_distance = DISTANCE_RANGE_RE.sub('', text_without_distance, count=1)
     else:
-        m = MILES_RE.search(t)
+        m = DISTANCE_RE.search(t)
         if m:
-            miles = float(m.group('val'))
+            value = float(m.group('val'))
+            unit = normalize_distance_unit(m.group('unit'), value, t)
+            if unit:
+                distance_value = value
+                distance_unit = unit
+                if unit == 'miles':
+                    miles = value
+                elif unit == 'km':
+                    km = value
+                elif unit == 'm':
+                    meters = value
+                    km = round(value / 1000.0, 4)
+                text_without_distance = DISTANCE_RE.sub('', text_without_distance, count=1)
 
-    rmin = RANGE_MIN_RE.search(t)
+    rmin = RANGE_MIN_RE.search(text_without_distance)
     if rmin:
         mins_range = [int(rmin.group('min1')), int(rmin.group('min2'))]
     else:
-        mn = MIN_RE.search(t)
+        mn = MIN_RE.search(text_without_distance)
         if mn:
             mins = int(mn.group('min'))
 
     return {
+        'distance_value': distance_value,
+        'distance_unit': distance_unit,
+        'distance_range': distance_range,
         'distance_miles': miles,
         'distance_miles_range': miles_range,
+        'distance_km': km,
+        'distance_km_range': km_range,
+        'distance_meters': meters,
+        'distance_meters_range': meters_range,
         'duration_minutes': mins,
         'duration_minutes_range': mins_range,
     }

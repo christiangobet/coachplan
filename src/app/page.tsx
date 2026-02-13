@@ -1,49 +1,109 @@
 import { redirect } from "next/navigation";
 import { currentUser } from "@clerk/nextjs/server";
+import Link from "next/link";
+import Image from "next/image";
+import styles from "./page.module.css";
+
+const featureCards = [
+  {
+    title: "Upload & Parse",
+    text: "Drop in your PDF plan and convert it into clean week/day workouts in minutes.",
+    image: "/landing/upload-parse.svg"
+  },
+  {
+    title: "Race-Day Alignment",
+    text: "Shift your full schedule so peak week lands exactly on race weekend.",
+    image: "/landing/race-alignment.svg"
+  },
+  {
+    title: "Coach Sync",
+    text: "Share plans, track completion, and keep athlete feedback in one workflow.",
+    image: "/landing/coach-sync.svg"
+  }
+];
 
 export default async function Home() {
   const user = await currentUser();
 
   if (user) {
-    redirect("/dashboard");
+    redirect("/auth/resolve-role");
   }
 
   return (
-    <main>
-      <section className="card white">
-        <div className="section-title">
-          <h1>Training Plan</h1>
+    <main className={styles.landing}>
+      <section className={styles.hero}>
+        <div className={styles.heroCopy}>
+          <span className={styles.eyebrow}>Built for athletes and coaches</span>
+          <h1>Training plans that feel as sharp as race day.</h1>
+          <p>
+            CoachPlan turns static PDFs into structured sessions, aligns your build to the big event,
+            and gives you one place to track execution week by week.
+          </p>
+          <div className={styles.ctas}>
+            <Link className={styles.ctaPrimary} href="/sign-in">Sign in</Link>
+            <Link className={styles.ctaSecondary} href="/plans">Explore plans</Link>
+          </div>
+          <div className={styles.metrics}>
+            <div className={styles.metric}>
+              <strong>PDF to schedule</strong>
+              <span>AI extraction + structure</span>
+            </div>
+            <div className={styles.metric}>
+              <strong>Race-ready timing</strong>
+              <span>Automatic week alignment</span>
+            </div>
+            <div className={styles.metric}>
+              <strong>Daily execution</strong>
+              <span>Complete and log actuals</span>
+            </div>
+          </div>
         </div>
-        <p className="muted">
-          Ochsner-inspired clarity for athletes and coaches. Upload a PDF plan, align to race day,
-          and track weekly progress with clean, structured views.
-        </p>
-        <div style={{ marginTop: 16, display: "flex", gap: 12, flexWrap: "wrap" }}>
-          <a className="cta" href="/sign-in">Sign in</a>
-          <a className="cta secondary" href="/plans">View plans</a>
+        <div className={styles.heroVisual}>
+          <Image
+            src="/landing/hero-race-group.jpg"
+            alt="Group of runners racing in a city marathon"
+            className={styles.heroImage}
+            fill
+            sizes="(max-width: 1080px) 100vw, 460px"
+            unoptimized
+            priority
+          />
+          <div className={styles.heroBadge}>
+            <span className={styles.heroBadgeLabel}>Active Plan</span>
+            <strong>City Marathon Build</strong>
+            <span>Race date: Oct 19</span>
+          </div>
         </div>
       </section>
 
-      <section className="container" style={{ marginTop: 24 }}>
-        <div className="grid-3">
-          <div className="card">
-            <div className="section-title">
-              <h3>Clear weekly blocks</h3>
-            </div>
-            <p className="muted">Structured weeks that mirror your training plan format.</p>
-          </div>
-          <div className="card">
-            <div className="section-title">
-              <h3>Race-day alignment</h3>
-            </div>
-            <p className="muted">Auto‑align Week 1 so the final week ends on race weekend.</p>
-          </div>
-          <div className="card">
-            <div className="section-title">
-              <h3>Coach + athlete flow</h3>
-            </div>
-            <p className="muted">Assign plans, track adherence, and log actuals.</p>
-          </div>
+      <section className={styles.features}>
+        <div className={styles.sectionHead}>
+          <h2>Everything in one training command center</h2>
+          <p>From plan setup to daily check-off, keep the whole season visible.</p>
+        </div>
+        <div className={styles.featureGrid}>
+          {featureCards.map((card) => (
+            <article key={card.title} className={styles.featureCard}>
+              <Image
+                src={card.image}
+                alt={`${card.title} illustration`}
+                className={styles.featureImage}
+                width={800}
+                height={520}
+              />
+              <h3>{card.title}</h3>
+              <p>{card.text}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className={styles.bottomCta}>
+        <h2>Start with your next training cycle today</h2>
+        <p>Import a plan, set your race date, and make every workout count.</p>
+        <div className={styles.ctas}>
+          <Link className={styles.ctaPrimary} href="/sign-up">Create account</Link>
+          <Link className={styles.ctaSecondary} href="/sign-in">I already have an account</Link>
         </div>
       </section>
     </main>
