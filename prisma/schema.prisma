@@ -10,6 +10,7 @@ datasource db {
 enum UserRole {
   ATHLETE
   COACH
+  ADMIN
 }
 
 enum Units {
@@ -41,6 +42,8 @@ model User {
   role         UserRole @default(ATHLETE)
   currentRole  UserRole @default(ATHLETE)
   hasBothRoles Boolean  @default(false)
+  isActive     Boolean  @default(true)
+  deactivatedAt DateTime?
   units        Units?   @default(MILES)
   paceTargets  Json?
   goalRaceDate DateTime?
@@ -50,6 +53,8 @@ model User {
   coachLinks   CoachAthlete[] @relation("Coach")
   ownedPlans   TrainingPlan[] @relation("PlanOwner")
   athletePlans TrainingPlan[] @relation("AthletePlan")
+  externalAccounts ExternalAccount[]
+  externalActivities ExternalActivity[]
 }
 
 model CoachAthlete {
@@ -70,14 +75,43 @@ enum PlanStatus {
   ARCHIVED
 }
 
+enum RaceType {
+  MARATHON
+  HALF_MARATHON
+  TEN_K
+  FIVE_K
+  ULTRA_50K
+  ULTRA_50MI
+  ULTRA_100K
+  ULTRA_100MI
+  TRAIL
+}
+
+enum Difficulty {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
+enum IntegrationProvider {
+  STRAVA
+  GARMIN
+}
+
 model TrainingPlan {
-  id         String     @id @default(cuid())
-  name       String
-  isTemplate Boolean    @default(false)
-  status     PlanStatus @default(DRAFT)
-  weekCount  Int?
-  raceDate   DateTime?
-  createdAt  DateTime   @default(now())
+  id          String      @id @default(cuid())
+  name        String
+  raceName    String?
+  description String?
+  isTemplate  Boolean     @default(false)
+  status      PlanStatus  @default(DRAFT)
+  weekCount   Int?
+  raceDate    DateTime?
+  raceType    RaceType?
+  difficulty  Difficulty?
+  isPublic    Boolean     @default(false)
+  sourceId    String?
+  createdAt   DateTime    @default(now())
 
   ownerId    String?
   athleteId  String?
@@ -140,8 +174,69 @@ model PlanActivity {
   completedAt DateTime?
   actualDistance Float?
   actualDuration Int?
+  actualPace String?
   notes     String?
 
   plan TrainingPlan @relation(fields: [planId], references: [id])
   day  PlanDay @relation(fields: [dayId], references: [id])
+  externalActivities ExternalActivity[] @relation("MatchedPlanActivity")
+}
+
+model ExternalAccount {
+  id               String              @id @default(cuid())
+  userId           String
+  provider         IntegrationProvider
+  providerUserId   String?
+  providerUsername String?
+  tokenType        String?
+  accessToken      String?
+  refreshToken     String?
+  scopes           String?
+  expiresAt        DateTime?
+  syncCursor       String?
+  connectedAt      DateTime            @default(now())
+  lastSyncAt       DateTime?
+  isActive         Boolean             @default(true)
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  user       User               @relation(fields: [userId], references: [id])
+  activities ExternalActivity[]
+
+  @@unique([userId, provider])
+  @@unique([provider, providerUserId])
+  @@index([userId, provider])
+}
+
+model ExternalActivity {
+  id                    String              @id @default(cuid())
+  accountId             String
+  userId                String
+  provider              IntegrationProvider
+  providerActivityId    String
+  name                  String?
+  sportType             String?
+  startTime             DateTime
+  durationSec           Int?
+  movingTimeSec         Int?
+  elapsedTimeSec        Int?
+  distanceM             Float?
+  avgHeartRate          Int?
+  maxHeartRate          Int?
+  calories              Float?
+  avgPaceSecPerKm       Float?
+  raw                   Json?
+  matchedPlanActivityId String?
+  importedAt            DateTime            @default(now())
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+
+  account             ExternalAccount @relation(fields: [accountId], references: [id])
+  user                User            @relation(fields: [userId], references: [id])
+  matchedPlanActivity PlanActivity?   @relation("MatchedPlanActivity", fields: [matchedPlanActivityId], references: [id])
+
+  @@unique([provider, providerActivityId])
+  @@index([userId, startTime])
+  @@index([accountId, startTime])
+  @@index([matchedPlanActivityId])
 }

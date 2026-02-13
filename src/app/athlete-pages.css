@@ -1,0 +1,159 @@
+.athlete-page-shell .dash-grid {
+  grid-template-columns: 200px minmax(0, 1fr) 280px;
+}
+
+.athlete-page-header h1 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.athlete-page-header p {
+  margin: 8px 0 0;
+}
+
+.athlete-form-grid {
+  align-items: start;
+}
+
+.athlete-page-card .section-title h3 {
+  font-size: 18px;
+}
+
+.athlete-save-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.athlete-right-card .dash-card-header {
+  margin-bottom: 10px;
+}
+
+.athlete-summary-list {
+  display: grid;
+  gap: 10px;
+}
+
+.athlete-summary-list div {
+  display: grid;
+  gap: 2px;
+  padding: 10px;
+  border-radius: var(--d-radius-sm);
+  background: var(--d-raised);
+}
+
+.athlete-summary-list strong {
+  font-size: 12px;
+  color: var(--d-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.athlete-summary-list span {
+  font-size: 14px;
+  color: var(--d-text);
+}
+
+.athlete-link-list {
+  display: grid;
+  gap: 10px;
+}
+
+.athlete-link-list a {
+  color: var(--d-text-mid);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.athlete-link-list a:hover {
+  color: var(--d-orange);
+}
+
+.athlete-intro {
+  margin-top: -6px;
+}
+
+.athlete-integration-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.athlete-integration-item {
+  border: 1px solid var(--d-border-light);
+  border-radius: var(--d-radius-sm);
+  background: var(--d-raised);
+  padding: 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.athlete-integration-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.athlete-integration-head strong {
+  font-size: 14px;
+  color: var(--d-text);
+}
+
+.athlete-integration-head .on,
+.athlete-integration-head .off {
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 4px 8px;
+}
+
+.athlete-integration-head .on {
+  color: #0f8a47;
+  background: rgba(15, 138, 71, 0.12);
+}
+
+.athlete-integration-head .off {
+  color: var(--d-muted);
+  background: rgba(107, 107, 118, 0.12);
+}
+
+.athlete-integration-meta {
+  display: grid;
+  gap: 2px;
+}
+
+.athlete-integration-meta span {
+  font-size: 12px;
+  color: var(--d-text-mid);
+}
+
+.athlete-integration-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.athlete-integration-actions .cta.secondary {
+  min-height: 32px;
+  font-size: 12px;
+  padding: 0 10px;
+}
+
+.athlete-integration-status {
+  margin: 8px 0 0;
+  font-weight: 600;
+}
+
+@media (max-width: 768px) {
+  .athlete-save-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .athlete-integration-grid {
+    grid-template-columns: 1fr;
+  }
+}

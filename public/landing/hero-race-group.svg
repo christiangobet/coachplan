@@ -1,0 +1,96 @@
+<svg width="1200" height="800" viewBox="0 0 1200 800" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="sky" x1="600" y1="0" x2="600" y2="510" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#DBE8FF"/>
+      <stop offset="1" stop-color="#BFD3F1"/>
+    </linearGradient>
+    <linearGradient id="road" x1="600" y1="425" x2="600" y2="800" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2A3952"/>
+      <stop offset="1" stop-color="#161F31"/>
+    </linearGradient>
+    <linearGradient id="pack" x1="120" y1="755" x2="1082" y2="523" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1D2A3F"/>
+      <stop offset="1" stop-color="#2B4065"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="800" rx="40" fill="url(#sky)"/>
+  <circle cx="102" cy="92" r="130" fill="#FC4C02" fill-opacity="0.2"/>
+  <circle cx="1040" cy="112" r="190" fill="#3B70CE" fill-opacity="0.18"/>
+
+  <g opacity="0.78">
+    <rect x="68" y="214" width="74" height="214" fill="#7E93BA"/>
+    <rect x="150" y="170" width="92" height="258" fill="#8EA3C9"/>
+    <rect x="255" y="128" width="98" height="300" fill="#758AB2"/>
+    <rect x="366" y="194" width="80" height="234" fill="#8CA1C7"/>
+    <rect x="458" y="150" width="104" height="278" fill="#6F84AC"/>
+    <rect x="576" y="180" width="90" height="248" fill="#899FC6"/>
+    <rect x="680" y="124" width="114" height="304" fill="#7288B0"/>
+    <rect x="808" y="196" width="88" height="232" fill="#8DA3C9"/>
+    <rect x="910" y="145" width="104" height="283" fill="#758BB3"/>
+    <rect x="1028" y="188" width="92" height="240" fill="#8CA1C8"/>
+  </g>
+
+  <rect x="124" y="286" width="952" height="72" rx="36" fill="#FFFFFF" fill-opacity="0.88"/>
+  <text x="600" y="330" text-anchor="middle" fill="#24314A" font-family="Figtree, Arial, sans-serif" font-size="38" font-weight="700" letter-spacing="2">
+    CITY MARATHON
+  </text>
+
+  <path d="M0 438H1200V800H0V438Z" fill="url(#road)"/>
+  <path d="M0 490C188 538 340 562 488 562C652 562 818 534 1200 470V565H0V490Z" fill="url(#pack)"/>
+
+  <path d="M110 586C350 626 690 610 1090 548" stroke="#FC4C02" stroke-width="10" stroke-linecap="round"/>
+  <path d="M146 638C372 668 696 654 1044 602" stroke="#F3A17E" stroke-width="7" stroke-linecap="round"/>
+  <path d="M204 690C418 710 704 704 982 664" stroke="#E9EEF9" stroke-width="5" stroke-linecap="round" stroke-opacity="0.55"/>
+
+  <g transform="translate(266 430)">
+    <circle cx="0" cy="0" r="28" fill="#F8C29A"/>
+    <rect x="-26" y="34" width="52" height="82" rx="20" fill="#FC4C02"/>
+    <rect x="-18" y="62" width="36" height="24" rx="8" fill="#FFFFFF"/>
+    <path d="M-18 116L-42 168" stroke="#1E2D47" stroke-width="14" stroke-linecap="round"/>
+    <path d="M16 116L46 164" stroke="#1E2D47" stroke-width="14" stroke-linecap="round"/>
+    <path d="M-24 72L-68 118" stroke="#F8C29A" stroke-width="11" stroke-linecap="round"/>
+    <path d="M26 72L76 104" stroke="#F8C29A" stroke-width="11" stroke-linecap="round"/>
+    <text x="0" y="80" text-anchor="middle" fill="#1C2A43" font-family="Figtree, Arial, sans-serif" font-size="12" font-weight="700">126</text>
+  </g>
+
+  <g transform="translate(430 454)">
+    <circle cx="0" cy="0" r="24" fill="#E9B58D"/>
+    <rect x="-24" y="30" width="48" height="78" rx="18" fill="#2361C6"/>
+    <rect x="-16" y="56" width="32" height="20" rx="7" fill="#FFFFFF"/>
+    <path d="M-14 108L-36 152" stroke="#1A2638" stroke-width="12" stroke-linecap="round"/>
+    <path d="M16 108L40 146" stroke="#1A2638" stroke-width="12" stroke-linecap="round"/>
+    <path d="M-20 62L-60 102" stroke="#E9B58D" stroke-width="9" stroke-linecap="round"/>
+    <path d="M22 62L64 92" stroke="#E9B58D" stroke-width="9" stroke-linecap="round"/>
+    <text x="0" y="70" text-anchor="middle" fill="#1C2A43" font-family="Figtree, Arial, sans-serif" font-size="11" font-weight="700">311</text>
+  </g>
+
+  <g transform="translate(588 420)">
+    <circle cx="0" cy="0" r="32" fill="#F1C49B"/>
+    <rect x="-30" y="38" width="60" height="92" rx="22" fill="#1D2A43"/>
+    <rect x="-20" y="68" width="40" height="24" rx="8" fill="#FFFFFF"/>
+    <path d="M-18 130L-44 190" stroke="#FC4C02" stroke-width="16" stroke-linecap="round"/>
+    <path d="M24 130L58 182" stroke="#FC4C02" stroke-width="16" stroke-linecap="round"/>
+    <path d="M-30 82L-86 126" stroke="#F1C49B" stroke-width="12" stroke-linecap="round"/>
+    <path d="M30 82L92 118" stroke="#F1C49B" stroke-width="12" stroke-linecap="round"/>
+    <text x="0" y="84" text-anchor="middle" fill="#1C2A43" font-family="Figtree, Arial, sans-serif" font-size="13" font-weight="700">042</text>
+  </g>
+
+  <g transform="translate(772 452)">
+    <circle cx="0" cy="0" r="25" fill="#DFAF88"/>
+    <rect x="-25" y="31" width="50" height="80" rx="20" fill="#34A164"/>
+    <rect x="-16" y="58" width="32" height="21" rx="7" fill="#FFFFFF"/>
+    <path d="M-16 111L-42 158" stroke="#1F2E46" stroke-width="13" stroke-linecap="round"/>
+    <path d="M17 111L42 150" stroke="#1F2E46" stroke-width="13" stroke-linecap="round"/>
+    <path d="M-22 64L-66 104" stroke="#DFAF88" stroke-width="10" stroke-linecap="round"/>
+    <path d="M24 64L68 94" stroke="#DFAF88" stroke-width="10" stroke-linecap="round"/>
+    <text x="0" y="72" text-anchor="middle" fill="#1C2A43" font-family="Figtree, Arial, sans-serif" font-size="11" font-weight="700">509</text>
+  </g>
+
+  <g transform="translate(934 478)" opacity="0.92">
+    <circle cx="0" cy="0" r="20" fill="#F5C7A1"/>
+    <rect x="-20" y="26" width="40" height="68" rx="16" fill="#6B55D9"/>
+    <path d="M-12 94L-30 132" stroke="#1F2D44" stroke-width="10" stroke-linecap="round"/>
+    <path d="M14 94L34 126" stroke="#1F2D44" stroke-width="10" stroke-linecap="round"/>
+  </g>
+</svg>

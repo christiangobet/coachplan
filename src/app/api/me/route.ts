@@ -1,17 +1,14 @@
 import { NextResponse } from 'next/server';
 import { currentUser } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
+import { ensureUserFromAuth } from '@/lib/user-sync';
 
-export async function GET(req: Request) {
+export async function GET() {
   const user = await currentUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  const email = user?.primaryEmailAddress?.emailAddress || '';
-  const name = user?.fullName || user?.firstName || 'User';
-
-  const dbUser = await prisma.user.upsert({
-    where: { id: user.id },
-    update: { email, name },
-    create: { id: user.id, email, name, role: 'ATHLETE', currentRole: 'ATHLETE' }
+  const dbUser = await ensureUserFromAuth(user, {
+    defaultRole: 'ATHLETE',
+    defaultCurrentRole: 'ATHLETE'
   });
 
   return NextResponse.json(dbUser);
@@ -20,9 +17,13 @@ export async function GET(req: Request) {
 export async function PUT(req: Request) {
   const user = await currentUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const dbUser = await ensureUserFromAuth(user, {
+    defaultRole: 'ATHLETE',
+    defaultCurrentRole: 'ATHLETE'
+  });
   const body = await req.json();
   const updated = await prisma.user.update({
-    where: { id: user.id },
+    where: { id: dbUser.id },
     data: {
       name: body.name,
       units: body.units,

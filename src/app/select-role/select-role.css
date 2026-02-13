@@ -1,0 +1,76 @@
+.role-select-page {
+  min-height: calc(100vh - 56px);
+  display: grid;
+  place-items: center;
+  padding: 28px 20px 48px;
+}
+
+.role-select-card {
+  width: min(760px, 100%);
+  background: var(--background);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  padding: 28px;
+  display: grid;
+  gap: 18px;
+}
+
+.role-select-head h1 {
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.role-select-head p {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.role-select-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.role-option-form {
+  margin: 0;
+}
+
+.role-option-btn {
+  width: 100%;
+  min-height: 160px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--panel);
+  color: var(--ink);
+  text-align: left;
+  padding: 16px;
+  display: grid;
+  gap: 8px;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+}
+
+.role-option-btn:hover {
+  border-color: var(--accent);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  transform: translateY(-1px);
+}
+
+.role-option-name {
+  font-size: 17px;
+  font-weight: 800;
+}
+
+.role-option-desc {
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+@media (max-width: 900px) {
+  .role-select-grid {
+    grid-template-columns: 1fr;
+  }
+}
