@@ -35,3 +35,10 @@ Training plan management app for endurance athletes and coaches. Upload PDF trai
 - Clerk handles auth; use `auth()` in API routes, `currentUser()` in server components
 - Two user roles: ATHLETE and COACH
 - Plans have statuses: DRAFT → ACTIVE → ARCHIVED
+- UI follows Strava-inspired aesthetic: Figtree font, orange accent (#fc4c02), light gray background, white cards
+
+## Project Plan
+
+See `PROJECT_PLAN.md` for full project status, stages, checklist, and progress tracking.
+
+**At the end of every session, update `PROJECT_PLAN.md`** — refresh progress %, check off completed items, and set next actions.

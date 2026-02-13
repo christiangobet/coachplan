@@ -1,10 +1,16 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import './plans.css';
 
 type Plan = { id: string; name: string; weekCount?: number | null; status: string };
-
 type Template = { id: string; name: string; weekCount?: number | null };
+
+function statusColor(status: string) {
+  if (status === 'ACTIVE') return 'var(--green)';
+  if (status === 'DRAFT') return 'var(--amber)';
+  return 'var(--muted)';
+}
 
 export default function PlansPage() {
   const [plans, setPlans] = useState<Plan[]>([]);
@@ -49,87 +55,74 @@ export default function PlansPage() {
   };
 
   return (
-    <main>
-      <section className="card white">
-        <div className="section-title">
+    <main className="plans-page">
+      <div className="plans-header">
+        <div>
           <h1>Plans</h1>
+          <p className="muted">Your training plans and available templates.</p>
         </div>
-        <p className="muted">Your active plans and available templates.</p>
+        <a className="cta" href="/upload">Upload Plan</a>
+      </div>
+
+      {/* Active plans */}
+      <section className="plans-section">
+        <h2 className="plans-section-title">Your Plans</h2>
+        {plans.length === 0 ? (
+          <div className="plans-empty">
+            <p className="muted">No plans yet. Upload a PDF or use a template to get started.</p>
+          </div>
+        ) : (
+          <div className="plans-grid">
+            {plans.map((plan) => (
+              <a className="plan-card" href={`/plans/${plan.id}`} key={plan.id}>
+                <div className="plan-card-top">
+                  <span
+                    className="plan-status-dot"
+                    style={{ background: statusColor(plan.status) }}
+                  />
+                  <span className="plan-status-label">{plan.status}</span>
+                </div>
+                <h3 className="plan-card-name">{plan.name}</h3>
+                <span className="plan-card-meta">
+                  {plan.weekCount ? `${plan.weekCount} weeks` : 'No weeks set'}
+                </span>
+                <span className="plan-card-action">Open plan &rarr;</span>
+              </a>
+            ))}
+          </div>
+        )}
       </section>
 
-      <section className="container" style={{ marginTop: 24 }}>
-        <div className="card">
-          <div className="section-title">
-            <h3>Active plans</h3>
+      {/* Templates */}
+      <section className="plans-section">
+        <h2 className="plans-section-title">Templates</h2>
+        {error && <p style={{ color: 'var(--red)', fontSize: 14, marginBottom: 12 }}>{error}</p>}
+        {templates.length === 0 ? (
+          <div className="plans-empty">
+            <p className="muted">No templates available.</p>
           </div>
-          <p className="muted">Upload a PDF or create a plan from a template.</p>
-          <div style={{ marginTop: 12 }}>
-            <a className="cta" href="/upload">Upload plan</a>
+        ) : (
+          <div className="plans-grid">
+            {templates.map((tpl) => (
+              <div className="plan-card template" key={tpl.id}>
+                <div className="plan-card-top">
+                  <span className="plan-template-badge">Template</span>
+                </div>
+                <h3 className="plan-card-name">{tpl.name}</h3>
+                <span className="plan-card-meta">
+                  {tpl.weekCount ? `${tpl.weekCount} weeks` : 'No weeks set'}
+                </span>
+                <button
+                  className="plan-card-use"
+                  onClick={() => handleUseTemplate(tpl.id)}
+                  disabled={!userId || assigning === tpl.id}
+                >
+                  {assigning === tpl.id ? 'Assigning...' : 'Use template'}
+                </button>
+              </div>
+            ))}
           </div>
-          <table>
-            <thead>
-              <tr>
-                <th>Plan</th>
-                <th>Weeks</th>
-                <th>Status</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {plans.map((plan) => (
-                <tr key={plan.id}>
-                  <td>{plan.name}</td>
-                  <td>{plan.weekCount || '-'}</td>
-                  <td>{plan.status}</td>
-                  <td><a className="cta secondary" href={`/plans/${plan.id}`}>Open</a></td>
-                </tr>
-              ))}
-              {plans.length === 0 && (
-                <tr>
-                  <td colSpan={4} className="muted">No assigned plans yet.</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="card">
-          <div className="section-title">
-            <h3>Templates</h3>
-          </div>
-          {error && <p className="muted" style={{ color: '#b42318' }}>{error}</p>}
-          <table>
-            <thead>
-              <tr>
-                <th>Template</th>
-                <th>Weeks</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {templates.map((tpl) => (
-                <tr key={tpl.id}>
-                  <td>{tpl.name}</td>
-                  <td>{tpl.weekCount || '-'}</td>
-                  <td>
-                    <button
-                      className="cta secondary"
-                      onClick={() => handleUseTemplate(tpl.id)}
-                      disabled={!userId || assigning === tpl.id}
-                    >
-                      {assigning === tpl.id ? 'Assigning...' : 'Use template'}
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {templates.length === 0 && (
-                <tr>
-                  <td colSpan={3} className="muted">No templates yet.</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+        )}
       </section>
     </main>
   );
