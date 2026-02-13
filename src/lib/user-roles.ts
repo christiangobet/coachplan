@@ -57,13 +57,25 @@ async function inferRolesFromData(userId: string): Promise<Set<UserRole>> {
 }
 
 export async function getCurrentUserRoleContext(): Promise<UserRoleContext | null> {
-  const authUser = await currentUser();
+  let authUser;
+  try {
+    authUser = await currentUser();
+  } catch (error) {
+    console.error('Failed to read Clerk user context', error);
+    return null;
+  }
   if (!authUser) return null;
 
-  const dbUser = await ensureUserFromAuth(authUser, {
-    defaultRole: 'ATHLETE',
-    defaultCurrentRole: 'ATHLETE'
-  });
+  let dbUser;
+  try {
+    dbUser = await ensureUserFromAuth(authUser, {
+      defaultRole: 'ATHLETE',
+      defaultCurrentRole: 'ATHLETE'
+    });
+  } catch (error) {
+    console.error('Failed to sync user role context', error);
+    return null;
+  }
 
   if (!dbUser.isActive) {
     return {
@@ -85,8 +97,12 @@ export async function getCurrentUserRoleContext(): Promise<UserRoleContext | nul
     roles.add('COACH');
   }
 
-  const inferred = await inferRolesFromData(dbUser.id);
-  inferred.forEach((role) => roles.add(role));
+  try {
+    const inferred = await inferRolesFromData(dbUser.id);
+    inferred.forEach((role) => roles.add(role));
+  } catch (error) {
+    console.error('Failed to infer role context from data', error);
+  }
 
   if (roles.size === 0) roles.add('ATHLETE');
 

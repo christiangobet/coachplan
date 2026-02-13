@@ -23,7 +23,12 @@ const featureCards = [
 ];
 
 export default async function Home() {
-  const user = await currentUser();
+  let user = null;
+  try {
+    user = await currentUser();
+  } catch (error) {
+    console.error('Failed to resolve current user on landing page', error);
+  }
 
   if (user) {
     redirect("/auth/resolve-role");
