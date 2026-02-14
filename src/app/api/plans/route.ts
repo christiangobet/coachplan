@@ -9,6 +9,9 @@ import { promisify } from 'util';
 import { parseWeekWithAI } from '@/lib/ai-plan-parser';
 import { alignWeeksToRaceDate } from '@/lib/clone-plan';
 
+export const runtime = 'nodejs';
+export const maxDuration = 300;
+
 const execFileAsync = promisify(execFile);
 const DAY_KEYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 const ENABLE_AI_WEEK_PARSE = process.env.ENABLE_AI_WEEK_PARSE === 'true';
@@ -274,7 +277,7 @@ async function parsePdfToJson(planId: string, pdfPath: string, name: string) {
         '--name',
         name
       ],
-      { timeout: 45000, maxBuffer: 8 * 1024 * 1024 }
+      { timeout: 180000, maxBuffer: 8 * 1024 * 1024 }
     );
   } catch (error) {
     const err = error as Error & { stderr?: string; message: string };

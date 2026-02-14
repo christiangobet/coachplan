@@ -28,6 +28,8 @@ export default function UploadPage() {
     setStatus('saving');
     setMessage('');
     try {
+      const controller = new AbortController();
+      const timeoutId = window.setTimeout(() => controller.abort(), 240000);
       const form = new FormData();
       form.append('name', name.trim());
       if (raceName.trim()) form.append('raceName', raceName.trim());
@@ -36,8 +38,10 @@ export default function UploadPage() {
 
       const res = await fetch('/api/plans', {
         method: 'POST',
-        body: form
+        body: form,
+        signal: controller.signal
       });
+      window.clearTimeout(timeoutId);
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || 'Upload failed');
       if (data?.plan?.id) {
@@ -49,7 +53,11 @@ export default function UploadPage() {
       }
     } catch (err: unknown) {
       setStatus('error');
-      setMessage(err instanceof Error ? err.message : 'Upload failed');
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        setMessage('Upload timed out. Please try again or use a smaller/simpler PDF.');
+      } else {
+        setMessage(err instanceof Error ? err.message : 'Upload failed');
+      }
     } finally {
       setStatus('idle');
     }
