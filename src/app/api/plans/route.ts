@@ -156,6 +156,40 @@ function resolveDistanceFromSegmentMetrics(metrics: Record<string, unknown>, raw
   return { distance: null, distanceUnit: null };
 }
 
+function resolveDistanceFromText(rawText: string): DistanceParseResult {
+  const text = rawText.toLowerCase();
+
+  const repeated = text.match(
+    /(\d+)\s*x\s*(\d+(?:\.\d+)?)\s*(mile|miles|mi|km|kms|kilometer|kilometre|kilometers|kilometres|k|m|meter|meters|metre|metres)\b/
+  );
+  if (repeated) {
+    const reps = Number(repeated[1]);
+    const each = Number(repeated[2]);
+    const unitToken = repeated[3] === 'k' ? 'km' : repeated[3];
+    if (Number.isFinite(reps) && reps > 0 && Number.isFinite(each) && each > 0) {
+      return normalizeDistanceValue(reps * each, asUpperDistanceUnit(unitToken));
+    }
+  }
+
+  const withUnit = text.match(
+    /(\d+(?:\.\d+)?(?:\s*-\s*\d+(?:\.\d+)?)?)\s*(miles?|mile|mi|km|kms|kilometers?|kilometres?|k|meters?|metres?|m)\b/
+  );
+  if (withUnit) {
+    const range = parseRange(withUnit[1].replace(/\s/g, ''));
+    const unitToken = withUnit[2] === 'k' ? 'km' : withUnit[2];
+    if (range) {
+      return normalizeDistanceValue(range.max, asUpperDistanceUnit(unitToken));
+    }
+  }
+
+  const compactK = text.match(/\b(\d+(?:\.\d+)?)k\b/);
+  if (compactK) {
+    return normalizeDistanceValue(Number(compactK[1]), 'KM');
+  }
+
+  return { distance: null, distanceUnit: null };
+}
+
 function inferSubtype(text: string) {
   const t = text.toLowerCase();
   if (t.includes('strength') || /\bst\s*\d/i.test(t)) return 'strength';
@@ -372,6 +406,13 @@ type ActivityDraft = {
   mustDo: boolean;
 };
 
+function ensureDistanceConsistency(activity: ActivityDraft): ActivityDraft {
+  if (activity.distance === null || activity.distanceUnit === null) {
+    return { ...activity, distance: null, distanceUnit: null };
+  }
+  return activity;
+}
+
 function normalizeMatchText(text: string | null | undefined) {
   return String(text || '')
     .toLowerCase()
@@ -413,7 +454,7 @@ function mergeActivityDraft(base: ActivityDraft, ai: ActivityDraft): ActivityDra
   const baseIsGenericTitle = base.title === 'Workout';
   const baseIsOtherType = base.type === 'OTHER';
 
-  return {
+  return ensureDistanceConsistency({
     ...base,
     type: baseIsOtherType ? (ai.type || base.type) : base.type,
     subtype: preferBaseSubtype ? base.subtype : (ai.subtype ?? base.subtype),
@@ -429,7 +470,7 @@ function mergeActivityDraft(base: ActivityDraft, ai: ActivityDraft): ActivityDra
     priority: base.priority ?? ai.priority ?? null,
     bailAllowed: base.bailAllowed || ai.bailAllowed,
     mustDo: base.mustDo || ai.mustDo
-  };
+  });
 }
 
 function mergeDayActivitiesWithAI(baseActivities: ActivityDraft[], aiActivities: ActivityDraft[]) {
@@ -506,26 +547,29 @@ function buildDeterministicActivities(args: { planId: string; dayId: string; ent
       const structuredDistance = parsedDistance.distance === null
         ? resolveDistanceFromStructure(structure)
         : parsedDistance;
+      const textDistance = structuredDistance.distance === null
+        ? resolveDistanceFromText(originalText)
+        : structuredDistance;
       const title =
         activityType === 'REST'
           ? 'Rest Day'
           : SUBTYPE_TITLES[subtype] || titleCase(subtype === 'unknown' ? 'Workout' : subtype);
 
-      drafts.push({
+      drafts.push(ensureDistanceConsistency({
         planId,
         dayId,
         type: activityType,
         subtype,
         title,
         rawText: cleanText || originalText,
-        distance: structuredDistance.distance,
-        distanceUnit: structuredDistance.distanceUnit,
+        distance: textDistance.distance,
+        distanceUnit: textDistance.distanceUnit,
         duration,
         structure: structure || null,
         priority: mustDo ? 'KEY' : bailAllowed ? 'OPTIONAL' : null,
         mustDo,
         bailAllowed
-      });
+      }));
     }
   }
 
@@ -542,7 +586,7 @@ function buildAiActivities(args: { planId: string; dayId: string; dayRawText: st
       a.metrics?.distance?.unit ?? null,
       a.raw_text || dayRawText || ''
     );
-    drafts.push({
+    drafts.push(ensureDistanceConsistency({
       planId,
       dayId,
       type: mapAiTypeToActivityType(a.type || null),
@@ -559,7 +603,7 @@ function buildAiActivities(args: { planId: string; dayId: string; dayRawText: st
       priority: a.priority ? String(a.priority).toUpperCase() : null,
       bailAllowed: Boolean(a.constraints?.bail_allowed),
       mustDo: Boolean(a.constraints?.must_do)
-    });
+    }));
   }
 
   return drafts;
