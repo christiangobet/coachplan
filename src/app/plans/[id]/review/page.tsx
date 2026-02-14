@@ -922,7 +922,23 @@ export default function PlanReviewPage() {
                             </label>
 
                             <label className="review-field review-col-distance">
-                              <span>Distance</span>
+                              <div className="review-field-label-row">
+                                <span>Distance</span>
+                                <span className="review-help-wrap">
+                                  <button
+                                    type="button"
+                                    className="review-help-dot"
+                                    aria-label="Distance unit help"
+                                  >
+                                    ?
+                                  </button>
+                                  <span className="review-help-popover" role="tooltip">
+                                    {hasDistance
+                                      ? 'Unit is auto-set by parser/profile. Change only if needed.'
+                                      : `Unit will default to ${viewerUnits === 'KM' ? 'km' : 'mi'} once distance is entered.`}
+                                  </span>
+                                </span>
+                              </div>
                               <div className={`review-distance-input-row${hasDistance ? '' : ' single'}`}>
                                 <input
                                   type="number"
@@ -946,11 +962,6 @@ export default function PlanReviewPage() {
                                   </select>
                                 )}
                               </div>
-                              <small className="review-field-hint">
-                                {hasDistance
-                                  ? 'Unit is auto-set by parser/profile. Change only if needed.'
-                                  : `Unit will default to ${viewerUnits === 'KM' ? 'km' : 'mi'} once distance is entered.`}
-                              </small>
                             </label>
 
                             <label className="review-field review-col-duration">
