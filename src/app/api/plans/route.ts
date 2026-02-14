@@ -18,7 +18,7 @@ const execFileAsync = promisify(execFile);
 const DAY_KEYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 const DAY_LABELS = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
 const TABLE_LABELS = ['WEEK', ...DAY_LABELS];
-const ENABLE_AI_WEEK_PARSE = process.env.ENABLE_AI_WEEK_PARSE === 'true';
+const ENABLE_AI_WEEK_PARSE = process.env.ENABLE_AI_WEEK_PARSE !== 'false' && Boolean(process.env.OPENAI_API_KEY);
 
 const RUN_SUBTYPES = new Set([
   'tempo',
@@ -183,12 +183,22 @@ function inferSubtype(text: string) {
 }
 
 function mapActivityType(subtype: string) {
+  if (subtype === 'run') return 'RUN';
   if (subtype === 'strength') return 'STRENGTH';
   if (subtype === 'cross-training') return 'CROSS_TRAIN';
   if (subtype === 'rest') return 'REST';
   if (subtype === 'hike') return 'HIKE';
   if (subtype === 'yoga') return 'OTHER';
   if (RUN_SUBTYPES.has(subtype)) return 'RUN';
+  return 'OTHER';
+}
+
+function mapAiTypeToActivityType(type: string | null | undefined) {
+  if (type === 'run') return 'RUN';
+  if (type === 'strength') return 'STRENGTH';
+  if (type === 'cross_train') return 'CROSS_TRAIN';
+  if (type === 'rest') return 'REST';
+  if (type === 'hike') return 'HIKE';
   return 'OTHER';
 }
 
@@ -341,6 +351,218 @@ function splitCombinedActivities(text: string) {
 
   flush();
   return parts.length ? parts : [source];
+}
+
+type ActivityDraft = {
+  planId: string;
+  dayId: string;
+  type: string;
+  subtype: string | null;
+  title: string;
+  rawText: string | null;
+  distance: number | null;
+  distanceUnit: 'MILES' | 'KM' | null;
+  duration: number | null;
+  paceTarget?: string | null;
+  effortTarget?: string | null;
+  structure?: any;
+  tags?: any;
+  priority: string | null;
+  bailAllowed: boolean;
+  mustDo: boolean;
+};
+
+function normalizeMatchText(text: string | null | undefined) {
+  return String(text || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function scoreActivityMatch(base: ActivityDraft, ai: ActivityDraft) {
+  let score = 0;
+
+  if (base.type === ai.type) score += 4;
+  if (base.subtype && ai.subtype && base.subtype === ai.subtype) score += 4;
+
+  const baseRaw = normalizeMatchText(base.rawText);
+  const aiRaw = normalizeMatchText(ai.rawText);
+  if (baseRaw && aiRaw) {
+    if (baseRaw === aiRaw) score += 8;
+    else if (baseRaw.includes(aiRaw) || aiRaw.includes(baseRaw)) score += 5;
+  }
+
+  const baseTitle = normalizeMatchText(base.title);
+  const aiTitle = normalizeMatchText(ai.title);
+  if (baseTitle && aiTitle) {
+    if (baseTitle === aiTitle) score += 3;
+    else if (baseTitle.includes(aiTitle) || aiTitle.includes(baseTitle)) score += 2;
+  }
+
+  if (base.distance !== null && ai.distance !== null && base.distanceUnit && ai.distanceUnit && base.distanceUnit === ai.distanceUnit) {
+    const delta = Math.abs(base.distance - ai.distance);
+    if (delta < 0.2) score += 2;
+    else if (delta < 0.5) score += 1;
+  }
+
+  return score;
+}
+
+function mergeActivityDraft(base: ActivityDraft, ai: ActivityDraft): ActivityDraft {
+  const preferBaseSubtype = Boolean(base.subtype && base.subtype !== 'unknown');
+  const baseIsGenericTitle = base.title === 'Workout';
+  const baseIsOtherType = base.type === 'OTHER';
+
+  return {
+    ...base,
+    type: baseIsOtherType ? (ai.type || base.type) : base.type,
+    subtype: preferBaseSubtype ? base.subtype : (ai.subtype ?? base.subtype),
+    title: baseIsGenericTitle && ai.title ? ai.title : base.title,
+    rawText: base.rawText || ai.rawText || null,
+    distance: base.distance ?? ai.distance,
+    distanceUnit: base.distanceUnit ?? ai.distanceUnit,
+    duration: base.duration ?? ai.duration,
+    paceTarget: base.paceTarget ?? ai.paceTarget ?? null,
+    effortTarget: base.effortTarget ?? ai.effortTarget ?? null,
+    structure: base.structure || ai.structure || null,
+    tags: base.tags || ai.tags || null,
+    priority: base.priority ?? ai.priority ?? null,
+    bailAllowed: base.bailAllowed || ai.bailAllowed,
+    mustDo: base.mustDo || ai.mustDo
+  };
+}
+
+function mergeDayActivitiesWithAI(baseActivities: ActivityDraft[], aiActivities: ActivityDraft[]) {
+  if (!aiActivities.length) return baseActivities;
+  if (!baseActivities.length) return aiActivities;
+
+  const usedAi = new Set<number>();
+  const merged: ActivityDraft[] = [];
+
+  for (const base of baseActivities) {
+    let bestIdx = -1;
+    let bestScore = -1;
+
+    for (let i = 0; i < aiActivities.length; i += 1) {
+      if (usedAi.has(i)) continue;
+      const score = scoreActivityMatch(base, aiActivities[i]);
+      if (score > bestScore) {
+        bestScore = score;
+        bestIdx = i;
+      }
+    }
+
+    if (bestIdx >= 0 && bestScore >= 4) {
+      usedAi.add(bestIdx);
+      merged.push(mergeActivityDraft(base, aiActivities[bestIdx]));
+    } else {
+      merged.push(base);
+    }
+  }
+
+  for (let i = 0; i < aiActivities.length; i += 1) {
+    if (!usedAi.has(i)) merged.push(aiActivities[i]);
+  }
+
+  return merged;
+}
+
+function buildDeterministicActivities(args: { planId: string; dayId: string; entry: any }) {
+  const { planId, dayId, entry } = args;
+  const drafts: ActivityDraft[] = [];
+
+  const segments = entry?.segments_parsed?.length
+    ? entry.segments_parsed
+    : [
+        {
+          text: entry?.raw || '',
+          type: entry?.type_guess || 'unknown',
+          metrics: entry?.metrics || {}
+        }
+      ];
+
+  for (const seg of segments) {
+    const splitSegments = splitCombinedActivities(seg.text || '');
+    const variants = splitSegments.flatMap((segmentText) => expandAlternatives(segmentText));
+    for (const variantText of variants) {
+      const originalText = variantText.trim();
+      if (!originalText) continue;
+
+      const inferred = inferSubtype(originalText);
+      const subtype = inferred !== 'unknown' ? inferred : (seg.type || 'unknown');
+      const activityType = mapActivityType(subtype);
+      const cleanText = originalText.replace(/[★♥]/g, '').trim();
+      const mustDo = originalText.includes('★');
+      const bailAllowed = originalText.includes('♥');
+
+      const metrics = seg.metrics || {};
+      const parsedDistance = resolveDistanceFromSegmentMetrics(metrics, originalText);
+      const duration =
+        metrics?.duration_minutes ??
+        metrics?.duration_minutes_range?.[1] ??
+        null;
+
+      const structure = parseStructure(originalText);
+      const structuredDistance = parsedDistance.distance === null
+        ? resolveDistanceFromStructure(structure)
+        : parsedDistance;
+      const title =
+        activityType === 'REST'
+          ? 'Rest Day'
+          : SUBTYPE_TITLES[subtype] || titleCase(subtype === 'unknown' ? 'Workout' : subtype);
+
+      drafts.push({
+        planId,
+        dayId,
+        type: activityType,
+        subtype,
+        title,
+        rawText: cleanText || originalText,
+        distance: structuredDistance.distance,
+        distanceUnit: structuredDistance.distanceUnit,
+        duration,
+        structure: structure || null,
+        priority: mustDo ? 'KEY' : bailAllowed ? 'OPTIONAL' : null,
+        mustDo,
+        bailAllowed
+      });
+    }
+  }
+
+  return drafts;
+}
+
+function buildAiActivities(args: { planId: string; dayId: string; dayRawText: string; aiActivities: any[] }) {
+  const { planId, dayId, dayRawText, aiActivities } = args;
+  const drafts: ActivityDraft[] = [];
+
+  for (const a of aiActivities) {
+    const aiDistance = resolveDistanceFromValueUnit(
+      a.metrics?.distance?.value ?? null,
+      a.metrics?.distance?.unit ?? null,
+      a.raw_text || dayRawText || ''
+    );
+    drafts.push({
+      planId,
+      dayId,
+      type: mapAiTypeToActivityType(a.type || null),
+      subtype: a.subtype || null,
+      title: a.title || 'Workout',
+      rawText: a.raw_text || dayRawText || null,
+      distance: aiDistance.distance,
+      distanceUnit: aiDistance.distanceUnit,
+      duration: a.metrics?.duration_min ?? null,
+      paceTarget: a.metrics?.pace_target ?? null,
+      effortTarget: a.metrics?.effort_target ?? null,
+      structure: a.structure || null,
+      tags: a.tags || null,
+      priority: a.priority ? String(a.priority).toUpperCase() : null,
+      bailAllowed: Boolean(a.constraints?.bail_allowed),
+      mustDo: Boolean(a.constraints?.must_do)
+    });
+  }
+
+  return drafts;
 }
 
 type PdfTextItem = {
@@ -689,91 +911,23 @@ export async function POST(req: Request) {
           });
 
           const aiActivities = aiWeek?.days?.[key]?.activities || [];
-          if (aiActivities.length) {
-            for (const a of aiActivities) {
-              const aiDistance = resolveDistanceFromValueUnit(
-                a.metrics?.distance?.value ?? null,
-                a.metrics?.distance?.unit ?? null,
-                a.raw_text || entry.raw || ''
-              );
-              activities.push({
+          const deterministicActivities = buildDeterministicActivities({
+            planId: plan.id,
+            dayId: day.id,
+            entry
+          });
+          const aiDrafts = aiActivities.length
+            ? buildAiActivities({
                 planId: plan.id,
                 dayId: day.id,
-                type: a.type === 'cross_train' ? 'CROSS_TRAIN' : (a.type || 'OTHER').toUpperCase(),
-                subtype: a.subtype || null,
-                title: a.title,
-                rawText: a.raw_text || entry.raw || null,
-                distance: aiDistance.distance,
-                distanceUnit: aiDistance.distanceUnit,
-                duration: a.metrics?.duration_min ?? null,
-                paceTarget: a.metrics?.pace_target ?? null,
-                effortTarget: a.metrics?.effort_target ?? null,
-                structure: a.structure || null,
-                tags: a.tags || null,
-                priority: a.priority ? a.priority.toUpperCase() : null,
-                bailAllowed: a.constraints?.bail_allowed ?? false,
-                mustDo: a.constraints?.must_do ?? false
-              });
-            }
-          } else {
-            const segments = entry?.segments_parsed?.length
-              ? entry.segments_parsed
-              : [
-                  {
-                    text: entry.raw || '',
-                    type: entry.type_guess || 'unknown',
-                    metrics: entry.metrics || {}
-                  }
-                ];
-
-            for (const seg of segments) {
-              const splitSegments = splitCombinedActivities(seg.text || '');
-              const variants = splitSegments.flatMap((segmentText) => expandAlternatives(segmentText));
-              for (const variantText of variants) {
-                const originalText = variantText.trim();
-                if (!originalText) continue;
-
-                const inferred = inferSubtype(originalText);
-                const subtype = inferred !== 'unknown' ? inferred : (seg.type || 'unknown');
-                const activityType = mapActivityType(subtype);
-                const cleanText = originalText.replace(/[★♥]/g, '').trim();
-                const mustDo = originalText.includes('★');
-                const bailAllowed = originalText.includes('♥');
-
-                const metrics = seg.metrics || {};
-                const parsedDistance = resolveDistanceFromSegmentMetrics(metrics, originalText);
-                const duration =
-                  metrics?.duration_minutes ??
-                  metrics?.duration_minutes_range?.[1] ??
-                  null;
-
-                const structure = parseStructure(originalText);
-                const structuredDistance = parsedDistance.distance === null
-                  ? resolveDistanceFromStructure(structure)
-                  : parsedDistance;
-                const title =
-                  activityType === 'REST'
-                    ? 'Rest Day'
-                    : SUBTYPE_TITLES[subtype] || titleCase(subtype === 'unknown' ? 'Workout' : subtype);
-
-                activities.push({
-                  planId: plan.id,
-                  dayId: day.id,
-                  type: activityType,
-                  subtype,
-                  title,
-                  rawText: cleanText || originalText,
-                  distance: structuredDistance.distance,
-                  distanceUnit: structuredDistance.distanceUnit,
-                  duration,
-                  structure: structure || null,
-                  priority: mustDo ? 'KEY' : bailAllowed ? 'OPTIONAL' : null,
-                  mustDo,
-                  bailAllowed
-                });
-              }
-            }
-          }
+                dayRawText: entry.raw || '',
+                aiActivities
+              })
+            : [];
+          const mergedActivities = aiDrafts.length
+            ? mergeDayActivitiesWithAI(deterministicActivities, aiDrafts)
+            : deterministicActivities;
+          activities.push(...mergedActivities);
         }
       }
 
