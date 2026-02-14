@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import './review.css';
 
@@ -165,6 +165,24 @@ function removeActivityFromPlan(
   };
 }
 
+function setFlag(
+  previous: Record<string, boolean>,
+  id: string,
+  enabled: boolean
+) {
+  const next = { ...previous };
+  if (enabled) next[id] = true;
+  else delete next[id];
+  return next;
+}
+
+function formatSavedTime(timestamp: number) {
+  return new Intl.DateTimeFormat(undefined, {
+    hour: '2-digit',
+    minute: '2-digit'
+  }).format(new Date(timestamp));
+}
+
 export default function PlanReviewPage() {
   const params = useParams<{ id: string }>();
   const searchParams = useSearchParams();
@@ -177,21 +195,30 @@ export default function PlanReviewPage() {
   const [notice, setNotice] = useState<string | null>(null);
 
   const [dayDrafts, setDayDrafts] = useState<Record<string, string>>({});
-  const [savingDayId, setSavingDayId] = useState<string | null>(null);
+  const [expandedDayNotes, setExpandedDayNotes] = useState<Record<string, boolean>>({});
+  const [savingDayIds, setSavingDayIds] = useState<Record<string, boolean>>({});
+  const [queuedDayIds, setQueuedDayIds] = useState<Record<string, boolean>>({});
 
   const [activityDrafts, setActivityDrafts] = useState<Record<string, ActivityDraft>>({});
-  const [savingActivityId, setSavingActivityId] = useState<string | null>(null);
+  const [savingActivityIds, setSavingActivityIds] = useState<Record<string, boolean>>({});
+  const [queuedActivityIds, setQueuedActivityIds] = useState<Record<string, boolean>>({});
   const [creatingDayId, setCreatingDayId] = useState<string | null>(null);
   const [deletingActivityId, setDeletingActivityId] = useState<string | null>(null);
   const [viewerUnits, setViewerUnits] = useState<DistanceUnitValue>('MILES');
+  const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
+
+  const daySaveTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const activitySaveTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   const initializeDrafts = useCallback((nextPlan: ReviewPlan, fallbackUnit: DistanceUnitValue) => {
     const nextDayDrafts: Record<string, string> = {};
+    const nextExpandedDayNotes: Record<string, boolean> = {};
     const nextActivityDrafts: Record<string, ActivityDraft> = {};
 
     for (const week of nextPlan.weeks || []) {
       for (const day of week.days || []) {
         nextDayDrafts[day.id] = day.rawText || '';
+        nextExpandedDayNotes[day.id] = true;
         for (const activity of day.activities || []) {
           nextActivityDrafts[activity.id] = toActivityDraft(activity, fallbackUnit);
         }
@@ -199,6 +226,7 @@ export default function PlanReviewPage() {
     }
 
     setDayDrafts(nextDayDrafts);
+    setExpandedDayNotes(nextExpandedDayNotes);
     setActivityDrafts(nextActivityDrafts);
   }, []);
 
@@ -207,6 +235,14 @@ export default function PlanReviewPage() {
     setLoading(true);
     setError(null);
     setNotice(null);
+    setSavingDayIds({});
+    setQueuedDayIds({});
+    setSavingActivityIds({});
+    setQueuedActivityIds({});
+    Object.values(daySaveTimersRef.current).forEach((timer) => clearTimeout(timer));
+    Object.values(activitySaveTimersRef.current).forEach((timer) => clearTimeout(timer));
+    daySaveTimersRef.current = {};
+    activitySaveTimersRef.current = {};
 
     try {
       const res = await fetch(`/api/plans/${planId}`);
@@ -230,6 +266,15 @@ export default function PlanReviewPage() {
   useEffect(() => {
     loadPlan();
   }, [loadPlan]);
+
+  useEffect(() => {
+    return () => {
+      Object.values(daySaveTimersRef.current).forEach((timer) => clearTimeout(timer));
+      Object.values(activitySaveTimersRef.current).forEach((timer) => clearTimeout(timer));
+      daySaveTimersRef.current = {};
+      activitySaveTimersRef.current = {};
+    };
+  }, []);
 
   useEffect(() => {
     if (!searchParams) return;
@@ -262,36 +307,35 @@ export default function PlanReviewPage() {
     return { totalWeeks, totalActivities, unassignedCount };
   }, [plan, unassigned]);
 
-  const setActivityDraftField = useCallback(
-    (activityId: string, field: keyof ActivityDraft, value: string) => {
-      setActivityDrafts((prev) => {
-        const current = prev[activityId];
-        if (!current) return prev;
-        return {
-          ...prev,
-          [activityId]: { ...current, [field]: value }
-        };
-      });
-    },
-    []
-  );
+  const autosaveState = useMemo(() => {
+    const queuedCount = Object.keys(queuedDayIds).length + Object.keys(queuedActivityIds).length;
+    const savingCount = Object.keys(savingDayIds).length + Object.keys(savingActivityIds).length;
+    const busy = queuedCount + savingCount > 0;
+    const label = busy
+      ? 'Saving changes…'
+      : lastSavedAt
+        ? `All changes saved at ${formatSavedTime(lastSavedAt)}`
+        : 'Changes save automatically';
+    return { busy, label };
+  }, [lastSavedAt, queuedActivityIds, queuedDayIds, savingActivityIds, savingDayIds]);
 
-  const saveDay = useCallback(
-    async (dayId: string) => {
+  const persistDay = useCallback(
+    async (dayId: string, rawText: string) => {
       if (!planId) return;
-      setSavingDayId(dayId);
+
+      setQueuedDayIds((prev) => setFlag(prev, dayId, false));
+      setSavingDayIds((prev) => setFlag(prev, dayId, true));
       setError(null);
-      setNotice(null);
 
       try {
         const res = await fetch(`/api/plans/${planId}/review/days/${dayId}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ rawText: dayDrafts[dayId] || '' })
+          body: JSON.stringify({ rawText })
         });
         const data = await res.json().catch(() => null);
         if (!res.ok) {
-          setError(data?.error || 'Failed to save day');
+          setError(data?.error || 'Failed to autosave day notes');
           return;
         }
         const updatedDay = data?.day as ReviewDay;
@@ -302,47 +346,55 @@ export default function PlanReviewPage() {
             activities: updatedDay.activities as ReviewActivity[]
           }));
         });
-        setDayDrafts((prev) => ({ ...prev, [dayId]: updatedDay.rawText || '' }));
-        setNotice('Day updated');
+        setLastSavedAt(Date.now());
       } catch {
-        setError('Failed to save day');
+        setError('Failed to autosave day notes');
       } finally {
-        setSavingDayId(null);
+        setSavingDayIds((prev) => setFlag(prev, dayId, false));
       }
     },
-    [planId, dayDrafts]
+    [planId]
   );
 
-  const saveActivity = useCallback(
-    async (activityId: string) => {
+  const queueDayAutosave = useCallback(
+    (dayId: string, rawText: string) => {
+      const existing = daySaveTimersRef.current[dayId];
+      if (existing) clearTimeout(existing);
+      setQueuedDayIds((prev) => setFlag(prev, dayId, true));
+      daySaveTimersRef.current[dayId] = setTimeout(() => {
+        delete daySaveTimersRef.current[dayId];
+        void persistDay(dayId, rawText);
+      }, 700);
+    },
+    [persistDay]
+  );
+
+  const setDayDraftField = useCallback(
+    (dayId: string, value: string) => {
+      setDayDrafts((prev) => ({ ...prev, [dayId]: value }));
+      queueDayAutosave(dayId, value);
+    },
+    [queueDayAutosave]
+  );
+
+  const persistActivity = useCallback(
+    async (activityId: string, draft: ActivityDraft) => {
       if (!planId) return;
-      const draft = activityDrafts[activityId];
-      if (!draft) return;
-      if (!draft.title.trim()) {
-        setError('Activity title is required');
-        return;
-      }
+      if (!draft.title.trim()) return;
 
       const parsedDistance = draft.distance.trim() === '' ? null : Number(draft.distance);
       const parsedDuration = draft.duration.trim() === '' ? null : Number(draft.duration);
 
-      if (parsedDistance !== null && (!Number.isFinite(parsedDistance) || parsedDistance < 0)) {
-        setError('Distance must be a non-negative number');
-        return;
-      }
-      const resolvedDistanceUnit = (draft.distanceUnit || viewerUnits) as DistanceUnitValue;
-
+      if (parsedDistance !== null && (!Number.isFinite(parsedDistance) || parsedDistance < 0)) return;
       if (
         parsedDuration !== null
         && (!Number.isFinite(parsedDuration) || parsedDuration < 0 || !Number.isInteger(parsedDuration))
-      ) {
-        setError('Duration must be a non-negative integer');
-        return;
-      }
+      ) return;
 
-      setSavingActivityId(activityId);
+      const resolvedDistanceUnit = (draft.distanceUnit || viewerUnits) as DistanceUnitValue;
+      setQueuedActivityIds((prev) => setFlag(prev, activityId, false));
+      setSavingActivityIds((prev) => setFlag(prev, activityId, true));
       setError(null);
-      setNotice(null);
 
       try {
         const res = await fetch(`/api/plans/${planId}/review/activities/${activityId}`, {
@@ -361,7 +413,7 @@ export default function PlanReviewPage() {
         });
         const data = await res.json().catch(() => null);
         if (!res.ok) {
-          setError(data?.error || 'Failed to save activity');
+          setError(data?.error || 'Failed to autosave activity');
           return;
         }
         const updatedActivity = data?.activity as ReviewActivity;
@@ -369,15 +421,43 @@ export default function PlanReviewPage() {
           if (!prev) return prev;
           return applyActivityUpdateToPlan(prev, activityId, () => updatedActivity);
         });
-        setActivityDrafts((prev) => ({ ...prev, [activityId]: toActivityDraft(updatedActivity, viewerUnits) }));
-        setNotice('Activity updated');
+        setLastSavedAt(Date.now());
       } catch {
-        setError('Failed to save activity');
+        setError('Failed to autosave activity');
       } finally {
-        setSavingActivityId(null);
+        setSavingActivityIds((prev) => setFlag(prev, activityId, false));
       }
     },
-    [activityDrafts, planId, viewerUnits]
+    [planId, viewerUnits]
+  );
+
+  const queueActivityAutosave = useCallback(
+    (activityId: string, draft: ActivityDraft) => {
+      const existing = activitySaveTimersRef.current[activityId];
+      if (existing) clearTimeout(existing);
+      setQueuedActivityIds((prev) => setFlag(prev, activityId, true));
+      activitySaveTimersRef.current[activityId] = setTimeout(() => {
+        delete activitySaveTimersRef.current[activityId];
+        void persistActivity(activityId, draft);
+      }, 700);
+    },
+    [persistActivity]
+  );
+
+  const setActivityDraftField = useCallback(
+    (activityId: string, field: keyof ActivityDraft, value: string) => {
+      setActivityDrafts((prev) => {
+        const current = prev[activityId];
+        if (!current) return prev;
+        const nextDraft = { ...current, [field]: value };
+        queueActivityAutosave(activityId, nextDraft);
+        return {
+          ...prev,
+          [activityId]: nextDraft
+        };
+      });
+    },
+    [queueActivityAutosave]
   );
 
   const addActivity = useCallback(
@@ -414,6 +494,13 @@ export default function PlanReviewPage() {
   const deleteActivity = useCallback(
     async (activityId: string) => {
       if (!planId) return;
+      const timer = activitySaveTimersRef.current[activityId];
+      if (timer) {
+        clearTimeout(timer);
+        delete activitySaveTimersRef.current[activityId];
+      }
+      setQueuedActivityIds((prev) => setFlag(prev, activityId, false));
+      setSavingActivityIds((prev) => setFlag(prev, activityId, false));
       setDeletingActivityId(activityId);
       setError(null);
       setNotice(null);
@@ -432,6 +519,7 @@ export default function PlanReviewPage() {
           delete next[activityId];
           return next;
         });
+        setLastSavedAt(Date.now());
         setNotice('Activity removed');
       } catch {
         setError('Failed to delete activity');
@@ -510,6 +598,8 @@ export default function PlanReviewPage() {
           </div>
         </div>
 
+        <p className={`review-autosave ${autosaveState.busy ? 'busy' : ''}`}>{autosaveState.label}</p>
+
         {notice && <p className="review-notice">{notice}</p>}
         {error && <p className="review-error">{error}</p>}
       </section>
@@ -527,11 +617,22 @@ export default function PlanReviewPage() {
 
               {days.length === 0 && <p className="review-muted">No days parsed for this week.</p>}
 
-              {days.map((day) => (
+              {days.map((day) => {
+                const notesOpen = expandedDayNotes[day.id] ?? true;
+                return (
                 <div key={day.id} className="review-day-block">
                   <div className="review-day-head">
                     <span className="review-day-pill">{DAY_LABELS[(day.dayOfWeek || 1) - 1] || 'Day'}</span>
                     <div className="review-day-actions">
+                      <button
+                        className="review-save-btn secondary"
+                        type="button"
+                        onClick={() =>
+                          setExpandedDayNotes((prev) => ({ ...prev, [day.id]: !notesOpen }))
+                        }
+                      >
+                        {notesOpen ? 'Hide Notes' : 'Show Notes'}
+                      </button>
                       <button
                         className="review-save-btn"
                         type="button"
@@ -540,48 +641,36 @@ export default function PlanReviewPage() {
                       >
                         {creatingDayId === day.id ? 'Adding…' : 'Add Activity'}
                       </button>
-                      <button
-                        className="review-save-btn"
-                        type="button"
-                        onClick={() => saveDay(day.id)}
-                        disabled={savingDayId === day.id}
-                      >
-                        {savingDayId === day.id ? 'Saving…' : 'Save Day'}
-                      </button>
                     </div>
                   </div>
 
-                  <label className="review-field">
-                    <span>Day notes / source text</span>
-                    <textarea
-                      value={dayDrafts[day.id] || ''}
-                      onChange={(event) =>
-                        setDayDrafts((prev) => ({ ...prev, [day.id]: event.target.value }))
-                      }
-                      rows={2}
-                    />
-                  </label>
+                  {notesOpen && (
+                    <label className="review-field">
+                      <span>Day notes / source text</span>
+                      <textarea
+                        value={dayDrafts[day.id] || ''}
+                        onChange={(event) =>
+                          setDayDraftField(day.id, event.target.value)
+                        }
+                        rows={2}
+                      />
+                    </label>
+                  )}
 
                   <div className="review-activity-list">
                     {(day.activities || []).map((activity) => {
                       const draft = activityDrafts[activity.id] || toActivityDraft(activity, viewerUnits);
                       const paceUnitLabel = (draft.distanceUnit || viewerUnits) === 'KM' ? 'km' : 'mi';
                       const hasDistance = draft.distance.trim() !== '';
+                      const activitySaving = Boolean(savingActivityIds[activity.id] || queuedActivityIds[activity.id]);
                       return (
                         <div key={activity.id} className="review-activity-item">
                           <div className="review-activity-top">
                             <strong>{activity.type.replace(/_/g, ' ')}</strong>
                             <div className="review-activity-actions">
+                              {activitySaving && <span className="review-inline-status">Saving…</span>}
                               <button
-                                className="review-save-btn"
-                                type="button"
-                                onClick={() => saveActivity(activity.id)}
-                                disabled={savingActivityId === activity.id}
-                              >
-                                {savingActivityId === activity.id ? 'Saving…' : 'Save Activity'}
-                              </button>
-                              <button
-                                className="review-delete-btn"
+                                className="review-delete-btn text"
                                 type="button"
                                 onClick={() => deleteActivity(activity.id)}
                                 disabled={deletingActivityId === activity.id}
@@ -592,7 +681,7 @@ export default function PlanReviewPage() {
                           </div>
 
                           <div className="review-activity-grid">
-                            <label className="review-field">
+                            <label className="review-field span-two">
                               <span>Title</span>
                               <input
                                 type="text"
@@ -666,7 +755,7 @@ export default function PlanReviewPage() {
                               />
                             </label>
 
-                            <label className="review-field">
+                            <label className="review-field span-two">
                               <span>Pace target</span>
                               <input
                                 type="text"
@@ -678,7 +767,7 @@ export default function PlanReviewPage() {
                               />
                             </label>
 
-                            <label className="review-field">
+                            <label className="review-field span-two">
                               <span>Effort target</span>
                               <input
                                 type="text"
@@ -706,7 +795,8 @@ export default function PlanReviewPage() {
                     })}
                   </div>
                 </div>
-              ))}
+              );
+              })}
             </article>
           );
         })}
