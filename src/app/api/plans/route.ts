@@ -3,6 +3,7 @@ import { currentUser } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
 import { promises as fs } from 'fs';
 import path from 'path';
+import os from 'os';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { parseWeekWithAI } from '@/lib/ai-plan-parser';
@@ -10,6 +11,7 @@ import { alignWeeksToRaceDate } from '@/lib/clone-plan';
 
 const execFileAsync = promisify(execFile);
 const DAY_KEYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+const ENABLE_AI_WEEK_PARSE = process.env.ENABLE_AI_WEEK_PARSE === 'true';
 
 const RUN_SUBTYPES = new Set([
   'tempo',
@@ -256,19 +258,29 @@ export async function GET(req: Request) {
 
 async function parsePdfToJson(planId: string, pdfPath: string, name: string) {
   const scriptPath = path.join(process.cwd(), 'scripts', 'parse_plan_pdf.py');
-  const outputDir = path.join(process.cwd(), 'tmp', 'parsed');
+  const outputDir = path.join(os.tmpdir(), 'coachplan', 'parsed');
   const outputPath = path.join(outputDir, `${planId}.json`);
   await fs.mkdir(outputDir, { recursive: true });
 
-  await execFileAsync('python3', [
-    scriptPath,
-    '--input',
-    pdfPath,
-    '--output',
-    outputPath,
-    '--name',
-    name
-  ]);
+  try {
+    await execFileAsync(
+      'python3',
+      [
+        scriptPath,
+        '--input',
+        pdfPath,
+        '--output',
+        outputPath,
+        '--name',
+        name
+      ],
+      { timeout: 45000, maxBuffer: 8 * 1024 * 1024 }
+    );
+  } catch (error) {
+    const err = error as Error & { stderr?: string; message: string };
+    const details = err.stderr?.trim() || err.message || 'Unknown parser failure';
+    throw new Error(`PDF parse failed: ${details}`);
+  }
 
   const raw = await fs.readFile(outputPath, 'utf-8');
   return JSON.parse(raw);
@@ -316,13 +328,14 @@ export async function POST(req: Request) {
   });
 
   if (file && file.size > 0) {
-    const uploadDir = path.join(process.cwd(), 'tmp', 'uploads');
-    await fs.mkdir(uploadDir, { recursive: true });
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const pdfPath = path.join(uploadDir, `${plan.id}.pdf`);
-    await fs.writeFile(pdfPath, buffer);
+    const uploadDir = path.join(os.tmpdir(), 'coachplan', 'uploads');
 
     try {
+      await fs.mkdir(uploadDir, { recursive: true });
+      const buffer = Buffer.from(await file.arrayBuffer());
+      const pdfPath = path.join(uploadDir, `${plan.id}.pdf`);
+      await fs.writeFile(pdfPath, buffer);
+
       const parsed = await parsePdfToJson(plan.id, pdfPath, name);
       const weeks = Array.isArray(parsed?.weeks) ? parsed.weeks : [];
 
@@ -348,15 +361,17 @@ export async function POST(req: Request) {
         });
 
         let aiWeek = null;
-        try {
-          aiWeek = await parseWeekWithAI({
-            planName: name,
-            weekNumber: i + 1,
-            days: rawDays,
-            legend: parsed?.glossary?.note || undefined
-          });
-        } catch {
-          aiWeek = null;
+        if (ENABLE_AI_WEEK_PARSE) {
+          try {
+            aiWeek = await parseWeekWithAI({
+              planName: name,
+              weekNumber: i + 1,
+              days: rawDays,
+              legend: parsed?.glossary?.note || undefined
+            });
+          } catch {
+            aiWeek = null;
+          }
         }
 
         for (let d = 0; d < DAY_KEYS.length; d += 1) {
