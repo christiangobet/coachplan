@@ -31,6 +31,11 @@ async function appendSourcePlanName<T extends { sourceId?: string | null }>(plan
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await currentUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const profile = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { units: true }
+  });
+  const viewerUnits = profile?.units === 'KM' ? 'KM' : 'MILES';
 
   const { id } = await params;
   const plan = await prisma.trainingPlan.findUnique({
@@ -46,12 +51,17 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  return NextResponse.json({ plan: await appendSourcePlanName(plan) });
+  return NextResponse.json({ plan: await appendSourcePlanName(plan), viewerUnits });
 }
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await currentUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const profile = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { units: true }
+  });
+  const viewerUnits = profile?.units === 'KM' ? 'KM' : 'MILES';
 
   const { id } = await params;
   const body = await req.json().catch(() => null);
@@ -132,5 +142,5 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   });
 
   if (!refreshed) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  return NextResponse.json({ plan: await appendSourcePlanName(refreshed) });
+  return NextResponse.json({ plan: await appendSourcePlanName(refreshed), viewerUnits });
 }

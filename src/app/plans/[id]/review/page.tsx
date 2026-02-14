@@ -7,14 +7,17 @@ import './review.css';
 
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const ACTIVITY_TYPES = ['RUN', 'STRENGTH', 'CROSS_TRAIN', 'REST', 'MOBILITY', 'YOGA', 'HIKE', 'OTHER'] as const;
+const DISTANCE_UNITS = ['MILES', 'KM'] as const;
 
 type ActivityTypeValue = (typeof ACTIVITY_TYPES)[number];
+type DistanceUnitValue = (typeof DISTANCE_UNITS)[number];
 
 type ReviewActivity = {
   id: string;
   title: string;
   type: ActivityTypeValue;
   distance: number | null;
+  distanceUnit: DistanceUnitValue | null;
   duration: number | null;
   paceTarget: string | null;
   effortTarget: string | null;
@@ -50,17 +53,19 @@ type ActivityDraft = {
   title: string;
   type: ActivityTypeValue;
   distance: string;
+  distanceUnit: DistanceUnitValue | '';
   duration: string;
   paceTarget: string;
   effortTarget: string;
   rawText: string;
 };
 
-function toActivityDraft(activity: ReviewActivity): ActivityDraft {
+function toActivityDraft(activity: ReviewActivity, fallbackUnit: DistanceUnitValue): ActivityDraft {
   return {
     title: activity.title || '',
     type: activity.type || 'OTHER',
     distance: activity.distance === null || activity.distance === undefined ? '' : String(activity.distance),
+    distanceUnit: activity.distanceUnit || (activity.distance === null || activity.distance === undefined ? '' : fallbackUnit),
     duration: activity.duration === null || activity.duration === undefined ? '' : String(activity.duration),
     paceTarget: activity.paceTarget || '',
     effortTarget: activity.effortTarget || '',
@@ -178,8 +183,9 @@ export default function PlanReviewPage() {
   const [savingActivityId, setSavingActivityId] = useState<string | null>(null);
   const [creatingDayId, setCreatingDayId] = useState<string | null>(null);
   const [deletingActivityId, setDeletingActivityId] = useState<string | null>(null);
+  const [viewerUnits, setViewerUnits] = useState<DistanceUnitValue>('MILES');
 
-  const initializeDrafts = useCallback((nextPlan: ReviewPlan) => {
+  const initializeDrafts = useCallback((nextPlan: ReviewPlan, fallbackUnit: DistanceUnitValue) => {
     const nextDayDrafts: Record<string, string> = {};
     const nextActivityDrafts: Record<string, ActivityDraft> = {};
 
@@ -187,7 +193,7 @@ export default function PlanReviewPage() {
       for (const day of week.days || []) {
         nextDayDrafts[day.id] = day.rawText || '';
         for (const activity of day.activities || []) {
-          nextActivityDrafts[activity.id] = toActivityDraft(activity);
+          nextActivityDrafts[activity.id] = toActivityDraft(activity, fallbackUnit);
         }
       }
     }
@@ -210,8 +216,10 @@ export default function PlanReviewPage() {
         return;
       }
       const fetchedPlan = data?.plan as ReviewPlan;
+      const units = data?.viewerUnits === 'KM' ? 'KM' : 'MILES';
+      setViewerUnits(units);
       setPlan(fetchedPlan);
-      initializeDrafts(fetchedPlan);
+      initializeDrafts(fetchedPlan, units);
     } catch {
       setError('Failed to load plan.');
     } finally {
@@ -322,6 +330,10 @@ export default function PlanReviewPage() {
         setError('Distance must be a non-negative number');
         return;
       }
+      if (parsedDistance !== null && !draft.distanceUnit) {
+        setError('Please select distance unit (mi or km)');
+        return;
+      }
 
       if (
         parsedDuration !== null
@@ -343,6 +355,7 @@ export default function PlanReviewPage() {
             title: draft.title.trim(),
             type: draft.type,
             distance: parsedDistance,
+            distanceUnit: parsedDistance === null ? null : draft.distanceUnit,
             duration: parsedDuration,
             paceTarget: draft.paceTarget.trim() || null,
             effortTarget: draft.effortTarget.trim() || null,
@@ -359,7 +372,7 @@ export default function PlanReviewPage() {
           if (!prev) return prev;
           return applyActivityUpdateToPlan(prev, activityId, () => updatedActivity);
         });
-        setActivityDrafts((prev) => ({ ...prev, [activityId]: toActivityDraft(updatedActivity) }));
+        setActivityDrafts((prev) => ({ ...prev, [activityId]: toActivityDraft(updatedActivity, viewerUnits) }));
         setNotice('Activity updated');
       } catch {
         setError('Failed to save activity');
@@ -367,7 +380,7 @@ export default function PlanReviewPage() {
         setSavingActivityId(null);
       }
     },
-    [activityDrafts, planId]
+    [activityDrafts, planId, viewerUnits]
   );
 
   const addActivity = useCallback(
@@ -390,7 +403,7 @@ export default function PlanReviewPage() {
         }
         const createdActivity = data?.activity as ReviewActivity;
         setPlan((prev) => (prev ? appendActivityToDayPlan(prev, dayId, createdActivity) : prev));
-        setActivityDrafts((prev) => ({ ...prev, [createdActivity.id]: toActivityDraft(createdActivity) }));
+        setActivityDrafts((prev) => ({ ...prev, [createdActivity.id]: toActivityDraft(createdActivity, viewerUnits) }));
         setNotice('Activity added');
       } catch {
         setError('Failed to add activity');
@@ -398,7 +411,7 @@ export default function PlanReviewPage() {
         setCreatingDayId(null);
       }
     },
-    [planId]
+    [planId, viewerUnits]
   );
 
   const deleteActivity = useCallback(
@@ -554,7 +567,7 @@ export default function PlanReviewPage() {
 
                   <div className="review-activity-list">
                     {(day.activities || []).map((activity) => {
-                      const draft = activityDrafts[activity.id] || toActivityDraft(activity);
+                      const draft = activityDrafts[activity.id] || toActivityDraft(activity, viewerUnits);
                       return (
                         <div key={activity.id} className="review-activity-item">
                           <div className="review-activity-top">
@@ -620,6 +633,21 @@ export default function PlanReviewPage() {
                                   setActivityDraftField(activity.id, 'distance', event.target.value)
                                 }
                               />
+                            </label>
+
+                            <label className="review-field">
+                              <span>Distance unit</span>
+                              <select
+                                value={draft.distanceUnit}
+                                onChange={(event) =>
+                                  setActivityDraftField(activity.id, 'distanceUnit', event.target.value)
+                                }
+                              >
+                                <option value="">Select unit</option>
+                                {DISTANCE_UNITS.map((unit) => (
+                                  <option key={unit} value={unit}>{unit === 'KM' ? 'km' : 'mi'}</option>
+                                ))}
+                              </select>
                             </label>
 
                             <label className="review-field">

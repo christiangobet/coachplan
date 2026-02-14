@@ -16,6 +16,12 @@ const ACTIVITY_TYPES: ActivityType[] = [
 
 const DISTANCE_UNITS: Units[] = ['MILES', 'KM'];
 
+function convertDistanceValue(value: number, from: Units, to: Units) {
+  if (from === to) return value;
+  if (from === 'MILES' && to === 'KM') return value * 1.609344;
+  return value / 1.609344;
+}
+
 function normalizeOptionalText(input: unknown): string | null | undefined {
   if (input === undefined) return undefined;
   if (input === null) return null;
@@ -57,6 +63,18 @@ export async function PATCH(
   if (plan.status !== 'DRAFT') {
     return NextResponse.json({ error: 'Only draft plans can be edited in review' }, { status: 400 });
   }
+
+  const profile = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { units: true }
+  });
+  const preferredUnits: Units = profile?.units === 'KM' ? 'KM' : 'MILES';
+
+  const activity = await prisma.planActivity.findFirst({
+    where: { id: activityId, planId },
+    select: { id: true, distance: true, distanceUnit: true }
+  });
+  if (!activity) return NextResponse.json({ error: 'Activity not found' }, { status: 404 });
 
   const raw = body as {
     title?: unknown;
@@ -146,11 +164,19 @@ export async function PATCH(
     return NextResponse.json({ error: 'No editable fields provided' }, { status: 400 });
   }
 
-  const activity = await prisma.planActivity.findFirst({
-    where: { id: activityId, planId },
-    select: { id: true }
-  });
-  if (!activity) return NextResponse.json({ error: 'Activity not found' }, { status: 404 });
+  if (updates.distance !== undefined) {
+    if (updates.distance === null) {
+      updates.distanceUnit = null;
+    } else {
+      updates.distanceUnit = updates.distanceUnit ?? activity.distanceUnit ?? preferredUnits;
+    }
+  } else if (updates.distanceUnit !== undefined) {
+    if (updates.distanceUnit === null) {
+      updates.distance = null;
+    } else if (activity.distance !== null && activity.distanceUnit && activity.distanceUnit !== updates.distanceUnit) {
+      updates.distance = Number(convertDistanceValue(activity.distance, activity.distanceUnit, updates.distanceUnit).toFixed(2));
+    }
+  }
 
   const updated = await prisma.planActivity.update({
     where: { id: activityId },

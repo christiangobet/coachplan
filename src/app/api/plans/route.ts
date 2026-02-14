@@ -119,6 +119,24 @@ function normalizeDistanceValue(distance: number | null, unit: 'MILES' | 'KM' | 
   return { distance, distanceUnit: unit };
 }
 
+function convertDistanceValue(value: number, from: UnitPreference, to: UnitPreference) {
+  if (from === to) return value;
+  if (from === 'MILES' && to === 'KM') return value * 1.609344;
+  return value / 1.609344;
+}
+
+function convertDistanceToStorageUnit(distance: DistanceParseResult, storageUnit: UnitPreference): DistanceParseResult {
+  if (distance.distance === null || distance.distanceUnit === null) {
+    return { distance: null, distanceUnit: null };
+  }
+  if (distance.distanceUnit === storageUnit) return distance;
+  const converted = convertDistanceValue(distance.distance, distance.distanceUnit, storageUnit);
+  return {
+    distance: Number(converted.toFixed(2)),
+    distanceUnit: storageUnit
+  };
+}
+
 function resolveDistanceFromValueUnit(
   distanceCandidate: unknown,
   unitCandidate: unknown,
@@ -600,8 +618,14 @@ function mergeDayActivitiesWithAI(baseActivities: ActivityDraft[], aiActivities:
   return merged;
 }
 
-function buildDeterministicActivities(args: { planId: string; dayId: string; entry: any; defaultDistanceUnit: UnitPreference }) {
-  const { planId, dayId, entry, defaultDistanceUnit } = args;
+function buildDeterministicActivities(args: {
+  planId: string;
+  dayId: string;
+  entry: any;
+  inferredDistanceUnit: UnitPreference;
+  storageDistanceUnit: UnitPreference;
+}) {
+  const { planId, dayId, entry, inferredDistanceUnit, storageDistanceUnit } = args;
   const drafts: ActivityDraft[] = [];
 
   const segments = entry?.segments_parsed?.length
@@ -641,8 +665,9 @@ function buildDeterministicActivities(args: { planId: string; dayId: string; ent
         ? resolveDistanceFromStructure(structure)
         : parsedDistance;
       const textDistance = structuredDistance.distance === null
-        ? resolveDistanceFromText(originalText, defaultDistanceUnit)
+        ? resolveDistanceFromText(originalText, inferredDistanceUnit)
         : structuredDistance;
+      const storageDistance = convertDistanceToStorageUnit(textDistance, storageDistanceUnit);
       const title =
         activityType === 'REST'
           ? 'Rest Day'
@@ -655,8 +680,8 @@ function buildDeterministicActivities(args: { planId: string; dayId: string; ent
         subtype,
         title,
         rawText: cleanText || originalText,
-        distance: textDistance.distance,
-        distanceUnit: textDistance.distanceUnit,
+        distance: storageDistance.distance,
+        distanceUnit: storageDistance.distanceUnit,
         duration,
         structure: structure || null,
         priority: mustDo ? 'KEY' : bailAllowed ? 'OPTIONAL' : null,
@@ -674,9 +699,10 @@ function buildAiActivities(args: {
   dayId: string;
   dayRawText: string;
   aiActivities: any[];
-  defaultDistanceUnit: UnitPreference;
+  inferredDistanceUnit: UnitPreference;
+  storageDistanceUnit: UnitPreference;
 }) {
-  const { planId, dayId, dayRawText, aiActivities, defaultDistanceUnit } = args;
+  const { planId, dayId, dayRawText, aiActivities, inferredDistanceUnit, storageDistanceUnit } = args;
   const drafts: ActivityDraft[] = [];
 
   for (const a of aiActivities) {
@@ -687,8 +713,9 @@ function buildAiActivities(args: {
       a.raw_text || dayRawText || ''
     );
     const fallbackTextDistance = aiDistance.distance === null
-      ? resolveDistanceFromText(a.raw_text || dayRawText || '', defaultDistanceUnit)
+      ? resolveDistanceFromText(a.raw_text || dayRawText || '', inferredDistanceUnit)
       : aiDistance;
+    const storageDistance = convertDistanceToStorageUnit(fallbackTextDistance, storageDistanceUnit);
     const aiDuration = a.metrics?.duration_min ?? resolveDurationFromText(a.raw_text || dayRawText || '') ?? null;
     drafts.push(ensureDistanceConsistency({
       planId,
@@ -697,8 +724,8 @@ function buildAiActivities(args: {
       subtype: a.subtype || null,
       title: a.title || 'Workout',
       rawText: a.raw_text || dayRawText || null,
-      distance: fallbackTextDistance.distance,
-      distanceUnit: fallbackTextDistance.distanceUnit,
+      distance: storageDistance.distance,
+      distanceUnit: storageDistance.distanceUnit,
       duration: aiDuration,
       paceTarget: a.metrics?.pace_target ?? null,
       effortTarget: a.metrics?.effort_target ?? null,
@@ -1073,7 +1100,8 @@ export async function POST(req: Request) {
             planId: plan.id,
             dayId: day.id,
             entry,
-            defaultDistanceUnit: dayDefaultDistanceUnit
+            inferredDistanceUnit: dayDefaultDistanceUnit,
+            storageDistanceUnit: userDefaultDistanceUnit
           });
           const aiDrafts = aiActivities.length
             ? buildAiActivities({
@@ -1081,7 +1109,8 @@ export async function POST(req: Request) {
                 dayId: day.id,
                 dayRawText: entry.raw || '',
                 aiActivities,
-                defaultDistanceUnit: dayDefaultDistanceUnit
+                inferredDistanceUnit: dayDefaultDistanceUnit,
+                storageDistanceUnit: userDefaultDistanceUnit
               })
             : [];
           const mergedActivities = aiDrafts.length

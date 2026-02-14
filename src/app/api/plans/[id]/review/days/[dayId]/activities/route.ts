@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { currentUser } from '@clerk/nextjs/server';
-import { ActivityType } from '@prisma/client';
+import { ActivityType, Units } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 
 const ACTIVITY_TYPES: ActivityType[] = [
@@ -13,6 +13,8 @@ const ACTIVITY_TYPES: ActivityType[] = [
   'HIKE',
   'OTHER'
 ];
+
+const DISTANCE_UNITS: Units[] = ['MILES', 'KM'];
 
 function normalizeOptionalText(input: unknown): string | null | undefined {
   if (input === undefined) return undefined;
@@ -63,6 +65,7 @@ export async function POST(
     title?: unknown;
     type?: unknown;
     distance?: unknown;
+    distanceUnit?: unknown;
     duration?: unknown;
     paceTarget?: unknown;
     effortTarget?: unknown;
@@ -86,6 +89,23 @@ export async function POST(
     return NextResponse.json({ error: 'distance must be >= 0' }, { status: 400 });
   }
 
+  const profile = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { units: true }
+  });
+  const preferredUnits: Units = profile?.units === 'KM' ? 'KM' : 'MILES';
+
+  let distanceUnit: Units | null | undefined = undefined;
+  if (payload.distanceUnit !== undefined) {
+    if (payload.distanceUnit === null || payload.distanceUnit === '') {
+      distanceUnit = null;
+    } else if (typeof payload.distanceUnit === 'string' && DISTANCE_UNITS.includes(payload.distanceUnit as Units)) {
+      distanceUnit = payload.distanceUnit as Units;
+    } else {
+      return NextResponse.json({ error: 'Invalid distance unit' }, { status: 400 });
+    }
+  }
+
   const duration = normalizeOptionalNumber(payload.duration);
   if (
     duration !== undefined
@@ -102,6 +122,9 @@ export async function POST(
       title,
       type,
       distance: distance === undefined ? null : distance,
+      distanceUnit: distance === undefined || distance === null
+        ? null
+        : (distanceUnit ?? preferredUnits),
       duration: duration === undefined ? null : duration,
       paceTarget: normalizeOptionalText(payload.paceTarget) ?? null,
       effortTarget: normalizeOptionalText(payload.effortTarget) ?? null,
