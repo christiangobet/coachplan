@@ -21,6 +21,7 @@ export default function PlansPage() {
   const [userId, setUserId] = useState<string | null>(null);
   const [athleteName, setAthleteName] = useState('Athlete');
   const [assigning, setAssigning] = useState<string | null>(null);
+  const [processingPlanId, setProcessingPlanId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -63,7 +64,48 @@ export default function PlansPage() {
     }
   };
 
-  const activePlans = plans.filter((plan) => plan.status === 'ACTIVE').length;
+  const updatePlanStatus = async (planId: string, status: 'DRAFT' | 'ACTIVE' | 'ARCHIVED') => {
+    setProcessingPlanId(planId);
+    setError(null);
+    try {
+      const res = await fetch(`/api/plans/${planId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status })
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error || 'Failed to update plan status');
+      setPlans((prev) => prev.map((plan) => (
+        plan.id === planId
+          ? { ...plan, status: data?.plan?.status || status }
+          : plan
+      )));
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to update plan status');
+    } finally {
+      setProcessingPlanId(null);
+    }
+  };
+
+  const deletePlan = async (planId: string) => {
+    if (!window.confirm('Delete this plan permanently? This cannot be undone.')) return;
+    setProcessingPlanId(planId);
+    setError(null);
+    try {
+      const res = await fetch(`/api/plans/${planId}`, { method: 'DELETE' });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error || 'Failed to delete plan');
+      setPlans((prev) => prev.filter((plan) => plan.id !== planId));
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to delete plan');
+    } finally {
+      setProcessingPlanId(null);
+    }
+  };
+
+  const activePlans = plans.filter((plan) => plan.status === 'ACTIVE');
+  const draftPlans = plans.filter((plan) => plan.status === 'DRAFT');
+  const archivedPlans = plans.filter((plan) => plan.status === 'ARCHIVED');
 
   return (
     <main className="dash plans-page-shell">
@@ -82,15 +124,16 @@ export default function PlansPage() {
           </div>
 
           <section className="plans-section plans-shell-section">
-            <h2 className="plans-section-title">Your Plans</h2>
-            {plans.length === 0 ? (
+            <h2 className="plans-section-title">Active Plans</h2>
+            {error && <p style={{ color: 'var(--d-red)', fontSize: 14, marginBottom: 12 }}>{error}</p>}
+            {activePlans.length === 0 ? (
               <div className="plans-empty">
-                <p className="muted">No plans yet. Upload a PDF or use a template to get started.</p>
+                <p className="muted">No active plans. Activate a draft plan to show it on dashboard.</p>
               </div>
             ) : (
               <div className="plans-grid">
-                {plans.map((plan) => (
-                  <Link className="plan-card" href={`/plans/${plan.id}`} key={plan.id}>
+                {activePlans.map((plan) => (
+                  <div className="plan-card" key={plan.id}>
                     <div className="plan-card-top">
                       <span
                         className="plan-status-dot"
@@ -102,8 +145,126 @@ export default function PlansPage() {
                     <span className="plan-card-meta">
                       {plan.weekCount ? `${plan.weekCount} weeks` : 'No weeks set'}
                     </span>
-                    <span className="plan-card-action">Open plan &rarr;</span>
-                  </Link>
+                    <div className="plan-card-actions">
+                      <Link className="plan-card-use" href={`/plans/${plan.id}`}>Open</Link>
+                      <button
+                        className="plan-card-use"
+                        onClick={() => updatePlanStatus(plan.id, 'DRAFT')}
+                        disabled={processingPlanId === plan.id}
+                      >
+                        {processingPlanId === plan.id ? 'Saving...' : 'Move to draft'}
+                      </button>
+                      <button
+                        className="plan-card-use"
+                        onClick={() => updatePlanStatus(plan.id, 'ARCHIVED')}
+                        disabled={processingPlanId === plan.id}
+                      >
+                        {processingPlanId === plan.id ? 'Saving...' : 'Archive'}
+                      </button>
+                      <button
+                        className="plan-card-use plan-card-delete"
+                        onClick={() => deletePlan(plan.id)}
+                        disabled={processingPlanId === plan.id}
+                      >
+                        {processingPlanId === plan.id ? 'Deleting...' : 'Delete'}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          <section className="plans-section plans-shell-section">
+            <h2 className="plans-section-title">Draft Plans</h2>
+            {draftPlans.length === 0 ? (
+              <div className="plans-empty">
+                <p className="muted">No draft plans.</p>
+              </div>
+            ) : (
+              <div className="plans-grid">
+                {draftPlans.map((plan) => (
+                  <div className="plan-card" key={plan.id}>
+                    <div className="plan-card-top">
+                      <span
+                        className="plan-status-dot"
+                        style={{ background: statusColor(plan.status) }}
+                      />
+                      <span className="plan-status-label">{plan.status}</span>
+                    </div>
+                    <h3 className="plan-card-name">{plan.name}</h3>
+                    <span className="plan-card-meta">
+                      {plan.weekCount ? `${plan.weekCount} weeks` : 'No weeks set'}
+                    </span>
+                    <div className="plan-card-actions">
+                      <Link className="plan-card-use" href={`/plans/${plan.id}`}>Open</Link>
+                      <button
+                        className="plan-card-use"
+                        onClick={() => updatePlanStatus(plan.id, 'ACTIVE')}
+                        disabled={processingPlanId === plan.id}
+                      >
+                        {processingPlanId === plan.id ? 'Saving...' : 'Activate'}
+                      </button>
+                      <button
+                        className="plan-card-use"
+                        onClick={() => updatePlanStatus(plan.id, 'ARCHIVED')}
+                        disabled={processingPlanId === plan.id}
+                      >
+                        {processingPlanId === plan.id ? 'Saving...' : 'Archive'}
+                      </button>
+                      <button
+                        className="plan-card-use plan-card-delete"
+                        onClick={() => deletePlan(plan.id)}
+                        disabled={processingPlanId === plan.id}
+                      >
+                        {processingPlanId === plan.id ? 'Deleting...' : 'Delete'}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          <section className="plans-section plans-shell-section">
+            <h2 className="plans-section-title">Archived Plans</h2>
+            {archivedPlans.length === 0 ? (
+              <div className="plans-empty">
+                <p className="muted">No archived plans.</p>
+              </div>
+            ) : (
+              <div className="plans-grid">
+                {archivedPlans.map((plan) => (
+                  <div className="plan-card" key={plan.id}>
+                    <div className="plan-card-top">
+                      <span
+                        className="plan-status-dot"
+                        style={{ background: statusColor(plan.status) }}
+                      />
+                      <span className="plan-status-label">{plan.status}</span>
+                    </div>
+                    <h3 className="plan-card-name">{plan.name}</h3>
+                    <span className="plan-card-meta">
+                      {plan.weekCount ? `${plan.weekCount} weeks` : 'No weeks set'}
+                    </span>
+                    <div className="plan-card-actions">
+                      <Link className="plan-card-use" href={`/plans/${plan.id}`}>Open</Link>
+                      <button
+                        className="plan-card-use"
+                        onClick={() => updatePlanStatus(plan.id, 'ACTIVE')}
+                        disabled={processingPlanId === plan.id}
+                      >
+                        {processingPlanId === plan.id ? 'Saving...' : 'Activate'}
+                      </button>
+                      <button
+                        className="plan-card-use plan-card-delete"
+                        onClick={() => deletePlan(plan.id)}
+                        disabled={processingPlanId === plan.id}
+                      >
+                        {processingPlanId === plan.id ? 'Deleting...' : 'Delete'}
+                      </button>
+                    </div>
+                  </div>
                 ))}
               </div>
             )}
@@ -152,12 +313,16 @@ export default function PlansPage() {
                 <span>Total plans</span>
               </div>
               <div>
-                <strong>{activePlans}</strong>
+                <strong>{activePlans.length}</strong>
                 <span>Active</span>
               </div>
               <div>
-                <strong>{templates.length}</strong>
-                <span>Templates</span>
+                <strong>{draftPlans.length}</strong>
+                <span>Drafts</span>
+              </div>
+              <div>
+                <strong>{archivedPlans.length}</strong>
+                <span>Archived</span>
               </div>
             </div>
           </div>

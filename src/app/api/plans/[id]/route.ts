@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { currentUser } from '@clerk/nextjs/server';
+import { PlanStatus } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { alignWeeksToRaceDate } from '@/lib/clone-plan';
 
@@ -86,6 +87,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const updates: {
     raceName?: string | null;
     raceDate?: Date | null;
+    status?: PlanStatus;
   } = {};
 
   if ('raceName' in body) {
@@ -106,7 +108,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     updates.raceDate = parsedRaceDate.value;
   }
 
-  if (!('raceName' in body) && !('raceDate' in body)) {
+  if ('status' in body) {
+    if (typeof body.status !== 'string' || !['DRAFT', 'ACTIVE', 'ARCHIVED'].includes(body.status)) {
+      return NextResponse.json({ error: 'status must be DRAFT, ACTIVE, or ARCHIVED' }, { status: 400 });
+    }
+    updates.status = body.status as PlanStatus;
+  }
+
+  if (!('raceName' in body) && !('raceDate' in body) && !('status' in body)) {
     return NextResponse.json({ error: 'No supported fields to update' }, { status: 400 });
   }
 
@@ -143,4 +152,55 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
   if (!refreshed) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   return NextResponse.json({ plan: await appendSourcePlanName(refreshed), viewerUnits });
+}
+
+export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const user = await currentUser();
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const { id } = await params;
+  const plan = await prisma.trainingPlan.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      ownerId: true,
+      athleteId: true,
+      isTemplate: true
+    }
+  });
+
+  if (!plan) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  if (plan.ownerId !== user.id && plan.athleteId !== user.id) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+  if (plan.isTemplate) {
+    return NextResponse.json({ error: 'Templates cannot be deleted from this endpoint' }, { status: 400 });
+  }
+
+  const planActivityIds = await prisma.planActivity.findMany({
+    where: { planId: plan.id },
+    select: { id: true }
+  });
+
+  await prisma.$transaction(async (tx) => {
+    if (planActivityIds.length > 0) {
+      await tx.externalActivity.updateMany({
+        where: {
+          matchedPlanActivityId: {
+            in: planActivityIds.map((a) => a.id)
+          }
+        },
+        data: {
+          matchedPlanActivityId: null
+        }
+      });
+    }
+
+    await tx.planActivity.deleteMany({ where: { planId: plan.id } });
+    await tx.planDay.deleteMany({ where: { planId: plan.id } });
+    await tx.planWeek.deleteMany({ where: { planId: plan.id } });
+    await tx.trainingPlan.delete({ where: { id: plan.id } });
+  });
+
+  return NextResponse.json({ deleted: true, id: plan.id });
 }

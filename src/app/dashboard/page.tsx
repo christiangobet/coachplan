@@ -52,8 +52,12 @@ export default async function DashboardPage() {
     defaultCurrentRole: "ATHLETE"
   });
 
+  const totalPlanCount = await prisma.trainingPlan.count({
+    where: { athleteId: user.id, isTemplate: false }
+  });
+
   const plans = await prisma.trainingPlan.findMany({
-    where: { athleteId: user.id, isTemplate: false },
+    where: { athleteId: user.id, isTemplate: false, status: "ACTIVE" },
     orderBy: { createdAt: "desc" },
     include: {
       weeks: {
@@ -67,7 +71,7 @@ export default async function DashboardPage() {
   });
 
   /* ── Empty / onboarding state ── */
-  if (plans.length === 0) {
+  if (totalPlanCount === 0) {
     return (
       <main className="dash">
         <div className="dash-atmosphere" />
@@ -114,8 +118,34 @@ export default async function DashboardPage() {
     );
   }
 
+  if (plans.length === 0) {
+    return (
+      <main className="dash">
+        <div className="dash-atmosphere" />
+        <div className="dash-topo" />
+        <div className="dash-empty-content">
+          <div className="dash-empty-hero">
+            <h1>Welcome, {name}</h1>
+            <p>You have plans, but none are active yet.</p>
+          </div>
+          <div className="dash-empty-steps">
+            <div className="dash-empty-step">
+              <span className="dash-empty-num">01</span>
+              <h3>Activate a plan</h3>
+              <p>Open plan management and set one draft plan to Active.</p>
+              <div className="dash-empty-actions">
+                <a className="dash-empty-cta" href="/plans">Manage Plans</a>
+                <a className="dash-empty-cta-outline" href="/upload">Upload Plan</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
   /* ── Active plan data ── */
-  const activePlan = plans.find((p) => p.status === "ACTIVE") || plans[0];
+  const activePlan = plans[0];
 
   if (!activePlan) {
     return (
