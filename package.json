@@ -8,6 +8,7 @@
     "postinstall": "prisma generate",
     "start": "next start",
     "lint": "eslint",
+    "test:parser-i18n": "node scripts/test-plan-parser-i18n.mjs",
     "make-admin": "node scripts/promote-admin.js",
     "backfill-plan-dates": "node scripts/backfill-plan-dates.js"
   },

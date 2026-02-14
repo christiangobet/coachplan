@@ -1,0 +1,9 @@
+{
+  "header_tokens": ["Woche", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"],
+  "week_markers": ["Woche 1", "KW 2"],
+  "cells": [
+    "Ruhetag oder 45 Minuten",
+    "2 Meilen Einlaufen + 6 x 400 Metern",
+    "Bergläufe und Schwelle"
+  ]
+}

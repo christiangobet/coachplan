@@ -1,0 +1,9 @@
+{
+  "header_tokens": ["Semaine", "Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"],
+  "week_markers": ["Semaine 3", "Sem. 4"],
+  "cells": [
+    "Jour de repos ou 30 minutes",
+    "Musculation + 1 heure",
+    "Retour au calme 10 minutes"
+  ]
+}

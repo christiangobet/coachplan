@@ -8,6 +8,7 @@ import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { parseWeekWithAI } from '@/lib/ai-plan-parser';
 import { alignWeeksToRaceDate } from '@/lib/clone-plan';
+import { canonicalizeTableLabel, extractWeekNumber, normalizePlanText } from '@/lib/plan-parser-i18n.mjs';
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { pathToFileURL } from 'url';
 
@@ -95,14 +96,14 @@ function asUpperDistanceUnit(token: unknown): 'MILES' | 'KM' | 'M' | null {
 }
 
 function hasMetersNotation(text: string) {
-  const t = text.toLowerCase();
+  const t = normalizePlanText(text).toLowerCase();
   if (/\d+(?:\.\d+)?\s*(?:meters?|metres?)\b/.test(t)) return true;
   if (/\b(?:reps?|strides?|interval)\b/.test(t) && /\d{2,4}\s*m\b/.test(t)) return true;
   return /\d{3,4}\s*m\b/.test(t);
 }
 
 function inferDistanceUnitFromText(text: string): 'MILES' | 'KM' | 'M' | null {
-  const t = text.toLowerCase();
+  const t = normalizePlanText(text).toLowerCase();
   if (/\d+(?:\.\d+)?\s*(?:miles?|mile|mi)\b/.test(t)) return 'MILES';
   if (/\d+(?:\.\d+)?\s*(?:km|kms|kilometers?|kilometres?)\b/.test(t)) return 'KM';
   if (hasMetersNotation(t)) return 'M';
@@ -181,7 +182,7 @@ function inferDominantDistanceUnit(texts: string[], fallback: UnitPreference): U
   let kmHits = 0;
 
   for (const text of texts) {
-    const t = (text || '').toLowerCase();
+    const t = normalizePlanText(text || '').toLowerCase();
     if (!t) continue;
 
     const mileMatchCount = (t.match(/\b\d+(?:\.\d+)?\s*(?:miles?|mile|mi)\b/g) || []).length;
@@ -202,8 +203,9 @@ function inferDominantDistanceUnit(texts: string[], fallback: UnitPreference): U
 function resolveImpliedRunDistanceFromText(rawText: string, defaultUnit: UnitPreference | null): DistanceParseResult {
   if (!defaultUnit) return { distance: null, distanceUnit: null };
 
-  const text = rawText.toLowerCase();
+  const text = normalizePlanText(rawText).toLowerCase();
   const runContext = /\b(run|tempo|easy|recovery|trail|long run|training race|race|progression|fast finish|threshold|t[\s-]?pace|lr)\b/.test(text)
+    || /\b(course|lauf|laufen)\b/.test(text)
     || /\b(?:e|t|lr)\s*\d+(?:\.\d+)?\b/.test(text);
   const nonRunContext = /\b(strength|rest|yoga|hike|cross|xt|bike|swim)\b/.test(text);
   if (!runContext || nonRunContext) return { distance: null, distanceUnit: null };
@@ -225,7 +227,7 @@ function resolveImpliedRunDistanceFromText(rawText: string, defaultUnit: UnitPre
 }
 
 function resolveDistanceFromText(rawText: string, defaultUnit: UnitPreference | null = null): DistanceParseResult {
-  const text = rawText.toLowerCase();
+  const text = normalizePlanText(rawText).toLowerCase();
 
   const repeated = text.match(
     /(\d+)\s*x\s*(\d+(?:\.\d+)?)\s*(mile|miles|mi|km|kms|kilometer|kilometre|kilometers|kilometres|k|m|meter|meters|metre|metres)\b/
@@ -262,7 +264,7 @@ function resolveDistanceFromText(rawText: string, defaultUnit: UnitPreference | 
 }
 
 function resolveDurationFromText(rawText: string): number | null {
-  const text = rawText.toLowerCase();
+  const text = normalizePlanText(rawText).toLowerCase();
 
   const repeated = text.match(/(\d+)\s*x\s*(\d+(?:\.\d+)?)\s*(hours?|hrs?|hr|h|minutes?|mins?|min|seconds?|secs?|sec)\b/);
   if (repeated) {
@@ -301,7 +303,7 @@ function resolveDurationFromText(rawText: string): number | null {
 }
 
 function inferSubtype(text: string) {
-  const t = text.toLowerCase();
+  const t = normalizePlanText(text).toLowerCase();
   if (t.includes('strength') || /\bst\s*\d/i.test(t)) return 'strength';
   if (/\brest\s*(day)?\b/.test(t)) return 'rest';
   if (t.includes('cross') || t.includes('xt')) return 'cross-training';
@@ -375,8 +377,9 @@ function extractDistanceRange(text: string, patterns: RegExp[]) {
 }
 
 function parseStructure(text: string) {
+  const normalizedText = normalizePlanText(text);
   const structure: any = {};
-  const warmup = extractDistanceRange(text, [
+  const warmup = extractDistanceRange(normalizedText, [
     /(\d+(?:\.\d+)?(?:\s*-\s*\d+(?:\.\d+)?)?)\s*(?:mile|miles|mi|km|kilometer|kilometre|meter|meters|metre|metres|m)\s*(?:WU|warm[\s-]?up)\b/i,
     /(?:WU|warm[\s-]?up)\s*(\d+(?:\.\d+)?(?:\s*-\s*\d+(?:\.\d+)?)?)\s*(?:mile|miles|mi|km|kilometer|kilometre|meter|meters|metre|metres|m)\b/i
   ]);
@@ -384,7 +387,7 @@ function parseStructure(text: string) {
     structure.warmup = warmup;
   }
 
-  const cooldown = extractDistanceRange(text, [
+  const cooldown = extractDistanceRange(normalizedText, [
     /(\d+(?:\.\d+)?(?:\s*-\s*\d+(?:\.\d+)?)?)\s*(?:mile|miles|mi|km|kilometer|kilometre|meter|meters|metre|metres|m)\s*(?:CD|cool[\s-]?down)\b/i,
     /(?:CD|cool[\s-]?down)\s*(\d+(?:\.\d+)?(?:\s*-\s*\d+(?:\.\d+)?)?)\s*(?:mile|miles|mi|km|kilometer|kilometre|meter|meters|metre|metres|m)\b/i
   ]);
@@ -392,7 +395,7 @@ function parseStructure(text: string) {
     structure.cooldown = cooldown;
   }
 
-  const tempo = extractDistanceRange(text, [
+  const tempo = extractDistanceRange(normalizedText, [
     /T[:\s]\s*(\d+(?:\.\d+)?(?:\s*-\s*\d+(?:\.\d+)?)?)\s*(?:mile|miles|mi|km|kilometer|kilometre|meter|meters|metre|metres|m)\b/i,
     /(\d+(?:\.\d+)?(?:\s*-\s*\d+(?:\.\d+)?)?)\s*(?:mile|miles|mi|km|kilometer|kilometre|meter|meters|metre|metres|m)\s*(?:tempo|threshold|t[\s-]?pace)\b/i
   ]);
@@ -400,7 +403,7 @@ function parseStructure(text: string) {
     structure.tempo = tempo;
   }
 
-  const intervalMatch = text.match(/(\d+)\s*x\s*(\d+(?:\.\d+)?)\s*(second|seconds|sec|minute|minutes|min)/i);
+  const intervalMatch = normalizedText.match(/(\d+)\s*x\s*(\d+(?:\.\d+)?)\s*(second|seconds|sec|minute|minutes|min)/i);
   if (intervalMatch) {
     const reps = Number(intervalMatch[1]);
     const duration = Number(intervalMatch[2]);
@@ -441,7 +444,8 @@ function resolveDistanceFromStructure(structure: any): DistanceParseResult {
 }
 
 function expandAlternatives(text: string) {
-  const restOr = text.match(/rest day or (.+)/i) || text.match(/rest or (.+)/i);
+  const normalized = normalizePlanText(text);
+  const restOr = normalized.match(/rest day or (.+)/i) || normalized.match(/rest or (.+)/i);
   if (restOr) {
     return ['Rest day', restOr[1]];
   }
@@ -794,22 +798,27 @@ function nearestIndex(target: number, anchors: number[]) {
 }
 
 function findTableHeader(items: PdfTextItem[]) {
-  const labels = items.filter((item) => TABLE_LABELS.includes(item.str.toUpperCase()));
-  const mondayRows = labels.filter((item) => item.str.toUpperCase() === 'MONDAY');
+  const labels = items
+    .map((item) => ({
+      item,
+      canonical: canonicalizeTableLabel(item.str)
+    }))
+    .filter((entry): entry is { item: PdfTextItem; canonical: string } => Boolean(entry.canonical));
+  const mondayRows = labels.filter((entry) => entry.canonical === 'MONDAY');
 
   for (const monday of mondayRows) {
-    const row = labels.filter((item) => Math.abs(item.y - monday.y) <= 2);
-    const names = new Set(row.map((item) => item.str.toUpperCase()));
+    const row = labels.filter((entry) => Math.abs(entry.item.y - monday.item.y) <= 2);
+    const names = new Set(row.map((entry) => entry.canonical));
     if (!TABLE_LABELS.every((label) => names.has(label))) continue;
 
     const columns = TABLE_LABELS.map((label) => {
       const candidates = row
-        .filter((item) => item.str.toUpperCase() === label)
-        .sort((a, b) => a.x - b.x);
-      return candidates[0]?.x ?? 0;
+        .filter((entry) => entry.canonical === label)
+        .sort((a, b) => a.item.x - b.item.x);
+      return candidates[0]?.item.x ?? 0;
     });
 
-    return { y: monday.y, columns };
+    return { y: monday.item.y, columns };
   }
 
   return null;
@@ -870,8 +879,12 @@ async function parsePdfToJsonNode(pdfPath: string, name: string) {
     }).filter((row) => row.cells.some(Boolean));
 
     const markers = rows
-      .filter((row) => /^\d{1,2}$/.test(row.cells[0]))
-      .map((row) => ({ y: row.y, week: Number(row.cells[0]) }));
+      .map((row) => {
+        const week = extractWeekNumber(row.cells[0] || '');
+        if (!week) return null;
+        return { y: row.y, week };
+      })
+      .filter((marker): marker is { y: number; week: number } => Boolean(marker));
 
     if (!markers.length) continue;
 
@@ -955,6 +968,7 @@ async function parsePdfToJson(planId: string, pdfPath: string, name: string) {
   const outputPath = path.join(outputDir, `${planId}.json`);
   await fs.mkdir(outputDir, { recursive: true });
 
+  let pythonFailureReason: string | null = null;
   try {
     await execFileAsync(
       'python3',
@@ -969,17 +983,23 @@ async function parsePdfToJson(planId: string, pdfPath: string, name: string) {
       ],
       { timeout: 180000, maxBuffer: 8 * 1024 * 1024 }
     );
+    const raw = await fs.readFile(outputPath, 'utf-8');
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed?.weeks) && parsed.weeks.length > 0) {
+      return parsed;
+    }
+    pythonFailureReason = 'Python parser produced no recognizable weeks.';
   } catch (error) {
     const err = error as Error & { stderr?: string; message: string };
-    const details = err.stderr?.trim() || err.message || 'Unknown parser failure';
-    if (details.includes('ENOENT') || details.toLowerCase().includes('no such file')) {
-      return parsePdfToJsonNode(pdfPath, name);
-    }
-    throw new Error(`PDF parse failed: ${details}`);
+    pythonFailureReason = err.stderr?.trim() || err.message || 'Unknown parser failure';
   }
 
-  const raw = await fs.readFile(outputPath, 'utf-8');
-  return JSON.parse(raw);
+  try {
+    return await parsePdfToJsonNode(pdfPath, name);
+  } catch (nodeError) {
+    const nodeReason = nodeError instanceof Error ? nodeError.message : 'Unknown node parser failure';
+    throw new Error(`PDF parse failed. Python parser: ${pythonFailureReason || 'unknown error'}. Node fallback: ${nodeReason}`);
+  }
 }
 
 export async function POST(req: Request) {
