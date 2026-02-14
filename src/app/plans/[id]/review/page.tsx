@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import './review.css';
 
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -162,6 +162,7 @@ function removeActivityFromPlan(
 
 export default function PlanReviewPage() {
   const params = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
   const planId = Array.isArray(params?.id) ? params?.id[0] : params?.id;
 
   const [plan, setPlan] = useState<ReviewPlan | null>(null);
@@ -221,6 +222,15 @@ export default function PlanReviewPage() {
   useEffect(() => {
     loadPlan();
   }, [loadPlan]);
+
+  useEffect(() => {
+    if (!searchParams) return;
+    if (searchParams.get('parseWarning') === '1') {
+      setNotice('Automatic parse could not complete. Fallback mode is active: review and add activities manually.');
+    } else if (searchParams.get('fromUpload') === '1') {
+      setNotice('Upload completed. Review and adjust activities before publishing.');
+    }
+  }, [searchParams]);
 
   const weeks = useMemo(() => {
     if (!plan?.weeks) return [];

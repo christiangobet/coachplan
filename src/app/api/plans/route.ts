@@ -330,6 +330,7 @@ export async function POST(req: Request) {
     }
   });
 
+  let parseWarning: string | null = null;
   if (file && file.size > 0) {
     const uploadDir = path.join(os.tmpdir(), 'coachplan', 'uploads');
 
@@ -495,12 +496,47 @@ export async function POST(req: Request) {
         }
       }
     } catch (error) {
-      return NextResponse.json(
-        { error: 'Parse failed', details: (error as Error).message },
-        { status: 500 }
-      );
+      const reason = (error as Error).message || 'Unknown parser error';
+      parseWarning = reason;
+      console.error('Plan parse failed, creating fallback editable skeleton', { planId: plan.id, reason });
+
+      const existingWeeks = await prisma.planWeek.count({ where: { planId: plan.id } });
+      if (existingWeeks === 0) {
+        const fallbackWeek = await prisma.planWeek.create({
+          data: {
+            planId: plan.id,
+            weekIndex: 1
+          }
+        });
+
+        await prisma.planDay.createMany({
+          data: Array.from({ length: 7 }).map((_, idx) => ({
+            planId: plan.id,
+            weekId: fallbackWeek.id,
+            dayOfWeek: idx + 1,
+            rawText: idx === 0
+              ? 'Parser fallback mode: add/edit activities manually for this plan.'
+              : null
+          }))
+        });
+
+        await prisma.trainingPlan.update({
+          where: { id: plan.id },
+          data: {
+            weekCount: 1,
+            status: 'DRAFT'
+          }
+        });
+      }
     }
   }
 
-  return NextResponse.json({ plan });
+  const latestPlan = await prisma.trainingPlan.findUnique({
+    where: { id: plan.id }
+  });
+
+  return NextResponse.json({
+    plan: latestPlan || plan,
+    parseWarning
+  });
 }

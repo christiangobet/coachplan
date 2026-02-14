@@ -43,10 +43,14 @@ export default function UploadPage() {
       });
       window.clearTimeout(timeoutId);
       const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || 'Upload failed');
+      if (!res.ok) {
+        const details = data?.details ? `: ${data.details}` : '';
+        throw new Error((data?.error || 'Upload failed') + details);
+      }
       if (data?.plan?.id) {
         if (file) {
-          window.location.href = `/plans/${data.plan.id}/review`;
+          const parseWarning = data?.parseWarning ? '&parseWarning=1' : '';
+          window.location.href = `/plans/${data.plan.id}/review?fromUpload=1${parseWarning}`;
         } else {
           window.location.href = `/plans/${data.plan.id}`;
         }
