@@ -327,7 +327,10 @@ function findTableHeader(items: PdfTextItem[]) {
 
 async function parsePdfToJsonNode(pdfPath: string, name: string) {
   const bytes = await fs.readFile(pdfPath);
-  const loadingTask = (pdfjsLib as any).getDocument({ data: new Uint8Array(bytes) });
+  const loadingTask = (pdfjsLib as any).getDocument({
+    data: new Uint8Array(bytes),
+    disableWorker: true
+  });
   const pdf = await loadingTask.promise;
   const weeks = new Map<number, Record<string, string[]>>();
 
