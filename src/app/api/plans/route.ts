@@ -8,12 +8,15 @@ import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { parseWeekWithAI } from '@/lib/ai-plan-parser';
 import { alignWeeksToRaceDate } from '@/lib/clone-plan';
+import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
 
 const execFileAsync = promisify(execFile);
 const DAY_KEYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+const DAY_LABELS = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
+const TABLE_LABELS = ['WEEK', ...DAY_LABELS];
 const ENABLE_AI_WEEK_PARSE = process.env.ENABLE_AI_WEEK_PARSE === 'true';
 
 const RUN_SUBTYPES = new Set([
@@ -247,6 +250,186 @@ function expandAlternatives(text: string) {
   return [text];
 }
 
+type PdfTextItem = {
+  str: string;
+  x: number;
+  y: number;
+};
+
+type RowCluster = {
+  y: number;
+  items: PdfTextItem[];
+};
+
+function normalizeWhitespace(text: string) {
+  return text
+    .replace(/\s+/g, ' ')
+    .replace(/\s*-\s*/g, '-')
+    .replace(/\s+\+\s+/g, ' + ')
+    .trim();
+}
+
+function clusterRows(items: PdfTextItem[], tolerance = 2): RowCluster[] {
+  const sorted = [...items].sort((a, b) => b.y - a.y || a.x - b.x);
+  const clusters: RowCluster[] = [];
+
+  for (const item of sorted) {
+    const cluster = clusters.find((c) => Math.abs(c.y - item.y) <= tolerance);
+    if (!cluster) {
+      clusters.push({ y: item.y, items: [item] });
+      continue;
+    }
+    cluster.items.push(item);
+  }
+
+  return clusters
+    .map((cluster) => ({
+      y: cluster.y,
+      items: cluster.items.sort((a, b) => a.x - b.x)
+    }))
+    .sort((a, b) => b.y - a.y);
+}
+
+function nearestIndex(target: number, anchors: number[]) {
+  let bestIdx = 0;
+  let bestDist = Number.POSITIVE_INFINITY;
+  for (let i = 0; i < anchors.length; i += 1) {
+    const dist = Math.abs(target - anchors[i]);
+    if (dist < bestDist) {
+      bestDist = dist;
+      bestIdx = i;
+    }
+  }
+  return { index: bestIdx, distance: bestDist };
+}
+
+function findTableHeader(items: PdfTextItem[]) {
+  const labels = items.filter((item) => TABLE_LABELS.includes(item.str.toUpperCase()));
+  const mondayRows = labels.filter((item) => item.str.toUpperCase() === 'MONDAY');
+
+  for (const monday of mondayRows) {
+    const row = labels.filter((item) => Math.abs(item.y - monday.y) <= 2);
+    const names = new Set(row.map((item) => item.str.toUpperCase()));
+    if (!TABLE_LABELS.every((label) => names.has(label))) continue;
+
+    const columns = TABLE_LABELS.map((label) => {
+      const candidates = row
+        .filter((item) => item.str.toUpperCase() === label)
+        .sort((a, b) => a.x - b.x);
+      return candidates[0]?.x ?? 0;
+    });
+
+    return { y: monday.y, columns };
+  }
+
+  return null;
+}
+
+async function parsePdfToJsonNode(pdfPath: string, name: string) {
+  const bytes = await fs.readFile(pdfPath);
+  const loadingTask = (pdfjsLib as any).getDocument({ data: new Uint8Array(bytes) });
+  const pdf = await loadingTask.promise;
+  const weeks = new Map<number, Record<string, string[]>>();
+
+  for (let pageIndex = 1; pageIndex <= pdf.numPages; pageIndex += 1) {
+    const page = await pdf.getPage(pageIndex);
+    const textContent = await page.getTextContent();
+    const items: PdfTextItem[] = (textContent.items as any[])
+      .map((item) => ({
+        str: String(item.str || '').trim(),
+        x: Number(item.transform?.[4] || 0),
+        y: Number(item.transform?.[5] || 0)
+      }))
+      .filter((item) => item.str);
+
+    const header = findTableHeader(items);
+    if (!header) continue;
+
+    const bodyItems = items.filter((item) => (
+      item.y < header.y - 3
+      && item.y > 70
+      && item.x < 740
+    ));
+
+    const rows = clusterRows(bodyItems).map((cluster) => {
+      const cellParts: string[][] = Array.from({ length: 8 }, () => []);
+
+      for (const item of cluster.items) {
+        const nearest = nearestIndex(item.x, header.columns);
+        if (nearest.distance > 75) continue;
+        cellParts[nearest.index].push(item.str);
+      }
+
+      return {
+        y: cluster.y,
+        cells: cellParts.map((parts) => normalizeWhitespace(parts.join(' ')))
+      };
+    }).filter((row) => row.cells.some(Boolean));
+
+    const markers = rows
+      .filter((row) => /^\d{1,2}$/.test(row.cells[0]))
+      .map((row) => ({ y: row.y, week: Number(row.cells[0]) }));
+
+    if (!markers.length) continue;
+
+    for (const row of rows) {
+      const dayCells = row.cells.slice(1);
+      if (!dayCells.some((cell) => cell.length > 0)) continue;
+
+      const nearestMarker = markers.reduce((best, marker) => {
+        if (!best) return marker;
+        return Math.abs(marker.y - row.y) < Math.abs(best.y - row.y) ? marker : best;
+      }, null as { y: number; week: number } | null);
+
+      if (!nearestMarker) continue;
+      const weekNumber = nearestMarker.week;
+
+      if (!weeks.has(weekNumber)) {
+        weeks.set(weekNumber, DAY_KEYS.reduce((acc, day) => {
+          acc[day] = [];
+          return acc;
+        }, {} as Record<string, string[]>));
+      }
+
+      const bucket = weeks.get(weekNumber)!;
+      for (let i = 0; i < DAY_KEYS.length; i += 1) {
+        const cell = dayCells[i];
+        if (!cell) continue;
+        bucket[DAY_KEYS[i]].push(cell);
+      }
+    }
+  }
+
+  const parsedWeeks = [...weeks.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([weekNumber, dayValues]) => ({
+      week_number: weekNumber,
+      days: DAY_KEYS.reduce((acc, day) => {
+        const raw = normalizeWhitespace((dayValues[day] || []).join(' '))
+          .replace(/\b([A-Za-z]+)-([A-Za-z]+)\b/g, '$1$2');
+        acc[day] = { raw };
+        return acc;
+      }, {} as Record<string, { raw: string }>)
+    }));
+
+  if (!parsedWeeks.length) {
+    throw new Error('Node parser found no recognizable week/day table in this PDF.');
+  }
+
+  return {
+    source_pdf: path.basename(pdfPath),
+    program_name: name,
+    generated_at: new Date().toISOString(),
+    weeks: parsedWeeks,
+    glossary: {
+      sections: [],
+      entries: {},
+      review_needed: [],
+      note: 'Parsed with Node fallback parser.'
+    }
+  };
+}
+
 export async function GET(req: Request) {
   const user = await currentUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -260,13 +443,13 @@ export async function GET(req: Request) {
 }
 
 async function parsePdfToJson(planId: string, pdfPath: string, name: string) {
+  if (process.env.VERCEL) {
+    return parsePdfToJsonNode(pdfPath, name);
+  }
+
   const scriptPath = path.join(process.cwd(), 'scripts', 'parse_plan_pdf.py');
   const outputDir = path.join(os.tmpdir(), 'coachplan', 'parsed');
   const outputPath = path.join(outputDir, `${planId}.json`);
-  const pythonDepsPath = path.join(process.cwd(), '.python_packages');
-  const pythonPath = process.env.PYTHONPATH
-    ? `${pythonDepsPath}:${process.env.PYTHONPATH}`
-    : pythonDepsPath;
   await fs.mkdir(outputDir, { recursive: true });
 
   try {
@@ -281,15 +464,14 @@ async function parsePdfToJson(planId: string, pdfPath: string, name: string) {
         '--name',
         name
       ],
-      {
-        timeout: 180000,
-        maxBuffer: 8 * 1024 * 1024,
-        env: { ...process.env, PYTHONPATH: pythonPath }
-      }
+      { timeout: 180000, maxBuffer: 8 * 1024 * 1024 }
     );
   } catch (error) {
     const err = error as Error & { stderr?: string; message: string };
     const details = err.stderr?.trim() || err.message || 'Unknown parser failure';
+    if (details.includes('ENOENT') || details.toLowerCase().includes('no such file')) {
+      return parsePdfToJsonNode(pdfPath, name);
+    }
     throw new Error(`PDF parse failed: ${details}`);
   }
 

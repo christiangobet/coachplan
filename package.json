@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "prisma generate && next dev --port 3001",
     "build": "prisma generate && next build",
-    "postinstall": "prisma generate && node scripts/install-python-deps.mjs",
+    "postinstall": "prisma generate",
     "start": "next start",
     "lint": "eslint",
     "make-admin": "node scripts/promote-admin.js",
@@ -15,6 +15,7 @@
     "@clerk/nextjs": "^6.37.2",
     "@prisma/client": "^5.22.0",
     "next": "16.1.6",
+    "pdfjs-dist": "^4.10.38",
     "react": "19.2.3",
     "react-dom": "19.2.3"
   },
