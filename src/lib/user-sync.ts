@@ -59,14 +59,21 @@ export async function ensureUserFromAuth(
 
     const byEmail = await tx.user.findUnique({ where: { email: normalizedEmail } });
     if (byEmail) {
-      // Same human re-created auth account with same email: move record to the new auth id.
+      // Keep stable DB user id to avoid FK breakage when user already has linked records.
+      // We treat matching email as the same app user and refresh profile fields only.
+      const updateData: Prisma.UserUpdateInput = {};
+      if (byEmail.name !== normalizedName) {
+        updateData.name = normalizedName;
+      }
+
+      if (byEmail.email !== normalizedEmail) {
+        updateData.email = normalizedEmail;
+      }
+
+      if (Object.keys(updateData).length === 0) return byEmail;
       return tx.user.update({
         where: { id: byEmail.id },
-        data: {
-          id: authUser.id,
-          email: normalizedEmail,
-          name: normalizedName
-        }
+        data: updateData
       });
     }
 
