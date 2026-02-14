@@ -74,6 +74,8 @@ type DistanceParseResult = {
   distanceUnit: 'MILES' | 'KM' | null;
 };
 
+type UnitPreference = 'MILES' | 'KM';
+
 function parseNumber(value: unknown): number | null {
   if (typeof value === 'number' && Number.isFinite(value)) return value;
   if (typeof value === 'string') {
@@ -156,7 +158,55 @@ function resolveDistanceFromSegmentMetrics(metrics: Record<string, unknown>, raw
   return { distance: null, distanceUnit: null };
 }
 
-function resolveDistanceFromText(rawText: string): DistanceParseResult {
+function inferDominantDistanceUnit(texts: string[], fallback: UnitPreference): UnitPreference {
+  let milesHits = 0;
+  let kmHits = 0;
+
+  for (const text of texts) {
+    const t = (text || '').toLowerCase();
+    if (!t) continue;
+
+    const mileMatchCount = (t.match(/\b\d+(?:\.\d+)?\s*(?:miles?|mile|mi)\b/g) || []).length;
+    const kmMatchCount = (t.match(/\b\d+(?:\.\d+)?\s*(?:km|kms|kilometers?|kilometres?)\b/g) || []).length;
+    const compactKCount = (t.match(/\b\d+(?:\.\d+)?k\b/g) || []).length;
+    const meterCount = hasMetersNotation(t) ? 1 : 0;
+
+    milesHits += mileMatchCount;
+    kmHits += kmMatchCount + compactKCount + meterCount;
+  }
+
+  if (milesHits === 0 && kmHits === 0) return fallback;
+  if (kmHits > milesHits) return 'KM';
+  if (milesHits > kmHits) return 'MILES';
+  return fallback;
+}
+
+function resolveImpliedRunDistanceFromText(rawText: string, defaultUnit: UnitPreference | null): DistanceParseResult {
+  if (!defaultUnit) return { distance: null, distanceUnit: null };
+
+  const text = rawText.toLowerCase();
+  const runContext = /\b(run|tempo|easy|recovery|trail|long run|training race|race|progression|fast finish|threshold|t[\s-]?pace|lr)\b/.test(text)
+    || /\b(?:e|t|lr)\s*\d+(?:\.\d+)?\b/.test(text);
+  const nonRunContext = /\b(strength|rest|yoga|hike|cross|xt|bike|swim)\b/.test(text);
+  if (!runContext || nonRunContext) return { distance: null, distanceUnit: null };
+
+  const patterns = [
+    /\b(?:e|t|lr|run|tempo|easy|recovery|trail|progression|long run)\s*[:\-]?\s*(\d+(?:\.\d+)?)\b(?!\s*(?:min|mins|minutes|hr|hrs|hour|hours|sec|secs|seconds)\b)/i,
+    /\b(\d+(?:\.\d+)?)\s*(?:easy|tempo|steady|threshold|progression|run)\b/i
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (!match) continue;
+    const value = Number(match[1]);
+    if (!Number.isFinite(value) || value <= 0 || value > 80) continue;
+    return normalizeDistanceValue(value, defaultUnit);
+  }
+
+  return { distance: null, distanceUnit: null };
+}
+
+function resolveDistanceFromText(rawText: string, defaultUnit: UnitPreference | null = null): DistanceParseResult {
   const text = rawText.toLowerCase();
 
   const repeated = text.match(
@@ -187,7 +237,49 @@ function resolveDistanceFromText(rawText: string): DistanceParseResult {
     return normalizeDistanceValue(Number(compactK[1]), 'KM');
   }
 
+  const implied = resolveImpliedRunDistanceFromText(rawText, defaultUnit);
+  if (implied.distance !== null) return implied;
+
   return { distance: null, distanceUnit: null };
+}
+
+function resolveDurationFromText(rawText: string): number | null {
+  const text = rawText.toLowerCase();
+
+  const repeated = text.match(/(\d+)\s*x\s*(\d+(?:\.\d+)?)\s*(hours?|hrs?|hr|h|minutes?|mins?|min|seconds?|secs?|sec)\b/);
+  if (repeated) {
+    const reps = Number(repeated[1]);
+    const each = Number(repeated[2]);
+    const unit = repeated[3];
+    if (Number.isFinite(reps) && reps > 0 && Number.isFinite(each) && each > 0) {
+      if (unit.startsWith('h')) return Math.round(reps * each * 60);
+      if (unit.startsWith('s')) return Math.round((reps * each) / 60);
+      return Math.round(reps * each);
+    }
+  }
+
+  const hourMinute = text.match(/(\d+(?:\.\d+)?)\s*(?:hours?|hrs?|hr|h)\s*(\d{1,2})?\s*(?:minutes?|mins?|min)?\b/);
+  if (hourMinute) {
+    const hours = Number(hourMinute[1]);
+    const mins = hourMinute[2] ? Number(hourMinute[2]) : 0;
+    if (Number.isFinite(hours) && Number.isFinite(mins)) {
+      return Math.round(hours * 60 + mins);
+    }
+  }
+
+  const minutes = text.match(/\b(\d+(?:\.\d+)?)\s*(?:minutes?|mins?|min)\b/);
+  if (minutes) {
+    const mins = Number(minutes[1]);
+    if (Number.isFinite(mins) && mins > 0) return Math.round(mins);
+  }
+
+  const apostropheMinutes = text.match(/\b(\d+(?:\.\d+)?)\s*[’']/);
+  if (apostropheMinutes) {
+    const mins = Number(apostropheMinutes[1]);
+    if (Number.isFinite(mins) && mins > 0 && mins <= 300) return Math.round(mins);
+  }
+
+  return null;
 }
 
 function inferSubtype(text: string) {
@@ -508,8 +600,8 @@ function mergeDayActivitiesWithAI(baseActivities: ActivityDraft[], aiActivities:
   return merged;
 }
 
-function buildDeterministicActivities(args: { planId: string; dayId: string; entry: any }) {
-  const { planId, dayId, entry } = args;
+function buildDeterministicActivities(args: { planId: string; dayId: string; entry: any; defaultDistanceUnit: UnitPreference }) {
+  const { planId, dayId, entry, defaultDistanceUnit } = args;
   const drafts: ActivityDraft[] = [];
 
   const segments = entry?.segments_parsed?.length
@@ -541,6 +633,7 @@ function buildDeterministicActivities(args: { planId: string; dayId: string; ent
       const duration =
         metrics?.duration_minutes ??
         metrics?.duration_minutes_range?.[1] ??
+        resolveDurationFromText(originalText) ??
         null;
 
       const structure = parseStructure(originalText);
@@ -548,7 +641,7 @@ function buildDeterministicActivities(args: { planId: string; dayId: string; ent
         ? resolveDistanceFromStructure(structure)
         : parsedDistance;
       const textDistance = structuredDistance.distance === null
-        ? resolveDistanceFromText(originalText)
+        ? resolveDistanceFromText(originalText, defaultDistanceUnit)
         : structuredDistance;
       const title =
         activityType === 'REST'
@@ -576,26 +669,37 @@ function buildDeterministicActivities(args: { planId: string; dayId: string; ent
   return drafts;
 }
 
-function buildAiActivities(args: { planId: string; dayId: string; dayRawText: string; aiActivities: any[] }) {
-  const { planId, dayId, dayRawText, aiActivities } = args;
+function buildAiActivities(args: {
+  planId: string;
+  dayId: string;
+  dayRawText: string;
+  aiActivities: any[];
+  defaultDistanceUnit: UnitPreference;
+}) {
+  const { planId, dayId, dayRawText, aiActivities, defaultDistanceUnit } = args;
   const drafts: ActivityDraft[] = [];
 
   for (const a of aiActivities) {
+    const aiType = mapAiTypeToActivityType(a.type || null);
     const aiDistance = resolveDistanceFromValueUnit(
       a.metrics?.distance?.value ?? null,
       a.metrics?.distance?.unit ?? null,
       a.raw_text || dayRawText || ''
     );
+    const fallbackTextDistance = aiDistance.distance === null
+      ? resolveDistanceFromText(a.raw_text || dayRawText || '', defaultDistanceUnit)
+      : aiDistance;
+    const aiDuration = a.metrics?.duration_min ?? resolveDurationFromText(a.raw_text || dayRawText || '') ?? null;
     drafts.push(ensureDistanceConsistency({
       planId,
       dayId,
-      type: mapAiTypeToActivityType(a.type || null),
+      type: aiType,
       subtype: a.subtype || null,
       title: a.title || 'Workout',
       rawText: a.raw_text || dayRawText || null,
-      distance: aiDistance.distance,
-      distanceUnit: aiDistance.distanceUnit,
-      duration: a.metrics?.duration_min ?? null,
+      distance: fallbackTextDistance.distance,
+      distanceUnit: fallbackTextDistance.distanceUnit,
+      duration: aiDuration,
       paceTarget: a.metrics?.pace_target ?? null,
       effortTarget: a.metrics?.effort_target ?? null,
       structure: a.structure || null,
@@ -854,6 +958,11 @@ async function parsePdfToJson(planId: string, pdfPath: string, name: string) {
 export async function POST(req: Request) {
   const user = await currentUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const dbUser = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { units: true }
+  });
+  const userDefaultDistanceUnit: UnitPreference = dbUser?.units === 'KM' ? 'KM' : 'MILES';
 
   const contentType = req.headers.get('content-type') || '';
   let name = '';
@@ -925,6 +1034,7 @@ export async function POST(req: Request) {
         DAY_KEYS.forEach((key) => {
           rawDays[key] = week?.days?.[key]?.raw || '';
         });
+        const weekDefaultDistanceUnit = inferDominantDistanceUnit(Object.values(rawDays), userDefaultDistanceUnit);
 
         let aiWeek = null;
         if (ENABLE_AI_WEEK_PARSE) {
@@ -953,19 +1063,25 @@ export async function POST(req: Request) {
               rawText: entry.raw || null
             }
           });
+          const dayDefaultDistanceUnit = inferDominantDistanceUnit(
+            [entry.raw || '', ...Object.values(rawDays)],
+            weekDefaultDistanceUnit
+          );
 
           const aiActivities = aiWeek?.days?.[key]?.activities || [];
           const deterministicActivities = buildDeterministicActivities({
             planId: plan.id,
             dayId: day.id,
-            entry
+            entry,
+            defaultDistanceUnit: dayDefaultDistanceUnit
           });
           const aiDrafts = aiActivities.length
             ? buildAiActivities({
                 planId: plan.id,
                 dayId: day.id,
                 dayRawText: entry.raw || '',
-                aiActivities
+                aiActivities,
+                defaultDistanceUnit: dayDefaultDistanceUnit
               })
             : [];
           const mergedActivities = aiDrafts.length
