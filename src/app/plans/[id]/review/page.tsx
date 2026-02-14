@@ -8,6 +8,13 @@ import './review.css';
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const ACTIVITY_TYPES = ['RUN', 'STRENGTH', 'CROSS_TRAIN', 'REST', 'MOBILITY', 'YOGA', 'HIKE', 'OTHER'] as const;
 const DISTANCE_UNITS = ['MILES', 'KM'] as const;
+const RACE_DISTANCE_OPTIONS = [
+  { value: '5', label: '5K' },
+  { value: '10', label: '10K' },
+  { value: '21.0975', label: 'Half Marathon (21.1K)' },
+  { value: '42.195', label: 'Marathon (42.2K)' },
+  { value: '50', label: '50K' }
+] as const;
 
 type ActivityTypeValue = (typeof ACTIVITY_TYPES)[number];
 type DistanceUnitValue = (typeof DISTANCE_UNITS)[number];
@@ -206,6 +213,17 @@ export default function PlanReviewPage() {
   const [deletingActivityId, setDeletingActivityId] = useState<string | null>(null);
   const [viewerUnits, setViewerUnits] = useState<DistanceUnitValue>('MILES');
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
+  const [showPacePersonalization, setShowPacePersonalization] = useState(false);
+  const [paceFormOpen, setPaceFormOpen] = useState(false);
+  const [paceApplying, setPaceApplying] = useState(false);
+  const [paceRunCount, setPaceRunCount] = useState(0);
+  const [raceDistanceKm, setRaceDistanceKm] = useState('42.195');
+  const [goalHours, setGoalHours] = useState('3');
+  const [goalMinutes, setGoalMinutes] = useState('30');
+  const [goalSeconds, setGoalSeconds] = useState('0');
+  const [overrideExistingPaces, setOverrideExistingPaces] = useState(false);
+  const [savePaceProfile, setSavePaceProfile] = useState(true);
+  const [paceModalError, setPaceModalError] = useState<string | null>(null);
 
   const daySaveTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const activitySaveTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
@@ -532,20 +550,108 @@ export default function PlanReviewPage() {
 
   const handlePublish = useCallback(async () => {
     if (!planId) return;
+    if (autosaveState.busy) {
+      setError('Please wait until all autosave changes are complete before publishing.');
+      return;
+    }
     setPublishing(true);
     setError(null);
     setNotice(null);
+
+    Object.values(daySaveTimersRef.current).forEach((timer) => clearTimeout(timer));
+    Object.values(activitySaveTimersRef.current).forEach((timer) => clearTimeout(timer));
+    daySaveTimersRef.current = {};
+    activitySaveTimersRef.current = {};
+    setQueuedDayIds({});
+    setQueuedActivityIds({});
+
     try {
       const res = await fetch(`/api/plans/${planId}/publish`, { method: 'POST' });
       const data = await res.json().catch(() => null);
       if (!res.ok) throw new Error(data?.error || 'Publish failed');
+      const runCount = Number(data?.runActivityCount || 0);
+      setPlan((prev) => (prev ? { ...prev, status: 'ACTIVE' } : prev));
+      setPaceRunCount(runCount);
+      if (runCount > 0) {
+        setShowPacePersonalization(true);
+        setPaceFormOpen(false);
+        setNotice('Plan published. Continue to dashboard or personalize run paces now.');
+        return;
+      }
       window.location.href = '/dashboard';
     } catch (publishError: unknown) {
       setError(publishError instanceof Error ? publishError.message : 'Publish failed');
     } finally {
       setPublishing(false);
     }
-  }, [planId]);
+  }, [autosaveState.busy, planId]);
+
+  const skipPacePersonalization = useCallback(() => {
+    window.location.href = '/dashboard';
+  }, []);
+
+  const applyPacePersonalization = useCallback(async () => {
+    if (!planId) return;
+
+    const numericDistance = Number(raceDistanceKm);
+    const numericHours = Number(goalHours || 0);
+    const numericMinutes = Number(goalMinutes || 0);
+    const numericSeconds = Number(goalSeconds || 0);
+
+    if (!Number.isFinite(numericDistance) || numericDistance <= 0) {
+      setPaceModalError('Race distance must be greater than 0.');
+      return;
+    }
+    if (![numericHours, numericMinutes, numericSeconds].every((value) => Number.isFinite(value) && value >= 0)) {
+      setPaceModalError('Race target time is invalid.');
+      return;
+    }
+    if (numericMinutes >= 60 || numericSeconds >= 60) {
+      setPaceModalError('Minutes and seconds must be lower than 60.');
+      return;
+    }
+    if (numericHours * 3600 + numericMinutes * 60 + numericSeconds < 600) {
+      setPaceModalError('Please set a race target of at least 10 minutes.');
+      return;
+    }
+
+    setPaceApplying(true);
+    setPaceModalError(null);
+    try {
+      const res = await fetch(`/api/plans/${planId}/pace-personalize`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          raceDistanceKm: numericDistance,
+          goalHours: numericHours,
+          goalMinutes: numericMinutes,
+          goalSeconds: numericSeconds,
+          overrideExisting: overrideExistingPaces,
+          saveToProfile: savePaceProfile
+        })
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        setPaceModalError(data?.error || 'Failed to personalize paces.');
+        return;
+      }
+      const personalized = Number(data?.summary?.updated || 0);
+      setNotice(`Pace targets personalized for ${personalized} run activities.`);
+      window.location.href = '/dashboard';
+    } catch {
+      setPaceModalError('Failed to personalize paces.');
+    } finally {
+      setPaceApplying(false);
+    }
+  }, [
+    goalHours,
+    goalMinutes,
+    goalSeconds,
+    overrideExistingPaces,
+    planId,
+    raceDistanceKm,
+    savePaceProfile
+  ]);
 
   if (loading) {
     return (
@@ -576,7 +682,7 @@ export default function PlanReviewPage() {
             <p>Plan: <strong>{plan.name}</strong> · Status: <strong>{plan.status}</strong></p>
           </div>
           <div className="review-hero-actions">
-            <button className="cta" onClick={handlePublish} disabled={publishing}>
+            <button className="cta" onClick={handlePublish} disabled={publishing || autosaveState.busy}>
               {publishing ? 'Publishing…' : 'Publish Plan'}
             </button>
             <Link className="cta secondary" href={`/plans/${plan.id}`}>View Calendar</Link>
@@ -604,8 +710,113 @@ export default function PlanReviewPage() {
         {error && <p className="review-error">{error}</p>}
       </section>
 
-      <section className="review-week-grid">
-        {weeks.map((week) => {
+      {showPacePersonalization && (
+        <section className="review-page-card review-publish-panel">
+          <div className="review-publish-head">
+            <div>
+              <h3>Plan Published</h3>
+              <p>
+                {paceRunCount > 0
+                  ? `Your plan is active with ${paceRunCount} run activities.`
+                  : 'Your plan is now active.'}
+              </p>
+            </div>
+            <div className="review-publish-actions">
+              <button className="cta" type="button" onClick={skipPacePersonalization}>
+                Go to Today
+              </button>
+              {paceRunCount > 0 && (
+                <button className="cta secondary" type="button" onClick={() => setPaceFormOpen((prev) => !prev)}>
+                  {paceFormOpen ? 'Hide Pace Setup' : 'Personalize Paces'}
+                </button>
+              )}
+            </div>
+          </div>
+
+          {paceRunCount > 0 && paceFormOpen && (
+            <div className="review-publish-body">
+              <p className="review-publish-copy">
+                Set a race target and CoachPlan will auto-fill pace targets in {viewerUnits === 'KM' ? 'min/km' : 'min/mi'}.
+              </p>
+              <div className="review-modal-grid">
+                <label className="review-field">
+                  <span>Goal race distance</span>
+                  <select value={raceDistanceKm} onChange={(event) => setRaceDistanceKm(event.target.value)}>
+                    {RACE_DISTANCE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="review-field">
+                  <span>Target time (hh:mm:ss)</span>
+                  <div className="review-time-input-row">
+                    <input
+                      type="number"
+                      min={0}
+                      step={1}
+                      value={goalHours}
+                      onChange={(event) => setGoalHours(event.target.value)}
+                      placeholder="hh"
+                    />
+                    <input
+                      type="number"
+                      min={0}
+                      max={59}
+                      step={1}
+                      value={goalMinutes}
+                      onChange={(event) => setGoalMinutes(event.target.value)}
+                      placeholder="mm"
+                    />
+                    <input
+                      type="number"
+                      min={0}
+                      max={59}
+                      step={1}
+                      value={goalSeconds}
+                      onChange={(event) => setGoalSeconds(event.target.value)}
+                      placeholder="ss"
+                    />
+                  </div>
+                </label>
+
+                <label className="review-check-row">
+                  <input
+                    type="checkbox"
+                    checked={overrideExistingPaces}
+                    onChange={(event) => setOverrideExistingPaces(event.target.checked)}
+                  />
+                  <span>Override existing pace targets already parsed from the source plan</span>
+                </label>
+
+                <label className="review-check-row">
+                  <input
+                    type="checkbox"
+                    checked={savePaceProfile}
+                    onChange={(event) => setSavePaceProfile(event.target.checked)}
+                  />
+                  <span>Save generated pace profile to athlete settings for next plans</span>
+                </label>
+              </div>
+
+              {paceModalError && <p className="review-error">{paceModalError}</p>}
+
+              <div className="review-modal-actions">
+                <button className="cta secondary" type="button" onClick={skipPacePersonalization} disabled={paceApplying}>
+                  Skip for now
+                </button>
+                <button className="cta" type="button" onClick={applyPacePersonalization} disabled={paceApplying}>
+                  {paceApplying ? 'Applying…' : 'Apply Pace Targets'}
+                </button>
+              </div>
+            </div>
+          )}
+        </section>
+      )}
+
+      {!showPacePersonalization && (
+        <section className="review-week-grid">
+          {weeks.map((week) => {
           const days = sortDays(week.days || []);
           const weekActivityCount = days.reduce((sum, day) => sum + (day.activities?.length || 0), 0);
           return (
@@ -620,77 +831,77 @@ export default function PlanReviewPage() {
               {days.map((day) => {
                 const notesOpen = expandedDayNotes[day.id] ?? true;
                 return (
-                <div key={day.id} className="review-day-block">
-                  <div className="review-day-head">
-                    <span className="review-day-pill">{DAY_LABELS[(day.dayOfWeek || 1) - 1] || 'Day'}</span>
-                    <div className="review-day-actions">
-                      <button
-                        className="review-save-btn secondary"
-                        type="button"
-                        onClick={() =>
-                          setExpandedDayNotes((prev) => ({ ...prev, [day.id]: !notesOpen }))
-                        }
-                      >
-                        {notesOpen ? 'Hide Notes' : 'Show Notes'}
-                      </button>
-                      <button
-                        className="review-save-btn"
-                        type="button"
-                        onClick={() => addActivity(day.id)}
-                        disabled={creatingDayId === day.id}
-                      >
-                        {creatingDayId === day.id ? 'Adding…' : 'Add Activity'}
-                      </button>
+                  <div key={day.id} className="review-day-block">
+                    <div className="review-day-head">
+                      <span className="review-day-pill">{DAY_LABELS[(day.dayOfWeek || 1) - 1] || 'Day'}</span>
+                      <div className="review-day-actions">
+                        <button
+                          className="review-save-btn secondary"
+                          type="button"
+                          onClick={() =>
+                            setExpandedDayNotes((prev) => ({ ...prev, [day.id]: !notesOpen }))
+                          }
+                        >
+                          {notesOpen ? 'Hide Notes' : 'Show Notes'}
+                        </button>
+                        <button
+                          className="review-save-btn"
+                          type="button"
+                          onClick={() => addActivity(day.id)}
+                          disabled={creatingDayId === day.id}
+                        >
+                          {creatingDayId === day.id ? 'Adding…' : 'Add Activity'}
+                        </button>
+                      </div>
                     </div>
-                  </div>
 
-                  {notesOpen && (
-                    <label className="review-field">
-                      <span>Day notes / source text</span>
-                      <textarea
-                        value={dayDrafts[day.id] || ''}
-                        onChange={(event) =>
-                          setDayDraftField(day.id, event.target.value)
-                        }
-                        rows={2}
-                      />
-                    </label>
-                  )}
+                    {notesOpen && (
+                      <label className="review-field">
+                        <span>Day notes / source text</span>
+                        <textarea
+                          value={dayDrafts[day.id] || ''}
+                          onChange={(event) =>
+                            setDayDraftField(day.id, event.target.value)
+                          }
+                          rows={2}
+                        />
+                      </label>
+                    )}
 
-                  <div className="review-activity-list">
-                    {(day.activities || []).map((activity) => {
-                      const draft = activityDrafts[activity.id] || toActivityDraft(activity, viewerUnits);
-                      const paceUnitLabel = (draft.distanceUnit || viewerUnits) === 'KM' ? 'km' : 'mi';
-                      const hasDistance = draft.distance.trim() !== '';
-                      const activitySaving = Boolean(savingActivityIds[activity.id] || queuedActivityIds[activity.id]);
-                      return (
-                        <div key={activity.id} className="review-activity-item">
-                          <div className="review-activity-top">
-                            <strong>{activity.type.replace(/_/g, ' ')}</strong>
-                            <div className="review-activity-actions">
-                              {activitySaving && <span className="review-inline-status">Saving…</span>}
-                              <button
-                                className="review-delete-btn text"
-                                type="button"
-                                onClick={() => deleteActivity(activity.id)}
-                                disabled={deletingActivityId === activity.id}
-                              >
-                                {deletingActivityId === activity.id ? 'Deleting…' : 'Delete'}
-                              </button>
+                    <div className="review-activity-list">
+                      {(day.activities || []).map((activity) => {
+                        const draft = activityDrafts[activity.id] || toActivityDraft(activity, viewerUnits);
+                        const paceUnitLabel = (draft.distanceUnit || viewerUnits) === 'KM' ? 'km' : 'mi';
+                        const hasDistance = draft.distance.trim() !== '';
+                        const activitySaving = Boolean(savingActivityIds[activity.id] || queuedActivityIds[activity.id]);
+                        return (
+                          <div key={activity.id} className="review-activity-item">
+                            <div className="review-activity-top">
+                              <strong>{activity.type.replace(/_/g, ' ')}</strong>
+                              <div className="review-activity-actions">
+                                {activitySaving && <span className="review-inline-status">Saving…</span>}
+                                <button
+                                  className="review-delete-btn text"
+                                  type="button"
+                                  onClick={() => deleteActivity(activity.id)}
+                                  disabled={deletingActivityId === activity.id}
+                                >
+                                  {deletingActivityId === activity.id ? 'Deleting…' : 'Delete'}
+                                </button>
+                              </div>
                             </div>
-                          </div>
 
-                          <div className="review-activity-grid">
-                            <label className="review-field span-two">
-                              <span>Title</span>
-                              <input
-                                type="text"
-                                value={draft.title}
-                                onChange={(event) =>
-                                  setActivityDraftField(activity.id, 'title', event.target.value)
-                                }
-                              />
-                            </label>
+                            <div className="review-activity-grid">
+                              <label className="review-field span-two">
+                                <span>Title</span>
+                                <input
+                                  type="text"
+                                  value={draft.title}
+                                  onChange={(event) =>
+                                    setActivityDraftField(activity.id, 'title', event.target.value)
+                                  }
+                                />
+                              </label>
 
                             <label className="review-field">
                               <span>Type</span>
@@ -780,29 +991,30 @@ export default function PlanReviewPage() {
                             </label>
                           </div>
 
-                          <label className="review-field">
-                            <span>Instructions</span>
-                            <textarea
-                              value={draft.rawText}
-                              onChange={(event) =>
-                                setActivityDraftField(activity.id, 'rawText', event.target.value)
-                              }
-                              rows={2}
-                            />
-                          </label>
-                        </div>
-                      );
-                    })}
+                            <label className="review-field">
+                              <span>Instructions</span>
+                              <textarea
+                                value={draft.rawText}
+                                onChange={(event) =>
+                                  setActivityDraftField(activity.id, 'rawText', event.target.value)
+                                }
+                                rows={2}
+                              />
+                            </label>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-              );
+                );
               })}
             </article>
           );
-        })}
-      </section>
+          })}
+        </section>
+      )}
 
-      {unassigned.length > 0 && (
+      {!showPacePersonalization && unassigned.length > 0 && (
         <section className="review-page-card">
           <h3>Unassigned Days</h3>
           <div className="review-unassigned-list">

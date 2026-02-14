@@ -79,13 +79,13 @@ export default async function DashboardPage() {
         <div className="dash-empty-content">
           <div className="dash-empty-hero">
             <h1>Welcome, {name}</h1>
-            <p>Set up your first training plan. It only takes a couple of minutes.</p>
+            <p>Start your first training cycle in 3 quick steps.</p>
           </div>
           <div className="dash-empty-steps">
             <div className="dash-empty-step">
               <span className="dash-empty-num">01</span>
-              <h3>Upload your plan</h3>
-              <p>Upload a PDF training plan or pick an existing template.</p>
+              <h3>Get a plan in</h3>
+              <p>Upload a PDF or start from a template.</p>
               <div className="dash-empty-actions">
                 <a className="dash-empty-cta" href="/upload">Upload PDF</a>
                 <a className="dash-empty-cta-outline" href="/plans">Templates</a>
@@ -93,24 +93,25 @@ export default async function DashboardPage() {
             </div>
             <div className="dash-empty-step">
               <span className="dash-empty-num">02</span>
-              <h3>Set your race date</h3>
-              <p>We'll align the plan weeks so training peaks on race weekend.</p>
+              <h3>Review and publish</h3>
+              <p>Confirm parsed workouts and activate the plan.</p>
               <div className="dash-empty-actions">
                 <a className="dash-empty-cta-outline" href="/plans">Open plans</a>
               </div>
             </div>
             <div className="dash-empty-step">
               <span className="dash-empty-num">03</span>
-              <h3>Connect a coach</h3>
-              <p>Invite or select a coach to review progress and adjust workouts.</p>
-              <div className="dash-empty-actions">
-                <a className="dash-empty-cta-outline" href="/coach">Find coach</a>
-              </div>
+              <h3>Do today’s workout</h3>
+              <p>Log actual distance, time, and pace right from dashboard.</p>
             </div>
             <div className="dash-empty-step">
-              <span className="dash-empty-num">04</span>
-              <h3>Start logging</h3>
-              <p>Track completion, pace, time, and distance versus your targets.</p>
+              <span className="dash-empty-num">Optional</span>
+              <h3>Coach and integrations</h3>
+              <p>Connect Strava or invite a coach after your plan is running.</p>
+              <div className="dash-empty-actions">
+                <a className="dash-empty-cta-outline" href="/profile">Profile setup</a>
+                <a className="dash-empty-cta-outline" href="/coach">Coach workspace</a>
+              </div>
             </div>
           </div>
         </div>

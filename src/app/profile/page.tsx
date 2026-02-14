@@ -10,6 +10,7 @@ import '../athlete-pages.css';
 type Coach = { id: string; name: string; email: string };
 
 type PaceTargets = {
+  [key: string]: unknown;
   easy?: string;
   tempo?: string;
 };
@@ -112,9 +113,13 @@ export default function ProfilePage() {
 
   async function saveProfile() {
     setStatus('Saving...');
-    const sanitizedPaceTargets: PaceTargets = {};
-    if (paceTargets.easy?.trim()) sanitizedPaceTargets.easy = paceTargets.easy.trim();
-    if (paceTargets.tempo?.trim()) sanitizedPaceTargets.tempo = paceTargets.tempo.trim();
+    const sanitizedPaceTargets: PaceTargets = { ...paceTargets };
+    const easy = typeof paceTargets.easy === 'string' ? paceTargets.easy.trim() : '';
+    const tempo = typeof paceTargets.tempo === 'string' ? paceTargets.tempo.trim() : '';
+    if (easy) sanitizedPaceTargets.easy = easy;
+    else delete sanitizedPaceTargets.easy;
+    if (tempo) sanitizedPaceTargets.tempo = tempo;
+    else delete sanitizedPaceTargets.tempo;
 
     await fetch('/api/me', {
       method: 'PUT',

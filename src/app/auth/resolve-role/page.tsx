@@ -8,7 +8,10 @@ export default async function ResolveRolePage() {
   if (!roleContext.isActive) redirect('/sign-in');
 
   if (roleContext.availableRoles.length > 1) {
-    redirect('/select-role');
+    if (roleContext.currentRole && roleContext.availableRoles.includes(roleContext.currentRole)) {
+      redirect(getRoleHomePath(roleContext.currentRole));
+    }
+    redirect(getRoleHomePath(roleContext.availableRoles[0]));
   }
 
   const selectedRole = roleContext.availableRoles[0] || roleContext.currentRole;

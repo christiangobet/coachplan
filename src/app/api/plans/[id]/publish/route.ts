@@ -19,5 +19,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     data: { status: 'ACTIVE' }
   });
 
-  return NextResponse.json({ plan: updated });
+  const runActivityCount = await prisma.planActivity.count({
+    where: { planId: plan.id, type: 'RUN' }
+  });
+
+  return NextResponse.json({ plan: updated, runActivityCount });
 }
