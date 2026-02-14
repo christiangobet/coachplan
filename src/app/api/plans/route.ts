@@ -202,32 +202,50 @@ function parseRange(value: string) {
   return null;
 }
 
+function extractDistanceRange(text: string, patterns: RegExp[]) {
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (!match) continue;
+
+    const range = parseRange(match[1].replace(/\s/g, ''));
+    if (!range) continue;
+
+    const matchUnit = inferDistanceUnitFromText(match[0]) || 'MILES';
+    return {
+      distance: range,
+      unit: matchUnit === 'M' ? 'm' : matchUnit.toLowerCase()
+    };
+  }
+
+  return null;
+}
+
 function parseStructure(text: string) {
   const structure: any = {};
-  const wuMatch = text.match(/(\d+(?:\.\d+)?(?:\s*-\s*\d+(?:\.\d+)?)?)\s*(?:mile|miles|km|kilometer|kilometre|meter|meters|metre|metres|m)\s*WU/i);
-  if (wuMatch) {
-    const range = parseRange(wuMatch[1].replace(/\s/g, ''));
-    if (range) {
-      const matchUnit = inferDistanceUnitFromText(wuMatch[0]) || 'MILES';
-      structure.warmup = { distance: range, unit: matchUnit === 'M' ? 'm' : matchUnit.toLowerCase() };
-    }
+  const warmup = extractDistanceRange(text, [
+    /(\d+(?:\.\d+)?(?:\s*-\s*\d+(?:\.\d+)?)?)\s*(?:mile|miles|mi|km|kilometer|kilometre|meter|meters|metre|metres|m)\s*(?:WU|warm[\s-]?up)\b/i,
+    /(?:WU|warm[\s-]?up)\s*(\d+(?:\.\d+)?(?:\s*-\s*\d+(?:\.\d+)?)?)\s*(?:mile|miles|mi|km|kilometer|kilometre|meter|meters|metre|metres|m)\b/i
+  ]);
+  if (warmup) {
+    structure.warmup = warmup;
   }
-  const cdMatch = text.match(/(\d+(?:\.\d+)?(?:\s*-\s*\d+(?:\.\d+)?)?)\s*(?:mile|miles|km|kilometer|kilometre|meter|meters|metre|metres|m)\s*CD/i);
-  if (cdMatch) {
-    const range = parseRange(cdMatch[1].replace(/\s/g, ''));
-    if (range) {
-      const matchUnit = inferDistanceUnitFromText(cdMatch[0]) || 'MILES';
-      structure.cooldown = { distance: range, unit: matchUnit === 'M' ? 'm' : matchUnit.toLowerCase() };
-    }
+
+  const cooldown = extractDistanceRange(text, [
+    /(\d+(?:\.\d+)?(?:\s*-\s*\d+(?:\.\d+)?)?)\s*(?:mile|miles|mi|km|kilometer|kilometre|meter|meters|metre|metres|m)\s*(?:CD|cool[\s-]?down)\b/i,
+    /(?:CD|cool[\s-]?down)\s*(\d+(?:\.\d+)?(?:\s*-\s*\d+(?:\.\d+)?)?)\s*(?:mile|miles|mi|km|kilometer|kilometre|meter|meters|metre|metres|m)\b/i
+  ]);
+  if (cooldown) {
+    structure.cooldown = cooldown;
   }
-  const tempoMatch = text.match(/T[:\s]\s*(\d+(?:\.\d+)?(?:\s*-\s*\d+(?:\.\d+)?)?)\s*(?:mile|miles|km|kilometer|kilometre|meter|meters|metre|metres|m)/i);
-  if (tempoMatch) {
-    const range = parseRange(tempoMatch[1].replace(/\s/g, ''));
-    if (range) {
-      const matchUnit = inferDistanceUnitFromText(tempoMatch[0]) || 'MILES';
-      structure.tempo = { distance: range, unit: matchUnit === 'M' ? 'm' : matchUnit.toLowerCase() };
-    }
+
+  const tempo = extractDistanceRange(text, [
+    /T[:\s]\s*(\d+(?:\.\d+)?(?:\s*-\s*\d+(?:\.\d+)?)?)\s*(?:mile|miles|mi|km|kilometer|kilometre|meter|meters|metre|metres|m)\b/i,
+    /(\d+(?:\.\d+)?(?:\s*-\s*\d+(?:\.\d+)?)?)\s*(?:mile|miles|mi|km|kilometer|kilometre|meter|meters|metre|metres|m)\s*(?:tempo|threshold|t[\s-]?pace)\b/i
+  ]);
+  if (tempo) {
+    structure.tempo = tempo;
   }
+
   const intervalMatch = text.match(/(\d+)\s*x\s*(\d+(?:\.\d+)?)\s*(second|seconds|sec|minute|minutes|min)/i);
   if (intervalMatch) {
     const reps = Number(intervalMatch[1]);
@@ -243,12 +261,86 @@ function parseStructure(text: string) {
   return Object.keys(structure).length ? structure : null;
 }
 
+function resolveDistanceFromStructure(structure: any): DistanceParseResult {
+  if (!structure || typeof structure !== 'object') {
+    return { distance: null, distanceUnit: null };
+  }
+
+  const parts = ['warmup', 'tempo', 'cooldown']
+    .map((key) => structure[key])
+    .filter(Boolean) as Array<{ distance?: { max?: number }, unit?: string }>;
+
+  if (!parts.length) {
+    return { distance: null, distanceUnit: null };
+  }
+
+  const sharedUnit = parts[0]?.unit;
+  if (!sharedUnit || parts.some((part) => part.unit !== sharedUnit || typeof part.distance?.max !== 'number')) {
+    return { distance: null, distanceUnit: null };
+  }
+
+  const total = parts.reduce((sum, part) => sum + Number(part.distance?.max || 0), 0);
+  if (sharedUnit === 'm') return normalizeDistanceValue(total, 'M');
+  if (sharedUnit === 'km') return normalizeDistanceValue(total, 'KM');
+  if (sharedUnit === 'mile' || sharedUnit === 'miles') return normalizeDistanceValue(total, 'MILES');
+  return { distance: null, distanceUnit: null };
+}
+
 function expandAlternatives(text: string) {
   const restOr = text.match(/rest day or (.+)/i) || text.match(/rest or (.+)/i);
   if (restOr) {
     return ['Rest day', restOr[1]];
   }
   return [text];
+}
+
+function splitCombinedActivities(text: string) {
+  const source = normalizeWhitespace(text);
+  if (!source) return [];
+
+  const parts: string[] = [];
+  let depth = 0;
+  let current = '';
+
+  const flush = () => {
+    const trimmed = normalizeWhitespace(current);
+    if (trimmed) parts.push(trimmed);
+    current = '';
+  };
+
+  for (let i = 0; i < source.length; i += 1) {
+    const char = source[i];
+    if (char === '(' || char === '[' || char === '{') {
+      depth += 1;
+      current += char;
+      continue;
+    }
+    if (char === ')' || char === ']' || char === '}') {
+      depth = Math.max(0, depth - 1);
+      current += char;
+      continue;
+    }
+
+    if (depth === 0) {
+      if (char === '+' && source[i - 1] !== '+' && source[i + 1] !== '+') {
+        flush();
+        continue;
+      }
+      if (char === ';' || char === '|') {
+        flush();
+        continue;
+      }
+      if (char === '/' && /\s/.test(source[i - 1] || '') && /\s/.test(source[i + 1] || '')) {
+        flush();
+        continue;
+      }
+    }
+
+    current += char;
+  }
+
+  flush();
+  return parts.length ? parts : [source];
 }
 
 type PdfTextItem = {
@@ -635,7 +727,8 @@ export async function POST(req: Request) {
                 ];
 
             for (const seg of segments) {
-              const variants = expandAlternatives(seg.text || '');
+              const splitSegments = splitCombinedActivities(seg.text || '');
+              const variants = splitSegments.flatMap((segmentText) => expandAlternatives(segmentText));
               for (const variantText of variants) {
                 const originalText = variantText.trim();
                 if (!originalText) continue;
@@ -655,6 +748,9 @@ export async function POST(req: Request) {
                   null;
 
                 const structure = parseStructure(originalText);
+                const structuredDistance = parsedDistance.distance === null
+                  ? resolveDistanceFromStructure(structure)
+                  : parsedDistance;
                 const title =
                   activityType === 'REST'
                     ? 'Rest Day'
@@ -667,8 +763,8 @@ export async function POST(req: Request) {
                   subtype,
                   title,
                   rawText: cleanText || originalText,
-                  distance: parsedDistance.distance,
-                  distanceUnit: parsedDistance.distanceUnit,
+                  distance: structuredDistance.distance,
+                  distanceUnit: structuredDistance.distanceUnit,
                   duration,
                   structure: structure || null,
                   priority: mustDo ? 'KEY' : bailAllowed ? 'OPTIONAL' : null,
