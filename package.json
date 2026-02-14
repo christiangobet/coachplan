@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "prisma generate && next dev --port 3001",
     "build": "prisma generate && next build",
-    "postinstall": "prisma generate",
+    "postinstall": "prisma generate && node scripts/install-python-deps.mjs",
     "start": "next start",
     "lint": "eslint",
     "make-admin": "node scripts/promote-admin.js",

@@ -225,8 +225,13 @@ export default function PlanReviewPage() {
 
   useEffect(() => {
     if (!searchParams) return;
+    const parseWarningMsg = searchParams.get('parseWarningMsg');
     if (searchParams.get('parseWarning') === '1') {
-      setNotice('Automatic parse could not complete. Fallback mode is active: review and add activities manually.');
+      setNotice(
+        parseWarningMsg
+          ? `Automatic parse could not complete (${parseWarningMsg}). Fallback mode is active: review and add activities manually.`
+          : 'Automatic parse could not complete. Fallback mode is active: review and add activities manually.'
+      );
     } else if (searchParams.get('fromUpload') === '1') {
       setNotice('Upload completed. Review and adjust activities before publishing.');
     }

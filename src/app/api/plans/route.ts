@@ -263,6 +263,10 @@ async function parsePdfToJson(planId: string, pdfPath: string, name: string) {
   const scriptPath = path.join(process.cwd(), 'scripts', 'parse_plan_pdf.py');
   const outputDir = path.join(os.tmpdir(), 'coachplan', 'parsed');
   const outputPath = path.join(outputDir, `${planId}.json`);
+  const pythonDepsPath = path.join(process.cwd(), '.python_packages');
+  const pythonPath = process.env.PYTHONPATH
+    ? `${pythonDepsPath}:${process.env.PYTHONPATH}`
+    : pythonDepsPath;
   await fs.mkdir(outputDir, { recursive: true });
 
   try {
@@ -277,7 +281,11 @@ async function parsePdfToJson(planId: string, pdfPath: string, name: string) {
         '--name',
         name
       ],
-      { timeout: 180000, maxBuffer: 8 * 1024 * 1024 }
+      {
+        timeout: 180000,
+        maxBuffer: 8 * 1024 * 1024,
+        env: { ...process.env, PYTHONPATH: pythonPath }
+      }
     );
   } catch (error) {
     const err = error as Error & { stderr?: string; message: string };

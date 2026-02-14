@@ -49,8 +49,11 @@ export default function UploadPage() {
       }
       if (data?.plan?.id) {
         if (file) {
-          const parseWarning = data?.parseWarning ? '&parseWarning=1' : '';
-          window.location.href = `/plans/${data.plan.id}/review?fromUpload=1${parseWarning}`;
+          const parseWarning = typeof data?.parseWarning === 'string' ? data.parseWarning : '';
+          const parseParams = parseWarning
+            ? `&parseWarning=1&parseWarningMsg=${encodeURIComponent(parseWarning.slice(0, 220))}`
+            : '';
+          window.location.href = `/plans/${data.plan.id}/review?fromUpload=1${parseParams}`;
         } else {
           window.location.href = `/plans/${data.plan.id}`;
         }
