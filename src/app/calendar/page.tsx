@@ -432,14 +432,20 @@ export default async function CalendarPage({
               <h1>Training Calendar</h1>
               <p>Monthly view aligned to your plan and race date.</p>
             </div>
-            <div className="cal-month-nav">
-              <Link className="cal-month-btn" href={prevMonthHref} aria-label="Previous month">
-                &larr; Prev
-              </Link>
-              <strong>{formatMonthLabel(monthStart)}</strong>
-              <Link className="cal-month-btn" href={nextMonthHref} aria-label="Next month">
-                Next &rarr;
-              </Link>
+            <div className="cal-header-actions">
+              <div className="cal-view-toggle" aria-label="Plan views">
+                <Link className="cal-view-pill" href={`/plans/${selectedPlan.id}`}>Plan</Link>
+                <span className="cal-view-pill active">Calendar</span>
+              </div>
+              <div className="cal-month-nav">
+                <Link className="cal-month-btn" href={prevMonthHref} aria-label="Previous month">
+                  &larr; Prev
+                </Link>
+                <strong>{formatMonthLabel(monthStart)}</strong>
+                <Link className="cal-month-btn" href={nextMonthHref} aria-label="Next month">
+                  Next &rarr;
+                </Link>
+              </div>
             </div>
           </div>
 

@@ -247,6 +247,45 @@
   margin-bottom: 6px;
 }
 
+.pcal-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pcal-view-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px;
+}
+
+.pcal-view-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.pcal-view-pill.active {
+  background: var(--background);
+  color: var(--ink);
+  box-shadow: var(--shadow);
+}
+
+.pcal-view-pill:hover {
+  color: var(--accent);
+}
+
 .pcal-header h1 {
   font-size: 24px;
   font-weight: 800;
@@ -951,6 +990,10 @@
   .plans-grid { grid-template-columns: 1fr; }
   .plans-header { flex-direction: column; }
   .pcal-header { flex-direction: column; }
+  .pcal-header-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
   .pcal-race-panel-head {
     flex-direction: column;
     align-items: flex-start;

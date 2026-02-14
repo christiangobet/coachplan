@@ -9,6 +9,46 @@
   align-items: flex-start;
 }
 
+.cal-header-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.cal-view-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--d-raised);
+  border: 1px solid var(--d-border);
+  border-radius: 999px;
+  padding: 4px;
+}
+
+.cal-view-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--d-text-mid);
+  text-decoration: none;
+}
+
+.cal-view-pill.active {
+  background: #fff;
+  color: var(--d-text);
+  box-shadow: var(--d-shadow);
+}
+
+.cal-view-pill:hover {
+  color: var(--d-orange);
+}
+
 .cal-header h1 {
   margin: 0;
   font-size: 24px;
@@ -54,6 +94,21 @@
 .cal-month-btn:hover {
   border-color: var(--d-orange);
   color: var(--d-orange);
+}
+
+@media (max-width: 900px) {
+  .cal-header {
+    flex-direction: column;
+  }
+
+  .cal-header-actions {
+    width: 100%;
+    align-items: stretch;
+  }
+
+  .cal-view-toggle {
+    width: fit-content;
+  }
 }
 
 .cal-plan-switch {
