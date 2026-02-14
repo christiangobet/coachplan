@@ -548,6 +548,77 @@
   gap: 10px;
 }
 
+.review-source-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.review-source-chip {
+  height: 32px;
+  border: 1px solid #d2ddf0;
+  border-radius: 999px;
+  background: #fff;
+  color: #4d5f7f;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 0 12px;
+  cursor: pointer;
+}
+
+.review-source-chip.active {
+  border-color: #fc4c02;
+  background: rgba(252, 76, 2, 0.08);
+  color: #fc4c02;
+}
+
+.review-results-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.review-result-card {
+  border: 1px solid #d7e2f4;
+  border-radius: 10px;
+  background: #fbfdff;
+  padding: 9px;
+  display: grid;
+  gap: 8px;
+}
+
+.review-result-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.review-strava-box {
+  border: 1px solid #d7e2f4;
+  border-radius: 10px;
+  background: #fbfdff;
+  padding: 9px;
+  display: grid;
+  gap: 8px;
+}
+
+.review-summary-block {
+  border: 1px solid #d7e2f4;
+  border-radius: 10px;
+  background: #fbfdff;
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.review-summary-paces {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 10px;
+  font-size: 12px;
+  color: #3c4f70;
+  font-weight: 600;
+}
+
 .review-time-input-row {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -642,6 +713,11 @@
   }
 
   .review-time-input-row {
+    grid-template-columns: 1fr;
+  }
+
+  .review-result-row,
+  .review-summary-paces {
     grid-template-columns: 1fr;
   }
 

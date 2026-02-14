@@ -4,6 +4,12 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import './review.css';
+import {
+  estimateGoalTimeFromEvidence,
+  formatTimeHms,
+  parseTimePartsToSeconds,
+  type PaceEvidence
+} from '@/lib/pace-estimation';
 
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const ACTIVITY_TYPES = ['RUN', 'STRENGTH', 'CROSS_TRAIN', 'REST', 'MOBILITY', 'YOGA', 'HIKE', 'OTHER'] as const;
@@ -15,9 +21,36 @@ const RACE_DISTANCE_OPTIONS = [
   { value: '42.195', label: 'Marathon (42.2K)' },
   { value: '50', label: '50K' }
 ] as const;
+const PACE_MULTIPLIERS = {
+  RACE: 1.0,
+  LONG: 1.09,
+  EASY: 1.14,
+  TEMPO: 0.96,
+  INTERVAL: 0.87
+} as const;
 
 type ActivityTypeValue = (typeof ACTIVITY_TYPES)[number];
 type DistanceUnitValue = (typeof DISTANCE_UNITS)[number];
+type PaceSourceMode = 'TARGET_TIME' | 'PAST_RESULT' | 'STRAVA';
+
+type StravaPaceCandidate = {
+  id: string;
+  label: string;
+  distanceKm: number;
+  timeSec: number;
+  dateISO: string;
+  activityName: string | null;
+};
+
+type ManualResultDraft = {
+  id: string;
+  distanceKm: string;
+  hours: string;
+  minutes: string;
+  seconds: string;
+  dateISO: string;
+  label: string;
+};
 
 type ReviewActivity = {
   id: string;
@@ -190,6 +223,30 @@ function formatSavedTime(timestamp: number) {
   }).format(new Date(timestamp));
 }
 
+function makeManualResult(): ManualResultDraft {
+  return {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    distanceKm: '10',
+    hours: '0',
+    minutes: '50',
+    seconds: '0',
+    dateISO: '',
+    label: ''
+  };
+}
+
+function formatPace(goalTimeSec: number, raceDistanceKm: number, multiplier: number, units: DistanceUnitValue) {
+  const secPerKm = (goalTimeSec / Math.max(0.1, raceDistanceKm)) * multiplier;
+  const secPerUnit = units === 'KM' ? secPerKm : secPerKm * 1.609344;
+  let minutes = Math.floor(secPerUnit / 60);
+  let seconds = Math.round(secPerUnit - (minutes * 60));
+  if (seconds >= 60) {
+    minutes += 1;
+    seconds -= 60;
+  }
+  return `${minutes}:${String(seconds).padStart(2, '0')} ${units === 'KM' ? '/km' : '/mi'}`;
+}
+
 export default function PlanReviewPage() {
   const params = useParams<{ id: string }>();
   const searchParams = useSearchParams();
@@ -215,12 +272,23 @@ export default function PlanReviewPage() {
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
   const [showPacePersonalization, setShowPacePersonalization] = useState(false);
   const [paceFormOpen, setPaceFormOpen] = useState(false);
+  const [paceStep, setPaceStep] = useState<1 | 2>(1);
   const [paceApplying, setPaceApplying] = useState(false);
   const [paceRunCount, setPaceRunCount] = useState(0);
+  const [paceSource, setPaceSource] = useState<PaceSourceMode>('TARGET_TIME');
   const [raceDistanceKm, setRaceDistanceKm] = useState('42.195');
   const [goalHours, setGoalHours] = useState('3');
   const [goalMinutes, setGoalMinutes] = useState('30');
   const [goalSeconds, setGoalSeconds] = useState('0');
+  const [manualResults, setManualResults] = useState<ManualResultDraft[]>([makeManualResult()]);
+  const [athleteAge, setAthleteAge] = useState('');
+  const [athleteSex, setAthleteSex] = useState('');
+  const [paceSourcesLoading, setPaceSourcesLoading] = useState(false);
+  const [stravaConnected, setStravaConnected] = useState(false);
+  const [stravaUsername, setStravaUsername] = useState<string | null>(null);
+  const [stravaLastSyncAt, setStravaLastSyncAt] = useState<string | null>(null);
+  const [stravaCandidates, setStravaCandidates] = useState<StravaPaceCandidate[]>([]);
+  const [selectedStravaId, setSelectedStravaId] = useState('');
   const [overrideExistingPaces, setOverrideExistingPaces] = useState(false);
   const [savePaceProfile, setSavePaceProfile] = useState(true);
   const [paceModalError, setPaceModalError] = useState<string | null>(null);
@@ -308,6 +376,41 @@ export default function PlanReviewPage() {
     }
   }, [searchParams]);
 
+  const loadPaceSources = useCallback(async () => {
+    if (!planId) return;
+    setPaceSourcesLoading(true);
+    try {
+      const res = await fetch(`/api/plans/${planId}/pace-personalize`);
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data) return;
+      const defaultDistance = Number(data.raceDistanceKmDefault);
+      if (Number.isFinite(defaultDistance) && defaultDistance > 0) {
+        setRaceDistanceKm(String(defaultDistance));
+      }
+      const strava = data.strava as {
+        connected?: boolean;
+        providerUsername?: string | null;
+        lastSyncAt?: string | null;
+        candidates?: StravaPaceCandidate[];
+      } | undefined;
+      setStravaConnected(Boolean(strava?.connected));
+      setStravaUsername(strava?.providerUsername || null);
+      setStravaLastSyncAt(strava?.lastSyncAt || null);
+      const candidates = Array.isArray(strava?.candidates) ? strava.candidates : [];
+      setStravaCandidates(candidates);
+      if (candidates.length > 0) {
+        setSelectedStravaId((prev) => prev || candidates[0].id);
+      }
+    } finally {
+      setPaceSourcesLoading(false);
+    }
+  }, [planId]);
+
+  useEffect(() => {
+    if (!showPacePersonalization || !paceFormOpen) return;
+    void loadPaceSources();
+  }, [loadPaceSources, paceFormOpen, showPacePersonalization]);
+
   const weeks = useMemo(() => {
     if (!plan?.weeks) return [];
     return [...plan.weeks].sort((a, b) => a.weekIndex - b.weekIndex);
@@ -336,6 +439,71 @@ export default function PlanReviewPage() {
         : 'Changes save automatically';
     return { busy, label };
   }, [lastSavedAt, queuedActivityIds, queuedDayIds, savingActivityIds, savingDayIds]);
+
+  const raceDistanceValue = Number(raceDistanceKm);
+
+  const manualEvidence = useMemo<PaceEvidence[]>(() => (
+    manualResults.flatMap((item) => {
+      const distanceKm = Number(item.distanceKm);
+      const timeSec = parseTimePartsToSeconds(item.hours, item.minutes, item.seconds);
+      if (!Number.isFinite(distanceKm) || distanceKm <= 0 || !timeSec || timeSec < 60) return [];
+      return [{
+        source: 'MANUAL' as const,
+        label: item.label || null,
+        distanceKm,
+        timeSec,
+        dateISO: item.dateISO || null
+      }];
+    })
+  ), [manualResults]);
+
+  const selectedStravaCandidate = useMemo(
+    () => stravaCandidates.find((item) => item.id === selectedStravaId) || null,
+    [selectedStravaId, stravaCandidates]
+  );
+
+  const evidenceEstimate = useMemo(() => {
+    if (!Number.isFinite(raceDistanceValue) || raceDistanceValue <= 0) return null;
+    if (paceSource === 'PAST_RESULT') {
+      return estimateGoalTimeFromEvidence({
+        targetDistanceKm: raceDistanceValue,
+        evidence: manualEvidence
+      });
+    }
+    if (paceSource === 'STRAVA' && selectedStravaCandidate) {
+      return estimateGoalTimeFromEvidence({
+        targetDistanceKm: raceDistanceValue,
+        evidence: [{
+          source: 'STRAVA',
+          label: selectedStravaCandidate.label,
+          distanceKm: selectedStravaCandidate.distanceKm,
+          timeSec: selectedStravaCandidate.timeSec,
+          dateISO: selectedStravaCandidate.dateISO
+        }]
+      });
+    }
+    return null;
+  }, [manualEvidence, paceSource, raceDistanceValue, selectedStravaCandidate]);
+
+  const targetGoalTimeSec = useMemo(() => {
+    if (paceSource === 'TARGET_TIME') {
+      return parseTimePartsToSeconds(goalHours, goalMinutes, goalSeconds);
+    }
+    return evidenceEstimate?.goalTimeSec || null;
+  }, [evidenceEstimate, goalHours, goalMinutes, goalSeconds, paceSource]);
+
+  const pacePreview = useMemo(() => {
+    if (!targetGoalTimeSec || targetGoalTimeSec < 600 || !Number.isFinite(raceDistanceValue) || raceDistanceValue <= 0) {
+      return null;
+    }
+    return {
+      race: formatPace(targetGoalTimeSec, raceDistanceValue, PACE_MULTIPLIERS.RACE, viewerUnits),
+      long: formatPace(targetGoalTimeSec, raceDistanceValue, PACE_MULTIPLIERS.LONG, viewerUnits),
+      easy: formatPace(targetGoalTimeSec, raceDistanceValue, PACE_MULTIPLIERS.EASY, viewerUnits),
+      tempo: formatPace(targetGoalTimeSec, raceDistanceValue, PACE_MULTIPLIERS.TEMPO, viewerUnits),
+      interval: formatPace(targetGoalTimeSec, raceDistanceValue, PACE_MULTIPLIERS.INTERVAL, viewerUnits)
+    };
+  }, [raceDistanceValue, targetGoalTimeSec, viewerUnits]);
 
   const persistDay = useCallback(
     async (dayId: string, rawText: string) => {
@@ -575,6 +743,9 @@ export default function PlanReviewPage() {
       if (runCount > 0) {
         setShowPacePersonalization(true);
         setPaceFormOpen(false);
+        setPaceStep(1);
+        setPaceSource('TARGET_TIME');
+        setPaceModalError(null);
         setNotice('Plan published. Continue to dashboard or personalize run paces now.');
         return;
       }
@@ -590,45 +761,101 @@ export default function PlanReviewPage() {
     window.location.href = '/dashboard';
   }, []);
 
+  const setManualField = useCallback((id: string, field: keyof ManualResultDraft, value: string) => {
+    setManualResults((prev) => prev.map((item) => (
+      item.id === id ? { ...item, [field]: value } : item
+    )));
+  }, []);
+
+  const addManualResult = useCallback(() => {
+    setManualResults((prev) => [...prev, makeManualResult()]);
+  }, []);
+
+  const removeManualResult = useCallback((id: string) => {
+    setManualResults((prev) => (prev.length > 1 ? prev.filter((item) => item.id !== id) : prev));
+  }, []);
+
+  const continuePaceSetup = useCallback(() => {
+    setPaceModalError(null);
+    if (!Number.isFinite(raceDistanceValue) || raceDistanceValue <= 0) {
+      setPaceModalError('Goal race distance must be greater than 0.');
+      return;
+    }
+
+    if (paceSource === 'TARGET_TIME') {
+      const parsed = parseTimePartsToSeconds(goalHours, goalMinutes, goalSeconds);
+      if (!parsed || parsed < 600) {
+        setPaceModalError('Please enter a valid target race time of at least 10 minutes.');
+        return;
+      }
+    }
+
+    if (paceSource === 'PAST_RESULT' && manualEvidence.length === 0) {
+      setPaceModalError('Add at least one valid past race/workout result.');
+      return;
+    }
+
+    if (paceSource === 'STRAVA' && !selectedStravaId) {
+      setPaceModalError('Select one Strava best effort to continue.');
+      return;
+    }
+
+    if (!targetGoalTimeSec || targetGoalTimeSec < 600) {
+      setPaceModalError('Could not estimate a valid target time from your input.');
+      return;
+    }
+
+    setPaceStep(2);
+  }, [
+    goalHours,
+    goalMinutes,
+    goalSeconds,
+    manualEvidence.length,
+    paceSource,
+    raceDistanceValue,
+    selectedStravaId,
+    targetGoalTimeSec
+  ]);
+
   const applyPacePersonalization = useCallback(async () => {
     if (!planId) return;
-
-    const numericDistance = Number(raceDistanceKm);
-    const numericHours = Number(goalHours || 0);
-    const numericMinutes = Number(goalMinutes || 0);
-    const numericSeconds = Number(goalSeconds || 0);
-
-    if (!Number.isFinite(numericDistance) || numericDistance <= 0) {
+    if (!Number.isFinite(raceDistanceValue) || raceDistanceValue <= 0) {
       setPaceModalError('Race distance must be greater than 0.');
       return;
     }
-    if (![numericHours, numericMinutes, numericSeconds].every((value) => Number.isFinite(value) && value >= 0)) {
-      setPaceModalError('Race target time is invalid.');
-      return;
-    }
-    if (numericMinutes >= 60 || numericSeconds >= 60) {
-      setPaceModalError('Minutes and seconds must be lower than 60.');
-      return;
-    }
-    if (numericHours * 3600 + numericMinutes * 60 + numericSeconds < 600) {
-      setPaceModalError('Please set a race target of at least 10 minutes.');
+    if (!targetGoalTimeSec || targetGoalTimeSec < 600) {
+      setPaceModalError('A valid target time is required.');
       return;
     }
 
     setPaceApplying(true);
     setPaceModalError(null);
     try {
+      const payload: Record<string, unknown> = {
+        raceDistanceKm: raceDistanceValue,
+        targetGoalTimeSec,
+        overrideExisting: overrideExistingPaces,
+        saveToProfile: savePaceProfile,
+        age: athleteAge.trim() ? Number(athleteAge) : null,
+        sex: athleteSex.trim() || null
+      };
+
+      if (paceSource === 'TARGET_TIME') {
+        payload.goalHours = Number(goalHours || 0);
+        payload.goalMinutes = Number(goalMinutes || 0);
+        payload.goalSeconds = Number(goalSeconds || 0);
+      }
+      if (paceSource === 'PAST_RESULT') {
+        payload.manualEvidence = manualEvidence;
+      }
+      if (paceSource === 'STRAVA') {
+        payload.stravaActivityId = selectedStravaId || null;
+      }
+
       const res = await fetch(`/api/plans/${planId}/pace-personalize`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          raceDistanceKm: numericDistance,
-          goalHours: numericHours,
-          goalMinutes: numericMinutes,
-          goalSeconds: numericSeconds,
-          overrideExisting: overrideExistingPaces,
-          saveToProfile: savePaceProfile
-        })
+        body: JSON.stringify(payload)
       });
       const data = await res.json().catch(() => null);
       if (!res.ok) {
@@ -644,13 +871,19 @@ export default function PlanReviewPage() {
       setPaceApplying(false);
     }
   }, [
+    athleteAge,
+    athleteSex,
     goalHours,
     goalMinutes,
     goalSeconds,
+    manualEvidence,
     overrideExistingPaces,
+    paceSource,
     planId,
-    raceDistanceKm,
-    savePaceProfile
+    raceDistanceValue,
+    savePaceProfile,
+    selectedStravaId,
+    targetGoalTimeSec
   ]);
 
   if (loading) {
@@ -726,7 +959,15 @@ export default function PlanReviewPage() {
                 Go to Today
               </button>
               {paceRunCount > 0 && (
-                <button className="cta secondary" type="button" onClick={() => setPaceFormOpen((prev) => !prev)}>
+                <button
+                  className="cta secondary"
+                  type="button"
+                  onClick={() => {
+                    setPaceFormOpen((prev) => !prev);
+                    setPaceStep(1);
+                    setPaceModalError(null);
+                  }}
+                >
                   {paceFormOpen ? 'Hide Pace Setup' : 'Personalize Paces'}
                 </button>
               )}
@@ -736,8 +977,11 @@ export default function PlanReviewPage() {
           {paceRunCount > 0 && paceFormOpen && (
             <div className="review-publish-body">
               <p className="review-publish-copy">
-                Set a race target and CoachPlan will auto-fill pace targets in {viewerUnits === 'KM' ? 'min/km' : 'min/mi'}.
+                {paceStep === 1
+                  ? `Step 1 of 2: choose your data source. CoachPlan will estimate paces in ${viewerUnits === 'KM' ? 'min/km' : 'min/mi'}.`
+                  : 'Step 2 of 2: review estimated target and apply pace zones to run workouts.'}
               </p>
+
               <div className="review-modal-grid">
                 <label className="review-field">
                   <span>Goal race distance</span>
@@ -748,37 +992,218 @@ export default function PlanReviewPage() {
                   </select>
                 </label>
 
-                <label className="review-field">
-                  <span>Target time (hh:mm:ss)</span>
-                  <div className="review-time-input-row">
-                    <input
-                      type="number"
-                      min={0}
-                      step={1}
-                      value={goalHours}
-                      onChange={(event) => setGoalHours(event.target.value)}
-                      placeholder="hh"
-                    />
-                    <input
-                      type="number"
-                      min={0}
-                      max={59}
-                      step={1}
-                      value={goalMinutes}
-                      onChange={(event) => setGoalMinutes(event.target.value)}
-                      placeholder="mm"
-                    />
-                    <input
-                      type="number"
-                      min={0}
-                      max={59}
-                      step={1}
-                      value={goalSeconds}
-                      onChange={(event) => setGoalSeconds(event.target.value)}
-                      placeholder="ss"
-                    />
+                {paceStep === 1 && (
+                  <>
+                    <div className="review-source-row">
+                      <button
+                        type="button"
+                        className={`review-source-chip${paceSource === 'TARGET_TIME' ? ' active' : ''}`}
+                        onClick={() => setPaceSource('TARGET_TIME')}
+                      >
+                        Target time
+                      </button>
+                      <button
+                        type="button"
+                        className={`review-source-chip${paceSource === 'PAST_RESULT' ? ' active' : ''}`}
+                        onClick={() => setPaceSource('PAST_RESULT')}
+                      >
+                        Past race result
+                      </button>
+                      <button
+                        type="button"
+                        className={`review-source-chip${paceSource === 'STRAVA' ? ' active' : ''}`}
+                        onClick={() => setPaceSource('STRAVA')}
+                      >
+                        Strava effort
+                      </button>
+                    </div>
+
+                    {paceSource === 'TARGET_TIME' && (
+                      <label className="review-field">
+                        <span>Target time (hh:mm:ss)</span>
+                        <div className="review-time-input-row">
+                          <input
+                            type="number"
+                            min={0}
+                            step={1}
+                            value={goalHours}
+                            onChange={(event) => setGoalHours(event.target.value)}
+                            placeholder="hh"
+                          />
+                          <input
+                            type="number"
+                            min={0}
+                            max={59}
+                            step={1}
+                            value={goalMinutes}
+                            onChange={(event) => setGoalMinutes(event.target.value)}
+                            placeholder="mm"
+                          />
+                          <input
+                            type="number"
+                            min={0}
+                            max={59}
+                            step={1}
+                            value={goalSeconds}
+                            onChange={(event) => setGoalSeconds(event.target.value)}
+                            placeholder="ss"
+                          />
+                        </div>
+                      </label>
+                    )}
+
+                    {paceSource === 'PAST_RESULT' && (
+                      <div className="review-results-grid">
+                        {manualResults.map((item) => (
+                          <div key={item.id} className="review-result-card">
+                            <div className="review-result-row">
+                              <label className="review-field">
+                                <span>Distance</span>
+                                <select
+                                  value={item.distanceKm}
+                                  onChange={(event) => setManualField(item.id, 'distanceKm', event.target.value)}
+                                >
+                                  {RACE_DISTANCE_OPTIONS.map((option) => (
+                                    <option key={option.value} value={option.value}>{option.label}</option>
+                                  ))}
+                                </select>
+                              </label>
+                              <label className="review-field">
+                                <span>Date</span>
+                                <input
+                                  type="date"
+                                  value={item.dateISO}
+                                  onChange={(event) => setManualField(item.id, 'dateISO', event.target.value)}
+                                />
+                              </label>
+                            </div>
+                            <label className="review-field">
+                              <span>Time (hh:mm:ss)</span>
+                              <div className="review-time-input-row">
+                                <input
+                                  type="number"
+                                  min={0}
+                                  step={1}
+                                  value={item.hours}
+                                  onChange={(event) => setManualField(item.id, 'hours', event.target.value)}
+                                  placeholder="hh"
+                                />
+                                <input
+                                  type="number"
+                                  min={0}
+                                  max={59}
+                                  step={1}
+                                  value={item.minutes}
+                                  onChange={(event) => setManualField(item.id, 'minutes', event.target.value)}
+                                  placeholder="mm"
+                                />
+                                <input
+                                  type="number"
+                                  min={0}
+                                  max={59}
+                                  step={1}
+                                  value={item.seconds}
+                                  onChange={(event) => setManualField(item.id, 'seconds', event.target.value)}
+                                  placeholder="ss"
+                                />
+                              </div>
+                            </label>
+                            <label className="review-field">
+                              <span>Label (optional)</span>
+                              <input
+                                type="text"
+                                value={item.label}
+                                onChange={(event) => setManualField(item.id, 'label', event.target.value)}
+                                placeholder="e.g. Spring 10K race"
+                              />
+                            </label>
+                            {manualResults.length > 1 && (
+                              <button
+                                className="review-delete-btn text"
+                                type="button"
+                                onClick={() => removeManualResult(item.id)}
+                              >
+                                Remove
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                        <button className="review-save-btn secondary" type="button" onClick={addManualResult}>
+                          Add result
+                        </button>
+                      </div>
+                    )}
+
+                    {paceSource === 'STRAVA' && (
+                      <div className="review-strava-box">
+                        <p className="review-field-hint">
+                          Status: {stravaConnected ? `Connected${stravaUsername ? ` as ${stravaUsername}` : ''}` : 'Not connected'}
+                          {stravaLastSyncAt ? ` · last sync ${new Date(stravaLastSyncAt).toLocaleDateString()}` : ''}
+                        </p>
+                        {paceSourcesLoading ? (
+                          <p className="review-muted">Loading Strava efforts…</p>
+                        ) : stravaCandidates.length === 0 ? (
+                          <p className="review-muted">No synced race-like Strava efforts found yet.</p>
+                        ) : (
+                          <label className="review-field">
+                            <span>Select effort</span>
+                            <select value={selectedStravaId} onChange={(event) => setSelectedStravaId(event.target.value)}>
+                              {stravaCandidates.map((candidate) => (
+                                <option key={candidate.id} value={candidate.id}>
+                                  {candidate.label} · {formatTimeHms(candidate.timeSec)} · {new Date(candidate.dateISO).toLocaleDateString()}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        )}
+                      </div>
+                    )}
+
+                    <div className="review-result-row">
+                      <label className="review-field">
+                        <span>Age (optional)</span>
+                        <input
+                          type="number"
+                          min={0}
+                          step={1}
+                          value={athleteAge}
+                          onChange={(event) => setAthleteAge(event.target.value)}
+                          placeholder="e.g. 38"
+                        />
+                      </label>
+                      <label className="review-field">
+                        <span>Sex (optional)</span>
+                        <select value={athleteSex} onChange={(event) => setAthleteSex(event.target.value)}>
+                          <option value="">Prefer not to say</option>
+                          <option value="female">Female</option>
+                          <option value="male">Male</option>
+                          <option value="non_binary">Non-binary</option>
+                        </select>
+                      </label>
+                    </div>
+                  </>
+                )}
+
+                {paceStep === 2 && (
+                  <div className="review-summary-block">
+                    <p className="review-publish-copy">
+                      Source: {paceSource === 'TARGET_TIME' ? 'Target time' : paceSource === 'PAST_RESULT' ? 'Past results estimate' : 'Strava estimate'}
+                    </p>
+                    <p className="review-publish-copy">
+                      Estimated target race time: <strong>{targetGoalTimeSec ? formatTimeHms(targetGoalTimeSec) : '--:--:--'}</strong>
+                      {evidenceEstimate?.confidence ? ` · ${evidenceEstimate.confidence} confidence` : ''}
+                    </p>
+                    {pacePreview && (
+                      <div className="review-summary-paces">
+                        <span>Race: {pacePreview.race}</span>
+                        <span>Long: {pacePreview.long}</span>
+                        <span>Easy: {pacePreview.easy}</span>
+                        <span>Tempo: {pacePreview.tempo}</span>
+                        <span>Interval: {pacePreview.interval}</span>
+                      </div>
+                    )}
                   </div>
-                </label>
+                )}
 
                 <label className="review-check-row">
                   <input
@@ -805,9 +1230,25 @@ export default function PlanReviewPage() {
                 <button className="cta secondary" type="button" onClick={skipPacePersonalization} disabled={paceApplying}>
                   Skip for now
                 </button>
-                <button className="cta" type="button" onClick={applyPacePersonalization} disabled={paceApplying}>
-                  {paceApplying ? 'Applying…' : 'Apply Pace Targets'}
-                </button>
+                {paceStep === 2 && (
+                  <button className="cta secondary" type="button" onClick={() => setPaceStep(1)} disabled={paceApplying}>
+                    Back
+                  </button>
+                )}
+                {paceStep === 1 ? (
+                  <button
+                    className="cta"
+                    type="button"
+                    onClick={continuePaceSetup}
+                    disabled={paceApplying || !targetGoalTimeSec}
+                  >
+                    Continue
+                  </button>
+                ) : (
+                  <button className="cta" type="button" onClick={applyPacePersonalization} disabled={paceApplying}>
+                    {paceApplying ? 'Applying…' : 'Apply Pace Targets'}
+                  </button>
+                )}
               </div>
             </div>
           )}
