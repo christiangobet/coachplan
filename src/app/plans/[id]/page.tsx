@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { getDayDateFromWeekStart, resolveWeekBounds } from '@/lib/plan-dates';
+import ActivityTypeIcon from '@/components/ActivityTypeIcon';
 import {
   convertDistanceForDisplay,
   convertPaceForDisplay,
@@ -414,7 +415,13 @@ export default function PlanDetailPage() {
                               type="button"
                             />
                             <div className="pcal-activity-content">
-                              <span className="pcal-activity-title">{a.title}</span>
+                              <span className="pcal-activity-title">
+                                <ActivityTypeIcon
+                                  type={a.type}
+                                  className={`pcal-activity-icon type-${String(a.type || 'OTHER').toLowerCase()}`}
+                                />
+                                <span className="pcal-activity-title-text">{a.title}</span>
+                              </span>
                               {details.length > 0 && (
                                 <span className="pcal-activity-details">
                                   {details.join(' · ')}
@@ -452,7 +459,10 @@ export default function PlanDetailPage() {
             <div className="pcal-modal-type-bar" style={{ background: typeColor(selectedActivity.type) }} />
 
             <div className="pcal-modal-body">
-              <span className="pcal-modal-type">{formatType(selectedActivity.type)}</span>
+              <span className="pcal-modal-type">
+                <ActivityTypeIcon type={selectedActivity.type} className="pcal-modal-type-icon" />
+                {formatType(selectedActivity.type)}
+              </span>
               <h2 className="pcal-modal-title">{selectedActivity.title}</h2>
 
               {/* Stats row */}

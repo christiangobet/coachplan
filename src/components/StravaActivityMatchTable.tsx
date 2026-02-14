@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import ActivityTypeIcon from '@/components/ActivityTypeIcon';
 import {
   convertDistanceForDisplay,
   distanceUnitLabel,
@@ -51,18 +52,6 @@ type ReviewResponse = {
 
 function formatType(type: string) {
   return type.replace(/_/g, ' ').toLowerCase().replace(/^\w/, (char) => char.toUpperCase());
-}
-
-function formatTypeCode(type: string) {
-  const t = (type || '').toUpperCase();
-  if (t === 'RUN') return 'RN';
-  if (t === 'STRENGTH') return 'ST';
-  if (t === 'CROSS_TRAIN') return 'XT';
-  if (t === 'REST') return 'RS';
-  if (t === 'YOGA') return 'YG';
-  if (t === 'MOBILITY') return 'MB';
-  if (t === 'HIKE') return 'HK';
-  return 'OT';
 }
 
 function formatPlanActivity(activity: PlanActivityRow, viewerUnits: DistanceUnit) {
@@ -287,7 +276,10 @@ export default function StravaActivityMatchTable() {
                             <div className="dash-day-item-head">
                               <strong>
                                 <span className={`dash-type-icon type-${String(activity.type || 'OTHER').toLowerCase()}`}>
-                                  {formatTypeCode(String(activity.type || 'OTHER'))}
+                                  <ActivityTypeIcon
+                                    type={String(activity.type || 'OTHER')}
+                                    className="dash-type-icon-glyph"
+                                  />
                                 </span>
                                 {activity.title}
                               </strong>
@@ -311,7 +303,10 @@ export default function StravaActivityMatchTable() {
                             <div key={activity.id} className="dash-day-item strava">
                               <strong>
                                 <span className={`dash-type-icon type-${String(activity.sportType || 'OTHER').toLowerCase()}`}>
-                                  {formatTypeCode(String(activity.sportType || 'OTHER'))}
+                                  <ActivityTypeIcon
+                                    type={String(activity.sportType || 'OTHER')}
+                                    className="dash-type-icon-glyph"
+                                  />
                                 </span>
                                 {activity.name}
                               </strong>

@@ -15,6 +15,7 @@ import CompleteWorkoutButton from "@/components/CompleteWorkoutButton";
 import AthleteSidebar from "@/components/AthleteSidebar";
 import StravaSyncPanel from "@/components/StravaSyncPanel";
 import StravaActivityMatchTable from "@/components/StravaActivityMatchTable";
+import ActivityTypeIcon from "@/components/ActivityTypeIcon";
 import "./dashboard.css";
 
 const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -26,18 +27,6 @@ function getIsoDay(date: Date) {
 
 function formatType(type: string) {
   return type.replace(/_/g, " ").toLowerCase().replace(/^\w/, (c) => c.toUpperCase());
-}
-
-function formatTypeCode(type: string) {
-  const t = (type || "").toUpperCase();
-  if (t === "RUN") return "RN";
-  if (t === "STRENGTH") return "ST";
-  if (t === "CROSS_TRAIN") return "XT";
-  if (t === "REST") return "RS";
-  if (t === "YOGA") return "YG";
-  if (t === "MOBILITY") return "MB";
-  if (t === "HIKE") return "HK";
-  return "OT";
 }
 
 function formatPlannedDate(date: Date) {
@@ -520,7 +509,10 @@ export default async function DashboardPage() {
                   <div className="dash-upcoming-info">
                     <span className="dash-upcoming-title">
                       <span className={`dash-type-icon type-${String(a.type || "OTHER").toLowerCase()}`}>
-                        {formatTypeCode(String(a.type || "OTHER"))}
+                        <ActivityTypeIcon
+                          type={String(a.type || "OTHER")}
+                          className="dash-type-icon-glyph"
+                        />
                       </span>
                       {a.title}
                     </span>

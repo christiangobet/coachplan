@@ -1130,6 +1130,11 @@
   flex-shrink: 0;
 }
 
+.dash-type-icon-glyph {
+  width: 12px;
+  height: 12px;
+}
+
 .dash-type-icon.type-run { background: #fc4c02; }
 .dash-type-icon.type-strength { background: #6c5ce7; }
 .dash-type-icon.type-cross_train { background: #0984e3; }

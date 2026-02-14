@@ -15,6 +15,7 @@ import {
 import AthleteSidebar from "@/components/AthleteSidebar";
 import DayCompletionButton from "@/components/DayCompletionButton";
 import RaceDetailsEditor from "@/components/RaceDetailsEditor";
+import ActivityTypeIcon from "@/components/ActivityTypeIcon";
 import "../dashboard/dashboard.css";
 import "./calendar.css";
 
@@ -516,7 +517,13 @@ export default async function CalendarPage({
                           className={`cal-activity type-${activity.type.toLowerCase()}${activity.completed ? " completed" : ""}`}
                           title={activity.title}
                         >
-                          <span>{activity.title}</span>
+                          <span className="cal-activity-title">
+                            <ActivityTypeIcon
+                              type={activity.type}
+                              className={`cal-activity-icon type-${activity.type.toLowerCase()}`}
+                            />
+                            <span className="cal-activity-title-text">{activity.title}</span>
+                          </span>
                           {activity.completed && <em>Done</em>}
                         </Link>
                       ))}
@@ -573,7 +580,13 @@ export default async function CalendarPage({
               {selectedPlanActivities.map((activity) => (
                 <div key={activity.id} className={`cal-day-detail-item${activity.completed ? " done" : ""}`}>
                   <div className="cal-day-detail-title">
-                    <strong>{activity.title}</strong>
+                    <span className="cal-day-detail-main">
+                      <ActivityTypeIcon
+                        type={activity.type}
+                        className={`cal-day-detail-icon type-${activity.type.toLowerCase()}`}
+                      />
+                      <strong>{activity.title}</strong>
+                    </span>
                     <span>{formatType(activity.type)}</span>
                   </div>
                   <div className="cal-day-detail-meta">

@@ -320,13 +320,34 @@
   padding: 6px;
 }
 
-.cal-activity span {
+.cal-activity-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.cal-activity-title-text {
   font-weight: 700;
   color: var(--d-text);
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
+
+.cal-activity-icon {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  color: var(--d-text-mid);
+}
+
+.cal-activity-icon.type-run { color: var(--d-orange); }
+.cal-activity-icon.type-strength { color: #6c5ce7; }
+.cal-activity-icon.type-cross_train { color: #0984e3; }
+.cal-activity-icon.type-rest { color: #0f8a47; }
+.cal-activity-icon.type-mobility { color: #e67e22; }
+.cal-activity-icon.type-yoga { color: #0f8a47; }
+.cal-activity-icon.type-hike { color: #0ea5a6; }
 
 .cal-activity em {
   font-style: normal;
@@ -568,6 +589,27 @@
   justify-content: space-between;
   gap: 8px;
 }
+
+.cal-day-detail-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cal-day-detail-icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  color: var(--d-text-mid);
+}
+
+.cal-day-detail-icon.type-run { color: var(--d-orange); }
+.cal-day-detail-icon.type-strength { color: #6c5ce7; }
+.cal-day-detail-icon.type-cross_train { color: #0984e3; }
+.cal-day-detail-icon.type-rest { color: #0f8a47; }
+.cal-day-detail-icon.type-mobility { color: #e67e22; }
+.cal-day-detail-icon.type-yoga { color: #0f8a47; }
+.cal-day-detail-icon.type-hike { color: #0ea5a6; }
 
 .cal-day-detail-title strong {
   font-size: 13px;
