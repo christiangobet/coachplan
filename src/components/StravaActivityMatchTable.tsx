@@ -2,6 +2,12 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import {
+  convertDistanceForDisplay,
+  distanceUnitLabel,
+  formatDistanceNumber,
+  type DistanceUnit
+} from '@/lib/unit-display';
 
 type PlanActivityRow = {
   id: string;
@@ -34,6 +40,7 @@ type ReviewDay = {
 };
 
 type ReviewResponse = {
+  viewerUnits?: 'MILES' | 'KM';
   account: {
     connected: boolean;
     providerUsername: string | null;
@@ -58,17 +65,23 @@ function formatTypeCode(type: string) {
   return 'OT';
 }
 
-function formatPlanActivity(activity: PlanActivityRow) {
+function formatPlanActivity(activity: PlanActivityRow, viewerUnits: DistanceUnit) {
   const bits: string[] = [];
   if (activity.duration) bits.push(`${activity.duration} min`);
-  if (activity.distance) bits.push(`${activity.distance} ${activity.distanceUnit?.toLowerCase() || 'mi'}`);
+  if (activity.distance) {
+    const converted = convertDistanceForDisplay(activity.distance, activity.distanceUnit, viewerUnits);
+    if (converted) bits.push(`${formatDistanceNumber(converted.value)} ${distanceUnitLabel(converted.unit)}`);
+  }
   if (activity.completed) bits.push('Done');
   return bits.join(' · ');
 }
 
-function formatStravaActivity(activity: StravaActivityRow) {
+function formatStravaActivity(activity: StravaActivityRow, viewerUnits: DistanceUnit) {
   const bits: string[] = [];
-  if (activity.distanceM && activity.distanceM > 0) bits.push(`${(activity.distanceM / 1000).toFixed(2)} km`);
+  if (activity.distanceM && activity.distanceM > 0) {
+    const converted = convertDistanceForDisplay(activity.distanceM / 1000, 'KM', viewerUnits);
+    if (converted) bits.push(`${formatDistanceNumber(converted.value)} ${distanceUnitLabel(converted.unit)}`);
+  }
   if (activity.durationSec && activity.durationSec > 0) {
     const min = Math.round(activity.durationSec / 60);
     bits.push(`${min} min`);
@@ -128,8 +141,9 @@ export default function StravaActivityMatchTable() {
         return;
       }
       const summary = body?.summary || {};
+      const truncatedNote = summary?.truncated ? ' (partial window; rerun sync)' : '';
       setStatus(
-        `Synced: ${summary.imported ?? 0} imported, ${summary.matched ?? 0} matched, ${summary.workoutsUpdated ?? 0} updated`
+        `Synced: ${summary.imported ?? 0} imported, ${summary.matched ?? 0} matched, ${summary.workoutsUpdated ?? 0} updated${truncatedNote}`
       );
       await load();
       router.refresh();
@@ -184,6 +198,7 @@ export default function StravaActivityMatchTable() {
     if (diffMs <= 6 * 60 * 60 * 1000) return { label: 'Up to date', tone: 'ok' as const };
     return { label: 'Sync recommended', tone: 'warn' as const };
   }, [data?.account?.connected, data?.account?.lastSyncAt]);
+  const viewerUnits: DistanceUnit = data?.viewerUnits === 'KM' ? 'KM' : 'MILES';
 
   return (
     <section className="dash-card dash-day-import-card">
@@ -281,7 +296,7 @@ export default function StravaActivityMatchTable() {
                               </span>
                             </div>
                             <span>{formatType(activity.type)}</span>
-                            {formatPlanActivity(activity) && <em>{formatPlanActivity(activity)}</em>}
+                            {formatPlanActivity(activity, viewerUnits) && <em>{formatPlanActivity(activity, viewerUnits)}</em>}
                             {activity.matchedExternalActivityId && (
                               <em className="dash-day-match-note">Matched from Strava</em>
                             )}
@@ -301,7 +316,7 @@ export default function StravaActivityMatchTable() {
                                 {activity.name}
                               </strong>
                               <span>{formatType(activity.sportType || 'OTHER')}</span>
-                              {formatStravaActivity(activity) && <em>{formatStravaActivity(activity)}</em>}
+                              {formatStravaActivity(activity, viewerUnits) && <em>{formatStravaActivity(activity, viewerUnits)}</em>}
                             </div>
                           ))}
                         </div>

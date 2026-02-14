@@ -3,6 +3,13 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { getDayDateFromWeekStart, resolveWeekBounds } from '@/lib/plan-dates';
+import {
+  convertDistanceForDisplay,
+  convertPaceForDisplay,
+  distanceUnitLabel,
+  formatDistanceNumber,
+  type DistanceUnit
+} from '@/lib/unit-display';
 import '../plans.css';
 
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -57,6 +64,7 @@ export default function PlanDetailPage() {
   const [actualPace, setActualPace] = useState('');
   const [actualsError, setActualsError] = useState<string | null>(null);
   const [savingActuals, setSavingActuals] = useState(false);
+  const [viewerUnits, setViewerUnits] = useState<DistanceUnit>('MILES');
 
   useEffect(() => {
     if (!planId) return;
@@ -75,6 +83,7 @@ export default function PlanDetailPage() {
           setError(data?.error || 'Failed to load plan.');
           return;
         }
+        setViewerUnits(data?.viewerUnits === 'KM' ? 'KM' : 'MILES');
         setPlan(data.plan);
       } catch (err: any) {
         setError(err?.message || 'Failed to load plan.');
@@ -144,7 +153,8 @@ export default function PlanDetailPage() {
         body: JSON.stringify({
           actualDistance: actualDistance.trim(),
           actualDuration: actualDuration.trim(),
-          actualPace: actualPace.trim()
+          actualPace: actualPace.trim(),
+          actualDistanceUnit: viewerUnits
         })
       });
 
@@ -162,7 +172,7 @@ export default function PlanDetailPage() {
     } finally {
       setSavingActuals(false);
     }
-  }, [selectedActivity, savingActuals, actualDistance, actualDuration, actualPace, applyActivityUpdate]);
+  }, [selectedActivity, savingActuals, actualDistance, actualDuration, actualPace, viewerUnits, applyActivityUpdate]);
 
   // Close modal on Escape
   useEffect(() => {
@@ -178,16 +188,28 @@ export default function PlanDetailPage() {
     setActualDistance(
       selectedActivity.actualDistance === null || selectedActivity.actualDistance === undefined
         ? ''
-        : String(selectedActivity.actualDistance)
+        : String(
+            convertDistanceForDisplay(
+              selectedActivity.actualDistance,
+              selectedActivity.distanceUnit,
+              viewerUnits
+            )?.value ?? selectedActivity.actualDistance
+          )
     );
     setActualDuration(
       selectedActivity.actualDuration === null || selectedActivity.actualDuration === undefined
         ? ''
         : String(selectedActivity.actualDuration)
     );
-    setActualPace(selectedActivity.actualPace || '');
+    setActualPace(
+      convertPaceForDisplay(
+        selectedActivity.actualPace,
+        viewerUnits,
+        selectedActivity.distanceUnit || viewerUnits
+      ) || ''
+    );
     setActualsError(null);
-  }, [selectedActivity]);
+  }, [selectedActivity, viewerUnits]);
 
   if (error) {
     return (
@@ -220,6 +242,22 @@ export default function PlanDetailPage() {
   const completedActivities = allActivities.filter((a: any) => a.completed).length;
   const totalMinutes = allActivities.reduce((acc: number, a: any) => acc + (a.duration || 0), 0);
   const completionPct = totalActivities > 0 ? Math.round((completedActivities / totalActivities) * 100) : 0;
+  const viewerUnitLabel = distanceUnitLabel(viewerUnits);
+  const toDisplayDistance = (value: number | null | undefined, unit: string | null | undefined) =>
+    convertDistanceForDisplay(value, unit, viewerUnits);
+  const formatDisplayDistance = (value: number | null | undefined, unit: string | null | undefined) => {
+    const converted = toDisplayDistance(value, unit);
+    if (!converted) return null;
+    return `${formatDistanceNumber(converted.value)}${distanceUnitLabel(converted.unit)}`;
+  };
+  const formatDisplayPace = (pace: string | null | undefined, unit: string | null | undefined) =>
+    convertPaceForDisplay(pace, viewerUnits, unit || viewerUnits);
+  const selectedDistanceDisplay = selectedActivity
+    ? toDisplayDistance(selectedActivity.distance, selectedActivity.distanceUnit)
+    : null;
+  const selectedPaceDisplay = selectedActivity
+    ? formatDisplayPace(selectedActivity.paceTarget, selectedActivity.distanceUnit)
+    : null;
 
   return (
     <main className="pcal">
@@ -340,15 +378,19 @@ export default function PlanDetailPage() {
                       )}
                       {activities.map((a: any) => {
                         const details: string[] = [];
-                        if (a.distance) details.push(`${a.distance}${a.distanceUnit === 'KM' ? 'km' : 'mi'}`);
+                        const plannedDistanceLabel = formatDisplayDistance(a.distance, a.distanceUnit);
+                        if (plannedDistanceLabel) details.push(plannedDistanceLabel);
                         if (a.duration) details.push(`${a.duration}m`);
-                        if (a.paceTarget) details.push(a.paceTarget);
+                        const displayPaceTarget = formatDisplayPace(a.paceTarget, a.distanceUnit);
+                        if (displayPaceTarget) details.push(displayPaceTarget);
                         if (a.effortTarget) details.push(a.effortTarget);
                         if (a.completed) {
                           const actuals: string[] = [];
-                          if (a.actualDistance) actuals.push(`${a.actualDistance}${a.distanceUnit === 'KM' ? 'km' : 'mi'}`);
+                          const actualDistanceLabel = formatDisplayDistance(a.actualDistance, a.distanceUnit);
+                          if (actualDistanceLabel) actuals.push(actualDistanceLabel);
                           if (a.actualDuration) actuals.push(`${a.actualDuration}m`);
-                          if (a.actualPace) actuals.push(a.actualPace);
+                          const displayActualPace = formatDisplayPace(a.actualPace, a.distanceUnit);
+                          if (displayActualPace) actuals.push(displayActualPace);
                           if (actuals.length > 0) details.push(`Actual ${actuals.join(' · ')}`);
                         }
 
@@ -408,13 +450,13 @@ export default function PlanDetailPage() {
 
               {/* Stats row */}
               <div className="pcal-modal-stats">
-                {selectedActivity.distance && (
+                {selectedDistanceDisplay && (
                   <div className="pcal-modal-stat">
                     <span className="pcal-modal-stat-value">
-                      {selectedActivity.distance}
+                      {formatDistanceNumber(selectedDistanceDisplay.value)}
                     </span>
                     <span className="pcal-modal-stat-label">
-                      {selectedActivity.distanceUnit === 'KM' ? 'km' : 'mi'}
+                      {viewerUnitLabel}
                     </span>
                   </div>
                 )}
@@ -429,7 +471,7 @@ export default function PlanDetailPage() {
                 {selectedActivity.paceTarget && (
                   <div className="pcal-modal-stat">
                     <span className="pcal-modal-stat-value">
-                      {selectedActivity.paceTarget}
+                      {selectedPaceDisplay}
                     </span>
                     <span className="pcal-modal-stat-label">pace</span>
                   </div>
@@ -466,7 +508,7 @@ export default function PlanDetailPage() {
                 {selectedActivity.completed ? (
                   <div className="pcal-modal-actuals-form">
                     <label>
-                      Distance ({selectedActivity.distanceUnit === 'KM' ? 'km' : 'mi'})
+                      Distance ({viewerUnitLabel})
                       <input
                         type="number"
                         inputMode="decimal"
@@ -474,7 +516,11 @@ export default function PlanDetailPage() {
                         step="0.01"
                         value={actualDistance}
                         onChange={(e) => setActualDistance(e.target.value)}
-                        placeholder={selectedActivity.distance != null ? String(selectedActivity.distance) : 'e.g. 8'}
+                        placeholder={
+                          selectedDistanceDisplay?.value != null
+                            ? String(selectedDistanceDisplay.value)
+                            : 'e.g. 8'
+                        }
                       />
                     </label>
                     <label>
@@ -495,7 +541,10 @@ export default function PlanDetailPage() {
                         type="text"
                         value={actualPace}
                         onChange={(e) => setActualPace(e.target.value)}
-                        placeholder={selectedActivity.paceTarget || 'e.g. 7:20 /mi'}
+                        placeholder={
+                          selectedPaceDisplay
+                          || `e.g. ${viewerUnitLabel === 'km' ? '4:40 /km' : '7:30 /mi'}`
+                        }
                       />
                     </label>
                     {actualsError && <p className="pcal-modal-form-error">{actualsError}</p>}

@@ -5,6 +5,13 @@ import { prisma } from "@/lib/prisma";
 import { getDayDateFromWeekStart, resolveWeekBounds } from "@/lib/plan-dates";
 import { ensureUserFromAuth } from "@/lib/user-sync";
 import { isDayMarkedDone } from "@/lib/day-status";
+import {
+  convertDistanceForDisplay,
+  convertPaceForDisplay,
+  distanceUnitLabel,
+  formatDistanceNumber,
+  type DistanceUnit
+} from "@/lib/unit-display";
 import AthleteSidebar from "@/components/AthleteSidebar";
 import DayCompletionButton from "@/components/DayCompletionButton";
 import RaceDetailsEditor from "@/components/RaceDetailsEditor";
@@ -157,14 +164,25 @@ function formatDurationSeconds(value: number | null | undefined) {
   return `${Math.round(value / 60)} min`;
 }
 
-function formatDistance(value: number | null | undefined, unit: string | null | undefined) {
-  if (!value || value <= 0) return "—";
-  return `${value} ${unit?.toLowerCase() || "mi"}`;
+function formatDistance(
+  value: number | null | undefined,
+  unit: string | null | undefined,
+  viewerUnit: DistanceUnit
+) {
+  const converted = convertDistanceForDisplay(value, unit, viewerUnit);
+  if (!converted) return "—";
+  return `${formatDistanceNumber(converted.value)} ${distanceUnitLabel(converted.unit)}`;
 }
 
-function formatDistanceMeters(value: number | null | undefined) {
+function formatDistanceMeters(value: number | null | undefined, viewerUnit: DistanceUnit) {
   if (!value || value <= 0) return "—";
-  return `${(value / 1000).toFixed(2)} km`;
+  const converted = convertDistanceForDisplay(value / 1000, "KM", viewerUnit);
+  if (!converted) return "—";
+  return `${formatDistanceNumber(converted.value)} ${distanceUnitLabel(converted.unit)}`;
+}
+
+function formatPace(value: string | null | undefined, viewerUnit: DistanceUnit, sourceUnit?: string | null) {
+  return convertPaceForDisplay(value, viewerUnit, sourceUnit || viewerUnit) || "—";
 }
 
 function getExternalDateKey(raw: unknown, startTime: Date) {
@@ -188,10 +206,11 @@ export default async function CalendarPage({
 
   const name = user.fullName || user.firstName || "Athlete";
 
-  await ensureUserFromAuth(user, {
+  const syncedUser = await ensureUserFromAuth(user, {
     defaultRole: "ATHLETE",
     defaultCurrentRole: "ATHLETE"
   });
+  const viewerUnits: DistanceUnit = syncedUser.units === "KM" ? "KM" : "MILES";
 
   const params = (await searchParams) || {};
   const requestedPlanId = typeof params.plan === "string" ? params.plan : "";
@@ -553,13 +572,13 @@ export default async function CalendarPage({
                   </div>
                   <div className="cal-day-detail-meta">
                     <span>
-                      Planned: {formatDistance(activity.distance, activity.distanceUnit)} · {formatDurationMinutes(activity.duration)}
+                      Planned: {formatDistance(activity.distance, activity.distanceUnit, viewerUnits)} · {formatDurationMinutes(activity.duration)}
                     </span>
                     <span>Status: {activity.completed ? "Done" : "Planned"}</span>
                     {(activity.actualDistance || activity.actualDuration || activity.actualPace) && (
                       <span>
-                        Logged: {formatDistance(activity.actualDistance, activity.distanceUnit)} · {formatDurationMinutes(activity.actualDuration)}
-                        {activity.actualPace ? ` · ${activity.actualPace}` : ""}
+                        Logged: {formatDistance(activity.actualDistance, activity.distanceUnit, viewerUnits)} · {formatDurationMinutes(activity.actualDuration)}
+                        {activity.actualPace ? ` · ${formatPace(activity.actualPace, viewerUnits, activity.distanceUnit)}` : ""}
                       </span>
                     )}
                     {activity.notes && <span>Notes: {activity.notes}</span>}
@@ -583,7 +602,7 @@ export default async function CalendarPage({
                     <span>{log.provider} · {formatClock(log.startTime)}</span>
                   </div>
                   <div className="cal-day-detail-meta">
-                    <span>{formatDistanceMeters(log.distanceM)} · {formatDurationSeconds(log.durationSec)}</span>
+                    <span>{formatDistanceMeters(log.distanceM, viewerUnits)} · {formatDurationSeconds(log.durationSec)}</span>
                     {log.avgHeartRate ? <span>Avg HR: {log.avgHeartRate} bpm</span> : null}
                     {log.calories ? <span>Calories: {Math.round(log.calories)}</span> : null}
                     <span>{log.matchedPlanActivityId ? "Matched to plan activity" : "Not matched yet"}</span>

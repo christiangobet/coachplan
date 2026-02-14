@@ -41,6 +41,11 @@ function getStravaDateKeyFromRaw(raw: unknown, fallbackStartTime: Date) {
 export async function GET() {
   const access = await requireRoleApi('ATHLETE');
   if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
+  const profile = await prisma.user.findUnique({
+    where: { id: access.context.userId },
+    select: { units: true }
+  });
+  const viewerUnits = profile?.units === 'KM' ? 'KM' : 'MILES';
 
   const account = await prisma.externalAccount.findUnique({
     where: {
@@ -60,9 +65,25 @@ export async function GET() {
     where: {
       athleteId: access.context.userId,
       isTemplate: false,
-      OR: [{ status: 'ACTIVE' }, { status: 'DRAFT' }]
+      status: 'ACTIVE'
     },
-    orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
+    orderBy: { createdAt: 'desc' },
+    include: {
+      weeks: {
+        include: {
+          days: {
+            include: { activities: true }
+          }
+        }
+      }
+    }
+  }) || await prisma.trainingPlan.findFirst({
+    where: {
+      athleteId: access.context.userId,
+      isTemplate: false,
+      status: 'DRAFT'
+    },
+    orderBy: { createdAt: 'desc' },
     include: {
       weeks: {
         include: {
@@ -228,6 +249,7 @@ export async function GET() {
   );
 
   return NextResponse.json({
+    viewerUnits,
     account: {
       connected: Boolean(account),
       providerUsername: account?.providerUsername || null,

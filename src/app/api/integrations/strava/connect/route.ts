@@ -13,7 +13,12 @@ export async function POST(req: Request) {
     );
   }
 
-  const origin = new URL(req.url).origin;
-  const url = buildStravaAuthorizeUrl(access.context.userId, origin);
-  return NextResponse.json({ url });
+  try {
+    const origin = new URL(req.url).origin;
+    const url = buildStravaAuthorizeUrl(access.context.userId, origin);
+    return NextResponse.json({ url });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to start Strava connect';
+    return NextResponse.json({ error: message }, { status: 503 });
+  }
 }

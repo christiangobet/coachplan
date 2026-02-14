@@ -4,6 +4,13 @@ import { prisma } from "@/lib/prisma";
 import { getDayDateFromWeekStart, resolveWeekBounds } from "@/lib/plan-dates";
 import { ensureUserFromAuth } from "@/lib/user-sync";
 import { isDayMarkedDone } from "@/lib/day-status";
+import {
+  convertDistanceForDisplay,
+  convertPaceForDisplay,
+  distanceUnitLabel,
+  formatDistanceNumber,
+  type DistanceUnit
+} from "@/lib/unit-display";
 import CompleteWorkoutButton from "@/components/CompleteWorkoutButton";
 import AthleteSidebar from "@/components/AthleteSidebar";
 import StravaSyncPanel from "@/components/StravaSyncPanel";
@@ -47,10 +54,11 @@ export default async function DashboardPage() {
 
   const name = user.fullName || user.firstName || "Athlete";
 
-  await ensureUserFromAuth(user, {
+  const syncedUser = await ensureUserFromAuth(user, {
     defaultRole: "ATHLETE",
     defaultCurrentRole: "ATHLETE"
   });
+  const viewerUnits: DistanceUnit = syncedUser.units === "KM" ? "KM" : "MILES";
 
   const totalPlanCount = await prisma.trainingPlan.count({
     where: { athleteId: user.id, isTemplate: false }
@@ -373,6 +381,15 @@ export default async function DashboardPage() {
   const completionPct = totalActivities > 0 ? Math.round((completedActivities / totalActivities) * 100) : 0;
 
   const isRestDay = !todayActivity || todayActivity.type === "REST";
+  const todayDisplayDistance = todayActivity
+    ? convertDistanceForDisplay(todayActivity.distance, todayActivity.distanceUnit, viewerUnits)
+    : null;
+  const todayDisplayActualDistance = todayActivity
+    ? convertDistanceForDisplay(todayActivity.actualDistance, todayActivity.distanceUnit, viewerUnits)
+    : null;
+  const todayDisplayActualPace = todayActivity
+    ? convertPaceForDisplay(todayActivity.actualPace, viewerUnits, todayActivity.distanceUnit || viewerUnits)
+    : null;
 
   return (
     <main className="dash">
@@ -429,8 +446,8 @@ export default async function DashboardPage() {
               {todayActivity?.duration && todayActivity?.distance && (
                 <span className="dash-hero-sep" />
               )}
-              {todayActivity?.distance && (
-                <span>{todayActivity.distance} {todayActivity.distanceUnit?.toLowerCase() || "mi"}</span>
+              {todayDisplayDistance && (
+                <span>{formatDistanceNumber(todayDisplayDistance.value)} {distanceUnitLabel(todayDisplayDistance.unit)}</span>
               )}
               {!todayActivity?.duration && !todayActivity?.distance && (
                 <span>{todayActivity ? "Follow plan notes" : "No workout scheduled on today's plan date"}</span>
@@ -445,12 +462,12 @@ export default async function DashboardPage() {
                   <CompleteWorkoutButton
                     activityId={todayActivity.id}
                     completed={todayActivity.completed}
-                    actualDistance={todayActivity.actualDistance}
+                    actualDistance={todayDisplayActualDistance?.value ?? null}
                     actualDuration={todayActivity.actualDuration}
-                    actualPace={todayActivity.actualPace}
-                    plannedDistance={todayActivity.distance}
+                    actualPace={todayDisplayActualPace}
+                    plannedDistance={todayDisplayDistance?.value ?? null}
                     plannedDuration={todayActivity.duration}
-                    distanceUnit={todayActivity.distanceUnit}
+                    distanceUnit={viewerUnits}
                   />
                   <a className="dash-btn-secondary" href={`/plans/${activePlan.id}`}>
                     View Plan

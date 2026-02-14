@@ -56,6 +56,7 @@ export type StravaSyncSummary = {
   fetched: number;
   afterEpoch: number;
   afterDate: string;
+  truncated?: boolean;
 };
 
 type DateMatchBucket = {
@@ -187,8 +188,12 @@ function formatPace(
   const secPerUnit = movingTimeSec / distanceUnits;
   if (!Number.isFinite(secPerUnit) || secPerUnit <= 0) return null;
 
-  const mins = Math.floor(secPerUnit / 60);
-  const secs = Math.round(secPerUnit % 60);
+  let mins = Math.floor(secPerUnit / 60);
+  let secs = Math.round(secPerUnit - mins * 60);
+  if (secs === 60) {
+    mins += 1;
+    secs = 0;
+  }
   const unitLabel = units === 'KM' ? '/km' : '/mi';
   return `${mins}:${String(secs).padStart(2, '0')} ${unitLabel}`;
 }
@@ -196,34 +201,72 @@ function formatPace(
 async function fetchStravaActivities(
   accessToken: string,
   afterEpoch: number,
-  maxPages = 8
-): Promise<StravaActivity[]> {
-  const all: StravaActivity[] = [];
+  maxPagesPerWindow = 20,
+  maxWindows = 20
+): Promise<{ activities: StravaActivity[]; truncated: boolean }> {
+  const byId = new Map<number, StravaActivity>();
+  let beforeEpoch: number | null = null;
+  let truncated = false;
 
-  for (let page = 1; page <= maxPages; page += 1) {
-    const query = new URLSearchParams({
-      after: String(afterEpoch),
-      per_page: '100',
-      page: String(page)
-    });
-    const res = await fetch(`${STRAVA_ACTIVITIES_URL}?${query.toString()}`, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-      cache: 'no-store'
-    });
+  for (let window = 1; window <= maxWindows; window += 1) {
+    let windowCompleted = false;
+    let oldestEpochInWindow: number | null = null;
 
-    if (!res.ok) {
-      const errorText = await res.text().catch(() => '');
-      throw new Error(`Strava activities request failed (${res.status}): ${errorText || 'Unknown error'}`);
+    for (let page = 1; page <= maxPagesPerWindow; page += 1) {
+      const query = new URLSearchParams({
+        after: String(afterEpoch),
+        per_page: '100',
+        page: String(page)
+      });
+      if (beforeEpoch) query.set('before', String(beforeEpoch));
+
+      const res = await fetch(`${STRAVA_ACTIVITIES_URL}?${query.toString()}`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        cache: 'no-store'
+      });
+
+      if (!res.ok) {
+        const errorText = await res.text().catch(() => '');
+        throw new Error(`Strava activities request failed (${res.status}): ${errorText || 'Unknown error'}`);
+      }
+
+      const batchRaw = await res.json().catch(() => []);
+      const batch = Array.isArray(batchRaw) ? (batchRaw as StravaActivity[]) : [];
+
+      if (batch.length === 0) {
+        windowCompleted = true;
+        break;
+      }
+
+      for (const activity of batch) {
+        byId.set(activity.id, activity);
+        const start = getStravaActivityStartTime(activity);
+        if (!start) continue;
+        const epoch = Math.floor(start.getTime() / 1000);
+        oldestEpochInWindow = oldestEpochInWindow === null
+          ? epoch
+          : Math.min(oldestEpochInWindow, epoch);
+      }
+
+      if (batch.length < 100) {
+        windowCompleted = true;
+        break;
+      }
     }
 
-    const batchRaw = await res.json().catch(() => []);
-    const batch = Array.isArray(batchRaw) ? (batchRaw as StravaActivity[]) : [];
-    all.push(...batch);
+    if (windowCompleted) {
+      return { activities: [...byId.values()], truncated };
+    }
 
-    if (batch.length < 100) break;
+    if (!oldestEpochInWindow || oldestEpochInWindow <= afterEpoch) {
+      truncated = true;
+      break;
+    }
+
+    beforeEpoch = oldestEpochInWindow - 1;
   }
 
-  return all;
+  return { activities: [...byId.values()], truncated: true };
 }
 
 async function refreshStravaToken(account: ExternalAccount) {
@@ -275,9 +318,23 @@ async function buildPlanActivityCandidates(userId: string) {
     where: {
       athleteId: userId,
       isTemplate: false,
-      OR: [{ status: 'ACTIVE' }, { status: 'DRAFT' }]
+      status: 'ACTIVE'
     },
-    orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
+    orderBy: { createdAt: 'desc' },
+    include: {
+      weeks: {
+        include: {
+          days: { include: { activities: true } }
+        }
+      }
+    }
+  }) || await prisma.trainingPlan.findFirst({
+    where: {
+      athleteId: userId,
+      isTemplate: false,
+      status: 'DRAFT'
+    },
+    orderBy: { createdAt: 'desc' },
     include: {
       weeks: {
         include: {
@@ -430,6 +487,10 @@ async function applyMatchedExternalToWorkout(args: {
   const workout = await prisma.planActivity.findUnique({ where: { id: args.planActivityId } });
   if (!workout) return false;
 
+  const storageUnit: Units = workout.distanceUnit === 'KM' ? 'KM' : 'MILES';
+  const distanceInStorageUnits = args.distanceM ? convertMetersToUserUnits(args.distanceM, storageUnit) : null;
+  const paceInStorageUnits = formatPace(args.durationSec, args.distanceM, storageUnit);
+
   const distanceInUnits = args.distanceM ? convertMetersToUserUnits(args.distanceM, args.userUnits) : null;
   const durationMinutes = args.durationSec ? Math.max(1, Math.round(args.durationSec / 60)) : null;
   const pace = formatPace(args.durationSec, args.distanceM, args.userUnits);
@@ -456,9 +517,9 @@ async function applyMatchedExternalToWorkout(args: {
     data: {
       completed: true,
       completedAt: args.startTime,
-      actualDistance: distanceInUnits ?? workout.actualDistance ?? undefined,
+      actualDistance: distanceInStorageUnits ?? workout.actualDistance ?? undefined,
       actualDuration: durationMinutes ?? workout.actualDuration ?? undefined,
-      actualPace: pace ?? workout.actualPace ?? undefined,
+      actualPace: paceInStorageUnits ?? workout.actualPace ?? undefined,
       notes: nextNotes
     }
   });
@@ -634,7 +695,7 @@ export async function syncStravaActivitiesForUser(args: {
   const useCursor = !args.forceLookback && Number.isFinite(cursorEpoch);
   const afterEpoch = useCursor ? cursorEpoch : fallbackAfterEpoch;
 
-  const [activities, existingMatches, plannedCandidates] = await Promise.all([
+  const [fetchedActivities, existingMatches, plannedCandidates] = await Promise.all([
     fetchStravaActivities(accessToken, afterEpoch),
     prisma.externalActivity.findMany({
       where: {
@@ -646,6 +707,7 @@ export async function syncStravaActivitiesForUser(args: {
     }),
     buildPlanActivityCandidates(args.userId)
   ]);
+  const activities = fetchedActivities.activities;
 
   const usedPlanActivityIds = new Set(
     existingMatches
@@ -763,9 +825,11 @@ export async function syncStravaActivitiesForUser(args: {
   }
 
   const previousCursorEpoch = Number.isFinite(cursorEpoch) ? cursorEpoch : null;
-  const nextCursorEpoch = latestActivityEpoch
-    ? Math.max(previousCursorEpoch ?? 0, latestActivityEpoch)
-    : (previousCursorEpoch ?? afterEpoch);
+  const nextCursorEpoch = fetchedActivities.truncated
+    ? (previousCursorEpoch ?? afterEpoch)
+    : latestActivityEpoch
+      ? Math.max(previousCursorEpoch ?? 0, latestActivityEpoch)
+      : (previousCursorEpoch ?? afterEpoch);
 
   await prisma.externalAccount.update({
     where: { id: readyAccount.id },
@@ -783,7 +847,8 @@ export async function syncStravaActivitiesForUser(args: {
     latestActivityEpoch,
     fetched: activities.length,
     afterEpoch,
-    afterDate: new Date(afterEpoch * 1000).toISOString().slice(0, 10)
+    afterDate: new Date(afterEpoch * 1000).toISOString().slice(0, 10),
+    truncated: fetchedActivities.truncated
   };
 }
 

@@ -103,8 +103,9 @@ export default function StravaSyncPanel({ compact = false }: { compact?: boolean
         return;
       }
       const summary = data?.summary;
+      const truncatedNote = summary?.truncated ? ' (partial window; rerun sync)' : '';
       setStatus(
-        `Synced: ${summary?.imported ?? 0} imported, ${summary?.matched ?? 0} matched, ${summary?.workoutsUpdated ?? 0} updated`
+        `Synced: ${summary?.imported ?? 0} imported, ${summary?.matched ?? 0} matched, ${summary?.workoutsUpdated ?? 0} updated${truncatedNote}`
       );
       await load();
     } catch {

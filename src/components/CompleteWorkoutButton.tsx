@@ -46,7 +46,8 @@ export default function CompleteWorkoutButton({
       const payload = {
         actualDistance: distance.trim(),
         actualDuration: duration.trim(),
-        actualPace: pace.trim()
+        actualPace: pace.trim(),
+        actualDistanceUnit: distanceUnit
       };
 
       const url = opts.complete
@@ -77,7 +78,7 @@ export default function CompleteWorkoutButton({
       const res = await fetch(`/api/activities/${activityId}/complete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({})
+        body: JSON.stringify({ actualDistanceUnit: distanceUnit })
       });
 
       if (!res.ok) {

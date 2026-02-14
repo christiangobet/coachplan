@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server';
 import { currentUser } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
+import {
+  convertDistanceValue,
+  convertPaceForDisplay,
+  normalizeDistanceUnit,
+  type DistanceUnit
+} from '@/lib/unit-display';
 
 function hasField(obj: Record<string, unknown>, key: string) {
   return Object.prototype.hasOwnProperty.call(obj, key);
@@ -53,6 +59,22 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const actualDuration = parseOptionalPositiveNumber(body, 'actualDuration', 2000);
   if (actualDuration.error) return NextResponse.json({ error: actualDuration.error }, { status: 400 });
 
+  let providedUnit: DistanceUnit | null | undefined = undefined;
+  if (hasField(body, 'actualDistanceUnit')) {
+    const rawUnit = body.actualDistanceUnit;
+    if (rawUnit === null || rawUnit === '') {
+      providedUnit = null;
+    } else if (typeof rawUnit === 'string') {
+      const parsed = normalizeDistanceUnit(rawUnit);
+      if (!parsed) {
+        return NextResponse.json({ error: 'actualDistanceUnit must be KM or MILES' }, { status: 400 });
+      }
+      providedUnit = parsed;
+    } else {
+      return NextResponse.json({ error: 'actualDistanceUnit must be text' }, { status: 400 });
+    }
+  }
+
   let actualPace: string | null | undefined;
   if (hasField(body, 'actualPace')) {
     const rawPace = body.actualPace;
@@ -97,10 +119,29 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     return NextResponse.json({ error: 'No actual fields provided' }, { status: 400 });
   }
 
+  const storageUnit = normalizeDistanceUnit(activity.distanceUnit);
+  let resolvedActualDistance = actualDistance.provided ? actualDistance.value : undefined;
+  if (
+    resolvedActualDistance !== undefined
+    && resolvedActualDistance !== null
+    && storageUnit
+    && providedUnit
+    && providedUnit !== storageUnit
+  ) {
+    resolvedActualDistance = Number(
+      convertDistanceValue(resolvedActualDistance, providedUnit, storageUnit).toFixed(2)
+    );
+  }
+
+  if (typeof actualPace === 'string' && actualPace && storageUnit) {
+    const sourceUnit = providedUnit || storageUnit;
+    actualPace = convertPaceForDisplay(actualPace, storageUnit, sourceUnit) || actualPace;
+  }
+
   const updated = await prisma.planActivity.update({
     where: { id: activity.id },
     data: {
-      actualDistance: actualDistance.provided ? actualDistance.value : undefined,
+      actualDistance: resolvedActualDistance,
       actualDuration: actualDuration.provided ? actualDuration.value : undefined,
       actualPace,
       notes

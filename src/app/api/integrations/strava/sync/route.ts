@@ -22,9 +22,25 @@ async function getPlanStartDate(userId: string): Promise<Date | null> {
     where: {
       athleteId: userId,
       isTemplate: false,
-      OR: [{ status: 'ACTIVE' }, { status: 'DRAFT' }]
+      status: 'ACTIVE'
     },
-    orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
+    orderBy: { createdAt: 'desc' },
+    include: {
+      weeks: {
+        include: {
+          days: {
+            select: { dayOfWeek: true }
+          }
+        }
+      }
+    }
+  }) || await prisma.trainingPlan.findFirst({
+    where: {
+      athleteId: userId,
+      isTemplate: false,
+      status: 'DRAFT'
+    },
+    orderBy: { createdAt: 'desc' },
     include: {
       weeks: {
         include: {

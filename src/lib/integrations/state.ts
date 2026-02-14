@@ -8,9 +8,11 @@ type IntegrationStatePayload = {
 };
 
 function getStateSecret() {
-  return process.env.INTEGRATIONS_STATE_SECRET
-    || process.env.CLERK_SECRET_KEY
-    || 'coachplan-local-integration-secret';
+  const secret = process.env.INTEGRATIONS_STATE_SECRET || process.env.CLERK_SECRET_KEY;
+  if (!secret) {
+    throw new Error('INTEGRATIONS_STATE_SECRET or CLERK_SECRET_KEY must be configured');
+  }
+  return secret;
 }
 
 function sign(encodedPayload: string) {
