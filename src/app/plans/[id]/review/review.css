@@ -191,6 +191,13 @@
   color: #60708d;
 }
 
+.review-field-hint {
+  margin: 0;
+  font-size: 11px;
+  color: #7a879b;
+  font-weight: 600;
+}
+
 .review-field input,
 .review-field select,
 .review-field textarea {
@@ -206,6 +213,16 @@
 .review-field textarea {
   resize: vertical;
   min-height: 52px;
+}
+
+.review-distance-input-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 92px;
+  gap: 8px;
+}
+
+.review-distance-input-row.single {
+  grid-template-columns: 1fr;
 }
 
 .review-field input:focus,
@@ -274,7 +291,7 @@
 
 .review-activity-grid {
   display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 8px;
 }
 
@@ -309,6 +326,10 @@
   }
 
   .review-activity-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .review-distance-input-row {
     grid-template-columns: 1fr;
   }
 

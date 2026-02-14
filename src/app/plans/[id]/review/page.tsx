@@ -65,7 +65,7 @@ function toActivityDraft(activity: ReviewActivity, fallbackUnit: DistanceUnitVal
     title: activity.title || '',
     type: activity.type || 'OTHER',
     distance: activity.distance === null || activity.distance === undefined ? '' : String(activity.distance),
-    distanceUnit: activity.distanceUnit || (activity.distance === null || activity.distance === undefined ? '' : fallbackUnit),
+    distanceUnit: activity.distanceUnit || fallbackUnit,
     duration: activity.duration === null || activity.duration === undefined ? '' : String(activity.duration),
     paceTarget: activity.paceTarget || '',
     effortTarget: activity.effortTarget || '',
@@ -330,10 +330,7 @@ export default function PlanReviewPage() {
         setError('Distance must be a non-negative number');
         return;
       }
-      if (parsedDistance !== null && !draft.distanceUnit) {
-        setError('Please select distance unit (mi or km)');
-        return;
-      }
+      const resolvedDistanceUnit = (draft.distanceUnit || viewerUnits) as DistanceUnitValue;
 
       if (
         parsedDuration !== null
@@ -355,7 +352,7 @@ export default function PlanReviewPage() {
             title: draft.title.trim(),
             type: draft.type,
             distance: parsedDistance,
-            distanceUnit: parsedDistance === null ? null : draft.distanceUnit,
+            distanceUnit: parsedDistance === null ? null : resolvedDistanceUnit,
             duration: parsedDuration,
             paceTarget: draft.paceTarget.trim() || null,
             effortTarget: draft.effortTarget.trim() || null,
@@ -568,6 +565,8 @@ export default function PlanReviewPage() {
                   <div className="review-activity-list">
                     {(day.activities || []).map((activity) => {
                       const draft = activityDrafts[activity.id] || toActivityDraft(activity, viewerUnits);
+                      const paceUnitLabel = (draft.distanceUnit || viewerUnits) === 'KM' ? 'km' : 'mi';
+                      const hasDistance = draft.distance.trim() !== '';
                       return (
                         <div key={activity.id} className="review-activity-item">
                           <div className="review-activity-top">
@@ -624,30 +623,34 @@ export default function PlanReviewPage() {
 
                             <label className="review-field">
                               <span>Distance</span>
-                              <input
-                                type="number"
-                                min={0}
-                                step="0.1"
-                                value={draft.distance}
-                                onChange={(event) =>
-                                  setActivityDraftField(activity.id, 'distance', event.target.value)
-                                }
-                              />
-                            </label>
-
-                            <label className="review-field">
-                              <span>Distance unit</span>
-                              <select
-                                value={draft.distanceUnit}
-                                onChange={(event) =>
-                                  setActivityDraftField(activity.id, 'distanceUnit', event.target.value)
-                                }
-                              >
-                                <option value="">Select unit</option>
-                                {DISTANCE_UNITS.map((unit) => (
-                                  <option key={unit} value={unit}>{unit === 'KM' ? 'km' : 'mi'}</option>
-                                ))}
-                              </select>
+                              <div className={`review-distance-input-row${hasDistance ? '' : ' single'}`}>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  step="0.1"
+                                  value={draft.distance}
+                                  onChange={(event) =>
+                                    setActivityDraftField(activity.id, 'distance', event.target.value)
+                                  }
+                                />
+                                {hasDistance && (
+                                  <select
+                                    value={draft.distanceUnit || viewerUnits}
+                                    onChange={(event) =>
+                                      setActivityDraftField(activity.id, 'distanceUnit', event.target.value)
+                                    }
+                                  >
+                                    {DISTANCE_UNITS.map((unit) => (
+                                      <option key={unit} value={unit}>{unit === 'KM' ? 'km' : 'mi'}</option>
+                                    ))}
+                                  </select>
+                                )}
+                              </div>
+                              <small className="review-field-hint">
+                                {hasDistance
+                                  ? 'Unit is auto-set by parser/profile. Change only if needed.'
+                                  : `Unit will default to ${viewerUnits === 'KM' ? 'km' : 'mi'} once distance is entered.`}
+                              </small>
                             </label>
 
                             <label className="review-field">
@@ -671,7 +674,7 @@ export default function PlanReviewPage() {
                                 onChange={(event) =>
                                   setActivityDraftField(activity.id, 'paceTarget', event.target.value)
                                 }
-                                placeholder="e.g. 7:30 /mi"
+                                placeholder={`e.g. ${paceUnitLabel === 'km' ? '4:45' : '7:30'} /${paceUnitLabel}`}
                               />
                             </label>
 
