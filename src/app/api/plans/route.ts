@@ -9,6 +9,7 @@ import { promisify } from 'util';
 import { parseWeekWithAI } from '@/lib/ai-plan-parser';
 import { alignWeeksToRaceDate } from '@/lib/clone-plan';
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
+import { pathToFileURL } from 'url';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
@@ -327,6 +328,16 @@ function findTableHeader(items: PdfTextItem[]) {
 
 async function parsePdfToJsonNode(pdfPath: string, name: string) {
   const bytes = await fs.readFile(pdfPath);
+  const workerPath = path.join(
+    process.cwd(),
+    'node_modules',
+    'pdfjs-dist',
+    'legacy',
+    'build',
+    'pdf.worker.mjs'
+  );
+  (pdfjsLib as any).GlobalWorkerOptions.workerSrc = pathToFileURL(workerPath).href;
+
   const loadingTask = (pdfjsLib as any).getDocument({
     data: new Uint8Array(bytes),
     disableWorker: true
