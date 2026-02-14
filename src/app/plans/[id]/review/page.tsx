@@ -856,7 +856,7 @@ export default function PlanReviewPage() {
                     </div>
 
                     {notesOpen && (
-                      <label className="review-field">
+                      <label className="review-field review-day-notes">
                         <span>Day notes / source text</span>
                         <textarea
                           value={dayDrafts[day.id] || ''}
@@ -875,7 +875,7 @@ export default function PlanReviewPage() {
                         const hasDistance = draft.distance.trim() !== '';
                         const activitySaving = Boolean(savingActivityIds[activity.id] || queuedActivityIds[activity.id]);
                         return (
-                          <div key={activity.id} className="review-activity-item">
+                          <div key={activity.id} className="review-activity-item review-activity-item-compact">
                             <div className="review-activity-top">
                               <strong>{activity.type.replace(/_/g, ' ')}</strong>
                               <div className="review-activity-actions">
@@ -892,7 +892,7 @@ export default function PlanReviewPage() {
                             </div>
 
                             <div className="review-activity-grid">
-                              <label className="review-field span-two">
+                              <label className="review-field review-col-title">
                                 <span>Title</span>
                                 <input
                                   type="text"
@@ -903,7 +903,7 @@ export default function PlanReviewPage() {
                                 />
                               </label>
 
-                            <label className="review-field">
+                            <label className="review-field review-col-type">
                               <span>Type</span>
                               <select
                                 value={draft.type}
@@ -921,7 +921,7 @@ export default function PlanReviewPage() {
                               </select>
                             </label>
 
-                            <label className="review-field">
+                            <label className="review-field review-col-distance">
                               <span>Distance</span>
                               <div className={`review-distance-input-row${hasDistance ? '' : ' single'}`}>
                                 <input
@@ -953,7 +953,7 @@ export default function PlanReviewPage() {
                               </small>
                             </label>
 
-                            <label className="review-field">
+                            <label className="review-field review-col-duration">
                               <span>Duration (min)</span>
                               <input
                                 type="number"
@@ -966,7 +966,7 @@ export default function PlanReviewPage() {
                               />
                             </label>
 
-                            <label className="review-field span-two">
+                            <label className="review-field review-col-pace">
                               <span>Pace target</span>
                               <input
                                 type="text"
@@ -978,7 +978,7 @@ export default function PlanReviewPage() {
                               />
                             </label>
 
-                            <label className="review-field span-two">
+                            <label className="review-field review-col-effort">
                               <span>Effort target</span>
                               <input
                                 type="text"
@@ -991,7 +991,7 @@ export default function PlanReviewPage() {
                             </label>
                           </div>
 
-                            <label className="review-field">
+                            <label className="review-field review-col-instructions">
                               <span>Instructions</span>
                               <textarea
                                 value={draft.rawText}
