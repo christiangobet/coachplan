@@ -36,6 +36,7 @@ type ReviewDay = {
   date: string;
   label: string;
   isToday: boolean;
+  isLockedPlanDay?: boolean;
   planActivities: PlanActivityRow[];
   stravaActivities: StravaActivityRow[];
 };
@@ -209,7 +210,7 @@ export default function StravaActivityMatchTable() {
     <section className="dash-card dash-day-import-card">
       <div className="dash-card-header">
         <div className="dash-day-import-title">
-          <span className="dash-card-title">Daily Plan vs Strava</span>
+          <span className="dash-card-title">Import Strava</span>
           <span className={`dash-day-sync-health ${syncHealth.tone}`}>{syncHealth.label}</span>
         </div>
         <div className="dash-day-import-actions">
@@ -254,6 +255,7 @@ export default function StravaActivityMatchTable() {
             <tbody>
               {rows.map((day) => {
                 const hasStrava = day.stravaActivities.length > 0;
+                const dayLocked = Boolean(day.isLockedPlanDay);
                 const importing = busyDate === day.date;
                 const imported = importedDates.has(day.date);
                 const matchedStravaCount = day.stravaActivities.filter((activity) => Boolean(activity.matchedPlanActivityId)).length;
@@ -261,12 +263,12 @@ export default function StravaActivityMatchTable() {
                 const completedPlanCount = day.planActivities.filter((activity) => activity.completed).length;
                 const dayDone = hasStrava && matchedStravaCount > 0 && matchedStravaCount === day.stravaActivities.length;
                 const dayPartial = hasStrava && matchedStravaCount > 0 && matchedStravaCount < day.stravaActivities.length;
-                const actionLabel = dayDone ? 'Done' : imported ? 'Imported' : dayPartial ? 'Re-import' : 'Import';
-                const rowClickable = hasStrava && !dayDone && !imported && !importing;
+                const actionLabel = dayLocked ? 'Locked' : dayDone ? 'Done' : imported ? 'Imported' : dayPartial ? 'Re-import' : 'Import';
+                const rowClickable = hasStrava && !dayLocked && !dayDone && !imported && !importing;
                 return (
                   <tr
                     key={day.date}
-                    className={`${dayDone ? 'day-status-done' : imported ? 'day-status-imported' : dayPartial ? 'day-status-partial' : ''}${rowClickable ? ' day-row-clickable' : ''}`.trim()}
+                    className={`${dayLocked ? 'day-status-locked' : dayDone ? 'day-status-done' : imported ? 'day-status-imported' : dayPartial ? 'day-status-partial' : ''}${rowClickable ? ' day-row-clickable' : ''}`.trim()}
                     role={rowClickable ? 'button' : undefined}
                     tabIndex={rowClickable ? 0 : undefined}
                     onClick={rowClickable ? () => importDay(day.date) : undefined}
@@ -339,18 +341,21 @@ export default function StravaActivityMatchTable() {
                     <td>
                       {hasStrava ? (
                         <div className="dash-day-action-stack">
-                          <span className={`dash-day-status-chip ${dayDone ? 'done' : imported ? 'imported' : dayPartial ? 'partial' : 'pending'}`}>
-                            {dayDone ? 'Done' : imported ? 'Imported' : dayPartial ? 'Partial match' : 'Pending import'}
+                          <span className={`dash-day-status-chip ${dayLocked ? 'locked' : dayDone ? 'done' : imported ? 'imported' : dayPartial ? 'partial' : 'pending'}`}>
+                            {dayLocked ? 'Locked' : dayDone ? 'Done' : imported ? 'Imported' : dayPartial ? 'Partial match' : 'Pending import'}
                           </span>
                           <span className="dash-day-action-meta">
-                            {matchedStravaCount}/{day.stravaActivities.length} matched · {completedPlanCount}/{day.planActivities.length} done
+                            {dayLocked
+                              ? 'Completed day. Import and matching are disabled.'
+                              : `${matchedStravaCount}/${day.stravaActivities.length} matched · ${completedPlanCount}/${day.planActivities.length} done`}
                           </span>
                           <button
                             className="dash-sync-btn"
                             type="button"
-                            disabled={importing || dayDone || imported}
+                            disabled={dayLocked || importing || dayDone || imported}
                             onClick={(event) => {
                               event.stopPropagation();
+                              if (dayLocked) return;
                               void importDay(day.date);
                             }}
                           >

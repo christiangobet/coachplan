@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireRoleApi } from '@/lib/role-guards';
 import { getDayDateFromWeekStart, resolveWeekBounds } from '@/lib/plan-dates';
+import { isDayMarkedDone } from '@/lib/day-status';
 
 function toDateKey(date: Date) {
   const yyyy = date.getFullYear();
@@ -36,6 +37,10 @@ function getStravaDateKeyFromRaw(raw: unknown, fallbackStartTime: Date) {
     }
   }
   return toDateKey(fallbackStartTime);
+}
+
+function isLockedPlanDay(notes: string | null | undefined, activities: Array<{ completed: boolean }>) {
+  return isDayMarkedDone(notes) || (activities.length > 0 && activities.every((activity) => activity.completed));
 }
 
 export async function GET() {
@@ -120,6 +125,7 @@ export async function GET() {
     actualPace: string | null;
     matchedExternalActivityId: string | null;
   }>>();
+  const lockedPlanDayByDate = new Map<string, boolean>();
   let planStart: Date | null = null;
 
   if (activePlan) {
@@ -140,6 +146,8 @@ export async function GET() {
         if (!planStart || dayDate < planStart) planStart = dayDate;
         const key = toDateKey(dayDate);
         const row = planByDate.get(key) || [];
+        const dayLocked = isLockedPlanDay(day.notes, day.activities || []);
+        lockedPlanDayByDate.set(key, Boolean(lockedPlanDayByDate.get(key) || dayLocked));
         for (const activity of day.activities || []) {
           row.push({
             id: activity.id,
@@ -235,6 +243,7 @@ export async function GET() {
     date: key,
     label: formatDateLabel(key),
     isToday: key === toDateKey(today),
+    isLockedPlanDay: Boolean(lockedPlanDayByDate.get(key)),
     planActivities: planByDate.get(key) || [],
     stravaActivities: stravaByDate.get(key) || []
   }));

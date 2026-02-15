@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useState, useCallback, useMemo } from 'react';
-import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { getDayDateFromWeekStart, resolveWeekBounds } from '@/lib/plan-dates';
+import { isDayMarkedDone } from '@/lib/day-status';
 import ActivityTypeIcon from '@/components/ActivityTypeIcon';
+import PlanSidebar from '@/components/PlanSidebar';
 import {
   convertDistanceForDisplay,
   convertPaceForDisplay,
@@ -510,142 +511,139 @@ export default function PlanDetailPage() {
 
   return (
     <main className="pcal">
-      {/* Header */}
-      <div className="pcal-header">
-        <div>
-          <h1>{plan.name}</h1>
-          <div className="pcal-header-meta">
-            <span className={`plan-detail-status ${statusClass}`}>{plan.status}</span>
-            {plan.weekCount && (
-              <>
-                <span className="plan-detail-meta-dot" />
-                <span>{plan.weekCount} weeks</span>
-              </>
-            )}
-            {plan.raceName && (
-              <>
-                <span className="plan-detail-meta-dot" />
-                <span>Race: {plan.raceName}</span>
-              </>
-            )}
-            {plan.raceDate && (
-              <>
-                <span className="plan-detail-meta-dot" />
-                <span>Date: {new Date(plan.raceDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-              </>
-            )}
-          </div>
-          {plan.sourcePlanName && (
-            <div className="pcal-plan-source">Plan source: {plan.sourcePlanName}</div>
-          )}
-        </div>
-        <div className="pcal-header-actions">
-          <div className="pcal-view-toggle" aria-label="Plan views">
-            <span className="pcal-view-pill active">Plan</span>
-            <Link className="pcal-view-pill" href={`/calendar?plan=${plan.id}`}>Calendar</Link>
-          </div>
-          <Link className="cta secondary" href="/plans">&larr; Back to Plans</Link>
-        </div>
-      </div>
+      <div className="pcal-layout">
+        <PlanSidebar planId={plan.id} active="overview" />
 
-      <section className="pcal-ai-trainer">
-        <div className="pcal-ai-trainer-head">
-          <h2>AI Trainer</h2>
-          <p>Tell the coach what happened (missed day, sickness, fatigue, schedule changes) and get safe adjustments.</p>
-        </div>
-        <textarea
-          value={aiTrainerInput}
-          onChange={(e) => setAiTrainerInput(e.target.value)}
-          placeholder="Example: I missed Tuesday intervals and felt sick for two days. Please adjust this week and next week safely."
-          rows={4}
-        />
-        <div className="pcal-ai-trainer-actions">
-          <button
-            className="cta"
-            type="button"
-            onClick={generateAiAdjustment}
-            disabled={aiTrainerLoading || aiTrainerApplying}
-          >
-            {aiTrainerLoading ? 'Generating…' : 'Generate Adjustment'}
-          </button>
-        </div>
-        {aiTrainerError && <p className="pcal-ai-trainer-error">{aiTrainerError}</p>}
-        {aiTrainerStatus && <p className="pcal-ai-trainer-status">{aiTrainerStatus}</p>}
+        <section className="pcal-main">
+          {/* Header */}
+          <div className="pcal-header" id="plan-overview">
+            <div>
+              <h1>{plan.name}</h1>
+              <div className="pcal-header-meta">
+                <span className={`plan-detail-status ${statusClass}`}>{plan.status}</span>
+                {plan.weekCount && (
+                  <>
+                    <span className="plan-detail-meta-dot" />
+                    <span>{plan.weekCount} weeks</span>
+                  </>
+                )}
+                {plan.raceName && (
+                  <>
+                    <span className="plan-detail-meta-dot" />
+                    <span>Race: {plan.raceName}</span>
+                  </>
+                )}
+                {plan.raceDate && (
+                  <>
+                    <span className="plan-detail-meta-dot" />
+                    <span>Date: {new Date(plan.raceDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                  </>
+                )}
+              </div>
+              {plan.sourcePlanName && (
+                <div className="pcal-plan-source">Plan source: {plan.sourcePlanName}</div>
+              )}
+            </div>
+          </div>
 
-        {aiTrainerProposal && (
-          <div className="pcal-ai-trainer-proposal">
-            <div className="pcal-ai-trainer-meta">
-              <strong>Coach Reply</strong>
-              <span>Confidence: {aiTrainerProposal.confidence}</span>
+          <section className="pcal-ai-trainer" id="ai-trainer">
+            <div className="pcal-ai-trainer-head">
+              <h2>AI Trainer</h2>
+              <p>Tell the coach what happened (missed day, sickness, fatigue, schedule changes) and get safe adjustments.</p>
             </div>
-            <p>{aiTrainerProposal.coachReply}</p>
-            {aiTrainerProposal.followUpQuestion && (
-              <p className="pcal-ai-trainer-followup">
-                Follow-up: {aiTrainerProposal.followUpQuestion}
-              </p>
-            )}
-            <div className="pcal-ai-trainer-meta">
-              <strong>Planned Changes ({aiTrainerProposal.changes.length})</strong>
-            </div>
-            {aiTrainerProposal.changes.length === 0 && (
-              <p className="pcal-ai-trainer-followup">
-                This request needs a plan-structure update (weeks/dates), which is not supported in AI Trainer yet.
-              </p>
-            )}
-            <ul className="pcal-ai-trainer-change-list">
-              {aiTrainerProposal.changes.map((change, idx) => (
-                <li
-                  key={`${change.op}-${idx}`}
-                  className={aiTrainerAppliedRows.has(idx) ? 'is-applied' : ''}
-                >
-                  <div className="pcal-ai-trainer-change-head">
-                    <span className="pcal-ai-trainer-op">{change.op.replace(/_/g, ' ')}</span>
-                    <strong>{describeAiChange(change, aiChangeLookup)}</strong>
-                    <button
-                      className="cta secondary pcal-ai-trainer-apply-one"
-                      type="button"
-                      onClick={() => applyAiAdjustment(idx)}
-                      disabled={aiTrainerAppliedRows.has(idx) || aiTrainerLoading || aiTrainerApplying}
-                    >
-                      {aiTrainerAppliedRows.has(idx)
-                        ? 'Applied'
-                        : aiTrainerApplyingTarget === idx
-                          ? 'Applying…'
-                          : 'Apply'}
-                    </button>
-                  </div>
-                  <p>{change.reason}</p>
-                </li>
-              ))}
-            </ul>
-            <div className="pcal-ai-trainer-apply-all">
+            <textarea
+              value={aiTrainerInput}
+              onChange={(e) => setAiTrainerInput(e.target.value)}
+              placeholder="Example: I missed Tuesday intervals and felt sick for two days. Please adjust this week and next week safely."
+              rows={4}
+            />
+            <div className="pcal-ai-trainer-actions">
               <button
                 className="cta"
                 type="button"
-                onClick={() => applyAiAdjustment()}
-                disabled={
-                  aiTrainerProposal.changes.length === 0
-                  || aiTrainerAppliedRows.size >= aiTrainerProposal.changes.length
-                  || aiTrainerLoading
-                  || aiTrainerApplying
-                }
+                onClick={generateAiAdjustment}
+                disabled={aiTrainerLoading || aiTrainerApplying}
               >
-                {aiTrainerApplyingTarget === 'all' ? 'Applying all…' : 'Apply All Changes'}
+                {aiTrainerLoading ? 'Generating…' : 'Generate Adjustment'}
               </button>
             </div>
-            {(aiTrainerProposal.riskFlags || []).length > 0 && (
-              <div className="pcal-ai-trainer-risks">
-                <strong>Risk Flags</strong>
-                <ul>
-                  {(aiTrainerProposal.riskFlags || []).map((flag, idx) => (
-                    <li key={`${flag}-${idx}`}>{flag}</li>
+            {aiTrainerError && <p className="pcal-ai-trainer-error">{aiTrainerError}</p>}
+            {aiTrainerStatus && <p className="pcal-ai-trainer-status">{aiTrainerStatus}</p>}
+
+            {aiTrainerProposal && (
+              <div className="pcal-ai-trainer-proposal">
+                <div className="pcal-ai-trainer-meta">
+                  <strong>Coach Reply</strong>
+                  <span>Confidence: {aiTrainerProposal.confidence}</span>
+                </div>
+                <p>{aiTrainerProposal.coachReply}</p>
+                {aiTrainerProposal.followUpQuestion && (
+                  <p className="pcal-ai-trainer-followup">
+                    Follow-up: {aiTrainerProposal.followUpQuestion}
+                  </p>
+                )}
+                <div className="pcal-ai-trainer-meta">
+                  <strong>Planned Changes ({aiTrainerProposal.changes.length})</strong>
+                </div>
+                {aiTrainerProposal.changes.length === 0 && (
+                  <p className="pcal-ai-trainer-followup">
+                    This request needs a plan-structure update (weeks/dates), which is not supported in AI Trainer yet.
+                  </p>
+                )}
+                <ul className="pcal-ai-trainer-change-list">
+                  {aiTrainerProposal.changes.map((change, idx) => (
+                    <li
+                      key={`${change.op}-${idx}`}
+                      className={aiTrainerAppliedRows.has(idx) ? 'is-applied' : ''}
+                    >
+                      <div className="pcal-ai-trainer-change-head">
+                        <span className="pcal-ai-trainer-op">{change.op.replace(/_/g, ' ')}</span>
+                        <strong>{describeAiChange(change, aiChangeLookup)}</strong>
+                        <button
+                          className="cta secondary pcal-ai-trainer-apply-one"
+                          type="button"
+                          onClick={() => applyAiAdjustment(idx)}
+                          disabled={aiTrainerAppliedRows.has(idx) || aiTrainerLoading || aiTrainerApplying}
+                        >
+                          {aiTrainerAppliedRows.has(idx)
+                            ? 'Applied'
+                            : aiTrainerApplyingTarget === idx
+                              ? 'Applying…'
+                              : 'Apply'}
+                        </button>
+                      </div>
+                      <p>{change.reason}</p>
+                    </li>
                   ))}
                 </ul>
+                <div className="pcal-ai-trainer-apply-all">
+                  <button
+                    className="cta"
+                    type="button"
+                    onClick={() => applyAiAdjustment()}
+                    disabled={
+                      aiTrainerProposal.changes.length === 0
+                      || aiTrainerAppliedRows.size >= aiTrainerProposal.changes.length
+                      || aiTrainerLoading
+                      || aiTrainerApplying
+                    }
+                  >
+                    {aiTrainerApplyingTarget === 'all' ? 'Applying all…' : 'Apply All Changes'}
+                  </button>
+                </div>
+                {(aiTrainerProposal.riskFlags || []).length > 0 && (
+                  <div className="pcal-ai-trainer-risks">
+                    <strong>Risk Flags</strong>
+                    <ul>
+                      {(aiTrainerProposal.riskFlags || []).map((flag, idx) => (
+                        <li key={`${flag}-${idx}`}>{flag}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
             )}
-          </div>
-        )}
-      </section>
+          </section>
 
       {/* Stats bar */}
       <div className="pcal-stats">
@@ -710,13 +708,15 @@ export default function PlanDetailPage() {
                   const day = dayMap.get(dow);
                   const activities = day?.activities || [];
                   const dayDate = getDayDateFromWeekStart(bounds.startDate, dow);
+                  const dayManualDone = isDayMarkedDone(day?.notes);
+                  const dayDone = dayManualDone || (activities.length > 0 && activities.every((activity: any) => activity.completed));
                   const isToday = dayDate && dayDate.getTime() === today.getTime();
                   const isPast = dayDate && dayDate.getTime() < today.getTime();
                   const showMonthInDate = !!dayDate && (dow === 1 || dayDate.getDate() === 1);
 
                   return (
                     <div
-                      className={`pcal-cell${isToday ? ' pcal-cell-today' : ''}${isPast ? ' pcal-cell-past' : ''}`}
+                      className={`pcal-cell${isToday ? ' pcal-cell-today' : ''}${isPast ? ' pcal-cell-past' : ''}${dayDone ? ' pcal-cell-day-done' : ''}`}
                       key={dow}
                     >
                       {dayDate && (
@@ -726,6 +726,7 @@ export default function PlanDetailPage() {
                             : dayDate.getDate()}
                         </span>
                       )}
+                      {dayDone && <span className="pcal-cell-day-check" title="Day completed">✓</span>}
                       {isToday && <span className="pcal-cell-today-badge">Today</span>}
                       {activities.length === 0 && (
                         <span className="pcal-cell-empty" />
@@ -784,6 +785,8 @@ export default function PlanDetailPage() {
             </div>
           );
         })}
+      </div>
+        </section>
       </div>
 
       {/* Activity detail modal */}

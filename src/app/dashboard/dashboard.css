@@ -1362,6 +1362,11 @@
   color: var(--d-text-mid);
 }
 
+.dash-day-status-chip.locked {
+  background: rgba(107, 107, 118, 0.2);
+  color: #4a4a53;
+}
+
 .dash-day-action-meta {
   font-size: 11px;
   color: var(--d-muted);
@@ -1377,6 +1382,11 @@
 
 .dash-day-table tr.day-status-imported td {
   background: rgba(107, 107, 118, 0.05);
+}
+
+.dash-day-table tr.day-status-locked td {
+  background: rgba(107, 107, 118, 0.1);
+  color: #5b5b63;
 }
 
 /* Status Feed */

@@ -2,6 +2,7 @@ import { ActivityType, ExternalAccount, Units } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { getDayDateFromWeekStart, resolveWeekBounds } from '@/lib/plan-dates';
 import { createIntegrationStateToken } from '@/lib/integrations/state';
+import { isDayMarkedDone } from '@/lib/day-status';
 
 const STRAVA_AUTH_URL = 'https://www.strava.com/oauth/authorize';
 const STRAVA_TOKEN_URL = 'https://www.strava.com/oauth/token';
@@ -62,6 +63,13 @@ export type StravaSyncSummary = {
 type DateMatchBucket = {
   candidates: PlannedActivityCandidate[];
   dayPenalty: number;
+};
+
+type PlanActivityCandidates = {
+  byDate: Map<string, PlannedActivityCandidate[]>;
+  byId: Map<string, PlannedActivityCandidate>;
+  planId: string | null;
+  lockedDateSet: Set<string>;
 };
 
 export type StravaDayImportSummary = {
@@ -128,6 +136,13 @@ function getExternalActivityDateKey(activity: { raw: unknown; startTime: Date })
     }
   }
   return toDateKey(activity.startTime);
+}
+
+function isLockedPlanDay(
+  notes: string | null | undefined,
+  activities: Array<{ completed: boolean }>
+) {
+  return isDayMarkedDone(notes) || (activities.length > 0 && activities.every((activity) => activity.completed));
 }
 
 function buildStravaRedirectUri(origin: string) {
@@ -313,7 +328,7 @@ async function ensureFreshStravaAccount(account: ExternalAccount) {
   return refreshStravaToken(account);
 }
 
-async function buildPlanActivityCandidates(userId: string) {
+async function buildPlanActivityCandidates(userId: string): Promise<PlanActivityCandidates> {
   const activePlan = await prisma.trainingPlan.findFirst({
     where: {
       athleteId: userId,
@@ -360,7 +375,8 @@ async function buildPlanActivityCandidates(userId: string) {
 
   const map = new Map<string, PlannedActivityCandidate[]>();
   const byId = new Map<string, PlannedActivityCandidate>();
-  if (!plan) return { byDate: map, byId, planId: null as string | null };
+  const lockedDateSet = new Set<string>();
+  if (!plan) return { byDate: map, byId, planId: null as string | null, lockedDateSet };
 
   const weeks = [...plan.weeks].sort((a, b) => a.weekIndex - b.weekIndex);
   const allWeekIndexes = weeks.map((w) => w.weekIndex);
@@ -378,6 +394,10 @@ async function buildPlanActivityCandidates(userId: string) {
       const dayDate = getDayDateFromWeekStart(bounds.startDate, day.dayOfWeek);
       if (!dayDate) continue;
       const key = toDateKey(dayDate);
+      if (isLockedPlanDay(day.notes, day.activities || [])) {
+        lockedDateSet.add(key);
+        continue;
+      }
       const row = map.get(key) || [];
 
       for (const activity of day.activities) {
@@ -405,7 +425,7 @@ async function buildPlanActivityCandidates(userId: string) {
     }
   }
 
-  return { byDate: map, byId, planId: plan.id };
+  return { byDate: map, byId, planId: plan.id, lockedDateSet };
 }
 
 function pickBestPlannedActivityFromBuckets(
@@ -712,7 +732,7 @@ export async function syncStravaActivitiesForUser(args: {
   const usedPlanActivityIds = new Set(
     existingMatches
       .map((row) => row.matchedPlanActivityId)
-      .filter((value): value is string => Boolean(value))
+      .filter((value): value is string => typeof value === 'string' && plannedCandidates.byId.has(value))
   );
 
   let imported = 0;
@@ -743,7 +763,7 @@ export async function syncStravaActivitiesForUser(args: {
     });
 
     const existingMatchedCandidate = existing?.matchedPlanActivityId
-      ? plannedCandidates.byId.get(existing.matchedPlanActivityId) || null
+      ? plannedCandidates.byId.get(existing.matchedPlanActivityId) ?? null
       : null;
 
     const dateBuckets = buildDateBuckets(plannedCandidates.byDate, dateKey);
@@ -756,7 +776,7 @@ export async function syncStravaActivitiesForUser(args: {
         usedPlanActivityIds
       );
 
-    const matchedPlanActivityId = existing?.matchedPlanActivityId || matchedCandidate?.id || null;
+    const matchedPlanActivityId = matchedCandidate?.id || null;
     if (matchedPlanActivityId) usedPlanActivityIds.add(matchedPlanActivityId);
 
     const record = await prisma.externalActivity.upsert({
@@ -803,7 +823,7 @@ export async function syncStravaActivitiesForUser(args: {
           ? durationSec / (distanceM / 1000)
           : null,
         raw: activity as unknown as object,
-        matchedPlanActivityId: matchedPlanActivityId || undefined
+        matchedPlanActivityId
       }
     });
     imported += 1;
@@ -955,6 +975,9 @@ export async function importStravaDayForUser(args: {
   });
 
   const plannedCandidates = await buildPlanActivityCandidates(args.userId);
+  if (plannedCandidates.lockedDateSet.has(date)) {
+    throw new Error('This day is marked completed and locked from Strava import.');
+  }
   const dayCandidates = plannedCandidates.byDate.get(date) || [];
   const dayCandidateIds = new Set(dayCandidates.map((candidate) => candidate.id));
 

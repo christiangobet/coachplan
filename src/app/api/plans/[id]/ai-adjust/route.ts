@@ -6,6 +6,7 @@ import { alignWeeksToRaceDate } from '@/lib/clone-plan';
 import { getDefaultAiModel, openaiJsonSchema } from '@/lib/openai';
 import { ensureUserFromAuth } from '@/lib/user-sync';
 import { getDayDateFromWeekStart, resolveWeekBounds } from '@/lib/plan-dates';
+import { isDayMarkedDone } from '@/lib/day-status';
 
 type MoveActivityChange = {
   op: 'move_activity';
@@ -82,6 +83,17 @@ type PlanAdjustRequestBody = {
   proposal?: unknown;
 };
 
+type ActivityLockInfo = {
+  dayId: string;
+  completed: boolean;
+};
+
+type PlanLockState = {
+  dayIdSet: Set<string>;
+  lockedDayIdSet: Set<string>;
+  activityById: Map<string, ActivityLockInfo>;
+};
+
 function isActivityType(value: unknown): value is ActivityType {
   return typeof value === 'string' && [
     'RUN', 'STRENGTH', 'CROSS_TRAIN', 'REST', 'MOBILITY', 'YOGA', 'HIKE', 'OTHER'
@@ -144,6 +156,10 @@ function addDays(date: Date, days: number) {
 function diffDays(start: Date, end: Date) {
   const ms = end.getTime() - start.getTime();
   return Math.floor(ms / (24 * 60 * 60 * 1000));
+}
+
+function isLockedDay(notes: string | null | undefined, activities: Array<{ completed: boolean }>) {
+  return isDayMarkedDone(notes) || (activities.length > 0 && activities.every((activity) => activity.completed));
 }
 
 function parseProposal(raw: unknown): PlanAdjustmentProposal | null {
@@ -324,6 +340,7 @@ function buildPlanContext(plan: NonNullable<PlanForContext>) {
     weekIndex: number;
     dayOfWeek: number;
     dateISO: string | null;
+    isLocked: boolean;
     activities: Array<{
       activityId: string;
       title: string;
@@ -349,12 +366,14 @@ function buildPlanContext(plan: NonNullable<PlanForContext>) {
     const days = [...(week.days || [])].sort((a, b) => a.dayOfWeek - b.dayOfWeek);
     for (const day of days) {
       const date = getDayDateFromWeekStart(bounds.startDate, day.dayOfWeek);
+      const dayActivities = day.activities || [];
       rows.push({
         dayId: day.id,
         weekIndex: week.weekIndex,
         dayOfWeek: day.dayOfWeek,
         dateISO: date ? new Date(date).toISOString().slice(0, 10) : null,
-        activities: (day.activities || []).map((activity) => ({
+        isLocked: isLockedDay(day.notes, dayActivities),
+        activities: dayActivities.map((activity) => ({
           activityId: activity.id,
           title: activity.title,
           type: activity.type,
@@ -386,7 +405,111 @@ function buildPlanContext(plan: NonNullable<PlanForContext>) {
       startDate: planStartDateISO
     },
     todayISO: new Date().toISOString().slice(0, 10),
+    lockedDayIds: rows.filter((row) => row.isLocked).map((row) => row.dayId),
     days: rows
+  };
+}
+
+function buildLockStateFromPlan(plan: NonNullable<PlanForContext>): PlanLockState {
+  const dayIdSet = new Set<string>();
+  const lockedDayIdSet = new Set<string>();
+  const activityById = new Map<string, ActivityLockInfo>();
+
+  for (const week of plan.weeks || []) {
+    for (const day of week.days || []) {
+      dayIdSet.add(day.id);
+      const dayActivities = day.activities || [];
+      if (isLockedDay(day.notes, dayActivities)) {
+        lockedDayIdSet.add(day.id);
+      }
+      for (const activity of dayActivities) {
+        activityById.set(activity.id, {
+          dayId: day.id,
+          completed: activity.completed
+        });
+      }
+    }
+  }
+
+  return { dayIdSet, lockedDayIdSet, activityById };
+}
+
+async function loadLockStateForPlan(planId: string): Promise<PlanLockState> {
+  const planDays = await prisma.planDay.findMany({
+    where: { planId },
+    select: {
+      id: true,
+      notes: true,
+      activities: {
+        select: {
+          id: true,
+          completed: true
+        }
+      }
+    }
+  });
+
+  const dayIdSet = new Set<string>();
+  const lockedDayIdSet = new Set<string>();
+  const activityById = new Map<string, ActivityLockInfo>();
+
+  for (const day of planDays) {
+    dayIdSet.add(day.id);
+    const dayActivities = day.activities || [];
+    if (isLockedDay(day.notes, dayActivities)) {
+      lockedDayIdSet.add(day.id);
+    }
+    for (const activity of dayActivities) {
+      activityById.set(activity.id, {
+        dayId: day.id,
+        completed: activity.completed
+      });
+    }
+  }
+
+  return { dayIdSet, lockedDayIdSet, activityById };
+}
+
+function changeTouchesLockedDay(change: PlanAdjustmentChange, lockState: PlanLockState) {
+  if (change.op === 'extend_plan') return false;
+
+  if (change.op === 'add_activity') {
+    return lockState.lockedDayIdSet.has(change.dayId);
+  }
+
+  const activity = lockState.activityById.get(change.activityId);
+  if (!activity) return false;
+  if (activity.completed || lockState.lockedDayIdSet.has(activity.dayId)) return true;
+
+  if (change.op === 'move_activity') {
+    return lockState.lockedDayIdSet.has(change.targetDayId);
+  }
+
+  return false;
+}
+
+function sanitizeProposalAgainstLockedDays(
+  proposal: PlanAdjustmentProposal,
+  lockState: PlanLockState
+) {
+  let removed = 0;
+  const nextChanges = proposal.changes.filter((change) => {
+    const blocked = changeTouchesLockedDay(change, lockState);
+    if (blocked) removed += 1;
+    return !blocked;
+  });
+
+  if (removed === 0) {
+    return proposal;
+  }
+
+  const lockNote = `${removed} proposed change(s) were removed because completed days are locked.`;
+  const riskFlags = [lockNote, ...(proposal.riskFlags || [])].slice(0, 6);
+  return {
+    ...proposal,
+    summary: nextChanges.length === 0 ? 'No applicable changes: completed days are locked.' : proposal.summary,
+    riskFlags,
+    changes: nextChanges
   };
 }
 
@@ -403,6 +526,9 @@ async function generateAdjustmentProposal(message: string, plan: NonNullable<Pla
       '- Preserve key sessions when possible, but reduce load if needed.',
       '- Do not increase weekly load aggressively.',
       '- Use only IDs present in context for day/activity references.',
+      '- Days listed in lockedDayIds are completed and must not be modified.',
+      '- Do not add activities to completed days.',
+      '- Do not move/edit/delete activities that are completed or already in completed days.',
       '- You may use extend_plan ONLY when athlete asks to start earlier or add weeks while keeping race date unchanged.',
       '- For extend_plan, provide newStartDate as ISO date (YYYY-MM-DD).',
       '- Do not use extend_plan for race-date changes or other structure changes.',
@@ -530,16 +656,11 @@ async function applyAdjustmentProposal(planId: string, proposal: PlanAdjustmentP
     throw new Error('Plan not found while applying adjustments');
   }
 
-  const planDays = await prisma.planDay.findMany({
-    where: { planId },
-    select: { id: true }
-  });
-  const dayIdSet = new Set(planDays.map((day) => day.id));
-  const planActivities = await prisma.planActivity.findMany({
-    where: { planId },
-    select: { id: true }
-  });
-  const activityIdSet = new Set(planActivities.map((activity) => activity.id));
+  const lockState = await loadLockStateForPlan(planId);
+  const dayIdSet = lockState.dayIdSet;
+  const lockedDayIdSet = lockState.lockedDayIdSet;
+  const activityById = lockState.activityById;
+  const activityIdSet = new Set(activityById.keys());
   const initialWeekIndexes = await prisma.planWeek.findMany({
     where: { planId },
     select: { weekIndex: true }
@@ -646,9 +767,23 @@ async function applyAdjustmentProposal(planId: string, proposal: PlanAdjustmentP
         if (!dayIdSet.has(change.targetDayId)) {
           throw new Error(`Target day not found in plan: ${change.targetDayId}`);
         }
+        const activity = activityById.get(change.activityId);
+        if (!activity) {
+          throw new Error(`Activity not found in plan: ${change.activityId}`);
+        }
+        if (activity.completed || lockedDayIdSet.has(activity.dayId)) {
+          throw new Error('Cannot move activities from completed days.');
+        }
+        if (lockedDayIdSet.has(change.targetDayId)) {
+          throw new Error('Cannot move activities into completed days.');
+        }
         await tx.planActivity.update({
           where: { id: change.activityId },
           data: { dayId: change.targetDayId }
+        });
+        activityById.set(change.activityId, {
+          ...activity,
+          dayId: change.targetDayId
         });
         appliedCount += 1;
         continue;
@@ -658,12 +793,20 @@ async function applyAdjustmentProposal(planId: string, proposal: PlanAdjustmentP
         if (!activityIdSet.has(change.activityId)) {
           throw new Error(`Activity not found in plan: ${change.activityId}`);
         }
+        const activity = activityById.get(change.activityId);
+        if (!activity) {
+          throw new Error(`Activity not found in plan: ${change.activityId}`);
+        }
+        if (activity.completed || lockedDayIdSet.has(activity.dayId)) {
+          throw new Error('Cannot delete activities from completed days.');
+        }
         await tx.externalActivity.updateMany({
           where: { matchedPlanActivityId: change.activityId },
           data: { matchedPlanActivityId: null }
         });
         await tx.planActivity.delete({ where: { id: change.activityId } });
         activityIdSet.delete(change.activityId);
+        activityById.delete(change.activityId);
         appliedCount += 1;
         continue;
       }
@@ -671,6 +814,13 @@ async function applyAdjustmentProposal(planId: string, proposal: PlanAdjustmentP
       if (change.op === 'edit_activity') {
         if (!activityIdSet.has(change.activityId)) {
           throw new Error(`Activity not found in plan: ${change.activityId}`);
+        }
+        const activity = activityById.get(change.activityId);
+        if (!activity) {
+          throw new Error(`Activity not found in plan: ${change.activityId}`);
+        }
+        if (activity.completed || lockedDayIdSet.has(activity.dayId)) {
+          throw new Error('Cannot edit activities from completed days.');
         }
         const updates: {
           type?: ActivityType;
@@ -717,6 +867,9 @@ async function applyAdjustmentProposal(planId: string, proposal: PlanAdjustmentP
       if (change.op === 'add_activity') {
         if (!dayIdSet.has(change.dayId)) {
           throw new Error(`Target day not found in plan: ${change.dayId}`);
+        }
+        if (lockedDayIdSet.has(change.dayId)) {
+          throw new Error('Cannot add activities to completed days.');
         }
         await tx.planActivity.create({
           data: {
@@ -782,8 +935,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       if (!parsed) {
         return NextResponse.json({ error: 'AI proposal format was invalid. Please try again.' }, { status: 502 });
       }
+      const lockState = buildLockStateFromPlan(plan);
+      const sanitized = sanitizeProposalAgainstLockedDays(parsed, lockState);
       return NextResponse.json({
-        proposal: parsed,
+        proposal: sanitized,
         plan: {
           id: plan.id,
           name: plan.name,

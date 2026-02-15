@@ -26,8 +26,8 @@ export default async function StravaPage() {
 
         <section className="dash-center">
           <div className="dash-page-heading">
-            <h1>Daily Plan vs Strava</h1>
-            <p>Review planned sessions against synced Strava activities and import day-by-day.</p>
+            <h1>Import Strava</h1>
+            <p>Review planned sessions against synced Strava activities and import by day.</p>
           </div>
 
           <div className="strava-mobile-sync">

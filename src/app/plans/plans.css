@@ -311,9 +311,79 @@
    Plan calendar view
    ══════════════════════════ */
 .pcal {
-  max-width: 1200px;
+  max-width: 1280px;
   margin: 0 auto;
   padding: 28px 20px 60px;
+}
+
+.pcal-layout {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.pcal-main {
+  min-width: 0;
+}
+
+.pcal-side {
+  position: sticky;
+  top: 88px;
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.pcal-side-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  padding: 2px 4px;
+}
+
+.pcal-side-nav {
+  display: grid;
+  gap: 4px;
+}
+
+.pcal-side-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  border-radius: var(--radius);
+  padding: 0 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  text-decoration: none;
+  border: 1px solid transparent;
+}
+
+.pcal-side-link:hover {
+  background: var(--panel);
+  color: var(--ink);
+}
+
+.pcal-side-link.active {
+  color: var(--ink);
+  background: var(--panel);
+  border-color: var(--border);
+}
+
+.pcal-side-footer {
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+
+.pcal-side-link.back {
+  width: 100%;
 }
 
 .pcal-header {
@@ -793,6 +863,15 @@
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 
+.pcal-cell-day-done {
+  background: linear-gradient(180deg, rgba(15, 138, 71, 0.08), var(--background) 48%);
+  box-shadow: inset 0 0 0 1px rgba(15, 138, 71, 0.28), var(--shadow);
+}
+
+.pcal-cell-day-done:hover {
+  box-shadow: inset 0 0 0 1px rgba(15, 138, 71, 0.34), 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
 .pcal-cell-today {
   box-shadow: inset 0 0 0 2px var(--accent);
 }
@@ -818,6 +897,23 @@
 
 .pcal-cell-today .pcal-cell-date {
   color: var(--accent);
+}
+
+.pcal-cell-day-check {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 800;
+  color: #fff;
+  background: var(--green);
+  box-shadow: 0 0 0 1px rgba(15, 138, 71, 0.28);
 }
 
 .pcal-cell-today-badge {
@@ -1258,6 +1354,23 @@
    Responsive
    ══════════════════════════ */
 @media (max-width: 900px) {
+  .pcal-layout {
+    grid-template-columns: 1fr;
+  }
+  .pcal-side {
+    position: static;
+    top: auto;
+  }
+  .pcal-side-nav {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+  }
+  .pcal-side-link {
+    justify-content: center;
+    text-align: center;
+    min-height: 36px;
+    padding: 0 8px;
+  }
   .pcal-race-grid {
     grid-template-columns: 1fr;
   }
@@ -1297,6 +1410,9 @@
 }
 
 @media (max-width: 640px) {
+  .pcal-side-nav {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
   .plans-grid { grid-template-columns: 1fr; }
   .plans-header { flex-direction: column; }
   .pcal-header { flex-direction: column; }

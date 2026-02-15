@@ -16,7 +16,7 @@ type AthleteNavItem =
 const NAV_ITEMS: Array<{ id: AthleteNavItem; href: string; label: string }> = [
   { id: "dashboard", href: "/dashboard", label: "Dashboard" },
   { id: "calendar", href: "/calendar", label: "Calendar" },
-  { id: "strava", href: "/strava", label: "Plan vs Strava" },
+  { id: "strava", href: "/strava", label: "Import Strava" },
   { id: "plans", href: "/plans", label: "Plans" },
   { id: "upload", href: "/upload", label: "Upload" },
   { id: "progress", href: "/progress", label: "Progress" },
