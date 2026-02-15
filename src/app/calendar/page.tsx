@@ -165,6 +165,15 @@ function formatDurationSeconds(value: number | null | undefined) {
   return `${Math.round(value / 60)} min`;
 }
 
+function formatMinutesTotal(value: number) {
+  if (value <= 0) return "0m";
+  const hours = Math.floor(value / 60);
+  const mins = value % 60;
+  if (hours && mins) return `${hours}h ${mins}m`;
+  if (hours) return `${hours}h`;
+  return `${mins}m`;
+}
+
 function formatDistance(
   value: number | null | undefined,
   unit: string | null | undefined,
@@ -421,6 +430,14 @@ export default async function CalendarPage({
   const monthCompletionPct = monthWorkoutCount > 0
     ? Math.round((monthCompletedCount / monthWorkoutCount) * 100)
     : 0;
+  const monthActivities = dayCells
+    .filter((date) => date.getMonth() === monthStart.getMonth() && date.getFullYear() === monthStart.getFullYear())
+    .flatMap((date) => activitiesByDate.get(dateKey(date)) || []);
+  const monthDistanceTotal = monthActivities.reduce((sum, activity) => {
+    const converted = convertDistanceForDisplay(activity.distance, activity.distanceUnit, viewerUnits);
+    return sum + (converted?.value || 0);
+  }, 0);
+  const monthDurationTotal = monthActivities.reduce((sum, activity) => sum + (activity.duration || 0), 0);
 
   return (
     <main className="dash cal-page">
@@ -429,9 +446,19 @@ export default async function CalendarPage({
 
         <section className="dash-center">
           <div className="dash-card cal-header">
-            <div>
-              <h1>Training Calendar</h1>
-              <p>Monthly view aligned to your plan and race date.</p>
+            <div className="cal-header-title">
+              <h1>Training Log</h1>
+              <p>Month-by-month execution aligned to your active plan.</p>
+            </div>
+            <div className="cal-header-metrics">
+              <div>
+                <span>Monthly Distance</span>
+                <strong>{formatDistanceNumber(monthDistanceTotal)} {distanceUnitLabel(viewerUnits)}</strong>
+              </div>
+              <div>
+                <span>Monthly Time</span>
+                <strong>{formatMinutesTotal(monthDurationTotal)}</strong>
+              </div>
             </div>
             <div className="cal-header-actions">
               <div className="cal-view-toggle" aria-label="Plan views">

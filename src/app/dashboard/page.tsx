@@ -379,6 +379,17 @@ export default async function DashboardPage() {
   const todayDisplayActualPace = todayActivity
     ? convertPaceForDisplay(todayActivity.actualPace, viewerUnits, todayActivity.distanceUnit || viewerUnits)
     : null;
+  const initials = name
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part[0]?.toUpperCase())
+    .slice(0, 2)
+    .join("") || "CP";
+  const weekCompletionPct = allActivities.length > 0
+    ? Math.round((allActivities.filter((activity) => activity.completed).length / allActivities.length) * 100)
+    : 0;
+  const keyCompletionPct = keyActivities.length > 0 ? Math.round((completedKey / keyActivities.length) * 100) : 0;
+  const weeklyTimePct = Math.min(100, Math.round((totalMinutes / 420) * 100));
 
   return (
     <main className="dash">
@@ -387,15 +398,18 @@ export default async function DashboardPage() {
 
       <div className="dash-grid">
         <div className="dash-left-col">
-          <AthleteSidebar active="today" name={name} sticky={false} showQuickActions={false} />
+          <AthleteSidebar active="dashboard" name={name} sticky={false} showQuickActions={false} />
           <StravaSyncPanel compact />
         </div>
 
         {/* ── Center ── */}
         <section className="dash-center">
-          <div className="dash-greeting">
-            <h1>{greeting}, {name}</h1>
-            <div className="dash-greeting-date">{dateStr}</div>
+          <div className="dash-page-heading">
+            <h1>Activity Feed</h1>
+            <p>{greeting}, {name} · {dateStr}</p>
+          </div>
+
+          <div className="dash-card dash-plan-summary">
             <div className="dash-greeting-meta">
               <div className="dash-greeting-meta-item">
                 <span className="dash-greeting-meta-label">Plan</span>
@@ -410,11 +424,15 @@ export default async function DashboardPage() {
                 <span className="dash-greeting-meta-value">{raceDateStr}</span>
               </div>
             </div>
-            <a className="dash-greeting-edit-link" href={`/plans/${activePlan.id}`}>Edit race info</a>
+            <a className="dash-greeting-edit-link" href={`/plans/${activePlan.id}`}>View Plan</a>
           </div>
 
           {/* Today's workout hero */}
           <div className={`dash-hero${isRestDay ? " dash-hero-rest" : ""}`}>
+            <div className="dash-hero-top">
+              <span className="dash-hero-chip">Up Next</span>
+              <a className="dash-hero-top-link" href={`/plans/${activePlan.id}`}>View Plan</a>
+            </div>
             <div className="dash-hero-label">TODAY · {dateStr}</div>
             {todayActivity && (
               <span className={`dash-type-badge dash-type-${todayActivity.type}`}>
@@ -545,6 +563,58 @@ export default async function DashboardPage() {
 
         {/* ── Right sidebar ── */}
         <aside className="dash-right">
+          <div className="dash-card dash-profile-card">
+            <div className="dash-profile-top">
+              <div className="dash-profile-avatar">{initials}</div>
+              <div>
+                <h3>{name}</h3>
+                <p>Runner · CoachPlan</p>
+              </div>
+            </div>
+            <div className="dash-profile-stats">
+              <div>
+                <strong>{totalPlanCount}</strong>
+                <span>Plans</span>
+              </div>
+              <div>
+                <strong>{totalActivities}</strong>
+                <span>Workouts</span>
+              </div>
+              <div>
+                <strong>{completedActivities}</strong>
+                <span>Done</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="dash-card dash-week-snapshot">
+            <div className="dash-card-header">
+              <span className="dash-card-title">This Week</span>
+              <span className="dash-week-snapshot-range">Week {currentWeekIndex}</span>
+            </div>
+            <div className="dash-week-snapshot-row">
+              <span>Workouts</span>
+              <strong>{weekCompletionPct}%</strong>
+            </div>
+            <div className="dash-week-snapshot-bar">
+              <div style={{ width: `${weekCompletionPct}%` }} />
+            </div>
+            <div className="dash-week-snapshot-row">
+              <span>Key sessions</span>
+              <strong>{keyCompletionPct}%</strong>
+            </div>
+            <div className="dash-week-snapshot-bar key">
+              <div style={{ width: `${keyCompletionPct}%` }} />
+            </div>
+            <div className="dash-week-snapshot-row">
+              <span>Time logged</span>
+              <strong>{Math.floor(totalMinutes / 60)}h {totalMinutes % 60}m</strong>
+            </div>
+            <div className="dash-week-snapshot-bar time">
+              <div style={{ width: `${weeklyTimePct}%` }} />
+            </div>
+          </div>
+
           {/* Weekly overview */}
           <div className="dash-card">
             <details className="dash-collapse">

@@ -75,10 +75,10 @@ export default function UploadPage() {
   return (
     <main className="dash athlete-page-shell">
       <div className="dash-grid">
-        <AthleteSidebar name={sidebarName} />
+        <AthleteSidebar active="upload" name={sidebarName} />
 
         <section className="dash-center">
-          <section className="dash-card athlete-page-header">
+          <section className="dash-card athlete-page-header upload-header">
             <h1>Upload Training Plan</h1>
             <p className="muted">
               Upload a PDF and align it to your race weekend. We&apos;ll parse weeks and workouts automatically.
@@ -98,10 +98,10 @@ export default function UploadPage() {
           </SignedOut>
 
           <SignedIn>
-            <div className="grid-2 athlete-form-grid">
-              <div className="dash-card athlete-page-card">
+            <div className="grid-2 athlete-form-grid upload-form-grid">
+              <div className="dash-card athlete-page-card upload-main-card">
                 <div className="section-title">
-                  <h3>Plan details</h3>
+                  <h3>Plan Details</h3>
                 </div>
                 <div className="form-stack">
                   <div className="muted">
@@ -135,18 +135,22 @@ export default function UploadPage() {
                   </label>
                   <label>
                     Upload PDF
-                    <input
-                      type="file"
-                      accept="application/pdf"
-                      onChange={(e) => {
-                        const picked = e.target.files?.[0] || null;
-                        setFile(picked);
-                        if (picked?.name) {
-                          const fileBasedName = deriveNameFromFile(picked.name);
-                          if (fileBasedName) setName(fileBasedName);
-                        }
-                      }}
-                    />
+                    <div className="upload-dropzone">
+                      <p>Drag and drop your PDF here, or click to browse.</p>
+                      <input
+                        type="file"
+                        accept="application/pdf"
+                        onChange={(e) => {
+                          const picked = e.target.files?.[0] || null;
+                          setFile(picked);
+                          if (picked?.name) {
+                            const fileBasedName = deriveNameFromFile(picked.name);
+                            if (fileBasedName) setName(fileBasedName);
+                          }
+                        }}
+                      />
+                    </div>
+                    {file?.name && <span className="upload-file-name">{file.name}</span>}
                   </label>
                 </div>
                 <div style={{ marginTop: 12 }}>

@@ -297,7 +297,7 @@ export default function PlanDetailPage() {
             <span className="pcal-view-pill active">Plan</span>
             <Link className="pcal-view-pill" href={`/calendar?plan=${plan.id}`}>Calendar</Link>
           </div>
-          <Link className="cta secondary" href="/dashboard">&larr; Dashboard</Link>
+          <Link className="cta secondary" href="/plans">&larr; Back to Plans</Link>
         </div>
       </div>
 

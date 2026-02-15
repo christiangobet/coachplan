@@ -10,9 +10,21 @@ type Plan = { id: string; name: string; weekCount?: number | null; status: strin
 type Template = { id: string; name: string; weekCount?: number | null };
 
 function statusColor(status: string) {
-  if (status === 'ACTIVE') return 'var(--green)';
-  if (status === 'DRAFT') return 'var(--amber)';
-  return 'var(--muted)';
+  if (status === 'ACTIVE') return 'var(--d-green)';
+  if (status === 'DRAFT') return 'var(--d-amber)';
+  return 'var(--d-muted)';
+}
+
+function statusProgress(status: string) {
+  if (status === 'ACTIVE') return 68;
+  if (status === 'DRAFT') return 18;
+  return 100;
+}
+
+function heroClass(status: string) {
+  if (status === 'ACTIVE') return 'active';
+  if (status === 'DRAFT') return 'draft';
+  return 'archived';
 }
 
 export default function PlansPage() {
@@ -110,7 +122,7 @@ export default function PlansPage() {
   return (
     <main className="dash plans-page-shell">
       <div className="dash-grid">
-        <AthleteSidebar name={athleteName} />
+        <AthleteSidebar active="plans" name={athleteName} />
 
         <section className="dash-center">
           <div className="dash-card plans-shell-header">
@@ -134,6 +146,9 @@ export default function PlansPage() {
               <div className="plans-grid">
                 {activePlans.map((plan) => (
                   <div className="plan-card" key={plan.id}>
+                    <div className={`plan-card-hero ${heroClass(plan.status)}`}>
+                      <span className="plan-card-hero-badge">Training Plan</span>
+                    </div>
                     <div className="plan-card-top">
                       <span
                         className="plan-status-dot"
@@ -145,6 +160,15 @@ export default function PlansPage() {
                     <span className="plan-card-meta">
                       {plan.weekCount ? `${plan.weekCount} weeks` : 'No weeks set'}
                     </span>
+                    <div className="plan-card-progress">
+                      <span>{statusProgress(plan.status)}% complete</span>
+                      <div className="plan-card-progress-track">
+                        <div
+                          className="plan-card-progress-fill"
+                          style={{ width: `${statusProgress(plan.status)}%` }}
+                        />
+                      </div>
+                    </div>
                     <div className="plan-card-actions">
                       <Link className="plan-card-use" href={`/plans/${plan.id}`}>Open</Link>
                       <button
@@ -185,6 +209,9 @@ export default function PlansPage() {
               <div className="plans-grid">
                 {draftPlans.map((plan) => (
                   <div className="plan-card" key={plan.id}>
+                    <div className={`plan-card-hero ${heroClass(plan.status)}`}>
+                      <span className="plan-card-hero-badge">Training Plan</span>
+                    </div>
                     <div className="plan-card-top">
                       <span
                         className="plan-status-dot"
@@ -196,6 +223,15 @@ export default function PlansPage() {
                     <span className="plan-card-meta">
                       {plan.weekCount ? `${plan.weekCount} weeks` : 'No weeks set'}
                     </span>
+                    <div className="plan-card-progress">
+                      <span>{statusProgress(plan.status)}% complete</span>
+                      <div className="plan-card-progress-track">
+                        <div
+                          className="plan-card-progress-fill"
+                          style={{ width: `${statusProgress(plan.status)}%` }}
+                        />
+                      </div>
+                    </div>
                     <div className="plan-card-actions">
                       <Link className="plan-card-use" href={`/plans/${plan.id}`}>Open</Link>
                       <button
@@ -236,6 +272,9 @@ export default function PlansPage() {
               <div className="plans-grid">
                 {archivedPlans.map((plan) => (
                   <div className="plan-card" key={plan.id}>
+                    <div className={`plan-card-hero ${heroClass(plan.status)}`}>
+                      <span className="plan-card-hero-badge">Training Plan</span>
+                    </div>
                     <div className="plan-card-top">
                       <span
                         className="plan-status-dot"
@@ -247,6 +286,15 @@ export default function PlansPage() {
                     <span className="plan-card-meta">
                       {plan.weekCount ? `${plan.weekCount} weeks` : 'No weeks set'}
                     </span>
+                    <div className="plan-card-progress">
+                      <span>{statusProgress(plan.status)}% complete</span>
+                      <div className="plan-card-progress-track">
+                        <div
+                          className="plan-card-progress-fill"
+                          style={{ width: `${statusProgress(plan.status)}%` }}
+                        />
+                      </div>
+                    </div>
                     <div className="plan-card-actions">
                       <Link className="plan-card-use" href={`/plans/${plan.id}`}>Open</Link>
                       <button
@@ -281,6 +329,9 @@ export default function PlansPage() {
               <div className="plans-grid">
                 {templates.map((tpl) => (
                   <div className="plan-card template" key={tpl.id}>
+                    <div className="plan-card-hero template">
+                      <span className="plan-card-hero-badge">Library</span>
+                    </div>
                     <div className="plan-card-top">
                       <span className="plan-template-badge">Template</span>
                     </div>

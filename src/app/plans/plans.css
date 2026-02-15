@@ -76,7 +76,7 @@
 }
 
 .plans-header h1 {
-  font-size: 24px;
+  font-size: 34px;
   font-weight: 800;
   letter-spacing: -0.02em;
 }
@@ -88,17 +88,17 @@
 .plans-section-title {
   font-size: 14px;
   font-weight: 700;
-  color: var(--muted);
+  color: var(--d-muted);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   margin-bottom: 12px;
 }
 
 .plans-empty {
-  background: var(--background);
-  border-radius: var(--radius-lg);
+  background: var(--d-surface);
+  border-radius: var(--d-radius-lg);
   padding: 24px;
-  box-shadow: var(--shadow);
+  box-shadow: var(--d-shadow);
 }
 
 .plans-empty p { font-size: 14px; }
@@ -106,34 +106,85 @@
 .plans-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 12px;
+  gap: 14px;
 }
 
 .plan-card {
-  background: var(--background);
+  background: var(--d-surface);
   border-radius: var(--radius-lg);
-  padding: 20px;
-  box-shadow: var(--shadow);
-  display: grid;
+  box-shadow: var(--d-shadow);
+  border: 1px solid var(--d-border-light);
+  display: flex;
+  flex-direction: column;
   gap: 6px;
-  transition: box-shadow 0.15s, transform 0.15s;
-  cursor: pointer;
+  overflow: hidden;
 }
 
 .plan-card:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  transform: translateY(-1px);
+  box-shadow: var(--d-shadow-md);
 }
 
 .plan-card.template {
   cursor: default;
-  border: 1px dashed var(--border);
+  border-style: dashed;
   box-shadow: none;
 }
 
 .plan-card.template:hover { box-shadow: none; transform: none; }
 
-.plan-card-top { display: flex; align-items: center; gap: 6px; margin-bottom: 2px; }
+.plan-card-hero {
+  height: 112px;
+  padding: 12px;
+  display: flex;
+  align-items: flex-end;
+}
+
+.plan-card-hero.active {
+  background: linear-gradient(135deg, #fc4c02 0%, #ff8c00 100%);
+}
+
+.plan-card-hero.draft {
+  background: linear-gradient(135deg, #3b82f6 0%, #06b6d4 100%);
+}
+
+.plan-card-hero.archived {
+  background: linear-gradient(135deg, #6b6b76 0%, #9b9ba3 100%);
+}
+
+.plan-card-hero.template {
+  background: linear-gradient(135deg, #d9dadf 0%, #ececf0 100%);
+}
+
+.plan-card-hero-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  border-radius: 999px;
+  padding: 0 8px;
+  background: rgba(0, 0, 0, 0.22);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.plan-card-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+
+.plan-card > .plan-card-top,
+.plan-card > .plan-card-name,
+.plan-card > .plan-card-meta,
+.plan-card > .plan-card-progress,
+.plan-card > .plan-card-use,
+.plan-card > .plan-card-actions {
+  margin-left: 16px;
+  margin-right: 16px;
+}
 
 .plan-status-dot { width: 8px; height: 8px; border-radius: 50%; }
 
@@ -156,8 +207,33 @@
   border-radius: 4px;
 }
 
-.plan-card-name { font-size: 16px; font-weight: 700; color: var(--ink); }
-.plan-card-meta { font-size: 13px; color: var(--muted); }
+.plan-card-name { font-size: 16px; font-weight: 700; color: var(--d-text); }
+.plan-card-meta { font-size: 13px; color: var(--d-muted); }
+
+.plan-card-progress {
+  display: grid;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.plan-card-progress span {
+  color: var(--d-text-mid);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.plan-card-progress-track {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--d-raised);
+  overflow: hidden;
+}
+
+.plan-card-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--d-orange);
+}
 
 .plan-card-action {
   font-size: 13px;
@@ -170,12 +246,12 @@
 .plan-card:hover .plan-card-action { opacity: 0.8; }
 
 .plan-card-use {
-  margin-top: 8px;
+  margin-top: 10px;
   padding: 8px 14px;
   border-radius: var(--radius);
   background: transparent;
-  border: 1px solid var(--border);
-  color: var(--ink);
+  border: 1px solid var(--d-border);
+  color: var(--d-text);
   font-family: inherit;
   font-weight: 600;
   font-size: 13px;
@@ -189,11 +265,12 @@
 .plan-card-use:disabled { opacity: 0.45; cursor: not-allowed; }
 
 .plan-card-actions {
-  margin-top: 8px;
+  margin-top: 10px;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
+  padding-bottom: 16px;
 }
 
 .plan-card-delete {
