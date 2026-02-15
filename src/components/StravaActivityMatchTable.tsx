@@ -93,11 +93,14 @@ export default function StravaActivityMatchTable() {
   const [busyDate, setBusyDate] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
+  const [importedDates, setImportedDates] = useState<Set<string>>(new Set());
 
   async function load() {
     setLoading(true);
     try {
-      const res = await fetch('/api/integrations/strava/review');
+      const res = await fetch(`/api/integrations/strava/review?ts=${Date.now()}`, {
+        cache: 'no-store'
+      });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
         setStatus(body?.error || 'Failed to load Strava table');
@@ -118,6 +121,7 @@ export default function StravaActivityMatchTable() {
   async function syncRecent() {
     setSyncing(true);
     setStatus('Syncing Strava from plan start to today...');
+    setImportedDates(new Set());
     try {
       const res = await fetch('/api/integrations/strava/sync', {
         method: 'POST',
@@ -158,8 +162,15 @@ export default function StravaActivityMatchTable() {
         return;
       }
       const summary = body?.summary || {};
+      if ((summary.stravaActivities ?? 0) > 0) {
+        setImportedDates((prev) => {
+          const next = new Set(prev);
+          next.add(date);
+          return next;
+        });
+      }
       setStatus(
-        `Imported ${summary.date}: ${summary.stravaActivities ?? 0} Strava activities, ${summary.workoutsUpdated ?? 0} workout logs updated`
+        `Imported ${summary.date}: ${summary.stravaActivities ?? 0} Strava activities, ${summary.matched ?? 0} matched, ${summary.workoutsUpdated ?? 0} workout logs updated`
       );
       await load();
       router.refresh();
@@ -239,17 +250,18 @@ export default function StravaActivityMatchTable() {
               {rows.map((day) => {
                 const hasStrava = day.stravaActivities.length > 0;
                 const importing = busyDate === day.date;
+                const imported = importedDates.has(day.date);
                 const matchedStravaCount = day.stravaActivities.filter((activity) => Boolean(activity.matchedPlanActivityId)).length;
                 const matchedPlanCount = day.planActivities.filter((activity) => Boolean(activity.matchedExternalActivityId)).length;
                 const completedPlanCount = day.planActivities.filter((activity) => activity.completed).length;
                 const dayDone = hasStrava && matchedStravaCount > 0 && matchedStravaCount === day.stravaActivities.length;
                 const dayPartial = hasStrava && matchedStravaCount > 0 && matchedStravaCount < day.stravaActivities.length;
-                const actionLabel = dayDone ? 'Done' : dayPartial ? 'Re-import' : 'Import';
-                const rowClickable = hasStrava && !dayDone && !importing;
+                const actionLabel = dayDone ? 'Done' : imported ? 'Imported' : dayPartial ? 'Re-import' : 'Import';
+                const rowClickable = hasStrava && !dayDone && !imported && !importing;
                 return (
                   <tr
                     key={day.date}
-                    className={`${dayDone ? 'day-status-done' : dayPartial ? 'day-status-partial' : ''}${rowClickable ? ' day-row-clickable' : ''}`.trim()}
+                    className={`${dayDone ? 'day-status-done' : imported ? 'day-status-imported' : dayPartial ? 'day-status-partial' : ''}${rowClickable ? ' day-row-clickable' : ''}`.trim()}
                     role={rowClickable ? 'button' : undefined}
                     tabIndex={rowClickable ? 0 : undefined}
                     onClick={rowClickable ? () => importDay(day.date) : undefined}
@@ -322,8 +334,8 @@ export default function StravaActivityMatchTable() {
                     <td>
                       {hasStrava ? (
                         <div className="dash-day-action-stack">
-                          <span className={`dash-day-status-chip ${dayDone ? 'done' : dayPartial ? 'partial' : 'pending'}`}>
-                            {dayDone ? 'Done' : dayPartial ? 'Partial match' : 'Pending import'}
+                          <span className={`dash-day-status-chip ${dayDone ? 'done' : imported ? 'imported' : dayPartial ? 'partial' : 'pending'}`}>
+                            {dayDone ? 'Done' : imported ? 'Imported' : dayPartial ? 'Partial match' : 'Pending import'}
                           </span>
                           <span className="dash-day-action-meta">
                             {matchedStravaCount}/{day.stravaActivities.length} matched · {completedPlanCount}/{day.planActivities.length} done
@@ -331,7 +343,7 @@ export default function StravaActivityMatchTable() {
                           <button
                             className="dash-sync-btn"
                             type="button"
-                            disabled={importing || dayDone}
+                            disabled={importing || dayDone || imported}
                             onClick={(event) => {
                               event.stopPropagation();
                               void importDay(day.date);
