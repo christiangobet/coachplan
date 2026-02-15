@@ -465,8 +465,10 @@
 }
 
 .pcal-ai-trainer-head {
-  display: grid;
-  gap: 4px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
 }
 
 .pcal-ai-trainer-head h2 {
@@ -481,6 +483,11 @@
   color: var(--muted);
   margin: 0;
   line-height: 1.4;
+}
+
+.pcal-ai-trainer-toggle {
+  min-height: 34px;
+  white-space: nowrap;
 }
 
 .pcal-ai-trainer textarea {
@@ -1409,6 +1416,13 @@
 }
 
 @media (max-width: 640px) {
+  .pcal-ai-trainer-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .pcal-ai-trainer-toggle {
+    width: fit-content;
+  }
   .pcal-side-nav {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }

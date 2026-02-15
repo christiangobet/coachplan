@@ -173,6 +173,7 @@ export default function PlanDetailPage() {
   const [aiTrainerError, setAiTrainerError] = useState<string | null>(null);
   const [aiTrainerStatus, setAiTrainerStatus] = useState<string | null>(null);
   const [aiTrainerAppliedRows, setAiTrainerAppliedRows] = useState<Set<number>>(new Set());
+  const [showAiTrainer, setShowAiTrainer] = useState(false);
   const aiTrainerApplying = aiTrainerApplyingTarget !== null;
 
   const loadPlan = useCallback(async () => {
@@ -202,6 +203,17 @@ export default function PlanDetailPage() {
   useEffect(() => {
     loadPlan();
   }, [loadPlan]);
+
+  useEffect(() => {
+    const maybeOpenAiTrainerFromHash = () => {
+      if (window.location.hash === '#ai-trainer') {
+        setShowAiTrainer(true);
+      }
+    };
+    maybeOpenAiTrainerFromHash();
+    window.addEventListener('hashchange', maybeOpenAiTrainerFromHash);
+    return () => window.removeEventListener('hashchange', maybeOpenAiTrainerFromHash);
+  }, []);
 
   const applyActivityUpdate = useCallback((activityId: string, updater: (activity: any) => any) => {
     setPlan((prev: any) => {
@@ -548,100 +560,113 @@ export default function PlanDetailPage() {
 
           <section className="pcal-ai-trainer" id="ai-trainer">
             <div className="pcal-ai-trainer-head">
-              <h2>AI Trainer</h2>
-              <p>Tell the coach what happened (missed day, sickness, fatigue, schedule changes) and get safe adjustments.</p>
-            </div>
-            <textarea
-              value={aiTrainerInput}
-              onChange={(e) => setAiTrainerInput(e.target.value)}
-              placeholder="Example: I missed Tuesday intervals and felt sick for two days. Please adjust this week and next week safely."
-              rows={4}
-            />
-            <div className="pcal-ai-trainer-actions">
+              <div>
+                <h2>AI Trainer</h2>
+                <p>Tell the coach what happened (missed day, sickness, fatigue, schedule changes) and get safe adjustments.</p>
+              </div>
               <button
-                className="cta"
+                className="cta secondary pcal-ai-trainer-toggle"
                 type="button"
-                onClick={generateAiAdjustment}
-                disabled={aiTrainerLoading || aiTrainerApplying}
+                onClick={() => setShowAiTrainer((prev) => !prev)}
               >
-                {aiTrainerLoading ? 'Generating…' : 'Generate Adjustment'}
+                {showAiTrainer ? 'Hide AI Trainer' : 'Open AI Trainer'}
               </button>
             </div>
-            {aiTrainerError && <p className="pcal-ai-trainer-error">{aiTrainerError}</p>}
-            {aiTrainerStatus && <p className="pcal-ai-trainer-status">{aiTrainerStatus}</p>}
-
-            {aiTrainerProposal && (
-              <div className="pcal-ai-trainer-proposal">
-                <div className="pcal-ai-trainer-meta">
-                  <strong>Coach Reply</strong>
-                  <span>Confidence: {aiTrainerProposal.confidence}</span>
-                </div>
-                <p>{aiTrainerProposal.coachReply}</p>
-                {aiTrainerProposal.followUpQuestion && (
-                  <p className="pcal-ai-trainer-followup">
-                    Follow-up: {aiTrainerProposal.followUpQuestion}
-                  </p>
-                )}
-                <div className="pcal-ai-trainer-meta">
-                  <strong>Planned Changes ({aiTrainerProposal.changes.length})</strong>
-                </div>
-                {aiTrainerProposal.changes.length === 0 && (
-                  <p className="pcal-ai-trainer-followup">
-                    This request needs a plan-structure update (weeks/dates), which is not supported in AI Trainer yet.
-                  </p>
-                )}
-                <ul className="pcal-ai-trainer-change-list">
-                  {aiTrainerProposal.changes.map((change, idx) => (
-                    <li
-                      key={`${change.op}-${idx}`}
-                      className={aiTrainerAppliedRows.has(idx) ? 'is-applied' : ''}
-                    >
-                      <div className="pcal-ai-trainer-change-head">
-                        <span className="pcal-ai-trainer-op">{change.op.replace(/_/g, ' ')}</span>
-                        <strong>{describeAiChange(change, aiChangeLookup)}</strong>
-                        <button
-                          className="cta secondary pcal-ai-trainer-apply-one"
-                          type="button"
-                          onClick={() => applyAiAdjustment(idx)}
-                          disabled={aiTrainerAppliedRows.has(idx) || aiTrainerLoading || aiTrainerApplying}
-                        >
-                          {aiTrainerAppliedRows.has(idx)
-                            ? 'Applied'
-                            : aiTrainerApplyingTarget === idx
-                              ? 'Applying…'
-                              : 'Apply'}
-                        </button>
-                      </div>
-                      <p>{change.reason}</p>
-                    </li>
-                  ))}
-                </ul>
-                <div className="pcal-ai-trainer-apply-all">
+            {showAiTrainer && (
+              <>
+                <textarea
+                  value={aiTrainerInput}
+                  onChange={(e) => setAiTrainerInput(e.target.value)}
+                  placeholder="Example: I missed Tuesday intervals and felt sick for two days. Please adjust this week and next week safely."
+                  rows={4}
+                />
+                <div className="pcal-ai-trainer-actions">
                   <button
                     className="cta"
                     type="button"
-                    onClick={() => applyAiAdjustment()}
-                    disabled={
-                      aiTrainerProposal.changes.length === 0
-                      || aiTrainerAppliedRows.size >= aiTrainerProposal.changes.length
-                      || aiTrainerLoading
-                      || aiTrainerApplying
-                    }
+                    onClick={generateAiAdjustment}
+                    disabled={aiTrainerLoading || aiTrainerApplying}
                   >
-                    {aiTrainerApplyingTarget === 'all' ? 'Applying all…' : 'Apply All Changes'}
+                    {aiTrainerLoading ? 'Generating…' : 'Generate Adjustment'}
                   </button>
                 </div>
-                {(aiTrainerProposal.riskFlags || []).length > 0 && (
-                  <div className="pcal-ai-trainer-risks">
-                    <strong>Risk Flags</strong>
-                    <ul>
-                      {(aiTrainerProposal.riskFlags || []).map((flag, idx) => (
-                        <li key={`${flag}-${idx}`}>{flag}</li>
+                {aiTrainerError && <p className="pcal-ai-trainer-error">{aiTrainerError}</p>}
+                {aiTrainerStatus && <p className="pcal-ai-trainer-status">{aiTrainerStatus}</p>}
+
+                {aiTrainerProposal && (
+                  <div className="pcal-ai-trainer-proposal">
+                    <div className="pcal-ai-trainer-meta">
+                      <strong>Coach Reply</strong>
+                      <span>Confidence: {aiTrainerProposal.confidence}</span>
+                    </div>
+                    <p>{aiTrainerProposal.coachReply}</p>
+                    {aiTrainerProposal.followUpQuestion && (
+                      <p className="pcal-ai-trainer-followup">
+                        Follow-up: {aiTrainerProposal.followUpQuestion}
+                      </p>
+                    )}
+                    <div className="pcal-ai-trainer-meta">
+                      <strong>Planned Changes ({aiTrainerProposal.changes.length})</strong>
+                    </div>
+                    {aiTrainerProposal.changes.length === 0 && (
+                      <p className="pcal-ai-trainer-followup">
+                        This request needs a plan-structure update (weeks/dates), which is not supported in AI Trainer yet.
+                      </p>
+                    )}
+                    <ul className="pcal-ai-trainer-change-list">
+                      {aiTrainerProposal.changes.map((change, idx) => (
+                        <li
+                          key={`${change.op}-${idx}`}
+                          className={aiTrainerAppliedRows.has(idx) ? 'is-applied' : ''}
+                        >
+                          <div className="pcal-ai-trainer-change-head">
+                            <span className="pcal-ai-trainer-op">{change.op.replace(/_/g, ' ')}</span>
+                            <strong>{describeAiChange(change, aiChangeLookup)}</strong>
+                            <button
+                              className="cta secondary pcal-ai-trainer-apply-one"
+                              type="button"
+                              onClick={() => applyAiAdjustment(idx)}
+                              disabled={aiTrainerAppliedRows.has(idx) || aiTrainerLoading || aiTrainerApplying}
+                            >
+                              {aiTrainerAppliedRows.has(idx)
+                                ? 'Applied'
+                                : aiTrainerApplyingTarget === idx
+                                  ? 'Applying…'
+                                  : 'Apply'}
+                            </button>
+                          </div>
+                          <p>{change.reason}</p>
+                        </li>
                       ))}
                     </ul>
+                    <div className="pcal-ai-trainer-apply-all">
+                      <button
+                        className="cta"
+                        type="button"
+                        onClick={() => applyAiAdjustment()}
+                        disabled={
+                          aiTrainerProposal.changes.length === 0
+                          || aiTrainerAppliedRows.size >= aiTrainerProposal.changes.length
+                          || aiTrainerLoading
+                          || aiTrainerApplying
+                        }
+                      >
+                        {aiTrainerApplyingTarget === 'all' ? 'Applying all…' : 'Apply All Changes'}
+                      </button>
+                    </div>
+                    {(aiTrainerProposal.riskFlags || []).length > 0 && (
+                      <div className="pcal-ai-trainer-risks">
+                        <strong>Risk Flags</strong>
+                        <ul>
+                          {(aiTrainerProposal.riskFlags || []).map((flag, idx) => (
+                            <li key={`${flag}-${idx}`}>{flag}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                   </div>
                 )}
-              </div>
+              </>
             )}
           </section>
 
