@@ -755,9 +755,6 @@ export default function PlanDetailPage() {
                                   {details.join(' · ')}
                                 </span>
                               )}
-                              {a.subtype && (
-                                <span className="pcal-activity-subtype">{a.subtype}</span>
-                              )}
                             </div>
                           </div>
                         );

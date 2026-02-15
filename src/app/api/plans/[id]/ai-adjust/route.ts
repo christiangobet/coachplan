@@ -674,6 +674,7 @@ async function applyAdjustmentProposal(planId: string, proposal: PlanAdjustmentP
         }
         const updates: {
           type?: ActivityType;
+          subtype?: string | null;
           title?: string;
           duration?: number | null;
           distance?: number | null;
@@ -685,8 +686,14 @@ async function applyAdjustmentProposal(planId: string, proposal: PlanAdjustmentP
           bailAllowed?: boolean;
           priority?: ActivityPriority | null;
         } = {};
-        if (change.type !== undefined) updates.type = change.type;
-        if (change.title !== undefined) updates.title = change.title;
+        if (change.type !== undefined) {
+          updates.type = change.type;
+          updates.subtype = null;
+        }
+        if (change.title !== undefined) {
+          updates.title = change.title;
+          updates.subtype = null;
+        }
         if (change.duration !== undefined) updates.duration = change.duration;
         if (change.distance !== undefined) updates.distance = change.distance;
         if (change.distanceUnit !== undefined) updates.distanceUnit = change.distanceUnit;
