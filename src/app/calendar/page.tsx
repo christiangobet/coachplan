@@ -588,7 +588,6 @@ export default async function CalendarPage({
                             <span className={`cal-activity-code type-${activity.type.toLowerCase()}`}>
                               {getTypeAbbr(activity.type)}
                             </span>
-                            <span className="cal-activity-title-text">{activity.title}</span>
                           </span>
                           {activity.completed && <em>Done</em>}
                         </Link>
