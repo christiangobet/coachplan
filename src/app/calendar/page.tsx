@@ -554,7 +554,7 @@ export default async function CalendarPage({
                 const dayAutoDone = dayActivities.length > 0 && dayActivities.every((activity) => activity.completed);
                 const dayDone = Boolean(dayInfo?.manualDone || dayAutoDone);
                 const moreCount = dayActivities.length > 3 ? dayActivities.length - 3 : 0;
-                const dayHref = buildCalendarHref(monthStart, selectedPlan.id, key);
+                const dayHref = `${buildCalendarHref(monthStart, selectedPlan.id, key)}#day-details-card`;
                 return (
                   <div
                     key={key}
@@ -578,8 +578,7 @@ export default async function CalendarPage({
 
                     <div className="cal-day-list">
                       {dayActivities.slice(0, 3).map((activity) => (
-                        <Link
-                          href={`/plans/${selectedPlan.id}`}
+                        <div
                           key={activity.id}
                           className={`cal-activity type-${activity.type.toLowerCase()}${activity.completed ? " completed" : ""}`}
                           title={activity.title}
@@ -590,12 +589,12 @@ export default async function CalendarPage({
                             </span>
                           </span>
                           {activity.completed && <em>Done</em>}
-                        </Link>
+                        </div>
                       ))}
                       {moreCount > 0 && (
-                        <Link className="cal-more" href={`/plans/${selectedPlan.id}`}>
+                        <span className="cal-more">
                           +{moreCount} more
-                        </Link>
+                        </span>
                       )}
                       {dayLogs.length > 0 && (
                         <span className="cal-log-pill">
@@ -611,10 +610,11 @@ export default async function CalendarPage({
         </section>
 
         <aside className="dash-right">
-          <div className="dash-card cal-info-card">
+          <div id="day-details-card" className="dash-card cal-info-card cal-day-details-card">
             <div className="dash-card-header">
               <span className="dash-card-title">Day Details</span>
             </div>
+            <p className="cal-day-detail-hint">Click any day card in the calendar to update this panel.</p>
             <div className="cal-day-detail-header">
               <strong>
                 {selectedDate.toLocaleDateString("en-US", {
