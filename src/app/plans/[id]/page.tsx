@@ -525,7 +525,7 @@ export default function PlanDetailPage() {
             className="cta secondary"
             type="button"
             onClick={applyAiAdjustment}
-            disabled={!aiTrainerProposal || aiTrainerLoading || aiTrainerApplying}
+            disabled={!aiTrainerProposal || aiTrainerProposal.changes.length === 0 || aiTrainerLoading || aiTrainerApplying}
           >
             {aiTrainerApplying ? 'Applying…' : 'Apply to Plan'}
           </button>
@@ -548,6 +548,11 @@ export default function PlanDetailPage() {
             <div className="pcal-ai-trainer-meta">
               <strong>Planned Changes ({aiTrainerProposal.changes.length})</strong>
             </div>
+            {aiTrainerProposal.changes.length === 0 && (
+              <p className="pcal-ai-trainer-followup">
+                This request needs a plan-structure update (weeks/dates), which is not supported in AI Trainer yet.
+              </p>
+            )}
             <ul className="pcal-ai-trainer-change-list">
               {aiTrainerProposal.changes.map((change, idx) => (
                 <li key={`${change.op}-${idx}`}>

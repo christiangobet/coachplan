@@ -96,6 +96,22 @@ function normalizeText(value: unknown): string | null {
   return trimmed ? trimmed : null;
 }
 
+function isPlanStructureChangeRequest(message: string) {
+  const text = message.toLowerCase();
+  const structurePatterns = [
+    /\bextend\b.*\bplan\b/,
+    /\blonger\b.*\bplan\b/,
+    /\badd\b.*\bweeks?\b/,
+    /\bprepend\b.*\bweeks?\b/,
+    /\bstart\b.*\b(earlier|before|on)\b/,
+    /\bmove\b.*\bstart date\b/,
+    /\bchange\b.*\b(start date|race date)\b/,
+    /\bkeep\b.*\brace date\b.*\b(add|extend|more)\b/,
+    /\bplan\b.*\b(start|begin)\b.*\b(on|at)\b/
+  ];
+  return structurePatterns.some((pattern) => pattern.test(text));
+}
+
 function parseProposal(raw: unknown): PlanAdjustmentProposal | null {
   if (!raw || typeof raw !== 'object') return null;
   const payload = raw as Record<string, unknown>;
@@ -216,8 +232,6 @@ function parseProposal(raw: unknown): PlanAdjustmentProposal | null {
 
     return null;
   }
-
-  if (changes.length === 0) return null;
 
   const riskFlags = Array.isArray(payload.riskFlags)
     ? payload.riskFlags.filter((item): item is string => typeof item === 'string').map((text) => text.slice(0, 180))
@@ -340,6 +354,9 @@ async function generateAdjustmentProposal(message: string, plan: NonNullable<Pla
       '- Preserve key sessions when possible, but reduce load if needed.',
       '- Do not increase weekly load aggressively.',
       '- Use only IDs present in context for day/activity references.',
+      '- You can only modify existing activities/days in this plan.',
+      '- You cannot add weeks, change week count, change plan start date, or change race date.',
+      '- If request requires structural plan changes (weeks/dates), return an empty changes array and explain this clearly.',
       '- Explain changes briefly in plain language.',
       `Athlete feedback: ${message}`,
       `Plan context JSON: ${JSON.stringify(context)}`
@@ -363,7 +380,7 @@ async function generateAdjustmentProposal(message: string, plan: NonNullable<Pla
           followUpQuestion: { type: 'string', maxLength: 240 },
           changes: {
             type: 'array',
-            minItems: 1,
+            minItems: 0,
             maxItems: 12,
             items: {
               oneOf: [
@@ -586,6 +603,26 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   const apply = Boolean(body.apply);
   if (!apply) {
+    if (isPlanStructureChangeRequest(message)) {
+      return NextResponse.json({
+        proposal: {
+          coachReply: 'This request changes plan structure (weeks/start date), and this AI Trainer flow only supports day/activity edits inside the current plan.',
+          summary: 'Plan-length and start-date changes require a separate plan-structure action.',
+          confidence: 'high',
+          riskFlags: [
+            'No changes applied because structural plan edits are not supported in AI Trainer yet.'
+          ],
+          followUpQuestion: 'Would you like a day-level adjustment inside the current weeks while keeping plan dates unchanged?',
+          changes: []
+        },
+        plan: {
+          id: plan.id,
+          name: plan.name,
+          status: plan.status
+        }
+      });
+    }
+
     try {
       const proposal = await generateAdjustmentProposal(message, plan);
       const parsed = parseProposal(proposal);
@@ -609,6 +646,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const proposal = parseProposal(body.proposal);
   if (!proposal) {
     return NextResponse.json({ error: 'proposal is required when apply=true' }, { status: 400 });
+  }
+  if (proposal.changes.length === 0) {
+    return NextResponse.json(
+      { error: 'No applicable day-level changes to apply. Plan structure changes (weeks/dates) are not supported in this flow.' },
+      { status: 400 }
+    );
   }
 
   try {
