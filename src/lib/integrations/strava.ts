@@ -886,6 +886,7 @@ export async function setStravaActivityMatchForUser(args: {
     },
     select: {
       id: true,
+      matchedPlanActivityId: true,
       startTime: true,
       distanceM: true,
       durationSec: true,
@@ -897,15 +898,54 @@ export async function setStravaActivityMatchForUser(args: {
     throw new Error('Strava activity not found');
   }
 
+  const activityIdsToCheck = new Set<string>();
+  if (external.matchedPlanActivityId) {
+    activityIdsToCheck.add(external.matchedPlanActivityId);
+  }
   if (args.planActivityId) {
-    const workout = await prisma.planActivity.findFirst({
+    activityIdsToCheck.add(args.planActivityId);
+  }
+
+  const checkedActivities = activityIdsToCheck.size > 0
+    ? await prisma.planActivity.findMany({
       where: {
-        id: args.planActivityId,
+        id: { in: [...activityIdsToCheck] },
         plan: { athleteId: args.userId }
       },
-      select: { id: true }
-    });
-    if (!workout) throw new Error('Plan activity not found');
+      select: {
+        id: true,
+        day: {
+          select: {
+            notes: true,
+            activities: {
+              select: { completed: true }
+            }
+          }
+        }
+      }
+    })
+    : [];
+
+  const checkedById = new Map(checkedActivities.map((activity) => [activity.id, activity]));
+
+  if (args.planActivityId && !checkedById.has(args.planActivityId)) {
+    throw new Error('Plan activity not found');
+  }
+
+  if (args.planActivityId) {
+    const target = checkedById.get(args.planActivityId);
+    const targetDayLocked = target ? isLockedPlanDay(target.day?.notes, target.day?.activities || []) : false;
+    if (targetDayLocked) {
+      throw new Error('Cannot match Strava activity to a completed day.');
+    }
+  }
+
+  if (external.matchedPlanActivityId && external.matchedPlanActivityId !== args.planActivityId) {
+    const current = checkedById.get(external.matchedPlanActivityId);
+    const currentDayLocked = current ? isLockedPlanDay(current.day?.notes, current.day?.activities || []) : false;
+    if (currentDayLocked) {
+      throw new Error('Cannot change matches on completed days.');
+    }
   }
 
   await prisma.$transaction(async (tx) => {
