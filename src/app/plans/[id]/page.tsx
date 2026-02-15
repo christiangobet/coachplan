@@ -54,6 +54,84 @@ function typeColor(type: string): string {
   }
 }
 
+type AiTrainerChange =
+  | {
+      op: 'move_activity';
+      activityId: string;
+      targetDayId: string;
+      reason: string;
+    }
+  | {
+      op: 'edit_activity';
+      activityId: string;
+      reason: string;
+      type?: string;
+      title?: string;
+      duration?: number | null;
+      distance?: number | null;
+      distanceUnit?: string | null;
+      paceTarget?: string | null;
+      effortTarget?: string | null;
+      notes?: string | null;
+      mustDo?: boolean;
+      bailAllowed?: boolean;
+      priority?: string | null;
+    }
+  | {
+      op: 'add_activity';
+      dayId: string;
+      reason: string;
+      type: string;
+      title: string;
+      duration?: number | null;
+      distance?: number | null;
+      distanceUnit?: string | null;
+      paceTarget?: string | null;
+      effortTarget?: string | null;
+      notes?: string | null;
+      mustDo?: boolean;
+      bailAllowed?: boolean;
+      priority?: string | null;
+    }
+  | {
+      op: 'delete_activity';
+      activityId: string;
+      reason: string;
+    };
+
+type AiTrainerProposal = {
+  coachReply: string;
+  summary: string;
+  confidence: 'low' | 'medium' | 'high';
+  riskFlags?: string[];
+  followUpQuestion?: string;
+  changes: AiTrainerChange[];
+};
+
+function describeAiChange(change: AiTrainerChange) {
+  if (change.op === 'move_activity') {
+    return `Move activity ${change.activityId} to day ${change.targetDayId}.`;
+  }
+  if (change.op === 'delete_activity') {
+    return `Remove activity ${change.activityId}.`;
+  }
+  if (change.op === 'add_activity') {
+    return `Add ${change.type} "${change.title}" on day ${change.dayId}.`;
+  }
+  const updates: string[] = [];
+  if (change.title !== undefined) updates.push('title');
+  if (change.type !== undefined) updates.push('type');
+  if (change.duration !== undefined) updates.push('duration');
+  if (change.distance !== undefined) updates.push('distance');
+  if (change.paceTarget !== undefined) updates.push('pace');
+  if (change.effortTarget !== undefined) updates.push('effort');
+  if (change.notes !== undefined) updates.push('notes');
+  if (change.priority !== undefined) updates.push('priority');
+  if (change.mustDo !== undefined) updates.push('must-do');
+  if (change.bailAllowed !== undefined) updates.push('bail');
+  return `Edit activity ${change.activityId}${updates.length > 0 ? ` (${updates.join(', ')})` : ''}.`;
+}
+
 export default function PlanDetailPage() {
   const params = useParams<{ id: string }>();
   const planId = Array.isArray(params?.id) ? params?.id[0] : params?.id;
@@ -67,31 +145,40 @@ export default function PlanDetailPage() {
   const [actualsError, setActualsError] = useState<string | null>(null);
   const [savingActuals, setSavingActuals] = useState(false);
   const [viewerUnits, setViewerUnits] = useState<DistanceUnit>('MILES');
+  const [aiTrainerInput, setAiTrainerInput] = useState('');
+  const [aiTrainerProposal, setAiTrainerProposal] = useState<AiTrainerProposal | null>(null);
+  const [aiTrainerLoading, setAiTrainerLoading] = useState(false);
+  const [aiTrainerApplying, setAiTrainerApplying] = useState(false);
+  const [aiTrainerError, setAiTrainerError] = useState<string | null>(null);
+  const [aiTrainerStatus, setAiTrainerStatus] = useState<string | null>(null);
+
+  const loadPlan = useCallback(async () => {
+    if (!planId) return;
+    try {
+      const res = await fetch(`/api/plans/${planId}`);
+      const text = await res.text();
+      let data: any = null;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        setError('Server returned non-JSON response.');
+        return;
+      }
+      if (!res.ok) {
+        setError(data?.error || 'Failed to load plan.');
+        return;
+      }
+      setViewerUnits(data?.viewerUnits === 'KM' ? 'KM' : 'MILES');
+      setPlan(data.plan);
+      setError(null);
+    } catch (err: any) {
+      setError(err?.message || 'Failed to load plan.');
+    }
+  }, [planId]);
 
   useEffect(() => {
-    if (!planId) return;
-    (async () => {
-      try {
-        const res = await fetch(`/api/plans/${planId}`);
-        const text = await res.text();
-        let data: any = null;
-        try {
-          data = JSON.parse(text);
-        } catch {
-          setError('Server returned non-JSON response.');
-          return;
-        }
-        if (!res.ok) {
-          setError(data?.error || 'Failed to load plan.');
-          return;
-        }
-        setViewerUnits(data?.viewerUnits === 'KM' ? 'KM' : 'MILES');
-        setPlan(data.plan);
-      } catch (err: any) {
-        setError(err?.message || 'Failed to load plan.');
-      }
-    })();
-  }, [planId]);
+    loadPlan();
+  }, [loadPlan]);
 
   const applyActivityUpdate = useCallback((activityId: string, updater: (activity: any) => any) => {
     setPlan((prev: any) => {
@@ -175,6 +262,74 @@ export default function PlanDetailPage() {
       setSavingActuals(false);
     }
   }, [selectedActivity, savingActuals, actualDistance, actualDuration, actualPace, viewerUnits, applyActivityUpdate]);
+
+  const generateAiAdjustment = useCallback(async () => {
+    if (!planId) return;
+    const message = aiTrainerInput.trim();
+    if (!message) {
+      setAiTrainerError('Describe what happened so the trainer can adapt the plan.');
+      return;
+    }
+    setAiTrainerLoading(true);
+    setAiTrainerError(null);
+    setAiTrainerStatus(null);
+    try {
+      const res = await fetch(`/api/plans/${planId}/ai-adjust`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message })
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(data?.error || 'Failed to generate adjustment proposal.');
+      }
+      setAiTrainerProposal(data?.proposal || null);
+      if (data?.proposal?.summary) {
+        setAiTrainerStatus(data.proposal.summary);
+      } else {
+        setAiTrainerStatus('Proposal generated. Review and apply if it looks good.');
+      }
+    } catch (err: unknown) {
+      setAiTrainerError(err instanceof Error ? err.message : 'Failed to generate adjustment proposal.');
+    } finally {
+      setAiTrainerLoading(false);
+    }
+  }, [aiTrainerInput, planId]);
+
+  const applyAiAdjustment = useCallback(async () => {
+    if (!planId || !aiTrainerProposal) return;
+    const message = aiTrainerInput.trim();
+    if (!message) {
+      setAiTrainerError('Describe what happened so the trainer can adapt the plan.');
+      return;
+    }
+    setAiTrainerApplying(true);
+    setAiTrainerError(null);
+    setAiTrainerStatus(null);
+    try {
+      const res = await fetch(`/api/plans/${planId}/ai-adjust`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message,
+          apply: true,
+          proposal: aiTrainerProposal
+        })
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(data?.error || 'Failed to apply plan adjustments.');
+      }
+      setAiTrainerProposal(null);
+      setAiTrainerStatus(`Applied ${data?.appliedCount ?? 0} change(s) to the plan.`);
+      setSelectedActivity(null);
+      await loadPlan();
+    } catch (err: unknown) {
+      setAiTrainerError(err instanceof Error ? err.message : 'Failed to apply plan adjustments.');
+    } finally {
+      setAiTrainerApplying(false);
+    }
+  }, [aiTrainerInput, aiTrainerProposal, loadPlan, planId]);
 
   // Close modal on Escape
   useEffect(() => {
@@ -300,6 +455,78 @@ export default function PlanDetailPage() {
           <Link className="cta secondary" href="/plans">&larr; Back to Plans</Link>
         </div>
       </div>
+
+      <section className="pcal-ai-trainer">
+        <div className="pcal-ai-trainer-head">
+          <h2>AI Trainer</h2>
+          <p>Tell the coach what happened (missed day, sickness, fatigue, schedule changes) and get safe adjustments.</p>
+        </div>
+        <textarea
+          value={aiTrainerInput}
+          onChange={(e) => setAiTrainerInput(e.target.value)}
+          placeholder="Example: I missed Tuesday intervals and felt sick for two days. Please adjust this week and next week safely."
+          rows={4}
+        />
+        <div className="pcal-ai-trainer-actions">
+          <button
+            className="cta"
+            type="button"
+            onClick={generateAiAdjustment}
+            disabled={aiTrainerLoading || aiTrainerApplying}
+          >
+            {aiTrainerLoading ? 'Generating…' : 'Generate Adjustment'}
+          </button>
+          <button
+            className="cta secondary"
+            type="button"
+            onClick={applyAiAdjustment}
+            disabled={!aiTrainerProposal || aiTrainerLoading || aiTrainerApplying}
+          >
+            {aiTrainerApplying ? 'Applying…' : 'Apply to Plan'}
+          </button>
+        </div>
+        {aiTrainerError && <p className="pcal-ai-trainer-error">{aiTrainerError}</p>}
+        {aiTrainerStatus && <p className="pcal-ai-trainer-status">{aiTrainerStatus}</p>}
+
+        {aiTrainerProposal && (
+          <div className="pcal-ai-trainer-proposal">
+            <div className="pcal-ai-trainer-meta">
+              <strong>Coach Reply</strong>
+              <span>Confidence: {aiTrainerProposal.confidence}</span>
+            </div>
+            <p>{aiTrainerProposal.coachReply}</p>
+            {aiTrainerProposal.followUpQuestion && (
+              <p className="pcal-ai-trainer-followup">
+                Follow-up: {aiTrainerProposal.followUpQuestion}
+              </p>
+            )}
+            <div className="pcal-ai-trainer-meta">
+              <strong>Planned Changes ({aiTrainerProposal.changes.length})</strong>
+            </div>
+            <ul className="pcal-ai-trainer-change-list">
+              {aiTrainerProposal.changes.map((change, idx) => (
+                <li key={`${change.op}-${idx}`}>
+                  <div className="pcal-ai-trainer-change-head">
+                    <span className="pcal-ai-trainer-op">{change.op.replace(/_/g, ' ')}</span>
+                    <strong>{describeAiChange(change)}</strong>
+                  </div>
+                  <p>{change.reason}</p>
+                </li>
+              ))}
+            </ul>
+            {(aiTrainerProposal.riskFlags || []).length > 0 && (
+              <div className="pcal-ai-trainer-risks">
+                <strong>Risk Flags</strong>
+                <ul>
+                  {(aiTrainerProposal.riskFlags || []).map((flag, idx) => (
+                    <li key={`${flag}-${idx}`}>{flag}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
+      </section>
 
       {/* Stats bar */}
       <div className="pcal-stats">

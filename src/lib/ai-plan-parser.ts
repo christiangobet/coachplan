@@ -1,4 +1,4 @@
-import { openaiJsonSchema } from "./openai";
+import { getDefaultAiModel, openaiJsonSchema } from "./openai";
 
 const WEEK_SCHEMA = {
   name: "week_plan",
@@ -119,7 +119,7 @@ export async function parseWeekWithAI(args: {
   legend?: string;
   model?: string;
 }) {
-  const model = args.model || process.env.OPENAI_MODEL || "gpt-4o-mini";
+  const model = args.model || getDefaultAiModel();
 
   const input = [
     "You are a training-plan parser.",

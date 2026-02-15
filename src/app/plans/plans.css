@@ -384,6 +384,188 @@
   color: var(--muted);
 }
 
+.pcal-ai-trainer {
+  margin: 14px 0 20px;
+  padding: 16px 20px;
+  background: var(--background);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  display: grid;
+  gap: 12px;
+}
+
+.pcal-ai-trainer-head {
+  display: grid;
+  gap: 4px;
+}
+
+.pcal-ai-trainer-head h2 {
+  font-size: 16px;
+  font-weight: 800;
+  margin: 0;
+  color: var(--ink);
+}
+
+.pcal-ai-trainer-head p {
+  font-size: 13px;
+  color: var(--muted);
+  margin: 0;
+  line-height: 1.4;
+}
+
+.pcal-ai-trainer textarea {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--background);
+  font-family: inherit;
+  font-size: 14px;
+  color: var(--ink);
+  line-height: 1.5;
+  padding: 10px 12px;
+  resize: vertical;
+  min-height: 96px;
+}
+
+.pcal-ai-trainer textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(252, 76, 2, 0.12);
+}
+
+.pcal-ai-trainer-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.pcal-ai-trainer-error {
+  margin: 0;
+  color: #b42318;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.pcal-ai-trainer-status {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.pcal-ai-trainer-proposal {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--panel);
+  padding: 12px;
+}
+
+.pcal-ai-trainer-proposal p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink);
+  line-height: 1.5;
+}
+
+.pcal-ai-trainer-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.pcal-ai-trainer-meta strong {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.pcal-ai-trainer-meta span {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.pcal-ai-trainer-followup {
+  color: var(--muted) !important;
+}
+
+.pcal-ai-trainer-change-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.pcal-ai-trainer-change-list li {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--background);
+  padding: 10px;
+  display: grid;
+  gap: 6px;
+}
+
+.pcal-ai-trainer-change-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.pcal-ai-trainer-op {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  border-radius: 999px;
+  padding: 0 8px;
+  background: rgba(252, 76, 2, 0.12);
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.pcal-ai-trainer-change-head strong {
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.pcal-ai-trainer-change-list li p {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.pcal-ai-trainer-risks {
+  display: grid;
+  gap: 6px;
+}
+
+.pcal-ai-trainer-risks strong {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.pcal-ai-trainer-risks ul {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+}
+
+.pcal-ai-trainer-risks li {
+  font-size: 12px;
+  color: #9e1f15;
+}
+
 .pcal-race-panel {
   margin: 14px 0 20px;
   padding: 16px 20px;
@@ -1088,6 +1270,10 @@
   .pcal-stats {
     flex-wrap: wrap;
     gap: 16px;
+  }
+  .pcal-ai-trainer-meta {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }
 

@@ -9,6 +9,7 @@ import { promisify } from 'util';
 import { parseWeekWithAI } from '@/lib/ai-plan-parser';
 import { alignWeeksToRaceDate } from '@/lib/clone-plan';
 import { canonicalizeTableLabel, extractWeekNumber, normalizePlanText } from '@/lib/plan-parser-i18n.mjs';
+import { hasConfiguredAiProvider } from '@/lib/openai';
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { pathToFileURL } from 'url';
 
@@ -19,7 +20,7 @@ const execFileAsync = promisify(execFile);
 const DAY_KEYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 const DAY_LABELS = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
 const TABLE_LABELS = ['WEEK', ...DAY_LABELS];
-const ENABLE_AI_WEEK_PARSE = process.env.ENABLE_AI_WEEK_PARSE !== 'false' && Boolean(process.env.OPENAI_API_KEY);
+const ENABLE_AI_WEEK_PARSE = process.env.ENABLE_AI_WEEK_PARSE !== 'false' && hasConfiguredAiProvider();
 
 const RUN_SUBTYPES = new Set([
   'tempo',
