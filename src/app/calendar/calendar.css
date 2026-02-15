@@ -326,13 +326,15 @@
 }
 
 .cal-day.selected {
-  border-color: #0f8a47;
-  box-shadow: inset 0 0 0 1px rgba(15, 138, 71, 0.2);
+  border-color: #2563eb;
+  background: linear-gradient(180deg, rgba(37, 99, 235, 0.1), #fff 42%);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2), inset 0 0 0 1px rgba(37, 99, 235, 0.16);
 }
 
 .cal-day.today.selected {
-  border-color: var(--d-orange);
-  box-shadow: 0 0 0 2px rgba(252, 76, 2, 0.26), inset 0 0 0 1px rgba(15, 138, 71, 0.16);
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.24), inset 0 0 0 1px rgba(37, 99, 235, 0.18);
+  background: linear-gradient(180deg, rgba(37, 99, 235, 0.12), #fff 38%);
 }
 
 .cal-day-hit {
