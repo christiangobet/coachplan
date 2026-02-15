@@ -1077,7 +1077,6 @@
 
 /* Completed state */
 .pcal-activity-done .pcal-activity-title {
-  text-decoration: line-through;
   color: var(--muted);
 }
 
