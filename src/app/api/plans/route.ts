@@ -855,8 +855,20 @@ type RowCluster = {
   items: PdfTextItem[];
 };
 
-function normalizeWhitespace(text: string) {
+function stripSuperscriptFootnotes(text: string) {
   return text
+    // Superscript/subscript unicode blocks commonly used for footnote markers in PDFs.
+    .replace(/[\u00B9\u00B2\u00B3\u2070-\u209F]/g, '')
+    // Common standalone footnote symbols.
+    .replace(/[†‡§¶‖※]/g, ' ')
+    // Bracketed/parenthesized footnote ids, e.g. [1], (2), (iv).
+    .replace(/\s*(?:\[\s*(?:\d{1,3}|[ivx]{1,6})\s*\]|\(\s*(?:\d{1,3}|[ivx]{1,6})\s*\))(?=\s|$)/gi, ' ')
+    // Stray reference arrows used in some exports.
+    .replace(/\s*[>›](?=\s|$)/g, ' ');
+}
+
+function normalizeWhitespace(text: string) {
+  return stripSuperscriptFootnotes(text)
     .replace(/\s+/g, ' ')
     .replace(/\s*-\s*/g, '-')
     .replace(/\s+\+\s+/g, ' + ')
