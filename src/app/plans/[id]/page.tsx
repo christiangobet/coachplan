@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { getDayDateFromWeekStart, resolveWeekBounds } from '@/lib/plan-dates';
@@ -108,15 +108,23 @@ type AiTrainerProposal = {
   changes: AiTrainerChange[];
 };
 
-function describeAiChange(change: AiTrainerChange) {
+type AiChangeLookup = {
+  dayLabelById: Map<string, string>;
+  activityLabelById: Map<string, string>;
+};
+
+function describeAiChange(change: AiTrainerChange, lookup: AiChangeLookup) {
+  const dayLabel = (dayId: string) => lookup.dayLabelById.get(dayId) || `day ${dayId}`;
+  const activityLabel = (activityId: string) => lookup.activityLabelById.get(activityId) || `activity ${activityId}`;
+
   if (change.op === 'move_activity') {
-    return `Move activity ${change.activityId} to day ${change.targetDayId}.`;
+    return `Move ${activityLabel(change.activityId)} to ${dayLabel(change.targetDayId)}.`;
   }
   if (change.op === 'delete_activity') {
-    return `Remove activity ${change.activityId}.`;
+    return `Remove ${activityLabel(change.activityId)}.`;
   }
   if (change.op === 'add_activity') {
-    return `Add ${change.type} "${change.title}" on day ${change.dayId}.`;
+    return `Add ${formatType(change.type)} "${change.title}" on ${dayLabel(change.dayId)}.`;
   }
   const updates: string[] = [];
   if (change.title !== undefined) updates.push('title');
@@ -129,7 +137,7 @@ function describeAiChange(change: AiTrainerChange) {
   if (change.priority !== undefined) updates.push('priority');
   if (change.mustDo !== undefined) updates.push('must-do');
   if (change.bailAllowed !== undefined) updates.push('bail');
-  return `Edit activity ${change.activityId}${updates.length > 0 ? ` (${updates.join(', ')})` : ''}.`;
+  return `Edit ${activityLabel(change.activityId)}${updates.length > 0 ? ` (${updates.join(', ')})` : ''}.`;
 }
 
 export default function PlanDetailPage() {
@@ -368,6 +376,43 @@ export default function PlanDetailPage() {
     setActualsError(null);
   }, [selectedActivity, viewerUnits]);
 
+  const aiChangeLookup = useMemo<AiChangeLookup>(() => {
+    const dayLabelById = new Map<string, string>();
+    const activityLabelById = new Map<string, string>();
+    if (!plan) return { dayLabelById, activityLabelById };
+
+    const sortedWeeks = [...(plan.weeks || [])].sort((a: any, b: any) => a.weekIndex - b.weekIndex);
+    const weekIndexes = sortedWeeks.map((week: any) => week.weekIndex);
+
+    for (const week of sortedWeeks) {
+      const bounds = resolveWeekBounds({
+        weekIndex: week.weekIndex,
+        weekStartDate: week.startDate,
+        weekEndDate: week.endDate,
+        raceDate: plan.raceDate,
+        weekCount: plan.weekCount,
+        allWeekIndexes: weekIndexes
+      });
+      for (const day of week.days || []) {
+        const date = getDayDateFromWeekStart(bounds.startDate, day.dayOfWeek);
+        const dayName = DAY_LABELS[Math.max(0, day.dayOfWeek - 1)] || `Day ${day.dayOfWeek}`;
+        const dayText = date
+          ? `${dayName} ${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+          : dayName;
+        dayLabelById.set(day.id, dayText);
+
+        for (const activity of day.activities || []) {
+          const title = typeof activity.title === 'string' && activity.title.trim()
+            ? activity.title.trim()
+            : formatType(activity.type || 'Workout');
+          activityLabelById.set(activity.id, `"${title}" (${dayText})`);
+        }
+      }
+    }
+
+    return { dayLabelById, activityLabelById };
+  }, [plan]);
+
   if (error) {
     return (
       <main className="pcal">
@@ -508,7 +553,7 @@ export default function PlanDetailPage() {
                 <li key={`${change.op}-${idx}`}>
                   <div className="pcal-ai-trainer-change-head">
                     <span className="pcal-ai-trainer-op">{change.op.replace(/_/g, ' ')}</span>
-                    <strong>{describeAiChange(change)}</strong>
+                    <strong>{describeAiChange(change, aiChangeLookup)}</strong>
                   </div>
                   <p>{change.reason}</p>
                 </li>
