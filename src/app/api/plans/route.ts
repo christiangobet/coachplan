@@ -540,6 +540,16 @@ function expandAlternatives(text: string) {
 function splitCombinedActivities(text: string) {
   const source = normalizeWhitespace(text);
   if (!source) return [];
+  const normalized = normalizePlanText(source).toLowerCase();
+  const hasWu = /\b(?:wu|warm[\s-]?up)\b/.test(normalized);
+  const hasTempo = /\btempo\b/.test(normalized) || /\bt(?=[:\s]*\d)/i.test(source);
+  const hasCd = /\b(?:cd|cool[\s-]?down)\b/.test(normalized);
+  const hasNonRunMarker = /\b(?:strength|rest|cross|xt|mobility|yoga|hike)\b/.test(normalized);
+
+  // Structured run phases (WU/T/CD) belong to one run activity, not separate activities.
+  if (!hasNonRunMarker && ((hasWu && hasTempo) || (hasTempo && hasCd) || (hasWu && hasCd))) {
+    return [source];
+  }
 
   const parts: string[] = [];
   let depth = 0;
