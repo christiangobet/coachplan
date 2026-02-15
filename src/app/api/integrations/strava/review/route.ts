@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import { prisma } from '@/lib/prisma';
 import { requireRoleApi } from '@/lib/role-guards';
 import { getDayDateFromWeekStart, resolveWeekBounds } from '@/lib/plan-dates';
 import { isDayMarkedDone } from '@/lib/day-status';
+import { pickSelectedPlan, SELECTED_PLAN_COOKIE } from '@/lib/plan-selection';
 
 function toDateKey(date: Date) {
   const yyyy = date.getFullYear();
@@ -43,7 +45,7 @@ function isLockedPlanDay(notes: string | null | undefined, activities: Array<{ c
   return isDayMarkedDone(notes) || (activities.length > 0 && activities.every((activity) => activity.completed));
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   const access = await requireRoleApi('ATHLETE');
   if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
   const profile = await prisma.user.findUnique({
@@ -51,6 +53,10 @@ export async function GET() {
     select: { units: true }
   });
   const viewerUnits = profile?.units === 'KM' ? 'KM' : 'MILES';
+  const url = new URL(req.url);
+  const requestedPlanId = url.searchParams.get('plan')?.trim() || '';
+  const cookieStore = await cookies();
+  const cookiePlanId = cookieStore.get(SELECTED_PLAN_COOKIE)?.value || '';
 
   const account = await prisma.externalAccount.findUnique({
     where: {
@@ -66,39 +72,7 @@ export async function GET() {
     }
   });
 
-  const activePlan = await prisma.trainingPlan.findFirst({
-    where: {
-      athleteId: access.context.userId,
-      isTemplate: false,
-      status: 'ACTIVE'
-    },
-    orderBy: { createdAt: 'desc' },
-    include: {
-      weeks: {
-        include: {
-          days: {
-            include: { activities: true }
-          }
-        }
-      }
-    }
-  }) || await prisma.trainingPlan.findFirst({
-    where: {
-      athleteId: access.context.userId,
-      isTemplate: false,
-      status: 'DRAFT'
-    },
-    orderBy: { createdAt: 'desc' },
-    include: {
-      weeks: {
-        include: {
-          days: {
-            include: { activities: true }
-          }
-        }
-      }
-    }
-  }) || await prisma.trainingPlan.findFirst({
+  const plans = await prisma.trainingPlan.findMany({
     where: { athleteId: access.context.userId, isTemplate: false },
     orderBy: { createdAt: 'desc' },
     include: {
@@ -110,6 +84,10 @@ export async function GET() {
         }
       }
     }
+  });
+  const activePlan = pickSelectedPlan(plans, {
+    requestedPlanId,
+    cookiePlanId
   });
 
   const planByDate = new Map<string, Array<{

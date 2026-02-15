@@ -1,9 +1,11 @@
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { currentUser } from "@clerk/nextjs/server";
 import { prisma } from "@/lib/prisma";
 import { getDayDateFromWeekStart, resolveWeekBounds } from "@/lib/plan-dates";
 import { ensureUserFromAuth } from "@/lib/user-sync";
 import { isDayMarkedDone } from "@/lib/day-status";
+import { pickSelectedPlan, SELECTED_PLAN_COOKIE } from "@/lib/plan-selection";
 import {
   convertDistanceForDisplay,
   convertPaceForDisplay,
@@ -15,9 +17,13 @@ import CompleteWorkoutButton from "@/components/CompleteWorkoutButton";
 import AthleteSidebar from "@/components/AthleteSidebar";
 import StravaSyncPanel from "@/components/StravaSyncPanel";
 import ActivityTypeIcon from "@/components/ActivityTypeIcon";
+import SelectedPlanCookie from "@/components/SelectedPlanCookie";
 import "./dashboard.css";
 
 const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+type DashboardSearchParams = {
+  plan?: string;
+};
 
 function getIsoDay(date: Date) {
   const js = date.getDay();
@@ -36,9 +42,18 @@ function pluralize(value: number, singular: string, plural: string) {
   return `${value} ${value === 1 ? singular : plural}`;
 }
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams
+}: {
+  searchParams?: Promise<DashboardSearchParams>;
+}) {
   const user = await currentUser();
   if (!user) redirect("/sign-in");
+
+  const params = (await searchParams) || {};
+  const requestedPlanId = typeof params.plan === "string" ? params.plan : "";
+  const cookieStore = await cookies();
+  const cookiePlanId = cookieStore.get(SELECTED_PLAN_COOKIE)?.value || "";
 
   const name = user.fullName || user.firstName || "Athlete";
 
@@ -142,7 +157,10 @@ export default async function DashboardPage() {
   }
 
   /* ── Active plan data ── */
-  const activePlan = plans[0];
+  const activePlan = pickSelectedPlan(plans, {
+    requestedPlanId,
+    cookiePlanId
+  });
 
   if (!activePlan) {
     return (
@@ -392,6 +410,7 @@ export default async function DashboardPage() {
 
   return (
     <main className="dash">
+      <SelectedPlanCookie planId={activePlan.id} />
       <div className="dash-atmosphere" />
       <div className="dash-topo" />
 

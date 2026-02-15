@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import { requireRoleApi } from '@/lib/role-guards';
 import { syncStravaActivitiesForUser } from '@/lib/integrations/strava';
 import { prisma } from '@/lib/prisma';
 import { getDayDateFromWeekStart, resolveWeekBounds } from '@/lib/plan-dates';
+import { pickSelectedPlan, SELECTED_PLAN_COOKIE } from '@/lib/plan-selection';
 
 function parseLookbackDays(raw: unknown) {
   if (raw === undefined || raw === null || raw === '') return 30;
@@ -17,40 +19,8 @@ function startOfDay(value: Date) {
   return date;
 }
 
-async function getPlanStartDate(userId: string): Promise<Date | null> {
-  const plan = await prisma.trainingPlan.findFirst({
-    where: {
-      athleteId: userId,
-      isTemplate: false,
-      status: 'ACTIVE'
-    },
-    orderBy: { createdAt: 'desc' },
-    include: {
-      weeks: {
-        include: {
-          days: {
-            select: { dayOfWeek: true }
-          }
-        }
-      }
-    }
-  }) || await prisma.trainingPlan.findFirst({
-    where: {
-      athleteId: userId,
-      isTemplate: false,
-      status: 'DRAFT'
-    },
-    orderBy: { createdAt: 'desc' },
-    include: {
-      weeks: {
-        include: {
-          days: {
-            select: { dayOfWeek: true }
-          }
-        }
-      }
-    }
-  }) || await prisma.trainingPlan.findFirst({
+async function getPlanStartDate(userId: string, preferredPlanId?: string | null): Promise<Date | null> {
+  const plans = await prisma.trainingPlan.findMany({
     where: { athleteId: userId, isTemplate: false },
     orderBy: { createdAt: 'desc' },
     include: {
@@ -62,6 +32,9 @@ async function getPlanStartDate(userId: string): Promise<Date | null> {
         }
       }
     }
+  });
+  const plan = pickSelectedPlan(plans, {
+    requestedPlanId: preferredPlanId
   });
 
   if (!plan) return null;
@@ -93,6 +66,8 @@ async function getPlanStartDate(userId: string): Promise<Date | null> {
 export async function POST(req: Request) {
   const access = await requireRoleApi('ATHLETE');
   if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
+  const cookieStore = await cookies();
+  const preferredPlanId = cookieStore.get(SELECTED_PLAN_COOKIE)?.value || null;
 
   const body = await req.json().catch(() => ({}));
   const parsedLookback = parseLookbackDays((body as Record<string, unknown>)?.lookbackDays);
@@ -101,7 +76,7 @@ export async function POST(req: Request) {
   let forceLookback = Boolean((body as Record<string, unknown>)?.forceLookback);
 
   if (syncFromPlanStart) {
-    const planStart = await getPlanStartDate(access.context.userId);
+    const planStart = await getPlanStartDate(access.context.userId, preferredPlanId);
     if (planStart) {
       const today = startOfDay(new Date());
       const diffMs = today.getTime() - planStart.getTime();
@@ -119,7 +94,8 @@ export async function POST(req: Request) {
     const summary = await syncStravaActivitiesForUser({
       userId: access.context.userId,
       lookbackDays,
-      forceLookback
+      forceLookback,
+      preferredPlanId
     });
     return NextResponse.json({ summary });
   } catch (error: unknown) {

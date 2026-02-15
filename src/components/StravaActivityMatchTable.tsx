@@ -9,6 +9,7 @@ import {
   formatDistanceNumber,
   type DistanceUnit
 } from '@/lib/unit-display';
+import { SELECTED_PLAN_COOKIE } from '@/lib/plan-selection';
 
 type PlanActivityRow = {
   id: string;
@@ -43,6 +44,10 @@ type ReviewDay = {
 
 type ReviewResponse = {
   viewerUnits?: 'MILES' | 'KM';
+  plan?: {
+    id: string;
+    name: string;
+  } | null;
   account: {
     connected: boolean;
     providerUsername: string | null;
@@ -108,6 +113,10 @@ export default function StravaActivityMatchTable() {
         return;
       }
       setData(body as ReviewResponse);
+      const selectedPlanId = typeof body?.plan?.id === 'string' ? body.plan.id : '';
+      if (selectedPlanId) {
+        document.cookie = `${SELECTED_PLAN_COOKIE}=${encodeURIComponent(selectedPlanId)}; Path=/; Max-Age=31536000; SameSite=Lax`;
+      }
     } catch {
       setStatus('Failed to load Strava table');
     } finally {

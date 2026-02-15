@@ -1,11 +1,13 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { currentUser } from "@clerk/nextjs/server";
 import { IntegrationProvider } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { ensureUserFromAuth } from "@/lib/user-sync";
 import { getDayDateFromWeekStart, resolveWeekBounds } from "@/lib/plan-dates";
 import { isDayMarkedDone } from "@/lib/day-status";
+import { pickSelectedPlan, SELECTED_PLAN_COOKIE } from "@/lib/plan-selection";
 import {
   convertDistanceForDisplay,
   distanceUnitLabel,
@@ -13,6 +15,7 @@ import {
   type DistanceUnit
 } from "@/lib/unit-display";
 import AthleteSidebar from "@/components/AthleteSidebar";
+import SelectedPlanCookie from "@/components/SelectedPlanCookie";
 import "../dashboard/dashboard.css";
 import "./progress.css";
 
@@ -109,6 +112,8 @@ export default async function ProgressPage({
   const params = (await searchParams) || {};
   const requestedPlanId = typeof params.plan === "string" ? params.plan : "";
   const windowKey = toWindowKey(typeof params.window === "string" ? params.window : undefined);
+  const cookieStore = await cookies();
+  const cookiePlanId = cookieStore.get(SELECTED_PLAN_COOKIE)?.value || "";
 
   const plans = await prisma.trainingPlan.findMany({
     where: { athleteId: user.id, isTemplate: false },
@@ -126,8 +131,10 @@ export default async function ProgressPage({
 
   if (plans.length === 0) redirect("/dashboard");
 
-  const defaultPlan = plans.find((p) => p.status === "ACTIVE") || plans[0];
-  const selectedPlan = plans.find((p) => p.id === requestedPlanId) || defaultPlan;
+  const selectedPlan = pickSelectedPlan(plans, {
+    requestedPlanId,
+    cookiePlanId
+  });
   if (!selectedPlan) redirect("/dashboard");
 
   const sourcePlanName = selectedPlan.sourceId
@@ -384,6 +391,7 @@ export default async function ProgressPage({
 
   return (
     <main className="dash prog-page-shell">
+      <SelectedPlanCookie planId={selectedPlan.id} />
       <div className="dash-grid">
         <AthleteSidebar active="progress" name={name} />
 

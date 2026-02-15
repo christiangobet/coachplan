@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { currentUser } from "@clerk/nextjs/server";
 import { prisma } from "@/lib/prisma";
 import { getDayDateFromWeekStart, resolveWeekBounds } from "@/lib/plan-dates";
 import { ensureUserFromAuth } from "@/lib/user-sync";
 import { isDayMarkedDone } from "@/lib/day-status";
+import { pickSelectedPlan, SELECTED_PLAN_COOKIE } from "@/lib/plan-selection";
 import {
   convertDistanceForDisplay,
   convertPaceForDisplay,
@@ -16,6 +18,7 @@ import AthleteSidebar from "@/components/AthleteSidebar";
 import DayCompletionButton from "@/components/DayCompletionButton";
 import RaceDetailsEditor from "@/components/RaceDetailsEditor";
 import ActivityTypeIcon from "@/components/ActivityTypeIcon";
+import SelectedPlanCookie from "@/components/SelectedPlanCookie";
 import "../dashboard/dashboard.css";
 import "./calendar.css";
 
@@ -251,6 +254,8 @@ export default async function CalendarPage({
   const requestedPlanId = typeof params.plan === "string" ? params.plan : "";
   const requestedMonth = typeof params.month === "string" ? params.month : undefined;
   const requestedDate = typeof params.date === "string" ? params.date : undefined;
+  const cookieStore = await cookies();
+  const cookiePlanId = cookieStore.get(SELECTED_PLAN_COOKIE)?.value || "";
 
   const plans = await prisma.trainingPlan.findMany({
     where: { athleteId: user.id, isTemplate: false },
@@ -268,8 +273,10 @@ export default async function CalendarPage({
 
   if (plans.length === 0) redirect("/dashboard");
 
-  const defaultPlan = plans.find((plan) => plan.status === "ACTIVE") || plans[0];
-  const selectedPlan = plans.find((plan) => plan.id === requestedPlanId) || defaultPlan;
+  const selectedPlan = pickSelectedPlan(plans, {
+    requestedPlanId,
+    cookiePlanId
+  });
   if (!selectedPlan) redirect("/dashboard");
 
   const sourcePlanName = selectedPlan.sourceId
@@ -466,6 +473,7 @@ export default async function CalendarPage({
 
   return (
     <main className="dash cal-page">
+      <SelectedPlanCookie planId={selectedPlan.id} />
       <div className="dash-grid">
         <AthleteSidebar active="calendar" name={name} />
 

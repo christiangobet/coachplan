@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { getDayDateFromWeekStart, resolveWeekBounds } from '@/lib/plan-dates';
 import { createIntegrationStateToken } from '@/lib/integrations/state';
 import { isDayMarkedDone } from '@/lib/day-status';
+import { pickSelectedPlan } from '@/lib/plan-selection';
 
 const STRAVA_AUTH_URL = 'https://www.strava.com/oauth/authorize';
 const STRAVA_TOKEN_URL = 'https://www.strava.com/oauth/token';
@@ -328,27 +329,12 @@ async function ensureFreshStravaAccount(account: ExternalAccount) {
   return refreshStravaToken(account);
 }
 
-async function buildPlanActivityCandidates(userId: string): Promise<PlanActivityCandidates> {
-  const activePlan = await prisma.trainingPlan.findFirst({
-    where: {
-      athleteId: userId,
-      isTemplate: false,
-      status: 'ACTIVE'
-    },
-    orderBy: { createdAt: 'desc' },
-    include: {
-      weeks: {
-        include: {
-          days: { include: { activities: true } }
-        }
-      }
-    }
-  }) || await prisma.trainingPlan.findFirst({
-    where: {
-      athleteId: userId,
-      isTemplate: false,
-      status: 'DRAFT'
-    },
+async function buildPlanActivityCandidates(
+  userId: string,
+  preferredPlanId?: string | null
+): Promise<PlanActivityCandidates> {
+  const plans = await prisma.trainingPlan.findMany({
+    where: { athleteId: userId, isTemplate: false },
     orderBy: { createdAt: 'desc' },
     include: {
       weeks: {
@@ -358,20 +344,7 @@ async function buildPlanActivityCandidates(userId: string): Promise<PlanActivity
       }
     }
   });
-
-  const plan = activePlan || (
-    await prisma.trainingPlan.findFirst({
-      where: { athleteId: userId, isTemplate: false },
-      orderBy: { createdAt: 'desc' },
-      include: {
-        weeks: {
-          include: {
-            days: { include: { activities: true } }
-          }
-        }
-      }
-    })
-  );
+  const plan = pickSelectedPlan(plans, { requestedPlanId: preferredPlanId });
 
   const map = new Map<string, PlannedActivityCandidate[]>();
   const byId = new Map<string, PlannedActivityCandidate>();
@@ -688,6 +661,7 @@ export async function syncStravaActivitiesForUser(args: {
   userId: string;
   lookbackDays?: number;
   forceLookback?: boolean;
+  preferredPlanId?: string | null;
 }): Promise<StravaSyncSummary> {
   const account = await prisma.externalAccount.findUnique({
     where: {
@@ -725,7 +699,7 @@ export async function syncStravaActivitiesForUser(args: {
       },
       select: { matchedPlanActivityId: true }
     }),
-    buildPlanActivityCandidates(args.userId)
+    buildPlanActivityCandidates(args.userId, args.preferredPlanId)
   ]);
   const activities = fetchedActivities.activities;
 
@@ -992,6 +966,7 @@ export async function setStravaActivityMatchForUser(args: {
 export async function importStravaDayForUser(args: {
   userId: string;
   date: string;
+  preferredPlanId?: string | null;
 }): Promise<StravaDayImportSummary> {
   const date = args.date;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
@@ -1014,7 +989,7 @@ export async function importStravaDayForUser(args: {
     select: { units: true }
   });
 
-  const plannedCandidates = await buildPlanActivityCandidates(args.userId);
+  const plannedCandidates = await buildPlanActivityCandidates(args.userId, args.preferredPlanId);
   if (plannedCandidates.lockedDateSet.has(date)) {
     throw new Error('This day is marked completed and locked from Strava import.');
   }

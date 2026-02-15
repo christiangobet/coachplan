@@ -6,6 +6,7 @@ import { getDayDateFromWeekStart, resolveWeekBounds } from '@/lib/plan-dates';
 import { isDayMarkedDone } from '@/lib/day-status';
 import ActivityTypeIcon from '@/components/ActivityTypeIcon';
 import PlanSidebar from '@/components/PlanSidebar';
+import SelectedPlanCookie from '@/components/SelectedPlanCookie';
 import {
   convertDistanceForDisplay,
   convertPaceForDisplay,
@@ -476,6 +477,7 @@ export default function PlanDetailPage() {
   if (error) {
     return (
       <main className="pcal">
+        <SelectedPlanCookie planId={planId} />
         <p style={{ color: 'var(--red)', fontSize: 14 }}>{error}</p>
       </main>
     );
@@ -484,6 +486,7 @@ export default function PlanDetailPage() {
   if (!plan) {
     return (
       <main className="pcal">
+        <SelectedPlanCookie planId={planId} />
         <p className="muted">Loading...</p>
       </main>
     );
@@ -523,6 +526,7 @@ export default function PlanDetailPage() {
 
   return (
     <main className="pcal">
+      <SelectedPlanCookie planId={plan.id} />
       <div className="pcal-layout">
         <PlanSidebar planId={plan.id} active="overview" />
 
