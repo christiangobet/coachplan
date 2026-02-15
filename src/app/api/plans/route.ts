@@ -325,17 +325,78 @@ function resolveDurationFromText(rawText: string): number | null {
   return null;
 }
 
+const ACTIVITY_ABBREVIATION_REPLACEMENTS: Array<[RegExp, string]> = [
+  [/\bwu\b/gi, 'warm up'],
+  [/\bcd\b/gi, 'cool down'],
+  [/\blrl\b/gi, 'long run'],
+  [/\blr\b/gi, 'long run'],
+  [/\bstr\b/gi, 'strength'],
+  [/\bstre\b/gi, 'strength'],
+  [/\brst\b/gi, 'rest'],
+  [/\bxt\b/gi, 'cross training'],
+  [/\bx[-\s]?train(?:ing)?\b/gi, 'cross training'],
+  [/\bcross[-\s]?train\b/gi, 'cross training'],
+  [/\bmob\b/gi, 'mobility'],
+  [/\byog\b/gi, 'yoga'],
+  [/\bhik\b/gi, 'hike'],
+  [/\brec\b/gi, 'recovery'],
+  [/\bff\b/gi, 'fast finish'],
+  [/\bmp\b/gi, 'marathon pace'],
+  [/\brp\b/gi, 'race pace'],
+  [/\be(?=\s*\d)/gi, 'easy run'],
+  [/\bt(?=\s*\d)/gi, 'tempo'],
+  [/\bi(?=\s*\d)/gi, 'interval']
+];
+
+function decodeActivityText(rawText: string) {
+  let decoded = normalizePlanText(rawText);
+  for (const [pattern, replacement] of ACTIVITY_ABBREVIATION_REPLACEMENTS) {
+    decoded = decoded.replace(pattern, replacement);
+  }
+  return normalizeWhitespace(decoded);
+}
+
+function normalizeSubtypeToken(value: string | null | undefined) {
+  if (!value) return null;
+  const token = normalizePlanText(value)
+    .toLowerCase()
+    .replace(/[_\s]+/g, '-')
+    .replace(/[^a-z-]/g, '')
+    .trim();
+
+  if (!token) return null;
+  if (token === 'run') return 'run';
+  if (token === 'strength' || token === 'str' || token === 'stre') return 'strength';
+  if (token === 'cross-training' || token === 'cross-train' || token === 'xtraining' || token === 'xt' || token === 'cross') return 'cross-training';
+  if (token === 'rest' || token === 'rest-day' || token === 'rst') return 'rest';
+  if (token === 'hike' || token === 'hik') return 'hike';
+  if (token === 'yoga' || token === 'yog') return 'yoga';
+  if (token === 'mobility' || token === 'mob') return 'mobility';
+  if (token === 'tempo' || token === 'threshold' || token === 't') return 'tempo';
+  if (token === 'progression') return 'progression';
+  if (token === 'recovery' || token === 'recovery-run' || token === 'rec') return 'recovery';
+  if (token === 'trail' || token === 'trail-run') return 'trail-run';
+  if (token === 'fast-finish' || token === 'ff') return 'fast-finish';
+  if (token === 'long-run' || token === 'lr' || token === 'lrl') return 'lrl';
+  if (token === 'hills' || token === 'hill') return 'hills';
+  if (token === 'hill-pyramid') return 'hill-pyramid';
+  if (token === 'incline-treadmill') return 'incline-treadmill';
+  if (token === 'training-race') return 'training-race';
+  if (token === 'race') return 'race';
+  return token;
+}
+
 function inferSubtype(text: string) {
   const t = normalizePlanText(text).toLowerCase();
-  if (t.includes('strength') || /\bst\s*\d/i.test(t)) return 'strength';
-  if (/\brest\s*(day)?\b/.test(t)) return 'rest';
-  if (t.includes('cross') || t.includes('xt')) return 'cross-training';
+  if (t.includes('strength') || /\b(?:str|stre)\b/.test(t) || /\bst\s*\d/i.test(t)) return 'strength';
+  if (/\b(?:rest|rst)\s*(day)?\b/.test(t)) return 'rest';
+  if (t.includes('cross') || /\b(?:xt|xtrain)\b/.test(t)) return 'cross-training';
   if (t.includes('training race')) return 'training-race';
   if (/\brace\b/.test(t)) return 'race';
   if (t.includes('incline treadmill')) return 'incline-treadmill';
   if (t.includes('hill pyramid')) return 'hill-pyramid';
   if (/\bhills?\b/.test(t)) return 'hills';
-  if (/\btempo\b/.test(t) || /\bT[:\s]\d/.test(text)) return 'tempo';
+  if (/\btempo\b/.test(t) || /\bt(?=\s*\d)/i.test(text)) return 'tempo';
   if (t.includes('progress')) return 'progression';
   if (t.includes('recovery') || /\brec\b/.test(t)) return 'recovery';
   if (/\btrail\b/.test(t)) return 'trail-run';
@@ -343,6 +404,7 @@ function inferSubtype(text: string) {
   if (/\blrl\b/.test(t) || /\blong run\b/.test(t) || /\blr\b/.test(t)) return 'lrl';
   if (/\bhike\b/.test(t)) return 'hike';
   if (/\byoga\b/.test(t)) return 'yoga';
+  if (/\bmobility\b/.test(t) || /\bmob\b/.test(t)) return 'mobility';
   if (/\beasy\b/.test(t) || /\be\s+\d/.test(t)) return 'easy-run';
   // If text contains distance info, likely a run
   if (/\d+(?:\.\d+)?\s*(?:miles?|mi|km|meters?|metres?)\b/.test(t) || /\d{3,4}\s*m\b/.test(t)) {
@@ -672,27 +734,29 @@ function buildDeterministicActivities(args: {
       const originalText = variantText.trim();
       if (!originalText) continue;
 
-      const inferred = inferSubtype(originalText);
-      const subtype = inferred !== 'unknown' ? inferred : (seg.type || 'unknown');
-      const activityType = mapActivityType(subtype);
       const cleanText = originalText.replace(/[★♥]/g, '').trim();
+      const decodedText = decodeActivityText(cleanText || originalText);
+      const inferred = inferSubtype(decodedText || originalText);
+      const normalizedSegSubtype = normalizeSubtypeToken(seg.type || null);
+      const subtype = inferred !== 'unknown' ? inferred : (normalizedSegSubtype || 'unknown');
+      const activityType = mapActivityType(subtype);
       const mustDo = originalText.includes('★');
       const bailAllowed = originalText.includes('♥');
 
       const metrics = seg.metrics || {};
-      const parsedDistance = resolveDistanceFromSegmentMetrics(metrics, originalText);
+      const parsedDistance = resolveDistanceFromSegmentMetrics(metrics, decodedText || originalText);
       const duration =
         metrics?.duration_minutes ??
         metrics?.duration_minutes_range?.[1] ??
-        resolveDurationFromText(originalText) ??
+        resolveDurationFromText(decodedText || originalText) ??
         null;
 
-      const structure = parseStructure(originalText);
+      const structure = parseStructure(decodedText || originalText);
       const structuredDistance = parsedDistance.distance === null
         ? resolveDistanceFromStructure(structure)
         : parsedDistance;
       const textDistance = structuredDistance.distance === null
-        ? resolveDistanceFromText(originalText, inferredDistanceUnit)
+        ? resolveDistanceFromText(decodedText || originalText, inferredDistanceUnit)
         : structuredDistance;
       const storageDistance = convertDistanceToStorageUnit(textDistance, storageDistanceUnit);
       const title =
@@ -706,7 +770,7 @@ function buildDeterministicActivities(args: {
         type: activityType,
         subtype,
         title,
-        rawText: cleanText || originalText,
+        rawText: decodedText || cleanText || originalText,
         distance: storageDistance.distance,
         distanceUnit: storageDistance.distanceUnit,
         duration,
@@ -733,24 +797,37 @@ function buildAiActivities(args: {
   const drafts: ActivityDraft[] = [];
 
   for (const a of aiActivities) {
+    const decodedRawText = decodeActivityText(String(a.raw_text || dayRawText || ''));
+    const normalizedSubtype = normalizeSubtypeToken(a.subtype || null);
+    const inferredSubtype = inferSubtype(decodedRawText || String(a.title || ''));
+    const effectiveSubtype =
+      normalizedSubtype && normalizedSubtype !== 'unknown'
+        ? normalizedSubtype
+        : inferredSubtype !== 'unknown'
+          ? inferredSubtype
+          : null;
     const aiType = mapAiTypeToActivityType(a.type || null);
     const aiDistance = resolveDistanceFromValueUnit(
       a.metrics?.distance?.value ?? null,
       a.metrics?.distance?.unit ?? null,
-      a.raw_text || dayRawText || ''
+      decodedRawText || dayRawText || ''
     );
     const fallbackTextDistance = aiDistance.distance === null
-      ? resolveDistanceFromText(a.raw_text || dayRawText || '', inferredDistanceUnit)
+      ? resolveDistanceFromText(decodedRawText || dayRawText || '', inferredDistanceUnit)
       : aiDistance;
     const storageDistance = convertDistanceToStorageUnit(fallbackTextDistance, storageDistanceUnit);
-    const aiDuration = a.metrics?.duration_min ?? resolveDurationFromText(a.raw_text || dayRawText || '') ?? null;
+    const aiDuration = a.metrics?.duration_min ?? resolveDurationFromText(decodedRawText || dayRawText || '') ?? null;
+    const normalizedTitle = normalizeWhitespace(String(a.title || ''));
+    const fallbackTitle = effectiveSubtype
+      ? SUBTYPE_TITLES[effectiveSubtype] || titleCase(effectiveSubtype)
+      : 'Workout';
     drafts.push(ensureDistanceConsistency({
       planId,
       dayId,
       type: aiType,
-      subtype: a.subtype || null,
-      title: a.title || 'Workout',
-      rawText: a.raw_text || dayRawText || null,
+      subtype: effectiveSubtype,
+      title: normalizedTitle || fallbackTitle,
+      rawText: decodedRawText || null,
       distance: storageDistance.distance,
       distanceUnit: storageDistance.distanceUnit,
       duration: aiDuration,

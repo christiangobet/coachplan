@@ -134,7 +134,7 @@ export async function parseWeekWithAI(args: {
     "- Treat kilometre/kilometer variants in German/French as km.",
     "- If distance is written in meters (m/meter/metre), convert to km (e.g. 400m => 0.4 km).",
     "- Treat minute/minuten and heure/stunde as duration units when present.",
-    "Decode abbreviations (WU, CD, T, I, LR, E, XT, RP, NS).",
+    "Decode abbreviations (WU, CD, T, I, LR, LRL, E, XT, STR, RST, MOB, YOG, HIK, RP, MP, NS).",
     "Interpret ★ as must_do and ♥ as bail_allowed.",
     "Preserve raw_text exactly as written in each cell when possible.",
     `Plan name: ${args.planName}`,
