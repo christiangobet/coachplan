@@ -118,6 +118,11 @@ export default function StravaActivityMatchTable() {
     load();
   }, []);
 
+  async function refreshTable() {
+    setImportedDates(new Set());
+    await load();
+  }
+
   async function syncRecent() {
     setSyncing(true);
     setStatus('Syncing Strava from plan start to today...');
@@ -216,7 +221,7 @@ export default function StravaActivityMatchTable() {
           >
             Sync Strava
           </button>
-          <button className="dash-sync-btn" type="button" onClick={load} disabled={syncing || loading}>
+          <button className="dash-sync-btn" type="button" onClick={refreshTable} disabled={syncing || loading}>
             Refresh
           </button>
         </div>
