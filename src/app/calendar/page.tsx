@@ -519,21 +519,6 @@ export default async function CalendarPage({
             </div>
           )}
 
-          <div className="dash-card cal-type-glossary" aria-label="Activity type glossary">
-            <div className="cal-type-glossary-head">
-              <strong>Type Glossary</strong>
-              <span>Abbreviations used in calendar cells</span>
-            </div>
-            <div className="cal-type-glossary-list">
-              {TYPE_GLOSSARY_ORDER.map((type) => (
-                <span key={type} className={`cal-type-chip type-${type.toLowerCase()}`}>
-                  <em>{getTypeAbbr(type)}</em>
-                  <span>{formatType(type)}</span>
-                </span>
-              ))}
-            </div>
-          </div>
-
           <div className="dash-card cal-month-card">
             <div className="cal-weekdays">
               {WEEKDAY_LABELS.map((label) => (
@@ -605,6 +590,21 @@ export default async function CalendarPage({
                   </div>
                 );
               })}
+            </div>
+          </div>
+
+          <div className="dash-card cal-type-glossary" aria-label="Activity type glossary">
+            <div className="cal-type-glossary-head">
+              <strong>Type Glossary</strong>
+              <span>Abbreviations used in calendar cells</span>
+            </div>
+            <div className="cal-type-glossary-list">
+              {TYPE_GLOSSARY_ORDER.map((type) => (
+                <span key={type} className={`cal-type-chip type-${type.toLowerCase()}`}>
+                  <em>{getTypeAbbr(type)}</em>
+                  <span>{formatType(type)}</span>
+                </span>
+              ))}
             </div>
           </div>
         </section>
