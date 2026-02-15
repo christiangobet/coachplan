@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { currentUser } from '@clerk/nextjs/server';
 import { ActivityPriority, ActivityType, Units } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { alignWeeksToRaceDate } from '@/lib/clone-plan';
 import { getDefaultAiModel, openaiJsonSchema } from '@/lib/openai';
 import { ensureUserFromAuth } from '@/lib/user-sync';
 import { getDayDateFromWeekStart, resolveWeekBounds } from '@/lib/plan-dates';
@@ -53,7 +54,18 @@ type DeleteActivityChange = {
   reason: string;
 };
 
-type PlanAdjustmentChange = MoveActivityChange | EditActivityChange | AddActivityChange | DeleteActivityChange;
+type ExtendPlanChange = {
+  op: 'extend_plan';
+  newStartDate: string;
+  reason: string;
+};
+
+type PlanAdjustmentChange =
+  | MoveActivityChange
+  | EditActivityChange
+  | AddActivityChange
+  | DeleteActivityChange
+  | ExtendPlanChange;
 
 type PlanAdjustmentProposal = {
   coachReply: string;
@@ -96,20 +108,42 @@ function normalizeText(value: unknown): string | null {
   return trimmed ? trimmed : null;
 }
 
-function isPlanStructureChangeRequest(message: string) {
-  const text = message.toLowerCase();
-  const structurePatterns = [
-    /\bextend\b.*\bplan\b/,
-    /\blonger\b.*\bplan\b/,
-    /\badd\b.*\bweeks?\b/,
-    /\bprepend\b.*\bweeks?\b/,
-    /\bstart\b.*\b(earlier|before|on)\b/,
-    /\bmove\b.*\bstart date\b/,
-    /\bchange\b.*\b(start date|race date)\b/,
-    /\bkeep\b.*\brace date\b.*\b(add|extend|more)\b/,
-    /\bplan\b.*\b(start|begin)\b.*\b(on|at)\b/
-  ];
-  return structurePatterns.some((pattern) => pattern.test(text));
+function parseIsoDate(input: unknown): string | null {
+  const text = normalizeText(input);
+  if (!text) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+  const parsed = new Date(text);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.toISOString().slice(0, 10);
+}
+
+function isoDateToLocalDate(isoDate: string) {
+  const [y, m, d] = isoDate.split('-').map((part) => Number(part));
+  if (!y || !m || !d) return null;
+  const date = new Date(y, m - 1, d);
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+function toMonday(date: Date) {
+  const monday = new Date(date);
+  const dow = monday.getDay();
+  const offset = dow === 0 ? -6 : 1 - dow;
+  monday.setDate(monday.getDate() + offset);
+  monday.setHours(0, 0, 0, 0);
+  return monday;
+}
+
+function addDays(date: Date, days: number) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  next.setHours(0, 0, 0, 0);
+  return next;
+}
+
+function diffDays(start: Date, end: Date) {
+  const ms = end.getTime() - start.getTime();
+  return Math.floor(ms / (24 * 60 * 60 * 1000));
 }
 
 function parseProposal(raw: unknown): PlanAdjustmentProposal | null {
@@ -230,6 +264,13 @@ function parseProposal(raw: unknown): PlanAdjustmentProposal | null {
       continue;
     }
 
+    if (op === 'extend_plan') {
+      const newStartDate = parseIsoDate(change.newStartDate);
+      if (!newStartDate) return null;
+      changes.push({ op, newStartDate, reason });
+      continue;
+    }
+
     return null;
   }
 
@@ -328,13 +369,21 @@ function buildPlanContext(plan: NonNullable<PlanForContext>) {
     }
   }
 
+  const dayDates = rows
+    .map((row) => row.dateISO)
+    .filter((value): value is string => Boolean(value))
+    .sort();
+  const planStartDateISO = dayDates.length > 0 ? dayDates[0] : null;
+
   return {
     plan: {
       id: plan.id,
       name: plan.name,
       status: plan.status,
+      weekCount: plan.weekCount,
       raceName: plan.raceName,
-      raceDate: plan.raceDate ? new Date(plan.raceDate).toISOString().slice(0, 10) : null
+      raceDate: plan.raceDate ? new Date(plan.raceDate).toISOString().slice(0, 10) : null,
+      startDate: planStartDateISO
     },
     todayISO: new Date().toISOString().slice(0, 10),
     days: rows
@@ -354,9 +403,9 @@ async function generateAdjustmentProposal(message: string, plan: NonNullable<Pla
       '- Preserve key sessions when possible, but reduce load if needed.',
       '- Do not increase weekly load aggressively.',
       '- Use only IDs present in context for day/activity references.',
-      '- You can only modify existing activities/days in this plan.',
-      '- You cannot add weeks, change week count, change plan start date, or change race date.',
-      '- If request requires structural plan changes (weeks/dates), return an empty changes array and explain this clearly.',
+      '- You may use extend_plan ONLY when athlete asks to start earlier or add weeks while keeping race date unchanged.',
+      '- For extend_plan, provide newStartDate as ISO date (YYYY-MM-DD).',
+      '- Do not use extend_plan for race-date changes or other structure changes.',
       '- Explain changes briefly in plain language.',
       `Athlete feedback: ${message}`,
       `Plan context JSON: ${JSON.stringify(context)}`
@@ -452,6 +501,16 @@ async function generateAdjustmentProposal(message: string, plan: NonNullable<Pla
                     activityId: { type: 'string', minLength: 3, maxLength: 64 },
                     reason: { type: 'string', minLength: 4, maxLength: 220 }
                   }
+                },
+                {
+                  type: 'object',
+                  additionalProperties: false,
+                  required: ['op', 'newStartDate', 'reason'],
+                  properties: {
+                    op: { type: 'string', const: 'extend_plan' },
+                    newStartDate: { type: 'string', minLength: 10, maxLength: 32 },
+                    reason: { type: 'string', minLength: 4, maxLength: 220 }
+                  }
                 }
               ]
             }
@@ -463,6 +522,14 @@ async function generateAdjustmentProposal(message: string, plan: NonNullable<Pla
 }
 
 async function applyAdjustmentProposal(planId: string, proposal: PlanAdjustmentProposal) {
+  const planMeta = await prisma.trainingPlan.findUnique({
+    where: { id: planId },
+    select: { raceDate: true, weekCount: true }
+  });
+  if (!planMeta) {
+    throw new Error('Plan not found while applying adjustments');
+  }
+
   const planDays = await prisma.planDay.findMany({
     where: { planId },
     select: { id: true }
@@ -473,10 +540,105 @@ async function applyAdjustmentProposal(planId: string, proposal: PlanAdjustmentP
     select: { id: true }
   });
   const activityIdSet = new Set(planActivities.map((activity) => activity.id));
+  const initialWeekIndexes = await prisma.planWeek.findMany({
+    where: { planId },
+    select: { weekIndex: true }
+  });
+  let effectiveWeekCount = Math.max(
+    planMeta.weekCount ?? 0,
+    ...initialWeekIndexes.map((week) => week.weekIndex)
+  );
 
   let appliedCount = 0;
+  let extendedWeeks = 0;
   await prisma.$transaction(async (tx) => {
     for (const change of proposal.changes) {
+      if (change.op === 'extend_plan') {
+        const requestedStart = isoDateToLocalDate(change.newStartDate);
+        if (!requestedStart) {
+          throw new Error(`Invalid newStartDate: ${change.newStartDate}`);
+        }
+
+        const weeks = await tx.planWeek.findMany({
+          where: { planId },
+          select: { id: true, weekIndex: true, startDate: true, endDate: true },
+          orderBy: { weekIndex: 'asc' }
+        });
+        if (weeks.length === 0) {
+          throw new Error('Cannot extend a plan with no existing weeks.');
+        }
+
+        const allWeekIndexes = weeks.map((week) => week.weekIndex);
+        let earliestStart: Date | null = null;
+        for (const week of weeks) {
+          const bounds = resolveWeekBounds({
+            weekIndex: week.weekIndex,
+            weekStartDate: week.startDate,
+            weekEndDate: week.endDate,
+            raceDate: planMeta.raceDate,
+            weekCount: effectiveWeekCount,
+            allWeekIndexes
+          });
+          if (!bounds.startDate) continue;
+          if (!earliestStart || bounds.startDate.getTime() < earliestStart.getTime()) {
+            earliestStart = bounds.startDate;
+          }
+        }
+        if (!earliestStart) {
+          throw new Error('Unable to determine current plan start date for extend_plan.');
+        }
+
+        const requestedMonday = toMonday(requestedStart);
+        const daysToCover = diffDays(requestedMonday, earliestStart);
+        if (daysToCover <= 0) {
+          continue;
+        }
+
+        const weeksToAdd = Math.ceil(daysToCover / 7);
+        const descendingWeeks = [...weeks].sort((a, b) => b.weekIndex - a.weekIndex);
+        for (const week of descendingWeeks) {
+          await tx.planWeek.update({
+            where: { id: week.id },
+            data: { weekIndex: week.weekIndex + weeksToAdd }
+          });
+        }
+
+        for (let i = 0; i < weeksToAdd; i += 1) {
+          const startDate = addDays(requestedMonday, i * 7);
+          const endDate = addDays(startDate, 6);
+          const createdWeek = await tx.planWeek.create({
+            data: {
+              planId,
+              weekIndex: i + 1,
+              startDate,
+              endDate
+            }
+          });
+          await tx.planDay.createMany({
+            data: [1, 2, 3, 4, 5, 6, 7].map((dayOfWeek) => ({
+              planId,
+              weekId: createdWeek.id,
+              dayOfWeek,
+              rawText: null,
+              notes: null
+            }))
+          });
+        }
+
+        const maxExistingWeekIndex = weeks.reduce(
+          (max, week) => (week.weekIndex > max ? week.weekIndex : max),
+          0
+        );
+        effectiveWeekCount = Math.max(effectiveWeekCount, maxExistingWeekIndex) + weeksToAdd;
+        await tx.trainingPlan.update({
+          where: { id: planId },
+          data: { weekCount: effectiveWeekCount }
+        });
+        extendedWeeks += weeksToAdd;
+        appliedCount += 1;
+        continue;
+      }
+
       if (change.op === 'move_activity') {
         if (!activityIdSet.has(change.activityId)) {
           throw new Error(`Activity not found in plan: ${change.activityId}`);
@@ -571,7 +733,11 @@ async function applyAdjustmentProposal(planId: string, proposal: PlanAdjustmentP
     }
   });
 
-  return appliedCount;
+  if (extendedWeeks > 0 && planMeta.raceDate && effectiveWeekCount > 0) {
+    await alignWeeksToRaceDate(planId, effectiveWeekCount, planMeta.raceDate);
+  }
+
+  return { appliedCount, extendedWeeks };
 }
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -603,26 +769,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   const apply = Boolean(body.apply);
   if (!apply) {
-    if (isPlanStructureChangeRequest(message)) {
-      return NextResponse.json({
-        proposal: {
-          coachReply: 'This request changes plan structure (weeks/start date), and this AI Trainer flow only supports day/activity edits inside the current plan.',
-          summary: 'Plan-length and start-date changes require a separate plan-structure action.',
-          confidence: 'high',
-          riskFlags: [
-            'No changes applied because structural plan edits are not supported in AI Trainer yet.'
-          ],
-          followUpQuestion: 'Would you like a day-level adjustment inside the current weeks while keeping plan dates unchanged?',
-          changes: []
-        },
-        plan: {
-          id: plan.id,
-          name: plan.name,
-          status: plan.status
-        }
-      });
-    }
-
     try {
       const proposal = await generateAdjustmentProposal(message, plan);
       const parsed = parseProposal(proposal);
@@ -648,21 +794,19 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ error: 'proposal is required when apply=true' }, { status: 400 });
   }
   if (proposal.changes.length === 0) {
-    return NextResponse.json(
-      { error: 'No applicable day-level changes to apply. Plan structure changes (weeks/dates) are not supported in this flow.' },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: 'No changes to apply.' }, { status: 400 });
   }
 
   try {
-    const appliedCount = await applyAdjustmentProposal(plan.id, proposal);
+    const result = await applyAdjustmentProposal(plan.id, proposal);
     const refreshed = await loadPlanForUser(plan.id, user.id);
     if (!refreshed) {
       return NextResponse.json({ error: 'Plan refresh failed after apply' }, { status: 500 });
     }
     return NextResponse.json({
       applied: true,
-      appliedCount,
+      appliedCount: result.appliedCount,
+      extendedWeeks: result.extendedWeeks,
       summary: proposal.summary,
       plan: await appendSourcePlanName(refreshed)
     });

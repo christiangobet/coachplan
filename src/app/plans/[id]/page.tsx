@@ -97,6 +97,11 @@ type AiTrainerChange =
       op: 'delete_activity';
       activityId: string;
       reason: string;
+    }
+  | {
+      op: 'extend_plan';
+      newStartDate: string;
+      reason: string;
     };
 
 type AiTrainerProposal = {
@@ -117,6 +122,13 @@ function describeAiChange(change: AiTrainerChange, lookup: AiChangeLookup) {
   const dayLabel = (dayId: string) => lookup.dayLabelById.get(dayId) || `day ${dayId}`;
   const activityLabel = (activityId: string) => lookup.activityLabelById.get(activityId) || `activity ${activityId}`;
 
+  if (change.op === 'extend_plan') {
+    const startDate = new Date(`${change.newStartDate}T00:00:00`);
+    const startText = Number.isNaN(startDate.getTime())
+      ? change.newStartDate
+      : startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    return `Extend plan to start on ${startText} (prepend weeks, keep race date).`;
+  }
   if (change.op === 'move_activity') {
     return `Move ${activityLabel(change.activityId)} to ${dayLabel(change.targetDayId)}.`;
   }
@@ -156,9 +168,10 @@ export default function PlanDetailPage() {
   const [aiTrainerInput, setAiTrainerInput] = useState('');
   const [aiTrainerProposal, setAiTrainerProposal] = useState<AiTrainerProposal | null>(null);
   const [aiTrainerLoading, setAiTrainerLoading] = useState(false);
-  const [aiTrainerApplying, setAiTrainerApplying] = useState(false);
+  const [aiTrainerApplyingTarget, setAiTrainerApplyingTarget] = useState<'all' | number | null>(null);
   const [aiTrainerError, setAiTrainerError] = useState<string | null>(null);
   const [aiTrainerStatus, setAiTrainerStatus] = useState<string | null>(null);
+  const aiTrainerApplying = aiTrainerApplyingTarget !== null;
 
   const loadPlan = useCallback(async () => {
     if (!planId) return;
@@ -304,14 +317,24 @@ export default function PlanDetailPage() {
     }
   }, [aiTrainerInput, planId]);
 
-  const applyAiAdjustment = useCallback(async () => {
+  const applyAiAdjustment = useCallback(async (changeIndex?: number) => {
     if (!planId || !aiTrainerProposal) return;
     const message = aiTrainerInput.trim();
     if (!message) {
       setAiTrainerError('Describe what happened so the trainer can adapt the plan.');
       return;
     }
-    setAiTrainerApplying(true);
+
+    const targetChanges =
+      typeof changeIndex === 'number'
+        ? aiTrainerProposal.changes.filter((_, idx) => idx === changeIndex)
+        : aiTrainerProposal.changes;
+    if (targetChanges.length === 0) {
+      setAiTrainerError('No changes available to apply.');
+      return;
+    }
+
+    setAiTrainerApplyingTarget(typeof changeIndex === 'number' ? changeIndex : 'all');
     setAiTrainerError(null);
     setAiTrainerStatus(null);
     try {
@@ -321,21 +344,39 @@ export default function PlanDetailPage() {
         body: JSON.stringify({
           message,
           apply: true,
-          proposal: aiTrainerProposal
+          proposal: {
+            ...aiTrainerProposal,
+            changes: targetChanges
+          }
         })
       });
       const data = await res.json().catch(() => null);
       if (!res.ok) {
         throw new Error(data?.error || 'Failed to apply plan adjustments.');
       }
-      setAiTrainerProposal(null);
-      setAiTrainerStatus(`Applied ${data?.appliedCount ?? 0} change(s) to the plan.`);
+      if (typeof changeIndex === 'number') {
+        setAiTrainerProposal((prev) => {
+          if (!prev) return prev;
+          const remaining = prev.changes.filter((_, idx) => idx !== changeIndex);
+          return { ...prev, changes: remaining };
+        });
+      } else {
+        setAiTrainerProposal(null);
+      }
+
+      const extendedWeeks = Number(data?.extendedWeeks || 0);
+      const appliedCount = Number(data?.appliedCount || 0);
+      if (extendedWeeks > 0) {
+        setAiTrainerStatus(`Applied ${appliedCount} change(s), including ${extendedWeeks} prepended week(s).`);
+      } else {
+        setAiTrainerStatus(`Applied ${appliedCount} change(s) to the plan.`);
+      }
       setSelectedActivity(null);
       await loadPlan();
     } catch (err: unknown) {
       setAiTrainerError(err instanceof Error ? err.message : 'Failed to apply plan adjustments.');
     } finally {
-      setAiTrainerApplying(false);
+      setAiTrainerApplyingTarget(null);
     }
   }, [aiTrainerInput, aiTrainerProposal, loadPlan, planId]);
 
@@ -521,14 +562,6 @@ export default function PlanDetailPage() {
           >
             {aiTrainerLoading ? 'Generating…' : 'Generate Adjustment'}
           </button>
-          <button
-            className="cta secondary"
-            type="button"
-            onClick={applyAiAdjustment}
-            disabled={!aiTrainerProposal || aiTrainerProposal.changes.length === 0 || aiTrainerLoading || aiTrainerApplying}
-          >
-            {aiTrainerApplying ? 'Applying…' : 'Apply to Plan'}
-          </button>
         </div>
         {aiTrainerError && <p className="pcal-ai-trainer-error">{aiTrainerError}</p>}
         {aiTrainerStatus && <p className="pcal-ai-trainer-status">{aiTrainerStatus}</p>}
@@ -559,11 +592,29 @@ export default function PlanDetailPage() {
                   <div className="pcal-ai-trainer-change-head">
                     <span className="pcal-ai-trainer-op">{change.op.replace(/_/g, ' ')}</span>
                     <strong>{describeAiChange(change, aiChangeLookup)}</strong>
+                    <button
+                      className="cta secondary pcal-ai-trainer-apply-one"
+                      type="button"
+                      onClick={() => applyAiAdjustment(idx)}
+                      disabled={aiTrainerLoading || aiTrainerApplying}
+                    >
+                      {aiTrainerApplyingTarget === idx ? 'Applying…' : 'Apply'}
+                    </button>
                   </div>
                   <p>{change.reason}</p>
                 </li>
               ))}
             </ul>
+            <div className="pcal-ai-trainer-apply-all">
+              <button
+                className="cta"
+                type="button"
+                onClick={() => applyAiAdjustment()}
+                disabled={aiTrainerProposal.changes.length === 0 || aiTrainerLoading || aiTrainerApplying}
+              >
+                {aiTrainerApplyingTarget === 'all' ? 'Applying all…' : 'Apply All Changes'}
+              </button>
+            </div>
             {(aiTrainerProposal.riskFlags || []).length > 0 && (
               <div className="pcal-ai-trainer-risks">
                 <strong>Risk Flags</strong>
