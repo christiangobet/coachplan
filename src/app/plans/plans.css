@@ -511,6 +511,12 @@
   gap: 6px;
 }
 
+.pcal-ai-trainer-change-list li.is-applied {
+  background: #f4f5f7;
+  border-color: #d5dae0;
+  opacity: 0.8;
+}
+
 .pcal-ai-trainer-change-head {
   display: flex;
   align-items: center;
