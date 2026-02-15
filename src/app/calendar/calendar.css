@@ -151,6 +151,12 @@
   .cal-view-toggle {
     width: fit-content;
   }
+
+  .cal-type-glossary-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
 }
 
 .cal-plan-switch {
@@ -190,6 +196,70 @@
   background: rgba(252, 76, 2, 0.08);
   color: var(--d-orange);
 }
+
+.cal-type-glossary {
+  display: grid;
+  gap: 10px;
+}
+
+.cal-type-glossary-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.cal-type-glossary-head strong {
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--d-text);
+}
+
+.cal-type-glossary-head span {
+  font-size: 12px;
+  color: var(--d-text-mid);
+}
+
+.cal-type-glossary-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.cal-type-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 26px;
+  border-radius: 999px;
+  border: 1px solid var(--d-border);
+  background: var(--d-raised);
+  padding: 0 10px;
+}
+
+.cal-type-chip em {
+  font-style: normal;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.cal-type-chip span {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--d-text-mid);
+}
+
+.cal-type-chip.type-run em { color: var(--d-orange); }
+.cal-type-chip.type-strength em { color: #6c5ce7; }
+.cal-type-chip.type-cross_train em { color: #0984e3; }
+.cal-type-chip.type-rest em { color: #0f8a47; }
+.cal-type-chip.type-mobility em { color: #e67e22; }
+.cal-type-chip.type-yoga em { color: #0f8a47; }
+.cal-type-chip.type-hike em { color: #0ea5a6; }
+.cal-type-chip.type-other em { color: var(--d-muted); }
 
 .cal-month-card {
   display: grid;
@@ -368,28 +438,61 @@
   gap: 5px;
 }
 
+.cal-activity-code {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  height: 18px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  padding: 0 6px;
+  flex-shrink: 0;
+}
+
 .cal-activity-title-text {
-  font-weight: 700;
+  font-weight: 600;
   color: var(--d-text);
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+  font-size: 11px;
 }
 
-.cal-activity-icon {
-  width: 12px;
-  height: 12px;
-  flex-shrink: 0;
+.cal-activity-code.type-run {
+  background: rgba(252, 76, 2, 0.16);
+  color: var(--d-orange);
+}
+.cal-activity-code.type-strength {
+  background: rgba(108, 92, 231, 0.16);
+  color: #6c5ce7;
+}
+.cal-activity-code.type-cross_train {
+  background: rgba(9, 132, 227, 0.16);
+  color: #0984e3;
+}
+.cal-activity-code.type-rest {
+  background: rgba(46, 204, 113, 0.18);
+  color: #0f8a47;
+}
+.cal-activity-code.type-mobility {
+  background: rgba(243, 156, 18, 0.16);
+  color: #c97b00;
+}
+.cal-activity-code.type-yoga {
+  background: rgba(46, 204, 113, 0.18);
+  color: #0f8a47;
+}
+.cal-activity-code.type-hike {
+  background: rgba(14, 165, 166, 0.18);
+  color: #0b8585;
+}
+.cal-activity-code.type-other {
+  background: rgba(107, 107, 118, 0.14);
   color: var(--d-text-mid);
 }
-
-.cal-activity-icon.type-run { color: var(--d-orange); }
-.cal-activity-icon.type-strength { color: #6c5ce7; }
-.cal-activity-icon.type-cross_train { color: #0984e3; }
-.cal-activity-icon.type-rest { color: #0f8a47; }
-.cal-activity-icon.type-mobility { color: #e67e22; }
-.cal-activity-icon.type-yoga { color: #0f8a47; }
-.cal-activity-icon.type-hike { color: #0ea5a6; }
 
 .cal-activity em {
   font-style: normal;

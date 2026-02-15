@@ -68,6 +68,26 @@ type DayInfo = {
 };
 
 const WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const TYPE_GLOSSARY_ORDER: ActivityType[] = [
+  "RUN",
+  "STRENGTH",
+  "CROSS_TRAIN",
+  "REST",
+  "MOBILITY",
+  "YOGA",
+  "HIKE",
+  "OTHER"
+];
+const ACTIVITY_TYPE_ABBR: Record<ActivityType, string> = {
+  RUN: "RUN",
+  STRENGTH: "STR",
+  CROSS_TRAIN: "XT",
+  REST: "RST",
+  MOBILITY: "MOB",
+  YOGA: "YOG",
+  HIKE: "HIK",
+  OTHER: "OTH"
+};
 
 function normalizeDate(value: Date) {
   const d = new Date(value);
@@ -82,6 +102,11 @@ function getIsoDay(value: Date) {
 
 function formatType(type: string) {
   return type.replace(/_/g, " ").toLowerCase().replace(/^\w/, (c) => c.toUpperCase());
+}
+
+function getTypeAbbr(type: string) {
+  const key = (type in ACTIVITY_TYPE_ABBR ? type : "OTHER") as ActivityType;
+  return ACTIVITY_TYPE_ABBR[key];
 }
 
 function dateKey(value: Date) {
@@ -494,6 +519,21 @@ export default async function CalendarPage({
             </div>
           )}
 
+          <div className="dash-card cal-type-glossary" aria-label="Activity type glossary">
+            <div className="cal-type-glossary-head">
+              <strong>Type Glossary</strong>
+              <span>Abbreviations used in calendar cells</span>
+            </div>
+            <div className="cal-type-glossary-list">
+              {TYPE_GLOSSARY_ORDER.map((type) => (
+                <span key={type} className={`cal-type-chip type-${type.toLowerCase()}`}>
+                  <em>{getTypeAbbr(type)}</em>
+                  <span>{formatType(type)}</span>
+                </span>
+              ))}
+            </div>
+          </div>
+
           <div className="dash-card cal-month-card">
             <div className="cal-weekdays">
               {WEEKDAY_LABELS.map((label) => (
@@ -545,10 +585,9 @@ export default async function CalendarPage({
                           title={activity.title}
                         >
                           <span className="cal-activity-title">
-                            <ActivityTypeIcon
-                              type={activity.type}
-                              className={`cal-activity-icon type-${activity.type.toLowerCase()}`}
-                            />
+                            <span className={`cal-activity-code type-${activity.type.toLowerCase()}`}>
+                              {getTypeAbbr(activity.type)}
+                            </span>
                             <span className="cal-activity-title-text">{activity.title}</span>
                           </span>
                           {activity.completed && <em>Done</em>}
@@ -614,7 +653,7 @@ export default async function CalendarPage({
                       />
                       <strong>{activity.title}</strong>
                     </span>
-                    <span>{formatType(activity.type)}</span>
+                    <span>{getTypeAbbr(activity.type)} · {formatType(activity.type)}</span>
                   </div>
                   <div className="cal-day-detail-meta">
                     <span>
