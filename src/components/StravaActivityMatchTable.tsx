@@ -237,7 +237,7 @@ export default function StravaActivityMatchTable() {
       {loading && <p className="dash-sync-note">Loading table...</p>}
 
       {!loading && !data?.account?.connected && (
-        <p className="dash-sync-note">Connect Strava from the left panel, then sync activities.</p>
+        <p className="dash-sync-note">Connect Strava from the sync panel, then sync activities.</p>
       )}
 
       {!loading && data?.account?.connected && rows.length > 0 && (

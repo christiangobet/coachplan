@@ -1,0 +1,32 @@
+.strava-mobile-sync {
+  display: none;
+}
+
+.strava-info-card {
+  padding-top: 18px;
+}
+
+.strava-steps {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 8px;
+  color: var(--d-text-mid);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.strava-links {
+  display: grid;
+  gap: 8px;
+}
+
+.strava-links .dash-connect-btn {
+  justify-content: flex-start;
+}
+
+@media (max-width: 1080px) {
+  .strava-mobile-sync {
+    display: block;
+  }
+}

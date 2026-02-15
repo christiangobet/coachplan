@@ -489,6 +489,7 @@ export default async function CalendarPage({
               <div className="cal-view-toggle" aria-label="Plan views">
                 <Link className="cal-view-pill" href={`/plans/${selectedPlan.id}`}>Plan</Link>
                 <span className="cal-view-pill active">Calendar</span>
+                <Link className="cal-view-pill" href="/strava">Plan vs Strava</Link>
               </div>
               <div className="cal-month-nav">
                 <Link className="cal-month-btn" href={prevMonthHref} aria-label="Previous month">
@@ -770,6 +771,7 @@ export default async function CalendarPage({
             <div className="cal-links">
               <Link href={`/plans/${selectedPlan.id}`}>Open plan detail</Link>
               <Link href="/dashboard">Go to Today</Link>
+              <Link href="/strava">Open Plan vs Strava</Link>
               <Link href="/progress">View Progress</Link>
             </div>
           </div>

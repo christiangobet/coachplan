@@ -14,7 +14,6 @@ import {
 import CompleteWorkoutButton from "@/components/CompleteWorkoutButton";
 import AthleteSidebar from "@/components/AthleteSidebar";
 import StravaSyncPanel from "@/components/StravaSyncPanel";
-import StravaActivityMatchTable from "@/components/StravaActivityMatchTable";
 import ActivityTypeIcon from "@/components/ActivityTypeIcon";
 import "./dashboard.css";
 
@@ -487,8 +486,6 @@ export default async function DashboardPage() {
               )}
             </div>
           </div>
-
-          <StravaActivityMatchTable />
 
           {/* Upcoming workouts */}
           <div className="dash-card">
