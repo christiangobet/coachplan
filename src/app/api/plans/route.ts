@@ -20,7 +20,16 @@ const execFileAsync = promisify(execFile);
 const DAY_KEYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 const DAY_LABELS = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
 const TABLE_LABELS = ['WEEK', ...DAY_LABELS];
-const ENABLE_AI_WEEK_PARSE = process.env.ENABLE_AI_WEEK_PARSE !== 'false' && hasConfiguredAiProvider();
+const ENABLE_AI_WEEK_PARSE = process.env.ENABLE_AI_WEEK_PARSE === 'true' && hasConfiguredAiProvider();
+
+function parseTimeoutMs(value: string | undefined, fallback: number) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 1000) return fallback;
+  return Math.floor(parsed);
+}
+
+const UPLOAD_PARSE_TIMEOUT_MS = parseTimeoutMs(process.env.UPLOAD_PARSE_TIMEOUT_MS, 120000);
+const AI_WEEK_PARSE_TIMEOUT_MS = parseTimeoutMs(process.env.AI_WEEK_PARSE_TIMEOUT_MS, 8000);
 
 const RUN_SUBTYPES = new Set([
   'tempo',
@@ -69,6 +78,19 @@ function planNameFromFilename(filename: string) {
   const withoutExt = filename.replace(/\.[^.]+$/, '');
   const normalized = withoutExt.replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim();
   return normalized || 'Uploaded Plan';
+}
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutMessage: string): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
+  });
+
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
 }
 
 type DistanceParseResult = {
@@ -1059,7 +1081,11 @@ export async function POST(req: Request) {
       const pdfPath = path.join(uploadDir, `${plan.id}.pdf`);
       await fs.writeFile(pdfPath, buffer);
 
-      const parsed = await parsePdfToJson(plan.id, pdfPath, name);
+      const parsed = await withTimeout(
+        parsePdfToJson(plan.id, pdfPath, name),
+        UPLOAD_PARSE_TIMEOUT_MS,
+        'PDF parse timed out. Please try a smaller/simpler PDF.'
+      );
       const weeks = Array.isArray(parsed?.weeks) ? parsed.weeks : [];
 
       const weekRecords: { id: string }[] = [];
@@ -1087,12 +1113,16 @@ export async function POST(req: Request) {
         let aiWeek = null;
         if (ENABLE_AI_WEEK_PARSE) {
           try {
-            aiWeek = await parseWeekWithAI({
-              planName: name,
-              weekNumber: i + 1,
-              days: rawDays,
-              legend: parsed?.glossary?.note || undefined
-            });
+            aiWeek = await withTimeout(
+              parseWeekWithAI({
+                planName: name,
+                weekNumber: i + 1,
+                days: rawDays,
+                legend: parsed?.glossary?.note || undefined
+              }),
+              AI_WEEK_PARSE_TIMEOUT_MS,
+              'AI week parse timed out.'
+            );
           } catch {
             aiWeek = null;
           }
