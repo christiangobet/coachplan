@@ -1316,6 +1316,41 @@
   margin-bottom: 6px;
 }
 
+.pcal-modal-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.pcal-modal-section-head .pcal-modal-section-title {
+  margin-bottom: 0;
+}
+
+.pcal-modal-strava-sync {
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--ink);
+  border-radius: var(--radius);
+  min-height: 32px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.pcal-modal-strava-sync:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.pcal-modal-strava-sync:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .pcal-modal-text {
   font-size: 14px;
   color: var(--ink);
@@ -1353,44 +1388,21 @@
   box-shadow: 0 0 0 3px rgba(252, 76, 2, 0.12);
 }
 
-.pcal-modal-actuals-save {
-  height: 38px;
-  border: none;
-  border-radius: var(--radius);
-  background: var(--accent);
-  color: #fff;
-  font-family: inherit;
-  font-size: 13px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-
-.pcal-modal-actuals-save:hover {
-  background: var(--accent-strong);
-}
-
-.pcal-modal-actuals-save:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
 .pcal-modal-form-error {
   margin: 0;
   font-size: 13px;
   color: var(--red);
 }
 
+.pcal-modal-form-success {
+  margin: 0;
+  font-size: 13px;
+  color: var(--green);
+}
+
 .pcal-modal-actuals-hint {
   margin: 10px 0 0;
   color: var(--muted);
-}
-
-.pcal-modal-actuals-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 12px;
 }
 
 .pcal-modal-tags {
@@ -1424,42 +1436,50 @@
   color: var(--accent);
 }
 
-.pcal-modal-actuals-secondary {
+.pcal-modal-footer {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.pcal-modal-cancel,
+.pcal-modal-primary {
   flex: 1;
-  min-height: 38px;
-  min-width: 180px;
-  padding: 10px 12px;
+  min-height: 40px;
+  padding: 0 12px;
   border-radius: var(--radius);
-  border: 1px solid var(--border);
-  background: #fff;
-  color: var(--ink);
   font-family: inherit;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
   cursor: pointer;
   transition: all 0.15s;
 }
 
-.pcal-modal-actuals-secondary:hover {
+.pcal-modal-cancel {
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--ink);
+}
+
+.pcal-modal-cancel:hover {
   border-color: var(--accent);
   color: var(--accent);
 }
 
-.pcal-modal-actuals-secondary.danger:hover {
-  border-color: var(--red);
-  color: var(--red);
+.pcal-modal-primary {
+  border: none;
+  background: var(--accent);
+  color: #fff;
 }
 
-.pcal-modal-actuals-secondary:disabled {
+.pcal-modal-primary:hover {
+  background: var(--accent-strong);
+}
+
+.pcal-modal-cancel:disabled,
+.pcal-modal-primary:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-  border-color: var(--border);
-  color: var(--muted);
-}
-
-.pcal-modal-actuals-save {
-  flex: 1;
-  min-width: 180px;
 }
 
 /* ══════════════════════════
@@ -1689,14 +1709,14 @@
     grid-template-columns: 1fr;
   }
 
-  .pcal-modal-actuals-actions {
+  .pcal-modal-footer {
     flex-direction: column;
   }
 
-  .pcal-modal-actuals-save,
-  .pcal-modal-actuals-secondary {
+  .pcal-modal-cancel,
+  .pcal-modal-primary,
+  .pcal-modal-strava-sync {
     width: 100%;
-    min-width: 0;
   }
 }
 

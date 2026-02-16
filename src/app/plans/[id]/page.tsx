@@ -15,7 +15,6 @@ import {
   type DistanceUnit
 } from '@/lib/unit-display';
 import ActivityForm, { ActivityFormData } from '@/components/PlanEditor/ActivityForm';
-import { ActivityPriority } from '@prisma/client';
 import '../plans.css';
 
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -70,6 +69,42 @@ function typeColor(type: string): string {
 
 function typeAbbr(type: string | null | undefined) {
   return ACTIVITY_TYPE_ABBR[String(type || 'OTHER').toUpperCase()] || 'OTH';
+}
+
+function toLocalDateKey(date: Date) {
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const dd = String(date.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function locateActivityInPlan(plan: any, activityId: string) {
+  if (!plan?.weeks || !activityId) return null;
+  const sortedWeeks = [...plan.weeks].sort((a: any, b: any) => a.weekIndex - b.weekIndex);
+  const allWeekIndexes = sortedWeeks.map((week: any) => week.weekIndex);
+
+  for (const week of sortedWeeks) {
+    const bounds = resolveWeekBounds({
+      weekIndex: week.weekIndex,
+      weekStartDate: week.startDate,
+      weekEndDate: week.endDate,
+      raceDate: plan.raceDate,
+      weekCount: plan.weekCount,
+      allWeekIndexes
+    });
+
+    for (const day of week.days || []) {
+      const found = (day.activities || []).find((activity: any) => activity.id === activityId);
+      if (!found) continue;
+      const dayDate = getDayDateFromWeekStart(bounds.startDate, day.dayOfWeek);
+      return {
+        activity: found,
+        dayDateISO: dayDate ? toLocalDateKey(dayDate) : null
+      };
+    }
+  }
+
+  return null;
 }
 
 type AiTrainerChange =
@@ -193,11 +228,13 @@ export default function PlanDetailPage() {
   const [plan, setPlan] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedActivity, setSelectedActivity] = useState<any>(null);
-  const [toggling, setToggling] = useState<Set<string>>(new Set());
   const [actualDistance, setActualDistance] = useState('');
   const [actualDuration, setActualDuration] = useState('');
   const [actualPace, setActualPace] = useState('');
   const [actualsError, setActualsError] = useState<string | null>(null);
+  const [stravaSyncError, setStravaSyncError] = useState<string | null>(null);
+  const [stravaSyncStatus, setStravaSyncStatus] = useState<string | null>(null);
+  const [syncingStrava, setSyncingStrava] = useState(false);
   const [savingActuals, setSavingActuals] = useState(false);
   const [viewerUnits, setViewerUnits] = useState<DistanceUnit>('MILES');
   const [aiTrainerInput, setAiTrainerInput] = useState('');
@@ -287,6 +324,15 @@ export default function PlanDetailPage() {
       }
       setViewerUnits(data?.viewerUnits === 'KM' ? 'KM' : 'MILES');
       setPlan(data.plan);
+      setSelectedActivity((prev: any) => {
+        if (!prev) return prev;
+        const located = locateActivityInPlan(data.plan, prev.id);
+        if (!located) return null;
+        return {
+          ...located.activity,
+          dayDateISO: located.dayDateISO || prev.dayDateISO || null
+        };
+      });
       setError(null);
     } catch (err: any) {
       setError(err?.message || 'Failed to load plan.');
@@ -330,33 +376,6 @@ export default function PlanDetailPage() {
     );
   }, []);
 
-  // Toggle activity completion with optimistic update
-  const toggleComplete = useCallback(async (activityId: string) => {
-    if (toggling.has(activityId)) return;
-
-    setToggling((prev) => new Set(prev).add(activityId));
-
-    applyActivityUpdate(activityId, (activity) => ({ ...activity, completed: !activity.completed }));
-
-    try {
-      const res = await fetch(`/api/activities/${activityId}/toggle`, { method: 'POST' });
-      if (!res.ok) throw new Error('Failed to toggle completion');
-      const data = await res.json().catch(() => ({}));
-      if (data?.activity) {
-        applyActivityUpdate(activityId, () => data.activity);
-      }
-    } catch {
-      // Revert on error
-      applyActivityUpdate(activityId, (activity) => ({ ...activity, completed: !activity.completed }));
-    } finally {
-      setToggling((prev) => {
-        const next = new Set(prev);
-        next.delete(activityId);
-        return next;
-      });
-    }
-  }, [toggling, applyActivityUpdate]);
-
   const completeActivity = useCallback(async (withActuals: boolean) => {
     if (!selectedActivity || savingActuals) return;
     setSavingActuals(true);
@@ -392,11 +411,53 @@ export default function PlanDetailPage() {
     }
   }, [selectedActivity, savingActuals, actualDistance, actualDuration, actualPace, viewerUnits, applyActivityUpdate]);
 
-  const markActivityIncomplete = useCallback(async () => {
-    if (!selectedActivity || savingActuals) return;
-    setActualsError(null);
-    await toggleComplete(selectedActivity.id);
-  }, [selectedActivity, savingActuals, toggleComplete]);
+  const syncActivityFromStrava = useCallback(async () => {
+    if (!selectedActivity || syncingStrava) return;
+
+    const dateISO = typeof selectedActivity.dayDateISO === 'string'
+      ? selectedActivity.dayDateISO
+      : null;
+    if (!dateISO) {
+      setStravaSyncError('Cannot sync this activity because its calendar date is missing.');
+      return;
+    }
+
+    setSyncingStrava(true);
+    setStravaSyncError(null);
+    setStravaSyncStatus(null);
+    try {
+      const res = await fetch('/api/integrations/strava/import-day', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date: dateISO })
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(body?.error || 'Failed to sync from Strava');
+      }
+
+      const updatedCount = Number(body?.summary?.workoutsUpdated || 0);
+      if (updatedCount > 0) {
+        setStravaSyncStatus(`Synced Strava logs and updated ${updatedCount} workout(s).`);
+      } else {
+        setStravaSyncStatus('Strava sync finished. No matching workout updates were found for this day.');
+      }
+      await loadPlan();
+    } catch (err: unknown) {
+      setStravaSyncError(err instanceof Error ? err.message : 'Failed to sync from Strava');
+    } finally {
+      setSyncingStrava(false);
+    }
+  }, [selectedActivity, syncingStrava, loadPlan]);
+
+  const completeFromModal = useCallback(() => {
+    const withActuals = Boolean(
+      actualDistance.trim()
+      || actualDuration.trim()
+      || actualPace.trim()
+    );
+    completeActivity(withActuals);
+  }, [actualDistance, actualDuration, actualPace, completeActivity]);
 
   const saveActuals = useCallback(async () => {
     if (!selectedActivity || savingActuals) return;
@@ -567,6 +628,8 @@ export default function PlanDetailPage() {
       ) || ''
     );
     setActualsError(null);
+    setStravaSyncError(null);
+    setStravaSyncStatus(null);
   }, [selectedActivity, viewerUnits]);
 
   const aiChangeLookup = useMemo<AiChangeLookup>(() => {
@@ -943,7 +1006,10 @@ export default function PlanDetailPage() {
                                     e.stopPropagation();
                                     setEditingActivity(a);
                                   } else {
-                                    setSelectedActivity(a);
+                                    setSelectedActivity({
+                                      ...a,
+                                      dayDateISO: dayDate ? toLocalDateKey(dayDate) : null
+                                    });
                                   }
                                 }}
                               >
@@ -1045,13 +1111,23 @@ export default function PlanDetailPage() {
                 )}
               </div>
 
-              {/* Instructions / raw text */}
-              {selectedActivity.rawText && (
-                <div className="pcal-modal-section">
+              {/* Instructions / Strava sync */}
+              <div className="pcal-modal-section">
+                <div className="pcal-modal-section-head">
                   <h3 className="pcal-modal-section-title">Instructions</h3>
-                  <p className="pcal-modal-text">{selectedActivity.rawText}</p>
+                  <button
+                    className="pcal-modal-strava-sync"
+                    onClick={syncActivityFromStrava}
+                    type="button"
+                    disabled={syncingStrava || savingActuals}
+                  >
+                    {syncingStrava ? 'Syncing…' : 'Sync with Strava'}
+                  </button>
                 </div>
-              )}
+                <p className="pcal-modal-text">{selectedActivity.rawText || 'No extra instructions for this activity.'}</p>
+                {stravaSyncError && <p className="pcal-modal-form-error">{stravaSyncError}</p>}
+                {stravaSyncStatus && <p className="pcal-modal-form-success">{stravaSyncStatus}</p>}
+              </div>
 
               {/* Notes */}
               {selectedActivity.notes && (
@@ -1108,41 +1184,10 @@ export default function PlanDetailPage() {
                 </div>
                 <p className="pcal-modal-text pcal-modal-actuals-hint">
                   {selectedActivity.completed
-                    ? 'This activity is marked done. Update actuals or mark it not done.'
-                    : 'Complete this activity in one step, with or without actuals.'}
+                    ? 'This activity is marked done. Update actuals if needed.'
+                    : 'Actuals are optional. Use Complete below to save this activity.'}
                 </p>
                 {actualsError && <p className="pcal-modal-form-error">{actualsError}</p>}
-                <div className="pcal-modal-actuals-actions">
-                  <button
-                    className="pcal-modal-actuals-save"
-                    onClick={selectedActivity.completed ? saveActuals : () => completeActivity(true)}
-                    type="button"
-                    disabled={savingActuals || toggling.has(selectedActivity.id)}
-                  >
-                    {(savingActuals || toggling.has(selectedActivity.id))
-                      ? 'Saving…'
-                      : (selectedActivity.completed ? 'Save Actuals' : 'Complete & Save')}
-                  </button>
-                  {selectedActivity.completed ? (
-                    <button
-                      className="pcal-modal-actuals-secondary danger"
-                      onClick={markActivityIncomplete}
-                      type="button"
-                      disabled={savingActuals || toggling.has(selectedActivity.id)}
-                    >
-                      Mark Not Done
-                    </button>
-                  ) : (
-                    <button
-                      className="pcal-modal-actuals-secondary"
-                      onClick={() => completeActivity(false)}
-                      type="button"
-                      disabled={savingActuals || toggling.has(selectedActivity.id)}
-                    >
-                      Complete Without Actuals
-                    </button>
-                  )}
-                </div>
               </div>
 
               {/* Tags */}
@@ -1160,6 +1205,27 @@ export default function PlanDetailPage() {
                   <span className="pcal-modal-badge">Key Workout</span>
                 </div>
               )}
+
+              <div className="pcal-modal-footer">
+                <button
+                  className="pcal-modal-cancel"
+                  onClick={() => setSelectedActivity(null)}
+                  type="button"
+                  disabled={savingActuals || syncingStrava}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="pcal-modal-primary"
+                  onClick={selectedActivity.completed ? saveActuals : completeFromModal}
+                  type="button"
+                  disabled={savingActuals || syncingStrava}
+                >
+                  {savingActuals
+                    ? 'Saving…'
+                    : (selectedActivity.completed ? 'Save' : 'Complete')}
+                </button>
+              </div>
 
             </div>
           </div>
