@@ -6,7 +6,7 @@ import AthleteSidebar from '@/components/AthleteSidebar';
 import '../dashboard/dashboard.css';
 import './plans.css';
 
-type Plan = { id: string; name: string; weekCount?: number | null; status: string };
+type Plan = { id: string; name: string; weekCount?: number | null; status: string; progress?: number };
 type Template = { id: string; name: string; weekCount?: number | null };
 
 function statusColor(status: string) {
@@ -15,11 +15,7 @@ function statusColor(status: string) {
   return 'var(--d-muted)';
 }
 
-function statusProgress(status: string) {
-  if (status === 'ACTIVE') return 68;
-  if (status === 'DRAFT') return 18;
-  return 100;
-}
+
 
 function heroClass(status: string) {
   if (status === 'ACTIVE') return 'active';
@@ -161,11 +157,11 @@ export default function PlansPage() {
                       {plan.weekCount ? `${plan.weekCount} weeks` : 'No weeks set'}
                     </span>
                     <div className="plan-card-progress">
-                      <span>{statusProgress(plan.status)}% complete</span>
+                      <span>{plan.progress ?? 0}% complete</span>
                       <div className="plan-card-progress-track">
                         <div
                           className="plan-card-progress-fill"
-                          style={{ width: `${statusProgress(plan.status)}%` }}
+                          style={{ width: `${plan.progress ?? 0}%` }}
                         />
                       </div>
                     </div>
@@ -225,11 +221,11 @@ export default function PlansPage() {
                       {plan.weekCount ? `${plan.weekCount} weeks` : 'No weeks set'}
                     </span>
                     <div className="plan-card-progress">
-                      <span>{statusProgress(plan.status)}% complete</span>
+                      <span>{plan.progress ?? 0}% complete</span>
                       <div className="plan-card-progress-track">
                         <div
                           className="plan-card-progress-fill"
-                          style={{ width: `${statusProgress(plan.status)}%` }}
+                          style={{ width: `${plan.progress ?? 0}%` }}
                         />
                       </div>
                     </div>
@@ -289,11 +285,11 @@ export default function PlansPage() {
                       {plan.weekCount ? `${plan.weekCount} weeks` : 'No weeks set'}
                     </span>
                     <div className="plan-card-progress">
-                      <span>{statusProgress(plan.status)}% complete</span>
+                      <span>{plan.progress ?? 0}% complete</span>
                       <div className="plan-card-progress-track">
                         <div
                           className="plan-card-progress-fill"
-                          style={{ width: `${statusProgress(plan.status)}%` }}
+                          style={{ width: `${plan.progress ?? 0}%` }}
                         />
                       </div>
                     </div>

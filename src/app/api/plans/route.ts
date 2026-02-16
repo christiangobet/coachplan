@@ -731,12 +731,12 @@ function buildDeterministicActivities(args: {
   const segments = entry?.segments_parsed?.length
     ? entry.segments_parsed
     : [
-        {
-          text: entry?.raw || '',
-          type: entry?.type_guess || 'unknown',
-          metrics: entry?.metrics || {}
-        }
-      ];
+      {
+        text: entry?.raw || '',
+        type: entry?.type_guess || 'unknown',
+        metrics: entry?.metrics || {}
+      }
+    ];
 
   for (const seg of segments) {
     const splitSegments = splitCombinedActivities(seg.text || '');
@@ -1091,10 +1091,25 @@ export async function GET(req: Request) {
 
   const plans = await prisma.trainingPlan.findMany({
     where: { athleteId: user.id, isTemplate: false },
-    orderBy: { createdAt: 'desc' }
+    orderBy: { createdAt: 'desc' },
+    include: {
+      activities: {
+        select: { completed: true }
+      }
+    }
   });
 
-  return NextResponse.json({ plans });
+  const plansWithProgress = plans.map((plan) => {
+    const total = plan.activities.length;
+    const completed = plan.activities.filter((a) => a.completed).length;
+    const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+    // Remove activities from the response to keep it clean, we only need the progress
+    const { activities, ...rest } = plan;
+    return { ...rest, progress };
+  });
+
+  return NextResponse.json({ plans: plansWithProgress });
 }
 
 async function parsePdfToJson(planId: string, pdfPath: string, name: string) {
@@ -1272,13 +1287,13 @@ export async function POST(req: Request) {
           });
           const aiDrafts = aiActivities.length
             ? buildAiActivities({
-                planId: plan.id,
-                dayId: day.id,
-                dayRawText: entry.raw || '',
-                aiActivities,
-                inferredDistanceUnit: dayDefaultDistanceUnit,
-                storageDistanceUnit: userDefaultDistanceUnit
-              })
+              planId: plan.id,
+              dayId: day.id,
+              dayRawText: entry.raw || '',
+              aiActivities,
+              inferredDistanceUnit: dayDefaultDistanceUnit,
+              storageDistanceUnit: userDefaultDistanceUnit
+            })
             : [];
           const mergedActivities = aiDrafts.length
             ? mergeDayActivitiesWithAI(deterministicActivities, aiDrafts)
