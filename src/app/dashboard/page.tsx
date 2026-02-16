@@ -18,9 +18,20 @@ import AthleteSidebar from "@/components/AthleteSidebar";
 import StravaSyncPanel from "@/components/StravaSyncPanel";
 import ActivityTypeIcon from "@/components/ActivityTypeIcon";
 import SelectedPlanCookie from "@/components/SelectedPlanCookie";
+import StravaDaySyncButton from "@/components/StravaDaySyncButton";
 import "./dashboard.css";
 
 const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const ACTIVITY_TYPE_ABBR: Record<string, string> = {
+  RUN: "RUN",
+  STRENGTH: "STR",
+  CROSS_TRAIN: "XT",
+  REST: "RST",
+  MOBILITY: "MOB",
+  YOGA: "YOG",
+  HIKE: "HIK",
+  OTHER: "OTH"
+};
 type DashboardSearchParams = {
   plan?: string;
 };
@@ -40,6 +51,42 @@ function formatPlannedDate(date: Date) {
 
 function pluralize(value: number, singular: string, plural: string) {
   return `${value} ${value === 1 ? singular : plural}`;
+}
+
+function typeAbbr(type: string | null | undefined) {
+  return ACTIVITY_TYPE_ABBR[String(type || "OTHER").toUpperCase()] || "OTH";
+}
+
+function toDateKey(date: Date) {
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const dd = String(date.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function buildPlannedMetricParts(activity: any, viewerUnits: DistanceUnit) {
+  if (!activity) return [];
+
+  const parts: string[] = [];
+  const plannedDistance = convertDistanceForDisplay(activity.distance, activity.distanceUnit, viewerUnits);
+  if (plannedDistance) {
+    parts.push(`${formatDistanceNumber(plannedDistance.value)} ${distanceUnitLabel(plannedDistance.unit)}`);
+  }
+  if (activity.duration) {
+    parts.push(`${activity.duration} min`);
+  }
+  const paceConverted = convertPaceForDisplay(
+    activity.paceTarget,
+    viewerUnits,
+    activity.distanceUnit || viewerUnits
+  );
+  const paceText = paceConverted
+    || (typeof activity.paceTarget === "string" ? activity.paceTarget.trim() : "");
+  if (paceText) {
+    parts.push(`Pace ${paceText}`);
+  }
+
+  return parts;
 }
 
 export default async function DashboardPage({
@@ -288,6 +335,7 @@ export default async function DashboardPage({
   const upcoming = datedActivities
     .filter((a) => a.date.getTime() > today.getTime())
     .slice(0, 3);
+  const upcomingHero = upcoming[0] || null;
 
   /* Week statistics */
   const weekByDay = new Map<number, any>();
@@ -396,6 +444,14 @@ export default async function DashboardPage({
   const todayDisplayActualPace = todayActivity
     ? convertPaceForDisplay(todayActivity.actualPace, viewerUnits, todayActivity.distanceUnit || viewerUnits)
     : null;
+  const todayDateKey = toDateKey(today);
+  const todayPlannedMetricParts = todayActivity
+    ? buildPlannedMetricParts(todayActivity, viewerUnits)
+    : [];
+  const todayMetaLine = [formatPlannedDate(today), ...todayPlannedMetricParts].join(" · ");
+  const upcomingHeroMetricParts = upcomingHero
+    ? buildPlannedMetricParts(upcomingHero, viewerUnits)
+    : [];
   const initials = name
     .split(/\s+/)
     .filter(Boolean)
@@ -454,28 +510,19 @@ export default async function DashboardPage({
             <div className="dash-hero-label">TODAY · {dateStr}</div>
             {todayActivity && (
               <span className={`dash-type-badge dash-type-${todayActivity.type}`}>
-                {formatType(todayActivity.type)}
+                <span title={formatType(todayActivity.type)}>{typeAbbr(todayActivity.type)}</span>
               </span>
             )}
             <h2 className="dash-hero-title">
               {todayActivity?.title || "Recovery & Rest"}
             </h2>
             <div className="dash-hero-meta">
-              <span>{formatPlannedDate(today)}</span>
-              {todayActivity?.duration && (
+              <span>{todayMetaLine}</span>
+              {todayPlannedMetricParts.length === 0 && (
                 <>
                   <span className="dash-hero-sep" />
-                  <span>{todayActivity.duration} min</span>
+                  <span>{todayActivity ? "Follow plan notes" : "No workout scheduled on today's plan date"}</span>
                 </>
-              )}
-              {todayActivity?.duration && todayActivity?.distance && (
-                <span className="dash-hero-sep" />
-              )}
-              {todayDisplayDistance && (
-                <span>{formatDistanceNumber(todayDisplayDistance.value)} {distanceUnitLabel(todayDisplayDistance.unit)}</span>
-              )}
-              {!todayActivity?.duration && !todayActivity?.distance && (
-                <span>{todayActivity ? "Follow plan notes" : "No workout scheduled on today's plan date"}</span>
               )}
             </div>
             {todayActivity?.rawText && (
@@ -494,14 +541,18 @@ export default async function DashboardPage({
                     plannedDuration={todayActivity.duration}
                     distanceUnit={viewerUnits}
                   />
+                  <StravaDaySyncButton dateISO={todayDateKey} className="dash-btn-secondary" />
                   <a className="dash-btn-secondary" href={`/plans/${activePlan.id}`}>
                     View Plan
                   </a>
                 </>
               ) : (
-                <a className="dash-btn-secondary" href={`/plans/${activePlan.id}`}>
-                  View Plan
-                </a>
+                <>
+                  <StravaDaySyncButton dateISO={todayDateKey} className="dash-btn-secondary" />
+                  <a className="dash-btn-secondary" href={`/plans/${activePlan.id}`}>
+                    View Plan
+                  </a>
+                </>
               )}
             </div>
           </div>
@@ -538,57 +589,68 @@ export default async function DashboardPage({
             {upcoming.length > 0 && (
               <>
                 {/* Hero Item */}
-                <div className={`dash-next-hero type-${(upcoming[0].type || 'OTHER').toLowerCase()}`}>
+                <div className={`dash-next-hero type-${(upcomingHero?.type || 'OTHER').toLowerCase()}`}>
                   <div className="dash-next-hero-top">
                     <span className="dash-next-hero-label">
-                      {getIsoDay(upcoming[0].date) - getIsoDay(today) === 1 ? 'Tomorrow' : formatPlannedDate(upcoming[0].date)}
+                      {upcomingHero && (getIsoDay(upcomingHero.date) - getIsoDay(today) === 1
+                        ? 'Tomorrow'
+                        : formatPlannedDate(upcomingHero.date))}
                     </span>
-                    <span className="dash-next-hero-date">
-                      {upcoming[0].duration ? `${upcoming[0].duration} min` : ''}
-                    </span>
+                    {upcomingHeroMetricParts.length > 0 && (
+                      <span className="dash-next-hero-date">
+                        {upcomingHeroMetricParts.join(" · ")}
+                      </span>
+                    )}
                   </div>
                   <div className="dash-next-hero-title">
-                    {upcoming[0].title}
+                    {upcomingHero?.title}
                   </div>
                   <div className="dash-next-hero-meta">
-                    <span className={`dash-type-icon type-${(upcoming[0].type || 'OTHER').toLowerCase()}`}>
-                      <ActivityTypeIcon type={upcoming[0].type || 'OTHER'} className="dash-type-icon-glyph" />
+                    <span className={`dash-type-icon type-${(upcomingHero?.type || 'OTHER').toLowerCase()}`}>
+                      <ActivityTypeIcon type={upcomingHero?.type || 'OTHER'} className="dash-type-icon-glyph" />
                     </span>
-                    <span>{formatType(upcoming[0].type || 'OTHER')}</span>
+                    <span title={formatType(upcomingHero?.type || 'OTHER')}>{typeAbbr(upcomingHero?.type || 'OTHER')}</span>
                   </div>
-                  {upcoming[0].notes && (
+                  {upcomingHero?.notes && (
                     <div className="dash-next-hero-notes">
-                      {upcoming[0].notes}
+                      {upcomingHero.notes}
                     </div>
                   )}
                 </div>
 
                 {/* Remaining List */}
-                {upcoming.slice(1).map((a) => (
-                  <div className="dash-upcoming-item" key={a.id}>
-                    <div className="dash-upcoming-left">
-                      <div className="dash-upcoming-day">
-                        {a.date ? DAY_LABELS[getIsoDay(a.date) - 1] : DAY_LABELS[(a.dayOfWeek || 1) - 1]}
-                      </div>
-                      <div className="dash-upcoming-info">
-                        <span className="dash-upcoming-title">
-                          <span className={`dash-type-icon type-${String(a.type || "OTHER").toLowerCase()}`}>
-                            <ActivityTypeIcon
-                              type={String(a.type || "OTHER")}
-                              className="dash-type-icon-glyph"
-                            />
+                {upcoming.slice(1).map((a) => {
+                  const metricParts = buildPlannedMetricParts(a, viewerUnits);
+                  return (
+                    <div className="dash-upcoming-item" key={a.id}>
+                      <div className="dash-upcoming-left">
+                        <div className="dash-upcoming-day">
+                          {a.date ? DAY_LABELS[getIsoDay(a.date) - 1] : DAY_LABELS[(a.dayOfWeek || 1) - 1]}
+                        </div>
+                        <div className="dash-upcoming-info">
+                          <span className="dash-upcoming-title">
+                            <span className={`dash-type-icon type-${String(a.type || "OTHER").toLowerCase()}`}>
+                              <ActivityTypeIcon
+                                type={String(a.type || "OTHER")}
+                                className="dash-type-icon-glyph"
+                              />
+                            </span>
+                            {a.title}
                           </span>
-                          {a.title}
-                        </span>
-                        <span className="dash-upcoming-type">{formatType(a.type)}</span>
-                        <span className="dash-upcoming-date">{formatPlannedDate(a.date)}</span>
+                          <span className="dash-upcoming-type" title={formatType(a.type)}>
+                            {typeAbbr(a.type)}
+                          </span>
+                          <span className="dash-upcoming-date">{formatPlannedDate(a.date)}</span>
+                        </div>
                       </div>
+                      {metricParts.length > 0 && (
+                        <span className="dash-upcoming-metrics">
+                          {metricParts.join(" · ")}
+                        </span>
+                      )}
                     </div>
-                    <span className="dash-upcoming-duration">
-                      {a.duration ? `${a.duration} min` : "—"}
-                    </span>
-                  </div>
-                ))}
+                  );
+                })}
               </>
             )}
           </div>

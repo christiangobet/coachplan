@@ -783,6 +783,9 @@
 .dash-next-hero-date {
   font-size: 12px;
   color: var(--d-text-mid);
+  text-align: right;
+  font-weight: 600;
+  max-width: 62%;
 }
 
 .dash-next-hero-title {
@@ -874,6 +877,13 @@
   font-size: 12px;
   color: var(--d-muted);
   font-weight: 500;
+}
+
+.dash-upcoming-metrics {
+  font-size: 12px;
+  color: var(--d-text-mid);
+  font-weight: 600;
+  text-align: right;
 }
 
 /* ══════════════════════════
