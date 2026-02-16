@@ -14,6 +14,8 @@ import {
   formatDistanceNumber,
   type DistanceUnit
 } from '@/lib/unit-display';
+import ActivityForm, { ActivityFormData } from '@/components/PlanEditor/ActivityForm';
+import { ActivityPriority } from '@prisma/client';
 import '../plans.css';
 
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -58,53 +60,53 @@ function typeColor(type: string): string {
 
 type AiTrainerChange =
   | {
-      op: 'move_activity';
-      activityId: string;
-      targetDayId: string;
-      reason: string;
-    }
+    op: 'move_activity';
+    activityId: string;
+    targetDayId: string;
+    reason: string;
+  }
   | {
-      op: 'edit_activity';
-      activityId: string;
-      reason: string;
-      type?: string;
-      title?: string;
-      duration?: number | null;
-      distance?: number | null;
-      distanceUnit?: string | null;
-      paceTarget?: string | null;
-      effortTarget?: string | null;
-      notes?: string | null;
-      mustDo?: boolean;
-      bailAllowed?: boolean;
-      priority?: string | null;
-    }
+    op: 'edit_activity';
+    activityId: string;
+    reason: string;
+    type?: string;
+    title?: string;
+    duration?: number | null;
+    distance?: number | null;
+    distanceUnit?: string | null;
+    paceTarget?: string | null;
+    effortTarget?: string | null;
+    notes?: string | null;
+    mustDo?: boolean;
+    bailAllowed?: boolean;
+    priority?: string | null;
+  }
   | {
-      op: 'add_activity';
-      dayId: string;
-      reason: string;
-      type: string;
-      title: string;
-      duration?: number | null;
-      distance?: number | null;
-      distanceUnit?: string | null;
-      paceTarget?: string | null;
-      effortTarget?: string | null;
-      notes?: string | null;
-      mustDo?: boolean;
-      bailAllowed?: boolean;
-      priority?: string | null;
-    }
+    op: 'add_activity';
+    dayId: string;
+    reason: string;
+    type: string;
+    title: string;
+    duration?: number | null;
+    distance?: number | null;
+    distanceUnit?: string | null;
+    paceTarget?: string | null;
+    effortTarget?: string | null;
+    notes?: string | null;
+    mustDo?: boolean;
+    bailAllowed?: boolean;
+    priority?: string | null;
+  }
   | {
-      op: 'delete_activity';
-      activityId: string;
-      reason: string;
-    }
+    op: 'delete_activity';
+    activityId: string;
+    reason: string;
+  }
   | {
-      op: 'extend_plan';
-      newStartDate: string;
-      reason: string;
-    };
+    op: 'extend_plan';
+    newStartDate: string;
+    reason: string;
+  };
 
 type AiTrainerProposal = {
   coachReply: string;
@@ -176,6 +178,59 @@ export default function PlanDetailPage() {
   const [aiTrainerAppliedRows, setAiTrainerAppliedRows] = useState<Set<number>>(new Set());
   const [showAiTrainer, setShowAiTrainer] = useState(false);
   const aiTrainerApplying = aiTrainerApplyingTarget !== null;
+
+  // -- Edit Mode State --
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [editingActivity, setEditingActivity] = useState<any>(null);
+  const [addingToDayId, setAddingToDayId] = useState<string | null>(null);
+
+  const handleSaveActivity = async (data: ActivityFormData) => {
+    try {
+      if (editingActivity) {
+        // Edit existing
+        const res = await fetch(`/api/activities/${editingActivity.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body.error || 'Failed to update activity');
+        }
+        // Refresh plan
+        await loadPlan();
+      } else if (addingToDayId) {
+        // Add new
+        const res = await fetch(`/api/plan-days/${addingToDayId}/activities`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body.error || 'Failed to add activity');
+        }
+        await loadPlan();
+      }
+    } catch (err: any) {
+      alert(err.message); // Simple error feedback for now
+      throw err;
+    }
+  };
+
+  const handleDeleteActivity = async (activityId: string) => {
+    if (!confirm('Are you sure you want to delete this activity?')) return;
+    try {
+      const res = await fetch(`/api/activities/${activityId}`, {
+        method: 'DELETE'
+      });
+      if (!res.ok) throw new Error('Failed to delete');
+      await loadPlan();
+      setEditingActivity(null); // Close form if it was open (though usually delete is from form or list)
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
 
   const loadPlan = useCallback(async () => {
     if (!planId) return;
@@ -415,12 +470,12 @@ export default function PlanDetailPage() {
       selectedActivity.actualDistance === null || selectedActivity.actualDistance === undefined
         ? ''
         : String(
-            convertDistanceForDisplay(
-              selectedActivity.actualDistance,
-              selectedActivity.distanceUnit,
-              viewerUnits
-            )?.value ?? selectedActivity.actualDistance
-          )
+          convertDistanceForDisplay(
+            selectedActivity.actualDistance,
+            selectedActivity.distanceUnit,
+            viewerUnits
+          )?.value ?? selectedActivity.actualDistance
+        )
     );
     setActualDuration(
       selectedActivity.actualDuration === null || selectedActivity.actualDuration === undefined
@@ -537,6 +592,14 @@ export default function PlanDetailPage() {
               <h1>{plan.name}</h1>
               <div className="pcal-header-meta">
                 <span className={`plan-detail-status ${statusClass}`}>{plan.status}</span>
+                <button
+                  type="button"
+                  className={`btn-light ${isEditMode ? 'active' : ''}`}
+                  onClick={() => setIsEditMode(!isEditMode)}
+                  style={{ marginLeft: '12px', padding: '4px 12px', fontSize: '12px' }}
+                >
+                  {isEditMode ? 'Done Editing' : 'Edit Plan'}
+                </button>
                 {plan.weekCount && (
                   <>
                     <span className="plan-detail-meta-dot" />
@@ -674,147 +737,166 @@ export default function PlanDetailPage() {
             )}
           </section>
 
-      {/* Stats bar */}
-      <div className="pcal-stats">
-        <div className="pcal-stat">
-          <span className="pcal-stat-value">{completionPct}%</span>
-          <span className="pcal-stat-label">Complete</span>
-        </div>
-        <div className="pcal-stat">
-          <span className="pcal-stat-value">{completedActivities}/{totalActivities}</span>
-          <span className="pcal-stat-label">Workouts</span>
-        </div>
-        <div className="pcal-stat">
-          <span className="pcal-stat-value">{Math.floor(totalMinutes / 60)}h{totalMinutes % 60 > 0 ? ` ${totalMinutes % 60}m` : ''}</span>
-          <span className="pcal-stat-label">Total Time</span>
-        </div>
-        <div className="pcal-stat">
-          <div className="pcal-stat-bar">
-            <div className="pcal-stat-bar-fill" style={{ width: `${completionPct}%` }} />
-          </div>
-        </div>
-      </div>
-
-      {/* Calendar column headers */}
-      <div className="pcal-col-headers">
-        {DAY_LABELS.map((d) => (
-          <span key={d}>{d}</span>
-        ))}
-      </div>
-
-      {/* Week rows */}
-      <div className="pcal-weeks">
-        {weeks.map((week: any) => {
-          const dayMap = new Map<number, any>();
-          for (const day of (week.days || [])) {
-            dayMap.set(day.dayOfWeek, day);
-          }
-          const bounds = resolveWeekBounds({
-            weekIndex: week.weekIndex,
-            weekStartDate: week.startDate,
-            weekEndDate: week.endDate,
-            raceDate: plan.raceDate,
-            weekCount: plan.weekCount,
-            allWeekIndexes
-          });
-          const weekRange = formatWeekRange(bounds.startDate, bounds.endDate);
-          const weekStart = bounds.startDate;
-          const weekEnd = bounds.endDate;
-          const isCurrentWeek = !!(weekStart && weekEnd && today >= weekStart && today <= weekEnd);
-
-          return (
-            <div className={`pcal-week${isCurrentWeek ? ' pcal-week-current' : ''}`} key={week.id}>
-              <div className="pcal-week-label">
-                <div className="pcal-week-head">
-                  <span className="pcal-week-num">W{week.weekIndex}</span>
-                  {isCurrentWeek && <span className="pcal-week-today-badge">Today</span>}
-                </div>
-                {weekRange && <span className="pcal-week-range">{weekRange}</span>}
-                {!weekRange && <span className="pcal-week-range muted">Dates not set</span>}
-              </div>
-              <div className="pcal-week-grid">
-                {[1, 2, 3, 4, 5, 6, 7].map((dow) => {
-                  const day = dayMap.get(dow);
-                  const activities = day?.activities || [];
-                  const dayDate = getDayDateFromWeekStart(bounds.startDate, dow);
-                  const dayManualDone = isDayMarkedDone(day?.notes);
-                  const dayDone = dayManualDone || (activities.length > 0 && activities.every((activity: any) => activity.completed));
-                  const isToday = dayDate && dayDate.getTime() === today.getTime();
-                  const isPast = dayDate && dayDate.getTime() < today.getTime();
-                  const showMonthInDate = !!dayDate && (dow === 1 || dayDate.getDate() === 1);
-
-                  return (
-                    <div
-                      className={`pcal-cell${isToday ? ' pcal-cell-today' : ''}${isPast ? ' pcal-cell-past' : ''}${dayDone ? ' pcal-cell-day-done' : ''}`}
-                      key={dow}
-                    >
-                      {dayDate && (
-                        <span className="pcal-cell-date">
-                          {showMonthInDate
-                            ? dayDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-                            : dayDate.getDate()}
-                        </span>
-                      )}
-                      {dayDone && <span className="pcal-cell-day-check" title="Day completed">✓</span>}
-                      {isToday && <span className="pcal-cell-today-badge">Today</span>}
-                      {activities.length === 0 && (
-                        <span className="pcal-cell-empty" />
-                      )}
-                      {activities.map((a: any) => {
-                        const details: string[] = [];
-                        const plannedDistanceLabel = formatDisplayDistance(a.distance, a.distanceUnit);
-                        if (plannedDistanceLabel) details.push(plannedDistanceLabel);
-                        if (a.duration) details.push(`${a.duration}m`);
-                        const displayPaceTarget = formatDisplayPace(a.paceTarget, a.distanceUnit);
-                        if (displayPaceTarget) details.push(displayPaceTarget);
-                        if (a.effortTarget) details.push(a.effortTarget);
-                        if (a.completed) {
-                          const actuals: string[] = [];
-                          const actualDistanceLabel = formatDisplayDistance(a.actualDistance, a.distanceUnit);
-                          if (actualDistanceLabel) actuals.push(actualDistanceLabel);
-                          if (a.actualDuration) actuals.push(`${a.actualDuration}m`);
-                          const displayActualPace = formatDisplayPace(a.actualPace, a.distanceUnit);
-                          if (displayActualPace) actuals.push(displayActualPace);
-                          if (actuals.length > 0) details.push(`Actual ${actuals.join(' · ')}`);
-                        }
-
-                        return (
-                          <div
-                            className={`pcal-activity pcal-activity-clickable${a.completed ? ' pcal-activity-done' : ''}${a.mustDo || a.priority === 'KEY' ? ' pcal-activity-key' : ''}`}
-                            key={a.id}
-                            onClick={() => setSelectedActivity(a)}
-                          >
-                            <button
-                              className={`pcal-toggle${a.completed ? ' pcal-toggle-done' : ''}`}
-                              onClick={(e) => toggleComplete(a.id, e)}
-                              aria-label={a.completed ? 'Mark incomplete' : 'Mark complete'}
-                              type="button"
-                            />
-                            <div className="pcal-activity-content">
-                              <span className="pcal-activity-title">
-                                <ActivityTypeIcon
-                                  type={a.type}
-                                  className={`pcal-activity-icon type-${String(a.type || 'OTHER').toLowerCase()}`}
-                                />
-                                <span className="pcal-activity-title-text">{a.title}</span>
-                              </span>
-                              {details.length > 0 && (
-                                <span className="pcal-activity-details">
-                                  {details.join(' · ')}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  );
-                })}
+          {/* Stats bar */}
+          <div className="pcal-stats">
+            <div className="pcal-stat">
+              <span className="pcal-stat-value">{completionPct}%</span>
+              <span className="pcal-stat-label">Complete</span>
+            </div>
+            <div className="pcal-stat">
+              <span className="pcal-stat-value">{completedActivities}/{totalActivities}</span>
+              <span className="pcal-stat-label">Workouts</span>
+            </div>
+            <div className="pcal-stat">
+              <span className="pcal-stat-value">{Math.floor(totalMinutes / 60)}h{totalMinutes % 60 > 0 ? ` ${totalMinutes % 60}m` : ''}</span>
+              <span className="pcal-stat-label">Total Time</span>
+            </div>
+            <div className="pcal-stat">
+              <div className="pcal-stat-bar">
+                <div className="pcal-stat-bar-fill" style={{ width: `${completionPct}%` }} />
               </div>
             </div>
-          );
-        })}
-      </div>
+          </div>
+
+          {/* Calendar column headers */}
+          <div className="pcal-col-headers">
+            {DAY_LABELS.map((d) => (
+              <span key={d}>{d}</span>
+            ))}
+          </div>
+
+          {/* Week rows */}
+          <div className="pcal-weeks">
+            {weeks.map((week: any) => {
+              const dayMap = new Map<number, any>();
+              for (const day of (week.days || [])) {
+                dayMap.set(day.dayOfWeek, day);
+              }
+              const bounds = resolveWeekBounds({
+                weekIndex: week.weekIndex,
+                weekStartDate: week.startDate,
+                weekEndDate: week.endDate,
+                raceDate: plan.raceDate,
+                weekCount: plan.weekCount,
+                allWeekIndexes
+              });
+              const weekRange = formatWeekRange(bounds.startDate, bounds.endDate);
+              const weekStart = bounds.startDate;
+              const weekEnd = bounds.endDate;
+              const isCurrentWeek = !!(weekStart && weekEnd && today >= weekStart && today <= weekEnd);
+
+              return (
+                <div className={`pcal-week${isCurrentWeek ? ' pcal-week-current' : ''}`} key={week.id}>
+                  <div className="pcal-week-label">
+                    <div className="pcal-week-head">
+                      <span className="pcal-week-num">W{week.weekIndex}</span>
+                      {isCurrentWeek && <span className="pcal-week-today-badge">Today</span>}
+                    </div>
+                    {weekRange && <span className="pcal-week-range">{weekRange}</span>}
+                    {!weekRange && <span className="pcal-week-range muted">Dates not set</span>}
+                  </div>
+                  <div className="pcal-week-grid">
+                    {[1, 2, 3, 4, 5, 6, 7].map((dow) => {
+                      const day = dayMap.get(dow);
+                      const activities = day?.activities || [];
+                      const dayDate = getDayDateFromWeekStart(bounds.startDate, dow);
+                      const dayManualDone = isDayMarkedDone(day?.notes);
+                      const dayDone = dayManualDone || (activities.length > 0 && activities.every((activity: any) => activity.completed));
+                      const isToday = dayDate && dayDate.getTime() === today.getTime();
+                      const isPast = dayDate && dayDate.getTime() < today.getTime();
+                      const showMonthInDate = !!dayDate && (dow === 1 || dayDate.getDate() === 1);
+
+                      return (
+                        <div
+                          className={`pcal-cell${isToday ? ' pcal-cell-today' : ''}${isPast ? ' pcal-cell-past' : ''}${dayDone ? ' pcal-cell-day-done' : ''}`}
+                          key={dow}
+                        >
+                          {dayDate && (
+                            <span className="pcal-cell-date">
+                              {showMonthInDate
+                                ? dayDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                                : dayDate.getDate()}
+                            </span>
+                          )}
+                          {dayDone && <span className="pcal-cell-day-check" title="Day completed">✓</span>}
+                          {isToday && <span className="pcal-cell-today-badge">Today</span>}
+                          {activities.length === 0 && !isEditMode && (
+                            <span className="pcal-cell-empty" />
+                          )}
+                          {isEditMode && (
+                            <button
+                              className="btn-ghost"
+                              style={{ width: '100%', padding: '4px', fontSize: '11px', marginTop: '4px', borderStyle: 'dashed' }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setAddingToDayId(day?.id || null);
+                              }}
+                            >
+                              + Add
+                            </button>
+                          )}
+                          {activities.map((a: any) => {
+                            const details: string[] = [];
+                            const plannedDistanceLabel = formatDisplayDistance(a.distance, a.distanceUnit);
+                            if (plannedDistanceLabel) details.push(plannedDistanceLabel);
+                            if (a.duration) details.push(`${a.duration}m`);
+                            const displayPaceTarget = formatDisplayPace(a.paceTarget, a.distanceUnit);
+                            if (displayPaceTarget) details.push(displayPaceTarget);
+                            if (a.effortTarget) details.push(a.effortTarget);
+                            if (a.completed) {
+                              const actuals: string[] = [];
+                              const actualDistanceLabel = formatDisplayDistance(a.actualDistance, a.distanceUnit);
+                              if (actualDistanceLabel) actuals.push(actualDistanceLabel);
+                              if (a.actualDuration) actuals.push(`${a.actualDuration}m`);
+                              const displayActualPace = formatDisplayPace(a.actualPace, a.distanceUnit);
+                              if (displayActualPace) actuals.push(displayActualPace);
+                              if (actuals.length > 0) details.push(`Actual ${actuals.join(' · ')}`);
+                            }
+
+                            return (
+                              <div
+                                className={`pcal-activity pcal-activity-clickable${a.completed ? ' pcal-activity-done' : ''}${a.mustDo || a.priority === 'KEY' ? ' pcal-activity-key' : ''}`}
+                                key={a.id}
+                                onClick={(e) => {
+                                  if (isEditMode) {
+                                    e.stopPropagation();
+                                    setEditingActivity(a);
+                                  } else {
+                                    setSelectedActivity(a);
+                                  }
+                                }}
+                              >
+                                <button
+                                  className={`pcal-toggle${a.completed ? ' pcal-toggle-done' : ''}`}
+                                  onClick={(e) => toggleComplete(a.id, e)}
+                                  aria-label={a.completed ? 'Mark incomplete' : 'Mark complete'}
+                                  type="button"
+                                />
+                                <div className="pcal-activity-content">
+                                  <span className="pcal-activity-title">
+                                    <ActivityTypeIcon
+                                      type={a.type}
+                                      className={`pcal-activity-icon type-${String(a.type || 'OTHER').toLowerCase()}`}
+                                    />
+                                    <span className="pcal-activity-title-text">{a.title}</span>
+                                  </span>
+                                  {details.length > 0 && (
+                                    <span className="pcal-activity-details">
+                                      {details.join(' · ')}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </section>
       </div>
 
@@ -984,6 +1066,20 @@ export default function PlanDetailPage() {
           </div>
         </div>
       )}
+      {/* Activity Form Modal */}
+      <ActivityForm
+        isOpen={!!editingActivity || !!addingToDayId}
+        onClose={() => {
+          setEditingActivity(null);
+          setAddingToDayId(null);
+        }}
+        onSubmit={handleSaveActivity}
+        onDelete={handleDeleteActivity}
+        initialData={editingActivity || {}}
+        title={editingActivity ? 'Edit Activity' : 'Add Activity'}
+        dayId={addingToDayId || undefined}
+      />
+
     </main>
   );
 }
