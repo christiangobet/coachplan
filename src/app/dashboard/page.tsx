@@ -16,7 +16,6 @@ import {
 import CompleteWorkoutButton from "@/components/CompleteWorkoutButton";
 import AthleteSidebar from "@/components/AthleteSidebar";
 import StravaSyncPanel from "@/components/StravaSyncPanel";
-import ActivityTypeIcon from "@/components/ActivityTypeIcon";
 import SelectedPlanCookie from "@/components/SelectedPlanCookie";
 import StravaDaySyncButton from "@/components/StravaDaySyncButton";
 import "./dashboard.css";
@@ -562,7 +561,7 @@ export default async function DashboardPage({
             <div className="dash-card-header">
               <span className="dash-card-title">Next Up</span>
               <a className="dash-card-link" href={`/plans/${activePlan.id}`}>
-                Full plan
+                View plan
               </a>
             </div>
             {trainingNotStarted && trainingStartDate && (
@@ -606,10 +605,12 @@ export default async function DashboardPage({
                     {upcomingHero?.title}
                   </div>
                   <div className="dash-next-hero-meta">
-                    <span className={`dash-type-icon type-${(upcomingHero?.type || 'OTHER').toLowerCase()}`}>
-                      <ActivityTypeIcon type={upcomingHero?.type || 'OTHER'} className="dash-type-icon-glyph" />
+                    <span
+                      className={`dash-type-pill type-${String(upcomingHero?.type || "OTHER").toLowerCase()}`}
+                      title={formatType(upcomingHero?.type || 'OTHER')}
+                    >
+                      {typeAbbr(upcomingHero?.type || 'OTHER')}
                     </span>
-                    <span title={formatType(upcomingHero?.type || 'OTHER')}>{typeAbbr(upcomingHero?.type || 'OTHER')}</span>
                   </div>
                   {upcomingHero?.notes && (
                     <div className="dash-next-hero-notes">
@@ -629,12 +630,6 @@ export default async function DashboardPage({
                         </div>
                         <div className="dash-upcoming-info">
                           <span className="dash-upcoming-title">
-                            <span className={`dash-type-icon type-${String(a.type || "OTHER").toLowerCase()}`}>
-                              <ActivityTypeIcon
-                                type={String(a.type || "OTHER")}
-                                className="dash-type-icon-glyph"
-                              />
-                            </span>
                             {a.title}
                           </span>
                           <span className="dash-upcoming-type" title={formatType(a.type)}>

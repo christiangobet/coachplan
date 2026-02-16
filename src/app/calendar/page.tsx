@@ -17,7 +17,6 @@ import {
 import AthleteSidebar from "@/components/AthleteSidebar";
 import DayCompletionButton from "@/components/DayCompletionButton";
 import RaceDetailsEditor from "@/components/RaceDetailsEditor";
-import ActivityTypeIcon from "@/components/ActivityTypeIcon";
 import SelectedPlanCookie from "@/components/SelectedPlanCookie";
 import "../dashboard/dashboard.css";
 import "./calendar.css";
@@ -655,13 +654,15 @@ export default async function CalendarPage({
                 <div key={activity.id} className={`cal-day-detail-item${activity.completed ? " done" : ""}`}>
                   <div className="cal-day-detail-title">
                     <span className="cal-day-detail-main">
-                      <ActivityTypeIcon
-                        type={activity.type}
-                        className={`cal-day-detail-icon type-${activity.type.toLowerCase()}`}
-                      />
+                      <span
+                        className={`cal-day-detail-type-pill type-${activity.type.toLowerCase()}`}
+                        title={formatType(activity.type)}
+                      >
+                        {getTypeAbbr(activity.type)}
+                      </span>
                       <strong>{activity.title}</strong>
                     </span>
-                    <span>{getTypeAbbr(activity.type)} · {formatType(activity.type)}</span>
+                    <span>{formatType(activity.type)}</span>
                   </div>
                   <div className="cal-day-detail-meta">
                     <span>

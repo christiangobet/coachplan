@@ -1250,10 +1250,28 @@
   gap: 6px;
 }
 
-.pcal-modal-type-icon {
-  width: 14px;
-  height: 14px;
+.pcal-modal-type-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  min-height: 18px;
+  border-radius: 999px;
+  padding: 0 6px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  border: 1px solid transparent;
 }
+
+.pcal-modal-type-chip.type-run { color: var(--accent); background: rgba(252, 76, 2, 0.12); border-color: rgba(252, 76, 2, 0.24); }
+.pcal-modal-type-chip.type-strength { color: #5f4fd2; background: rgba(108, 92, 231, 0.12); border-color: rgba(108, 92, 231, 0.24); }
+.pcal-modal-type-chip.type-cross_train { color: #0a73be; background: rgba(9, 132, 227, 0.12); border-color: rgba(9, 132, 227, 0.24); }
+.pcal-modal-type-chip.type-rest { color: #0f8a47; background: rgba(46, 204, 113, 0.12); border-color: rgba(46, 204, 113, 0.24); }
+.pcal-modal-type-chip.type-mobility { color: #cc6b0d; background: rgba(230, 126, 34, 0.12); border-color: rgba(230, 126, 34, 0.24); }
+.pcal-modal-type-chip.type-yoga { color: #0f8a47; background: rgba(46, 204, 113, 0.12); border-color: rgba(46, 204, 113, 0.24); }
+.pcal-modal-type-chip.type-hike { color: #0d8a8b; background: rgba(14, 165, 166, 0.12); border-color: rgba(14, 165, 166, 0.24); }
+.pcal-modal-type-chip.type-other { color: var(--muted); background: rgba(107, 107, 118, 0.12); border-color: rgba(107, 107, 118, 0.24); }
 
 .pcal-modal-title {
   font-size: 20px;

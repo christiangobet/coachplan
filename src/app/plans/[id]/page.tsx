@@ -19,6 +19,16 @@ import { ActivityPriority } from '@prisma/client';
 import '../plans.css';
 
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const ACTIVITY_TYPE_ABBR: Record<string, string> = {
+  RUN: 'RUN',
+  STRENGTH: 'STR',
+  CROSS_TRAIN: 'XT',
+  REST: 'RST',
+  MOBILITY: 'MOB',
+  YOGA: 'YOG',
+  HIKE: 'HIK',
+  OTHER: 'OTH'
+};
 
 function formatType(type: string) {
   return type.replace(/_/g, ' ').toLowerCase().replace(/^\w/, (c) => c.toUpperCase());
@@ -56,6 +66,10 @@ function typeColor(type: string): string {
     case 'HIKE': return '#0984e3';
     default: return 'var(--muted)';
   }
+}
+
+function typeAbbr(type: string | null | undefined) {
+  return ACTIVITY_TYPE_ABBR[String(type || 'OTHER').toUpperCase()] || 'OTH';
 }
 
 type AiTrainerChange =
@@ -944,7 +958,12 @@ export default function PlanDetailPage() {
 
             <div className="pcal-modal-body">
               <span className="pcal-modal-type">
-                <ActivityTypeIcon type={selectedActivity.type} className="pcal-modal-type-icon" />
+                <span
+                  className={`pcal-modal-type-chip type-${String(selectedActivity.type || 'OTHER').toLowerCase()}`}
+                  title={formatType(selectedActivity.type)}
+                >
+                  {typeAbbr(selectedActivity.type)}
+                </span>
                 {formatType(selectedActivity.type)}
               </span>
               <h2 className="pcal-modal-title">{selectedActivity.title}</h2>
