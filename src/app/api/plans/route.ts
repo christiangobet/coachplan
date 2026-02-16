@@ -36,6 +36,10 @@ function parseBoundedNumber(value: string | undefined, fallback: number, min: nu
 
 const UPLOAD_PARSE_TIMEOUT_MS = parseTimeoutMs(process.env.UPLOAD_PARSE_TIMEOUT_MS, 120000);
 const AI_WEEK_PARSE_TIMEOUT_MS = parseTimeoutMs(process.env.AI_WEEK_PARSE_TIMEOUT_MS, 8000);
+const AI_WEEK_PARSE_MODEL = process.env.AI_WEEK_PARSE_MODEL?.trim() || undefined;
+const AI_WEEK_PARSE_MAX_DAYS = Math.floor(
+  parseBoundedNumber(process.env.AI_WEEK_PARSE_MAX_DAYS, 3, 1, DAY_KEYS.length)
+);
 const PARSE_MIN_QUALITY_SCORE = parseBoundedNumber(process.env.PARSE_MIN_QUALITY_SCORE, 30, 0, 100);
 const PARSE_MIN_DAY_COVERAGE = parseBoundedNumber(process.env.PARSE_MIN_DAY_COVERAGE, 0.12, 0, 1);
 
@@ -778,6 +782,57 @@ function normalizeMatchText(text: string | null | undefined) {
     .trim();
 }
 
+function countAbbreviationTokens(text: string) {
+  return (text.match(/\b(?:wu|cd|lr|lrl|xt|str|rst|mob|yog|hik|rp|mp|ns|ff|rec)\b/gi) || []).length;
+}
+
+function chooseActivityRawText(baseRaw: string | null | undefined, aiRaw: string | null | undefined) {
+  const base = normalizeWhitespace(String(baseRaw || ''));
+  const ai = normalizeWhitespace(String(aiRaw || ''));
+
+  if (!ai) return base || null;
+  if (!base) return ai;
+
+  const baseAbbrCount = countAbbreviationTokens(base);
+  const aiAbbrCount = countAbbreviationTokens(ai);
+
+  if (aiAbbrCount < baseAbbrCount) return ai;
+  if (ai.length >= base.length + 6) return ai;
+  return base;
+}
+
+function scoreDayForAiPass(rawText: string) {
+  const text = normalizeWhitespace(rawText || '');
+  if (!text) return 0;
+
+  const normalized = normalizePlanText(text).toLowerCase();
+  let score = 0;
+
+  if (/[★♥]/.test(text)) score += 2;
+  if (/[;|]/.test(text)) score += 2;
+  if (/\b(?:wu|cd|xt|str|rst|mob|yog|hik|rp|mp|ns|ff)\b/i.test(normalized)) score += 3;
+  if (/\b(?:lr|lrl)\b/i.test(normalized)) score += 2;
+  if (/\b(?:e|t|i)\s*:/i.test(normalized)) score += 2;
+  if (/\b\d+\s*x\s*\d+(?:\.\d+)?\b/i.test(normalized)) score += 2;
+  if (/\([^)]*\d[^)]*\)/.test(text)) score += 1;
+  if (text.length > 44) score += 1;
+  if ((text.match(/\d+(?:\.\d+)?\s*(?:miles?|mi|km|meters?|metres?|m)\b/gi) || []).length > 1) score += 1;
+
+  return score;
+}
+
+function selectAiTargetDayKeys(rawDays: Record<string, string>, maxDays: number) {
+  return DAY_KEYS
+    .map((dayKey) => {
+      const rawText = rawDays[dayKey] || '';
+      return { dayKey, score: scoreDayForAiPass(rawText) };
+    })
+    .filter((candidate) => candidate.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, Math.max(1, maxDays))
+    .map((candidate) => candidate.dayKey);
+}
+
 function scoreActivityMatch(base: ActivityDraft, ai: ActivityDraft) {
   let score = 0;
 
@@ -817,7 +872,7 @@ function mergeActivityDraft(base: ActivityDraft, ai: ActivityDraft): ActivityDra
     type: baseIsOtherType ? (ai.type || base.type) : base.type,
     subtype: preferBaseSubtype ? base.subtype : (ai.subtype ?? base.subtype),
     title: baseIsGenericTitle && ai.title ? ai.title : base.title,
-    rawText: base.rawText || ai.rawText || null,
+    rawText: chooseActivityRawText(base.rawText, ai.rawText),
     distance: base.distance ?? ai.distance,
     distanceUnit: base.distanceUnit ?? ai.distanceUnit,
     duration: base.duration ?? ai.duration,
@@ -956,9 +1011,12 @@ function buildAiActivities(args: {
   const drafts: ActivityDraft[] = [];
 
   for (const a of aiActivities) {
-    const decodedRawText = decodeActivityText(String(a.raw_text || dayRawText || ''));
+    const sourceRawText = normalizeWhitespace(String(a.raw_text || dayRawText || ''));
+    const decodedRawText = decodeActivityText(sourceRawText);
+    const instructionText = normalizeWhitespace(String(a.instruction_text || ''));
+    const displayRawText = instructionText || decodedRawText || null;
     const normalizedSubtype = normalizeSubtypeToken(a.subtype || null);
-    const inferredSubtype = inferSubtype(decodedRawText || String(a.title || ''));
+    const inferredSubtype = inferSubtype(displayRawText || String(a.title || ''));
     const effectiveSubtype =
       normalizedSubtype && normalizedSubtype !== 'unknown'
         ? normalizedSubtype
@@ -986,7 +1044,7 @@ function buildAiActivities(args: {
       type: aiType,
       subtype: effectiveSubtype,
       title: normalizedTitle || fallbackTitle,
-      rawText: decodedRawText || null,
+      rawText: displayRawText,
       distance: storageDistance.distance,
       distanceUnit: storageDistance.distanceUnit,
       duration: aiDuration,
@@ -1464,16 +1522,25 @@ export async function POST(req: Request) {
           rawDays[key] = week?.days?.[key]?.raw || '';
         });
         const weekDefaultDistanceUnit = inferDominantDistanceUnit(Object.values(rawDays), userDefaultDistanceUnit);
+        const aiTargetDayKeys = ENABLE_AI_WEEK_PARSE
+          ? selectAiTargetDayKeys(rawDays, AI_WEEK_PARSE_MAX_DAYS)
+          : [];
+        const aiTargetSet = new Set(aiTargetDayKeys);
 
         let aiWeek = null;
-        if (ENABLE_AI_WEEK_PARSE) {
+        if (ENABLE_AI_WEEK_PARSE && aiTargetDayKeys.length > 0) {
+          const aiInputDays: Record<string, string> = {};
+          DAY_KEYS.forEach((key) => {
+            aiInputDays[key] = aiTargetSet.has(key) ? rawDays[key] : '';
+          });
           try {
             aiWeek = await withTimeout(
               parseWeekWithAI({
                 planName: name,
                 weekNumber: i + 1,
-                days: rawDays,
-                legend: parsed?.glossary?.note || undefined
+                days: aiInputDays,
+                legend: parsed?.glossary?.note || undefined,
+                model: AI_WEEK_PARSE_MODEL
               }),
               AI_WEEK_PARSE_TIMEOUT_MS,
               'AI week parse timed out.'
@@ -1501,7 +1568,9 @@ export async function POST(req: Request) {
             weekDefaultDistanceUnit
           );
 
-          const aiActivities = aiWeek?.days?.[key]?.activities || [];
+          const aiActivities = aiTargetSet.has(key)
+            ? (aiWeek?.days?.[key]?.activities || [])
+            : [];
           const deterministicActivities = buildDeterministicActivities({
             planId: plan.id,
             dayId: day.id,

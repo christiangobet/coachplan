@@ -72,6 +72,7 @@ const WEEK_SCHEMA = {
           subtype: { type: ["string", "null"] },
           title: { type: "string" },
           raw_text: { type: "string" },
+          instruction_text: { type: ["string", "null"] },
           metrics: {
             type: "object",
             additionalProperties: false,
@@ -137,6 +138,8 @@ export async function parseWeekWithAI(args: {
     "Decode abbreviations (WU, CD, T, I, LR, LRL, E, XT, STR, RST, MOB, YOG, HIK, RP, MP, NS).",
     "Interpret ★ as must_do and ♥ as bail_allowed.",
     "Preserve raw_text exactly as written in each cell when possible.",
+    "Also provide instruction_text as plain, readable coaching text with abbreviations expanded.",
+    "For days where the raw cell is empty, return zero activities.",
     `Plan name: ${args.planName}`,
     args.legend ? `Legend:\n${args.legend}` : "",
     `Week ${args.weekNumber} raw cells:`,
