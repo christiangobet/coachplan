@@ -471,7 +471,13 @@ export default async function DashboardPage({
 
       <div className="dash-grid">
         <div className="dash-left-col">
-          <AthleteSidebar active="dashboard" name={name} sticky={false} showQuickActions={false} />
+          <AthleteSidebar
+            active="dashboard"
+            name={name}
+            sticky={false}
+            showQuickActions={false}
+            selectedPlanId={activePlan.id}
+          />
           <StravaSyncPanel compact />
         </div>
 

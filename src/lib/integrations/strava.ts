@@ -344,7 +344,7 @@ async function buildPlanActivityCandidates(
       }
     }
   });
-  const plan = pickSelectedPlan(plans, { requestedPlanId: preferredPlanId });
+  const plan = pickSelectedPlan(plans, { cookiePlanId: preferredPlanId });
 
   const map = new Map<string, PlannedActivityCandidate[]>();
   const byId = new Map<string, PlannedActivityCandidate>();

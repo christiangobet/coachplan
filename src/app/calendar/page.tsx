@@ -474,7 +474,7 @@ export default async function CalendarPage({
     <main className="dash cal-page">
       <SelectedPlanCookie planId={selectedPlan.id} />
       <div className="dash-grid">
-        <AthleteSidebar active="calendar" name={name} />
+        <AthleteSidebar active="calendar" name={name} selectedPlanId={selectedPlan.id} />
 
         <section className="dash-center">
           <div className="dash-card cal-header">

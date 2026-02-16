@@ -393,7 +393,7 @@ export default async function ProgressPage({
     <main className="dash prog-page-shell">
       <SelectedPlanCookie planId={selectedPlan.id} />
       <div className="dash-grid">
-        <AthleteSidebar active="progress" name={name} />
+        <AthleteSidebar active="progress" name={name} selectedPlanId={selectedPlan.id} />
 
         <section className="dash-center">
           <div className="dash-card prog-header-card">

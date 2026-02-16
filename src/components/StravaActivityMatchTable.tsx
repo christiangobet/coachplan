@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import ActivityTypeIcon from '@/components/ActivityTypeIcon';
 import {
   convertDistanceForDisplay,
@@ -94,6 +94,8 @@ function formatDate(value: string | null | undefined) {
 
 export default function StravaActivityMatchTable() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const selectedPlanId = searchParams.get('plan') || '';
   const [data, setData] = useState<ReviewResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [busyDate, setBusyDate] = useState<string | null>(null);
@@ -101,32 +103,32 @@ export default function StravaActivityMatchTable() {
   const [status, setStatus] = useState<string | null>(null);
   const [importedDates, setImportedDates] = useState<Set<string>>(new Set());
 
-  async function load() {
+  const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/integrations/strava/review?ts=${Date.now()}`, {
-        cache: 'no-store'
-      });
+      const reviewUrl = new URL(`/api/integrations/strava/review?ts=${Date.now()}`, window.location.origin);
+      if (selectedPlanId) reviewUrl.searchParams.set('plan', selectedPlanId);
+      const res = await fetch(reviewUrl.toString(), { cache: 'no-store' });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
         setStatus(body?.error || 'Failed to load Strava table');
         return;
       }
       setData(body as ReviewResponse);
-      const selectedPlanId = typeof body?.plan?.id === 'string' ? body.plan.id : '';
-      if (selectedPlanId) {
-        document.cookie = `${SELECTED_PLAN_COOKIE}=${encodeURIComponent(selectedPlanId)}; Path=/; Max-Age=31536000; SameSite=Lax`;
+      const selectedPlanIdFromResponse = typeof body?.plan?.id === 'string' ? body.plan.id : '';
+      if (selectedPlanIdFromResponse) {
+        document.cookie = `${SELECTED_PLAN_COOKIE}=${encodeURIComponent(selectedPlanIdFromResponse)}; Path=/; Max-Age=31536000; SameSite=Lax`;
       }
     } catch {
       setStatus('Failed to load Strava table');
     } finally {
       setLoading(false);
     }
-  }
+  }, [selectedPlanId]);
 
   useEffect(() => {
     load();
-  }, []);
+  }, [load]);
 
   async function refreshTable() {
     setImportedDates(new Set());
@@ -141,7 +143,7 @@ export default function StravaActivityMatchTable() {
       const res = await fetch('/api/integrations/strava/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ syncFromPlanStart: true })
+        body: JSON.stringify({ syncFromPlanStart: true, planId: selectedPlanId || undefined })
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -169,7 +171,7 @@ export default function StravaActivityMatchTable() {
       const res = await fetch('/api/integrations/strava/import-day', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ date })
+        body: JSON.stringify({ date, planId: selectedPlanId || undefined })
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {

@@ -2,7 +2,9 @@
 
 import Link from 'next/link';
 import { UserButton } from '@clerk/nextjs';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { useState, useEffect } from 'react';
+import { appendPlanQueryToHref, extractPlanIdFromPathname } from '@/lib/plan-selection';
 
 type NavItem = { href: string; label: string };
 
@@ -26,6 +28,9 @@ export default function Header({
     isAccountInactive?: boolean;
 }) {
     const [menuOpen, setMenuOpen] = useState(false);
+    const pathname = usePathname();
+    const searchParams = useSearchParams();
+    const contextualPlanId = searchParams.get('plan') || extractPlanIdFromPathname(pathname);
 
     // Close menu on route change (resize)
     useEffect(() => {
@@ -54,7 +59,7 @@ export default function Header({
                 </>
             ) : (
                 <>
-                    <Link className="brand" href={brandHref}>{brand}</Link>
+                    <Link className="brand" href={appendPlanQueryToHref(brandHref, contextualPlanId)}>{brand}</Link>
                     {roleChip && (
                         <span className={`env-chip ${roleChipClass || ''}`}>
                             {roleChip}
@@ -65,7 +70,12 @@ export default function Header({
                             <span className="nav-account-disabled">Account Deactivated</span>
                         )}
                         {!isAccountInactive && navItems.map((item) => (
-                            <Link key={item.href} href={item.href}>{item.label}</Link>
+                            <Link
+                                key={item.href}
+                                href={appendPlanQueryToHref(item.href, contextualPlanId)}
+                            >
+                                {item.label}
+                            </Link>
                         ))}
                         {!isAccountInactive && roleSwitchHref && (
                             <Link className="nav-role-switch" href={roleSwitchHref}>Switch Role</Link>
@@ -98,7 +108,7 @@ export default function Header({
                             <Link
                                 key={item.href}
                                 className="mobile-nav-link"
-                                href={item.href}
+                                href={appendPlanQueryToHref(item.href, contextualPlanId)}
                                 onClick={() => setMenuOpen(false)}
                             >
                                 {item.label}

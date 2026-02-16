@@ -1,4 +1,8 @@
+'use client';
+
 import Link from "next/link";
+import { usePathname, useSearchParams } from "next/navigation";
+import { appendPlanQueryToHref, extractPlanIdFromPathname } from "@/lib/plan-selection";
 
 type AthleteNavItem =
   | "dashboard"
@@ -30,13 +34,22 @@ export default function AthleteSidebar({
   active,
   name,
   sticky = true,
-  showQuickActions = false
+  showQuickActions = false,
+  selectedPlanId = null
 }: {
   active?: AthleteNavItem;
   name: string;
   sticky?: boolean;
   showQuickActions?: boolean;
+  selectedPlanId?: string | null;
 }) {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const contextualPlanId =
+    selectedPlanId
+    || searchParams.get("plan")
+    || extractPlanIdFromPathname(pathname);
+
   const initials = name
     .split(/\s+/)
     .filter(Boolean)
@@ -49,7 +62,7 @@ export default function AthleteSidebar({
 
   return (
     <aside className={`dash-side${sticky ? "" : " no-sticky"}`}>
-      <Link className="dash-side-brand" href="/dashboard">
+      <Link className="dash-side-brand" href={appendPlanQueryToHref("/dashboard", contextualPlanId)}>
         <span>Coach</span> Plan
       </Link>
 
@@ -58,7 +71,7 @@ export default function AthleteSidebar({
           <Link
             key={item.id}
             className={`dash-nav-item${isActive(item.id) ? " active" : ""}`}
-            href={item.href}
+            href={appendPlanQueryToHref(item.href, contextualPlanId)}
           >
             <span className="dash-nav-dot" />
             {item.label}
@@ -72,9 +85,9 @@ export default function AthleteSidebar({
 
           <div className="dash-connect">
             <span>Quick Actions</span>
-            <Link className="dash-connect-btn" href="/upload">Upload Plan</Link>
-            <Link className="dash-connect-btn" href="/plans">Manage Plans</Link>
-            <Link className="dash-connect-btn" href="/profile">Profile Settings</Link>
+            <Link className="dash-connect-btn" href={appendPlanQueryToHref("/upload", contextualPlanId)}>Upload Plan</Link>
+            <Link className="dash-connect-btn" href={appendPlanQueryToHref("/plans", contextualPlanId)}>Manage Plans</Link>
+            <Link className="dash-connect-btn" href={appendPlanQueryToHref("/profile", contextualPlanId)}>Profile Settings</Link>
           </div>
         </>
       )}

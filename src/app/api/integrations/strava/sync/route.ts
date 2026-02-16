@@ -34,7 +34,7 @@ async function getPlanStartDate(userId: string, preferredPlanId?: string | null)
     }
   });
   const plan = pickSelectedPlan(plans, {
-    requestedPlanId: preferredPlanId
+    cookiePlanId: preferredPlanId
   });
 
   if (!plan) return null;
@@ -67,9 +67,13 @@ export async function POST(req: Request) {
   const access = await requireRoleApi('ATHLETE');
   if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
   const cookieStore = await cookies();
-  const preferredPlanId = cookieStore.get(SELECTED_PLAN_COOKIE)?.value || null;
+  const cookiePlanId = cookieStore.get(SELECTED_PLAN_COOKIE)?.value || null;
 
   const body = await req.json().catch(() => ({}));
+  const explicitPlanId = typeof (body as Record<string, unknown>)?.planId === 'string'
+    ? String((body as Record<string, unknown>).planId).trim()
+    : '';
+  const preferredPlanId = explicitPlanId || cookiePlanId;
   const parsedLookback = parseLookbackDays((body as Record<string, unknown>)?.lookbackDays);
   const syncFromPlanStart = Boolean((body as Record<string, unknown>)?.syncFromPlanStart);
   let lookbackDays = parsedLookback;

@@ -4,13 +4,24 @@ import { currentUser } from "@clerk/nextjs/server";
 import AthleteSidebar from "@/components/AthleteSidebar";
 import StravaSyncPanel from "@/components/StravaSyncPanel";
 import StravaActivityMatchTable from "@/components/StravaActivityMatchTable";
+import { appendPlanQueryToHref } from "@/lib/plan-selection";
 import "../dashboard/dashboard.css";
 import "./strava.css";
 
-export default async function StravaPage() {
+type StravaSearchParams = {
+  plan?: string;
+};
+
+export default async function StravaPage({
+  searchParams
+}: {
+  searchParams?: Promise<StravaSearchParams>;
+}) {
   const user = await currentUser();
   if (!user) redirect("/sign-in");
 
+  const params = (await searchParams) || {};
+  const selectedPlanId = typeof params.plan === "string" ? params.plan : "";
   const name = user.fullName || user.firstName || "Athlete";
 
   return (
@@ -20,7 +31,13 @@ export default async function StravaPage() {
 
       <div className="dash-grid">
         <div className="dash-left-col">
-          <AthleteSidebar active="strava" name={name} sticky={false} showQuickActions={false} />
+          <AthleteSidebar
+            active="strava"
+            name={name}
+            sticky={false}
+            showQuickActions={false}
+            selectedPlanId={selectedPlanId}
+          />
           <StravaSyncPanel compact />
         </div>
 
@@ -54,10 +71,10 @@ export default async function StravaPage() {
               <span className="dash-card-title">Shortcuts</span>
             </div>
             <div className="strava-links">
-              <Link className="dash-connect-btn" href="/calendar">
+              <Link className="dash-connect-btn" href={appendPlanQueryToHref("/calendar", selectedPlanId)}>
                 Open Calendar
               </Link>
-              <Link className="dash-connect-btn" href="/progress">
+              <Link className="dash-connect-btn" href={appendPlanQueryToHref("/progress", selectedPlanId)}>
                 Open Progress
               </Link>
             </div>

@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import AthleteSidebar from '@/components/AthleteSidebar';
+import { SELECTED_PLAN_COOKIE } from '@/lib/plan-selection';
 import '../dashboard/dashboard.css';
 import './plans.css';
 
@@ -46,6 +47,11 @@ export default function PlansPage() {
   const [assigning, setAssigning] = useState<string | null>(null);
   const [processingPlanId, setProcessingPlanId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const rememberSelectedPlan = (planId: string) => {
+    if (!planId) return;
+    document.cookie = `${SELECTED_PLAN_COOKIE}=${encodeURIComponent(planId)}; Path=/; Max-Age=31536000; SameSite=Lax`;
+  };
 
   useEffect(() => {
     fetch('/api/me')
@@ -103,6 +109,9 @@ export default function PlansPage() {
           ? { ...plan, status: data?.plan?.status || status }
           : plan
       )));
+      if ((data?.plan?.status || status) === 'ACTIVE') {
+        rememberSelectedPlan(planId);
+      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to update plan status');
     } finally {
@@ -187,8 +196,8 @@ export default function PlansPage() {
                       </div>
                     </div>
                     <div className="plan-card-actions">
-                      <Link className="plan-card-use" href={`/plans/${plan.id}`}>Open</Link>
-                      <Link className="plan-card-use" href={`/plans/${plan.id}?mode=edit`} style={{ marginLeft: '8px' }}>Edit</Link>
+                      <Link className="plan-card-use" href={`/plans/${plan.id}`} onClick={() => rememberSelectedPlan(plan.id)}>Open</Link>
+                      <Link className="plan-card-use" href={`/plans/${plan.id}?mode=edit`} style={{ marginLeft: '8px' }} onClick={() => rememberSelectedPlan(plan.id)}>Edit</Link>
                       <button
                         className="plan-card-use"
                         onClick={() => updatePlanStatus(plan.id, 'DRAFT')}
@@ -257,8 +266,8 @@ export default function PlansPage() {
                       </div>
                     </div>
                     <div className="plan-card-actions">
-                      <Link className="plan-card-use" href={`/plans/${plan.id}`}>Open</Link>
-                      <Link className="plan-card-use" href={`/plans/${plan.id}?mode=edit`} style={{ marginLeft: '8px' }}>Edit</Link>
+                      <Link className="plan-card-use" href={`/plans/${plan.id}`} onClick={() => rememberSelectedPlan(plan.id)}>Open</Link>
+                      <Link className="plan-card-use" href={`/plans/${plan.id}?mode=edit`} style={{ marginLeft: '8px' }} onClick={() => rememberSelectedPlan(plan.id)}>Edit</Link>
                       <button
                         className="plan-card-use"
                         onClick={() => updatePlanStatus(plan.id, 'ACTIVE')}
@@ -327,7 +336,7 @@ export default function PlansPage() {
                       </div>
                     </div>
                     <div className="plan-card-actions">
-                      <Link className="plan-card-use" href={`/plans/${plan.id}`}>Open</Link>
+                      <Link className="plan-card-use" href={`/plans/${plan.id}`} onClick={() => rememberSelectedPlan(plan.id)}>Open</Link>
                       <button
                         className="plan-card-use"
                         onClick={() => updatePlanStatus(plan.id, 'ACTIVE')}

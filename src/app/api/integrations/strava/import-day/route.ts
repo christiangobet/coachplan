@@ -6,16 +6,20 @@ import { SELECTED_PLAN_COOKIE } from '@/lib/plan-selection';
 
 type ImportDayBody = {
   date?: unknown;
+  planId?: unknown;
 };
 
 export async function POST(req: Request) {
   const access = await requireRoleApi('ATHLETE');
   if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
   const cookieStore = await cookies();
-  const preferredPlanId = cookieStore.get(SELECTED_PLAN_COOKIE)?.value || null;
+  const cookiePlanId = cookieStore.get(SELECTED_PLAN_COOKIE)?.value || null;
 
   const body = (await req.json().catch(() => ({}))) as ImportDayBody;
   const date = typeof body.date === 'string' ? body.date.trim() : '';
+  const preferredPlanId = typeof body.planId === 'string' && body.planId.trim()
+    ? body.planId.trim()
+    : cookiePlanId;
   if (!date) {
     return NextResponse.json({ error: 'date is required (YYYY-MM-DD)' }, { status: 400 });
   }

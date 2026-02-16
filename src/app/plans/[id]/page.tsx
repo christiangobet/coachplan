@@ -672,7 +672,6 @@ export default function PlanDetailPage() {
   if (error) {
     return (
       <main className="pcal">
-        <SelectedPlanCookie planId={planId} />
         <p style={{ color: 'var(--red)', fontSize: 14 }}>{error}</p>
       </main>
     );
@@ -681,7 +680,6 @@ export default function PlanDetailPage() {
   if (!plan) {
     return (
       <main className="pcal">
-        <SelectedPlanCookie planId={planId} />
         <p className="muted">Loading...</p>
       </main>
     );
@@ -721,7 +719,7 @@ export default function PlanDetailPage() {
 
   return (
     <main className="pcal">
-      <SelectedPlanCookie planId={plan.id} />
+      <SelectedPlanCookie planId={plan.status === 'ACTIVE' ? plan.id : null} />
       <div className="pcal-layout">
         <PlanSidebar planId={plan.id} active="overview" />
 

@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { appendPlanQueryToHref } from '@/lib/plan-selection';
 
 type PlanSidebarItem = 'overview' | 'calendar' | 'ai' | 'strava' | 'progress';
 
@@ -6,7 +7,7 @@ const ITEMS: Array<{ id: PlanSidebarItem; label: string; href: (planId: string) 
   { id: 'overview', label: 'Overview', href: (planId) => `/plans/${planId}#plan-overview` },
   { id: 'calendar', label: 'Calendar', href: (planId) => `/calendar?plan=${planId}` },
   { id: 'ai', label: 'AI Trainer', href: (planId) => `/plans/${planId}#ai-trainer` },
-  { id: 'strava', label: 'Import Strava', href: () => '/strava' },
+  { id: 'strava', label: 'Import Strava', href: (planId) => appendPlanQueryToHref('/strava', planId) },
   { id: 'progress', label: 'Progress', href: (planId) => `/progress?plan=${planId}` }
 ];
 
