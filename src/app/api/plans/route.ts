@@ -28,8 +28,16 @@ function parseTimeoutMs(value: string | undefined, fallback: number) {
   return Math.floor(parsed);
 }
 
+function parseBoundedNumber(value: string | undefined, fallback: number, min: number, max: number) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(max, Math.max(min, parsed));
+}
+
 const UPLOAD_PARSE_TIMEOUT_MS = parseTimeoutMs(process.env.UPLOAD_PARSE_TIMEOUT_MS, 120000);
 const AI_WEEK_PARSE_TIMEOUT_MS = parseTimeoutMs(process.env.AI_WEEK_PARSE_TIMEOUT_MS, 8000);
+const PARSE_MIN_QUALITY_SCORE = parseBoundedNumber(process.env.PARSE_MIN_QUALITY_SCORE, 30, 0, 100);
+const PARSE_MIN_DAY_COVERAGE = parseBoundedNumber(process.env.PARSE_MIN_DAY_COVERAGE, 0.12, 0, 1);
 
 const RUN_SUBTYPES = new Set([
   'tempo',
@@ -99,6 +107,147 @@ type DistanceParseResult = {
 };
 
 type UnitPreference = 'MILES' | 'KM';
+
+type ParsedDayEntry = {
+  raw?: string | null;
+  segments_parsed?: Array<{ type?: string | null }> | null;
+};
+
+type ParsedWeekEntry = {
+  week_number?: number | null;
+  days?: Partial<Record<string, ParsedDayEntry | null>> | null;
+};
+
+type ParseQuality = {
+  score: number;
+  weekCount: number;
+  dayCoverage: number;
+  populatedDays: number;
+  totalDaySlots: number;
+  avgCharsPerPopulatedDay: number;
+  unknownSegmentRatio: number;
+  consecutiveWeekCoverage: number;
+};
+
+type ParseCandidate = {
+  parser: 'python' | 'node';
+  parsed: ParsedPlanOutput;
+  quality: ParseQuality;
+};
+
+type ParsedPlanOutput = Record<string, unknown> & {
+  weeks: ParsedWeekEntry[];
+  glossary?: { note?: string | null } & Record<string, unknown>;
+  parser?: string;
+  parse_meta?: {
+    selectedParser: string;
+    quality: ParseQuality;
+    candidates: Array<{ parser: string; quality: ParseQuality }>;
+  };
+};
+
+function toParsedDayEntry(value: unknown): ParsedDayEntry {
+  if (!value || typeof value !== 'object') return {};
+  const raw = typeof (value as { raw?: unknown }).raw === 'string' ? (value as { raw: string }).raw : null;
+  const segmentsCandidate = (value as { segments_parsed?: unknown }).segments_parsed;
+  const segments = Array.isArray(segmentsCandidate)
+    ? segmentsCandidate
+      .filter((entry) => entry && typeof entry === 'object')
+      .map((entry) => ({ type: typeof (entry as { type?: unknown }).type === 'string' ? (entry as { type: string }).type : null }))
+    : null;
+  return { raw, segments_parsed: segments };
+}
+
+function scoreParsedResult(parsed: unknown): ParseQuality {
+  const weeks = Array.isArray((parsed as { weeks?: unknown })?.weeks)
+    ? ((parsed as { weeks: unknown[] }).weeks as ParsedWeekEntry[])
+    : [];
+
+  const weekCount = weeks.length;
+  const totalDaySlots = weekCount * DAY_KEYS.length;
+  let populatedDays = 0;
+  let charCount = 0;
+  let unknownSegments = 0;
+  let totalSegments = 0;
+  const weekNumbers: number[] = [];
+
+  for (let i = 0; i < weeks.length; i += 1) {
+    const week = weeks[i];
+    const weekNumber = typeof week?.week_number === 'number' && Number.isFinite(week.week_number)
+      ? week.week_number
+      : i + 1;
+    weekNumbers.push(weekNumber);
+
+    const days = week?.days && typeof week.days === 'object' ? week.days : {};
+    for (const day of DAY_KEYS) {
+      const entry = toParsedDayEntry((days as Record<string, unknown>)[day]);
+      const raw = String(entry.raw || '').trim();
+      if (raw) {
+        populatedDays += 1;
+        charCount += raw.length;
+      }
+      const segments = Array.isArray(entry.segments_parsed) ? entry.segments_parsed : [];
+      totalSegments += segments.length;
+      unknownSegments += segments.filter((segment) => segment?.type === 'unknown').length;
+    }
+  }
+
+  const dayCoverage = totalDaySlots > 0 ? populatedDays / totalDaySlots : 0;
+  const avgCharsPerPopulatedDay = populatedDays > 0 ? charCount / populatedDays : 0;
+  const unknownSegmentRatio = totalSegments > 0 ? unknownSegments / totalSegments : 0;
+
+  const uniqueWeeks = [...new Set(weekNumbers)].sort((a, b) => a - b);
+  let longestRun = uniqueWeeks.length > 0 ? 1 : 0;
+  let currentRun = uniqueWeeks.length > 0 ? 1 : 0;
+  for (let i = 1; i < uniqueWeeks.length; i += 1) {
+    if (uniqueWeeks[i] === uniqueWeeks[i - 1] + 1) {
+      currentRun += 1;
+      longestRun = Math.max(longestRun, currentRun);
+    } else {
+      currentRun = 1;
+    }
+  }
+  const consecutiveWeekCoverage = uniqueWeeks.length > 0 ? longestRun / uniqueWeeks.length : 0;
+
+  let score = 0;
+  if (weekCount > 0) score += 20;
+  if (weekCount >= 2) score += 10;
+  if (weekCount >= 4) score += 5;
+  if (weekCount >= 8) score += 5;
+  score += Math.round(Math.min(1, dayCoverage) * 40);
+
+  if (avgCharsPerPopulatedDay >= 20) score += 10;
+  else if (avgCharsPerPopulatedDay >= 8) score += 8;
+  else if (avgCharsPerPopulatedDay >= 3) score += 5;
+  else if (avgCharsPerPopulatedDay > 0) score += 2;
+
+  score += Math.round(Math.min(1, consecutiveWeekCoverage) * 10);
+  if (unknownSegmentRatio > 0.6) score -= 6;
+  else if (unknownSegmentRatio > 0.35) score -= 3;
+  if (weekCount === 0 || dayCoverage === 0) score = 0;
+
+  return {
+    score: Math.min(100, Math.max(0, score)),
+    weekCount,
+    dayCoverage,
+    populatedDays,
+    totalDaySlots,
+    avgCharsPerPopulatedDay: Number(avgCharsPerPopulatedDay.toFixed(2)),
+    unknownSegmentRatio: Number(unknownSegmentRatio.toFixed(3)),
+    consecutiveWeekCoverage: Number(consecutiveWeekCoverage.toFixed(3))
+  };
+}
+
+function selectBestParseCandidate(candidates: ParseCandidate[]) {
+  const sorted = [...candidates].sort((a, b) => {
+    if (b.quality.score !== a.quality.score) return b.quality.score - a.quality.score;
+    if (b.quality.dayCoverage !== a.quality.dayCoverage) return b.quality.dayCoverage - a.quality.dayCoverage;
+    if (b.quality.weekCount !== a.quality.weekCount) return b.quality.weekCount - a.quality.weekCount;
+    if (a.parser === b.parser) return 0;
+    return a.parser === 'python' ? -1 : 1;
+  });
+  return sorted[0];
+}
 
 function parseNumber(value: unknown): number | null {
   if (typeof value === 'number' && Number.isFinite(value)) return value;
@@ -960,7 +1109,7 @@ function findTableHeader(items: PdfTextItem[]) {
   return null;
 }
 
-async function parsePdfToJsonNode(pdfPath: string, name: string) {
+async function parsePdfToJsonNode(pdfPath: string, name: string): Promise<ParsedPlanOutput> {
   const bytes = await fs.readFile(pdfPath);
   const workerPath = path.join(
     process.cwd(),
@@ -1072,6 +1221,7 @@ async function parsePdfToJsonNode(pdfPath: string, name: string) {
     source_pdf: path.basename(pdfPath),
     program_name: name,
     generated_at: new Date().toISOString(),
+    parser: 'node',
     weeks: parsedWeeks,
     glossary: {
       sections: [],
@@ -1109,9 +1259,18 @@ export async function GET(req: Request) {
   return NextResponse.json({ plans: plansWithProgress });
 }
 
-async function parsePdfToJson(planId: string, pdfPath: string, name: string) {
+async function parsePdfToJson(planId: string, pdfPath: string, name: string): Promise<ParsedPlanOutput> {
   if (process.env.VERCEL) {
-    return parsePdfToJsonNode(pdfPath, name);
+    const nodeParsed = await parsePdfToJsonNode(pdfPath, name);
+    const nodeQuality = scoreParsedResult(nodeParsed);
+    return {
+      ...nodeParsed,
+      parse_meta: {
+        selectedParser: 'node',
+        quality: nodeQuality,
+        candidates: [{ parser: 'node', quality: nodeQuality }]
+      }
+    };
   }
 
   const scriptPath = path.join(process.cwd(), 'scripts', 'parse_plan_pdf.py');
@@ -1119,6 +1278,7 @@ async function parsePdfToJson(planId: string, pdfPath: string, name: string) {
   const outputPath = path.join(outputDir, `${planId}.json`);
   await fs.mkdir(outputDir, { recursive: true });
 
+  let pythonParsed: ParsedPlanOutput | null = null;
   let pythonFailureReason: string | null = null;
   try {
     await execFileAsync(
@@ -1135,22 +1295,62 @@ async function parsePdfToJson(planId: string, pdfPath: string, name: string) {
       { timeout: 180000, maxBuffer: 8 * 1024 * 1024 }
     );
     const raw = await fs.readFile(outputPath, 'utf-8');
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed?.weeks) && parsed.weeks.length > 0) {
-      return parsed;
+    const parsed = JSON.parse(raw) as unknown;
+    if (parsed && typeof parsed === 'object') {
+      const parsedRecord = parsed as Record<string, unknown>;
+      const weeks = Array.isArray(parsedRecord.weeks) ? parsedRecord.weeks as ParsedWeekEntry[] : [];
+      pythonParsed = { ...parsedRecord, weeks, parser: 'python' };
+    } else {
+      pythonFailureReason = 'Python parser returned an invalid JSON payload.';
     }
-    pythonFailureReason = 'Python parser produced no recognizable weeks.';
   } catch (error) {
     const err = error as Error & { stderr?: string; message: string };
     pythonFailureReason = err.stderr?.trim() || err.message || 'Unknown parser failure';
   }
 
+  let nodeParsed: ParsedPlanOutput | null = null;
+  let nodeFailureReason: string | null = null;
   try {
-    return await parsePdfToJsonNode(pdfPath, name);
+    nodeParsed = await parsePdfToJsonNode(pdfPath, name);
   } catch (nodeError) {
-    const nodeReason = nodeError instanceof Error ? nodeError.message : 'Unknown node parser failure';
-    throw new Error(`PDF parse failed. Python parser: ${pythonFailureReason || 'unknown error'}. Node fallback: ${nodeReason}`);
+    nodeFailureReason = nodeError instanceof Error ? nodeError.message : 'Unknown node parser failure';
   }
+
+  const candidates: ParseCandidate[] = [];
+  if (pythonParsed) {
+    candidates.push({
+      parser: 'python',
+      parsed: pythonParsed,
+      quality: scoreParsedResult(pythonParsed)
+    });
+  }
+  if (nodeParsed) {
+    candidates.push({
+      parser: 'node',
+      parsed: nodeParsed,
+      quality: scoreParsedResult(nodeParsed)
+    });
+  }
+
+  const viable = candidates.filter((candidate) => candidate.quality.weekCount > 0);
+  if (!viable.length) {
+    throw new Error(
+      `PDF parse failed. Python parser: ${pythonFailureReason || 'no usable output'}. Node fallback: ${nodeFailureReason || 'no usable output'}.`
+    );
+  }
+
+  const selected = selectBestParseCandidate(viable);
+  return {
+    ...selected.parsed,
+    parse_meta: {
+      selectedParser: selected.parser,
+      quality: selected.quality,
+      candidates: candidates.map((candidate) => ({
+        parser: candidate.parser,
+        quality: candidate.quality
+      }))
+    }
+  };
 }
 
 export async function POST(req: Request) {
@@ -1214,6 +1414,33 @@ export async function POST(req: Request) {
         UPLOAD_PARSE_TIMEOUT_MS,
         'PDF parse timed out. Please try a smaller/simpler PDF.'
       );
+      const parseMeta = parsed && typeof parsed === 'object'
+        ? (parsed as {
+          parse_meta?: {
+            selectedParser?: string;
+            quality?: ParseQuality;
+            candidates?: Array<{ parser: string; quality: ParseQuality }>;
+          };
+        }).parse_meta
+        : undefined;
+      const parseQuality = parseMeta?.quality || scoreParsedResult(parsed);
+      const selectedParser = parseMeta?.selectedParser
+        || (typeof (parsed as { parser?: unknown })?.parser === 'string' ? String((parsed as { parser?: unknown }).parser) : 'unknown');
+      if (
+        parseQuality.weekCount === 0
+        || parseQuality.score < PARSE_MIN_QUALITY_SCORE
+        || parseQuality.dayCoverage < PARSE_MIN_DAY_COVERAGE
+      ) {
+        throw new Error(
+          `Parsed content confidence too low (parser=${selectedParser}, score=${parseQuality.score}, weekCount=${parseQuality.weekCount}, dayCoverage=${parseQuality.dayCoverage.toFixed(2)}).`
+        );
+      }
+      console.info('Plan parse quality', {
+        planId: plan.id,
+        parser: selectedParser,
+        quality: parseQuality,
+        candidates: parseMeta?.candidates || null
+      });
       const weeks = Array.isArray(parsed?.weeks) ? parsed.weeks : [];
 
       const weekRecords: { id: string }[] = [];

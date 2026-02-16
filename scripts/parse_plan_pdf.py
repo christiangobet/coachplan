@@ -3,6 +3,7 @@ import argparse
 import json
 import os
 import re
+import unicodedata
 from datetime import datetime
 
 import pdfplumber
@@ -11,6 +12,66 @@ DAY_KEYS = ['monday','tuesday','wednesday','thursday','friday','saturday','sunda
 HEADER_ROW = ['MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY','SUNDAY']
 HEADER_ROW_WITH_WEEK = ['WEEK'] + HEADER_ROW
 HEADER_ROW_WITH_WEEK_TWM = ['WEEK'] + HEADER_ROW + ['TWM']
+
+TABLE_LABEL_ALIASES = {
+    'WEEK': ['week', 'wk', 'kw', 'sem', 'woche', 'semaine'],
+    'MONDAY': ['monday', 'mon', 'mo', 'montag', 'lundi', 'lun'],
+    'TUESDAY': ['tuesday', 'tue', 'tues', 'tu', 'di', 'dienstag', 'mardi', 'mar'],
+    'WEDNESDAY': ['wednesday', 'wed', 'we', 'mi', 'mittwoch', 'mercredi', 'mer'],
+    'THURSDAY': ['thursday', 'thu', 'thurs', 'th', 'do', 'donnerstag', 'jeudi', 'jeu'],
+    'FRIDAY': ['friday', 'fri', 'fr', 'freitag', 'vendredi', 'ven'],
+    'SATURDAY': ['saturday', 'sat', 'sa', 'samstag', 'samedi', 'sam'],
+    'SUNDAY': ['sunday', 'sun', 'so', 'sonntag', 'dimanche', 'dim'],
+    'TWM': ['twm', 'totalweekmiles', 'totalweeklymiles'],
+}
+
+TABLE_ALIAS_TO_CANONICAL = {}
+for canonical, aliases in TABLE_LABEL_ALIASES.items():
+    for alias in aliases:
+        TABLE_ALIAS_TO_CANONICAL[alias] = canonical
+
+LOCALIZED_TEXT_REPLACEMENTS = [
+    (re.compile(r'\bruhetag\b', re.I), 'rest day'),
+    (re.compile(r'\bjour de repos\b', re.I), 'rest day'),
+    (re.compile(r'\brepos\b', re.I), 'rest day'),
+    (re.compile(r'\bkrafttraining\b', re.I), 'strength'),
+    (re.compile(r'\bkraft\b', re.I), 'strength'),
+    (re.compile(r'\bmusculation\b', re.I), 'strength'),
+    (re.compile(r'\brenforcement\b', re.I), 'strength'),
+    (re.compile(r'\balternativtraining\b', re.I), 'cross training'),
+    (re.compile(r'\bcrosstraining\b', re.I), 'cross training'),
+    (re.compile(r'\bentrainement croise\b', re.I), 'cross training'),
+    (re.compile(r'\berholungslauf\b', re.I), 'recovery run'),
+    (re.compile(r'\brecuperation\b', re.I), 'recovery'),
+    (re.compile(r'\bleichter lauf\b', re.I), 'easy run'),
+    (re.compile(r'\bfooting\b', re.I), 'easy run'),
+    (re.compile(r'\bberglauf(?:e|en)?\b', re.I), 'hills'),
+    (re.compile(r'\bcotes?\b', re.I), 'hills'),
+    (re.compile(r'\bmontees?\b', re.I), 'hills'),
+    (re.compile(r'\beinlaufen\b', re.I), 'warm up'),
+    (re.compile(r'\bechauffement\b', re.I), 'warm up'),
+    (re.compile(r'\bauslaufen\b', re.I), 'cool down'),
+    (re.compile(r'\bretour au calme\b', re.I), 'cool down'),
+    (re.compile(r'\bwandern\b', re.I), 'hike'),
+    (re.compile(r'\brandonnee\b', re.I), 'hike'),
+    (re.compile(r'\bschwelle\b', re.I), 'threshold'),
+    (re.compile(r'\bseuil\b', re.I), 'threshold'),
+    (re.compile(r'\bmeilen?\b', re.I), 'miles'),
+    (re.compile(r'\bmilles?\b', re.I), 'miles'),
+    (re.compile(r'\bkilometern?\b', re.I), 'km'),
+    (re.compile(r'\bkilometers?\b', re.I), 'km'),
+    (re.compile(r'\bkilometres?\b', re.I), 'km'),
+    (re.compile(r'\bmetern?\b', re.I), 'meters'),
+    (re.compile(r'\bmetres?\b', re.I), 'meters'),
+    (re.compile(r'\bminuten?\b', re.I), 'minutes'),
+    (re.compile(r'\bsekunden?\b', re.I), 'seconds'),
+    (re.compile(r'\bsecondes?\b', re.I), 'seconds'),
+    (re.compile(r'\bstunden?\b', re.I), 'hours'),
+    (re.compile(r'\bheures?\b', re.I), 'hours'),
+    (re.compile(r'\bstd\b\.?', re.I), 'hours'),
+    (re.compile(r'\boder\b', re.I), 'or'),
+    (re.compile(r'\bou\b', re.I), 'or'),
+]
 
 DISTANCE_RE = re.compile(
     r'(?P<val>\d+(?:\.\d+)?)\s*(?P<unit>miles?|mile|mi|kms?|kilometers?|kilometres?|meters?|metres?|m)\b',
@@ -52,12 +113,29 @@ TYPE_PRIORITY = [
 def normalize_text(text):
     return re.sub(r'\s+', ' ', text or '').strip()
 
+def strip_diacritics(text):
+    normalized = unicodedata.normalize('NFD', str(text or ''))
+    return ''.join(ch for ch in normalized if unicodedata.category(ch) != 'Mn')
+
+def normalize_table_label_token(text):
+    return re.sub(r'[^a-z]', '', strip_diacritics(text).lower()).strip()
+
+def canonicalize_table_label(text):
+    token = normalize_table_label_token(text)
+    return TABLE_ALIAS_TO_CANONICAL.get(token) if token else None
+
+def normalize_plan_text(text):
+    normalized = strip_diacritics(text)
+    for rx, replacement in LOCALIZED_TEXT_REPLACEMENTS:
+        normalized = rx.sub(replacement, normalized)
+    return normalized
+
 def strip_footnotes(text):
     # Remove trailing footnote digits attached to words (e.g., miles2, XT3, LR6)
     return re.sub(r'(?<=[A-Za-z])\d+', '', text)
 
 def clean_cell_text(text):
-    t = normalize_text(strip_footnotes((text or '').replace('\n', ' ')))
+    t = normalize_plan_text(normalize_text(strip_footnotes((text or '').replace('\n', ' '))))
     if not t:
         return t
     if t.lower().startswith('est;'):
@@ -97,7 +175,7 @@ def to_km(value, unit):
 
 
 def parse_metrics(text):
-    t = text.lower()
+    t = normalize_plan_text(text).lower()
     miles = None
     miles_range = None
     km = None
@@ -246,8 +324,16 @@ def extract_tables(pdf):
         nonlocal weeks
         if not table or len(table) < 2:
             return
-        header = [normalize_text(h).upper() for h in table[0]]
-        if header not in (HEADER_ROW, HEADER_ROW_WITH_WEEK, HEADER_ROW_WITH_WEEK_TWM):
+        header = [canonicalize_table_label(h) for h in table[0]]
+        while header and not header[-1]:
+            header.pop()
+
+        table_mode = None
+        if len(header) >= 8 and header[0] == 'WEEK' and header[1:8] == HEADER_ROW:
+            table_mode = 'week_first'
+        elif len(header) >= 7 and header[:7] == HEADER_ROW:
+            table_mode = 'days_only'
+        if table_mode is None:
             return
 
         current_week_num = None
@@ -269,23 +355,22 @@ def extract_tables(pdf):
             row = [clean_cell_text(c) for c in row]
             if not row:
                 continue
-            if row[0].upper() == 'WEEK':
+            if canonicalize_table_label(row[0]) == 'WEEK':
                 continue
 
             # map columns to weekdays
-            if header == HEADER_ROW:
+            if table_mode == 'days_only':
                 cells = (row + [''] * 7)[:7]
                 # No WEEK column — each row is a complete week
                 is_new_week = any(c.strip() for c in cells)
                 week_marker = str(len(weeks) + 1) if is_new_week else ''
-            elif header == HEADER_ROW_WITH_WEEK:
-                week_marker = row[0]
-                cells = (row[1:] + [''] * 7)[:7]
-                is_new_week = str(week_marker).strip().isdigit()
             else:
-                week_marker = row[0]
+                week_marker = normalize_text(row[0])
                 cells = (row[1:8] + [''] * 7)[:7]
-                is_new_week = str(week_marker).strip().isdigit()
+                week_match = re.search(r'\b(\d{1,2})\b', week_marker or '')
+                is_new_week = week_match is not None
+                if week_match:
+                    week_marker = week_match.group(1)
 
             # start a new week row
             if is_new_week:
