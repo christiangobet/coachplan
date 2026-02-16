@@ -20,6 +20,7 @@ const execFileAsync = promisify(execFile);
 const DAY_KEYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 const DAY_LABELS = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
 const TABLE_LABELS = ['WEEK', ...DAY_LABELS];
+const OPTIONAL_TRAILING_TABLE_LABELS = ['TWM'];
 const ENABLE_AI_WEEK_PARSE = process.env.ENABLE_AI_WEEK_PARSE === 'true' && hasConfiguredAiProvider();
 
 function parseTimeoutMs(value: string | undefined, fallback: number) {
@@ -871,6 +872,10 @@ function stripSuperscriptFootnotes(text: string) {
     .replace(/[\u00B9\u00B2\u00B3\u2070-\u209F]/g, '')
     // Common standalone footnote symbols.
     .replace(/[†‡§¶‖※]/g, ' ')
+    // Keep symbol markers (key/optional), but drop attached index digits like ★4, ♥8.
+    .replace(/([★♥])\d{1,2}\b/g, '$1')
+    // Drop attached footnote indices like RP9, CD5, finish11, NS10.
+    .replace(/\b([A-Za-z]{2,})(\d{1,2})(?=[:;,.!?)]|\s|$)/g, '$1')
     // Bracketed/parenthesized footnote ids, e.g. [1], (2), (iv).
     .replace(/\s*(?:\[\s*(?:\d{1,3}|[ivx]{1,6})\s*\]|\(\s*(?:\d{1,3}|[ivx]{1,6})\s*\))(?=\s|$)/gi, ' ')
     // Stray reference arrows used in some exports.
@@ -919,6 +924,14 @@ function nearestIndex(target: number, anchors: number[]) {
   return { index: bestIdx, distance: bestDist };
 }
 
+function isLikelyFootnoteOnly(text: string) {
+  const t = normalizeWhitespace(text);
+  if (!t) return true;
+  if (/^\d{1,2}$/.test(t)) return true;
+  if (/^[\[(]?\d{1,2}[\])]?$/.test(t)) return true;
+  return false;
+}
+
 function findTableHeader(items: PdfTextItem[]) {
   const labels = items
     .map((item) => ({
@@ -932,8 +945,12 @@ function findTableHeader(items: PdfTextItem[]) {
     const row = labels.filter((entry) => Math.abs(entry.item.y - monday.item.y) <= 2);
     const names = new Set(row.map((entry) => entry.canonical));
     if (!TABLE_LABELS.every((label) => names.has(label))) continue;
+    const labelsForColumns = [...TABLE_LABELS];
+    for (const extra of OPTIONAL_TRAILING_TABLE_LABELS) {
+      if (names.has(extra)) labelsForColumns.push(extra);
+    }
 
-    const columns = TABLE_LABELS.map((label) => {
+    const columns = labelsForColumns.map((label) => {
       const candidates = row
         .filter((entry) => entry.canonical === label)
         .sort((a, b) => a.item.x - b.item.x);
@@ -1011,7 +1028,7 @@ async function parsePdfToJsonNode(pdfPath: string, name: string) {
     if (!markers.length) continue;
 
     for (const row of rows) {
-      const dayCells = row.cells.slice(1);
+      const dayCells = row.cells.slice(1, 1 + DAY_KEYS.length);
       if (!dayCells.some((cell) => cell.length > 0)) continue;
 
       const nearestMarker = markers.reduce((best, marker) => {
@@ -1032,7 +1049,7 @@ async function parsePdfToJsonNode(pdfPath: string, name: string) {
       const bucket = weeks.get(weekNumber)!;
       for (let i = 0; i < DAY_KEYS.length; i += 1) {
         const cell = dayCells[i];
-        if (!cell) continue;
+        if (!cell || isLikelyFootnoteOnly(cell)) continue;
         bucket[DAY_KEYS[i]].push(cell);
       }
     }

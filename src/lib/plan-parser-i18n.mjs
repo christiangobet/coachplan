@@ -7,6 +7,7 @@ const TABLE_LABEL_ALIASES = {
   FRIDAY: ['friday', 'fri', 'fr', 'freitag', 'vendredi', 'ven'],
   SATURDAY: ['saturday', 'sat', 'sa', 'samstag', 'samedi', 'sam'],
   SUNDAY: ['sunday', 'sun', 'so', 'sonntag', 'dimanche', 'dim'],
+  TWM: ['twm', 'totalweekmiles', 'totalweeklymiles'],
 };
 
 const LOCALIZED_TEXT_REPLACEMENTS = [
@@ -92,4 +93,3 @@ export function extractWeekNumber(text) {
   const week = Number(weekMatch[1]);
   return Number.isFinite(week) ? week : null;
 }
-
