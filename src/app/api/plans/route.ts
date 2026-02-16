@@ -20,7 +20,6 @@ const execFileAsync = promisify(execFile);
 const DAY_KEYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 const DAY_LABELS = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
 const TABLE_LABELS = ['WEEK', ...DAY_LABELS];
-const OPTIONAL_TRAILING_TABLE_LABELS = ['TWM'];
 const ENABLE_AI_WEEK_PARSE = process.env.ENABLE_AI_WEEK_PARSE === 'true' && hasConfiguredAiProvider();
 
 function parseTimeoutMs(value: string | undefined, fallback: number) {
@@ -945,12 +944,10 @@ function findTableHeader(items: PdfTextItem[]) {
     const row = labels.filter((entry) => Math.abs(entry.item.y - monday.item.y) <= 2);
     const names = new Set(row.map((entry) => entry.canonical));
     if (!TABLE_LABELS.every((label) => names.has(label))) continue;
-    const labelsForColumns = [...TABLE_LABELS];
-    for (const extra of OPTIONAL_TRAILING_TABLE_LABELS) {
-      if (names.has(extra)) labelsForColumns.push(extra);
-    }
 
-    const columns = labelsForColumns.map((label) => {
+    // Intentionally ignore trailing summary columns like TWM (total weekly mileage).
+    // Parsing anchors only map to WEEK + weekday columns.
+    const columns = TABLE_LABELS.map((label) => {
       const candidates = row
         .filter((entry) => entry.canonical === label)
         .sort((a, b) => a.item.x - b.item.x);

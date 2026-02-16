@@ -28,6 +28,7 @@ function navItemsForRole(role: UserRole): TopNavItem[] {
   return [
     { href: "/dashboard", label: "Dashboard" },
     { href: "/calendar", label: "Calendar" },
+    { href: "/strava", label: "Import Strava" },
     { href: "/progress", label: "Progress" },
     { href: "/plans", label: "Plans" },
     { href: "/upload", label: "Upload" },
@@ -86,4 +87,3 @@ export default async function RootLayout({
     </ClerkProvider>
   );
 }
-

@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import { currentUser } from '@clerk/nextjs/server';
 import { ActivityPriority, ActivityType, Units } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { alignWeeksToRaceDate } from '@/lib/clone-plan';
 import { getDefaultAiModel, openaiJsonSchema } from '@/lib/openai';
 import { ensureUserFromAuth } from '@/lib/user-sync';
 import { getDayDateFromWeekStart, resolveWeekBounds } from '@/lib/plan-dates';
@@ -11,10 +10,7 @@ import { isDayMarkedDone } from '@/lib/day-status';
 import {
   applyAdjustmentProposal,
   PlanAdjustmentProposal,
-  changeTouchesLockedDay,
   sanitizeProposalAgainstLockedDays,
-  PlanLockState,
-  loadLockStateForPlan,
   buildLockStateFromPlan,
   PlanAdjustmentChange,
   EditActivityChange,
@@ -62,35 +58,6 @@ function parseIsoDate(input: unknown): string | null {
   const parsed = new Date(text);
   if (Number.isNaN(parsed.getTime())) return null;
   return parsed.toISOString().slice(0, 10);
-}
-
-function isoDateToLocalDate(isoDate: string) {
-  const [y, m, d] = isoDate.split('-').map((part) => Number(part));
-  if (!y || !m || !d) return null;
-  const date = new Date(y, m - 1, d);
-  date.setHours(0, 0, 0, 0);
-  return date;
-}
-
-function toMonday(date: Date) {
-  const monday = new Date(date);
-  const dow = monday.getDay();
-  const offset = dow === 0 ? -6 : 1 - dow;
-  monday.setDate(monday.getDate() + offset);
-  monday.setHours(0, 0, 0, 0);
-  return monday;
-}
-
-function addDays(date: Date, days: number) {
-  const next = new Date(date);
-  next.setDate(next.getDate() + days);
-  next.setHours(0, 0, 0, 0);
-  return next;
-}
-
-function diffDays(start: Date, end: Date) {
-  const ms = end.getTime() - start.getTime();
-  return Math.floor(ms / (24 * 60 * 60 * 1000));
 }
 
 
@@ -535,16 +502,20 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     }
   }
 
-  const proposal = parseProposal(body.proposal);
-  if (!proposal) {
+  const parsedProposal = parseProposal(body.proposal);
+  if (!parsedProposal) {
     return NextResponse.json({ error: 'proposal is required when apply=true' }, { status: 400 });
   }
-  if (proposal.changes.length === 0) {
-    return NextResponse.json({ error: 'No changes to apply.' }, { status: 400 });
+  const sanitizedProposal = sanitizeProposalAgainstLockedDays(parsedProposal, buildLockStateFromPlan(plan));
+  if (sanitizedProposal.changes.length === 0) {
+    return NextResponse.json(
+      { error: sanitizedProposal.summary || 'No changes to apply.' },
+      { status: 400 }
+    );
   }
 
   try {
-    const result = await applyAdjustmentProposal(plan.id, proposal);
+    const result = await applyAdjustmentProposal(plan.id, sanitizedProposal);
     const refreshed = await loadPlanForUser(plan.id, user.id);
     if (!refreshed) {
       return NextResponse.json({ error: 'Plan refresh failed after apply' }, { status: 500 });
@@ -553,7 +524,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       applied: true,
       appliedCount: result.appliedCount,
       extendedWeeks: result.extendedWeeks,
-      summary: proposal.summary,
+      summary: sanitizedProposal.summary,
       plan: await appendSourcePlanName(refreshed)
     });
   } catch (error: unknown) {

@@ -328,9 +328,9 @@ export async function applyAdjustmentProposal(planId: string, proposal: PlanAdju
                 if (activity.completed || lockedDayIdSet.has(activity.dayId)) {
                     throw new Error('Cannot move activities from completed days.');
                 }
-                // if (lockedDayIdSet.has(change.targetDayId)) {
-                //   throw new Error('Cannot move activities into completed days.');
-                // }
+                if (lockedDayIdSet.has(change.targetDayId)) {
+                    throw new Error('Cannot move activities into completed days.');
+                }
                 await tx.planActivity.update({
                     where: { id: change.activityId },
                     data: { dayId: change.targetDayId }

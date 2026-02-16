@@ -156,6 +156,22 @@ function describeAiChange(change: AiTrainerChange, lookup: AiChangeLookup) {
   return `Edit ${activityLabel(change.activityId)}${updates.length > 0 ? ` (${updates.join(', ')})` : ''}.`;
 }
 
+function humanizeAiText(text: string | null | undefined, lookup: AiChangeLookup) {
+  if (!text) return '';
+  let next = text;
+
+  for (const [id, label] of lookup.activityLabelById.entries()) {
+    if (!id || !next.includes(id)) continue;
+    next = next.split(id).join(label);
+  }
+  for (const [id, label] of lookup.dayLabelById.entries()) {
+    if (!id || !next.includes(id)) continue;
+    next = next.split(id).join(label);
+  }
+
+  return next;
+}
+
 export default function PlanDetailPage() {
   const params = useParams<{ id: string }>();
   const searchParams = useSearchParams();
@@ -665,7 +681,11 @@ export default function PlanDetailPage() {
                   </button>
                 </div>
                 {aiTrainerError && <p className="pcal-ai-trainer-error">{aiTrainerError}</p>}
-                {aiTrainerStatus && <p className="pcal-ai-trainer-status">{aiTrainerStatus}</p>}
+                {aiTrainerStatus && (
+                  <p className="pcal-ai-trainer-status">
+                    {humanizeAiText(aiTrainerStatus, aiChangeLookup)}
+                  </p>
+                )}
 
                 {aiTrainerProposal && (
                   <div className="pcal-ai-trainer-proposal">
@@ -673,10 +693,10 @@ export default function PlanDetailPage() {
                       <strong>Coach Reply</strong>
                       <span>Confidence: {aiTrainerProposal.confidence}</span>
                     </div>
-                    <p>{aiTrainerProposal.coachReply}</p>
+                    <p>{humanizeAiText(aiTrainerProposal.coachReply, aiChangeLookup)}</p>
                     {aiTrainerProposal.followUpQuestion && (
                       <p className="pcal-ai-trainer-followup">
-                        Follow-up: {aiTrainerProposal.followUpQuestion}
+                        Follow-up: {humanizeAiText(aiTrainerProposal.followUpQuestion, aiChangeLookup)}
                       </p>
                     )}
                     <div className="pcal-ai-trainer-meta">
@@ -709,7 +729,7 @@ export default function PlanDetailPage() {
                                   : 'Apply'}
                             </button>
                           </div>
-                          <p>{change.reason}</p>
+                          <p>{humanizeAiText(change.reason, aiChangeLookup)}</p>
                         </li>
                       ))}
                     </ul>
@@ -733,7 +753,7 @@ export default function PlanDetailPage() {
                         <strong>Risk Flags</strong>
                         <ul>
                           {(aiTrainerProposal.riskFlags || []).map((flag, idx) => (
-                            <li key={`${flag}-${idx}`}>{flag}</li>
+                            <li key={`${flag}-${idx}`}>{humanizeAiText(flag, aiChangeLookup)}</li>
                           ))}
                         </ul>
                       </div>
