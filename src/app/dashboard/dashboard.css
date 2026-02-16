@@ -1774,7 +1774,25 @@
   }
 
   .dash-greeting-meta {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 4px;
+    margin-top: 8px;
+  }
+
+  .dash-greeting-meta-item {
+    padding: 6px 8px;
+    gap: 1px;
+  }
+
+  .dash-greeting-meta-label {
+    font-size: 9px;
+  }
+
+  .dash-greeting-meta-value {
+    font-size: 11px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .dash-progress-pct {
