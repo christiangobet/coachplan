@@ -300,42 +300,42 @@ export default async function DashboardPage({
 
   const recentDayStatuses = isTodayInsideCurrentWeek
     ? weekDays
-        .filter((day) => day.dayOfWeek <= isoDay)
-        .map((day) => {
-          const manualDone = isDayMarkedDone(day.notes);
-          const dayDate = getDayDateFromWeekStart(currentBounds?.startDate || null, day.dayOfWeek);
-          const dayLabel = dayDate
-            ? dayDate.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })
-            : DAY_LABELS[Math.max(0, (day.dayOfWeek || 1) - 1)];
-          const activities = day.activities || [];
-          const nonRest = activities.filter((activity: any) => activity.type !== "REST");
-          const completedNonRest = nonRest.length > 0 && nonRest.every((activity: any) => activity.completed);
-          const isRestOnly = activities.length > 0 && nonRest.length === 0;
+      .filter((day) => day.dayOfWeek <= isoDay)
+      .map((day) => {
+        const manualDone = isDayMarkedDone(day.notes);
+        const dayDate = getDayDateFromWeekStart(currentBounds?.startDate || null, day.dayOfWeek);
+        const dayLabel = dayDate
+          ? dayDate.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })
+          : DAY_LABELS[Math.max(0, (day.dayOfWeek || 1) - 1)];
+        const activities = day.activities || [];
+        const nonRest = activities.filter((activity: any) => activity.type !== "REST");
+        const completedNonRest = nonRest.length > 0 && nonRest.every((activity: any) => activity.completed);
+        const isRestOnly = activities.length > 0 && nonRest.length === 0;
 
-          if (manualDone) {
-            return {
-              alert: false,
-              text: `${dayLabel} · Done (manual)`
-            };
-          }
-          if (completedNonRest || isRestOnly) {
-            return {
-              alert: false,
-              text: `${dayLabel} · Done`
-            };
-          }
-          if (day.dayOfWeek < isoDay) {
-            return {
-              alert: true,
-              text: `${dayLabel} · Pending`
-            };
-          }
+        if (manualDone) {
           return {
             alert: false,
-            text: `${dayLabel} · In progress`
+            text: `${dayLabel} · Done (manual)`
           };
-        })
-        .slice(-5)
+        }
+        if (completedNonRest || isRestOnly) {
+          return {
+            alert: false,
+            text: `${dayLabel} · Done`
+          };
+        }
+        if (day.dayOfWeek < isoDay) {
+          return {
+            alert: true,
+            text: `${dayLabel} · Pending`
+          };
+        }
+        return {
+          alert: false,
+          text: `${dayLabel} · In progress`
+        };
+      })
+      .slice(-5)
     : [];
 
   /* Status items */
@@ -362,13 +362,13 @@ export default async function DashboardPage({
   }
   const missedKey = isTodayInsideCurrentWeek
     ? keyActivities.filter(
-        (a) => {
-          const day = weekDays.find((d) => d.activities?.includes(a));
-          if (!day) return false;
-          if (isDayMarkedDone(day.notes)) return false;
-          return !a.completed && day.dayOfWeek < isoDay;
-        }
-      )
+      (a) => {
+        const day = weekDays.find((d) => d.activities?.includes(a));
+        if (!day) return false;
+        if (isDayMarkedDone(day.notes)) return false;
+        return !a.completed && day.dayOfWeek < isoDay;
+      }
+    )
     : [];
   if (missedKey.length === 0) {
     statusItems.unshift({ alert: false, text: "You're on track" });
@@ -534,31 +534,63 @@ export default async function DashboardPage({
                 No upcoming workouts scheduled after today.
               </p>
             )}
-            {upcoming.map((a) => (
-              <div className="dash-upcoming-item" key={a.id}>
-                <div className="dash-upcoming-left">
-                  <div className="dash-upcoming-day">
-                    {a.date ? DAY_LABELS[getIsoDay(a.date) - 1] : DAY_LABELS[(a.dayOfWeek || 1) - 1]}
-                  </div>
-                  <div className="dash-upcoming-info">
-                    <span className="dash-upcoming-title">
-                      <span className={`dash-type-icon type-${String(a.type || "OTHER").toLowerCase()}`}>
-                        <ActivityTypeIcon
-                          type={String(a.type || "OTHER")}
-                          className="dash-type-icon-glyph"
-                        />
-                      </span>
-                      {a.title}
+
+            {upcoming.length > 0 && (
+              <>
+                {/* Hero Item */}
+                <div className={`dash-next-hero type-${(upcoming[0].type || 'OTHER').toLowerCase()}`}>
+                  <div className="dash-next-hero-top">
+                    <span className="dash-next-hero-label">
+                      {getIsoDay(upcoming[0].date) - getIsoDay(today) === 1 ? 'Tomorrow' : formatPlannedDate(upcoming[0].date)}
                     </span>
-                    <span className="dash-upcoming-type">{formatType(a.type)}</span>
-                    <span className="dash-upcoming-date">{formatPlannedDate(a.date)}</span>
+                    <span className="dash-next-hero-date">
+                      {upcoming[0].duration ? `${upcoming[0].duration} min` : ''}
+                    </span>
                   </div>
+                  <div className="dash-next-hero-title">
+                    {upcoming[0].title}
+                  </div>
+                  <div className="dash-next-hero-meta">
+                    <span className={`dash-type-icon type-${(upcoming[0].type || 'OTHER').toLowerCase()}`}>
+                      <ActivityTypeIcon type={upcoming[0].type || 'OTHER'} className="dash-type-icon-glyph" />
+                    </span>
+                    <span>{formatType(upcoming[0].type || 'OTHER')}</span>
+                  </div>
+                  {upcoming[0].notes && (
+                    <div className="dash-next-hero-notes">
+                      {upcoming[0].notes}
+                    </div>
+                  )}
                 </div>
-                <span className="dash-upcoming-duration">
-                  {a.duration ? `${a.duration} min` : "—"}
-                </span>
-              </div>
-            ))}
+
+                {/* Remaining List */}
+                {upcoming.slice(1).map((a) => (
+                  <div className="dash-upcoming-item" key={a.id}>
+                    <div className="dash-upcoming-left">
+                      <div className="dash-upcoming-day">
+                        {a.date ? DAY_LABELS[getIsoDay(a.date) - 1] : DAY_LABELS[(a.dayOfWeek || 1) - 1]}
+                      </div>
+                      <div className="dash-upcoming-info">
+                        <span className="dash-upcoming-title">
+                          <span className={`dash-type-icon type-${String(a.type || "OTHER").toLowerCase()}`}>
+                            <ActivityTypeIcon
+                              type={String(a.type || "OTHER")}
+                              className="dash-type-icon-glyph"
+                            />
+                          </span>
+                          {a.title}
+                        </span>
+                        <span className="dash-upcoming-type">{formatType(a.type)}</span>
+                        <span className="dash-upcoming-date">{formatPlannedDate(a.date)}</span>
+                      </div>
+                    </div>
+                    <span className="dash-upcoming-duration">
+                      {a.duration ? `${a.duration} min` : "—"}
+                    </span>
+                  </div>
+                ))}
+              </>
+            )}
           </div>
 
           {/* Guide */}
