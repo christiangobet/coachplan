@@ -285,8 +285,13 @@ main {
   color: #ffffff;
 }
 
-.tag.yellow { background: var(--amber); }
-.tag.green { background: var(--green); }
+.tag.yellow {
+  background: var(--amber);
+}
+
+.tag.green {
+  background: var(--green);
+}
 
 /* ── Plan review ── */
 .review-header {
@@ -399,9 +404,20 @@ main {
   margin-top: 10px;
 }
 
-.day-pill.done { background: var(--green); color: #ffffff; }
-.day-pill.warn { background: var(--amber); color: #ffffff; }
-.day-pill.miss { background: var(--red); color: #ffffff; }
+.day-pill.done {
+  background: var(--green);
+  color: #ffffff;
+}
+
+.day-pill.warn {
+  background: var(--amber);
+  color: #ffffff;
+}
+
+.day-pill.miss {
+  background: var(--red);
+  color: #ffffff;
+}
 
 /* ── Status ── */
 .status-list {
@@ -449,9 +465,17 @@ main {
   border-radius: 999px;
 }
 
-.wellness-fill.green { background: var(--green); }
-.wellness-fill.blue { background: #0984e3; }
-.wellness-fill.orange { background: var(--accent); }
+.wellness-fill.green {
+  background: var(--green);
+}
+
+.wellness-fill.blue {
+  background: #0984e3;
+}
+
+.wellness-fill.orange {
+  background: var(--accent);
+}
 
 /* ── Forms ── */
 .form-stack {
@@ -529,11 +553,163 @@ tbody tr:nth-child(odd) {
   font-size: 14px;
 }
 
+/* ── Hamburger button (hidden on desktop) ── */
+.hamburger-btn {
+  display: none;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+  margin-left: 8px;
+  z-index: 110;
+}
+
+.hamburger-icon {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: 22px;
+}
+
+.hamburger-icon span {
+  display: block;
+  height: 2px;
+  width: 100%;
+  background: var(--ink);
+  border-radius: 2px;
+  transition: transform 0.25s, opacity 0.2s;
+}
+
+.hamburger-icon.open span:nth-child(1) {
+  transform: translateY(7px) rotate(45deg);
+}
+
+.hamburger-icon.open span:nth-child(2) {
+  opacity: 0;
+}
+
+.hamburger-icon.open span:nth-child(3) {
+  transform: translateY(-7px) rotate(-45deg);
+}
+
+/* ── Mobile overlay ── */
+.mobile-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.3);
+  z-index: 90;
+  animation: fadeIn 0.15s ease;
+}
+
+/* ── Mobile menu ── */
+.mobile-menu {
+  display: none;
+}
+
+.mobile-nav-link {
+  display: flex;
+  align-items: center;
+  padding: 14px 24px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ink);
+  border-bottom: 1px solid var(--border);
+  transition: background 0.15s, color 0.15s;
+}
+
+.mobile-nav-link:hover,
+.mobile-nav-link:active {
+  background: var(--panel);
+  color: var(--accent);
+}
+
+.mobile-nav-role {
+  color: var(--accent);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideDown {
+  from {
+    transform: translateY(-10px);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
 /* ── Responsive ── */
 @media (max-width: 900px) {
-  .grid-3 { grid-template-columns: 1fr; }
-  .grid-2 { grid-template-columns: 1fr; }
-  .nav { margin-left: 0; flex-wrap: wrap; }
-  .dashboard-shell { grid-template-columns: 1fr; }
-  .sidebar { position: static; }
+  .grid-3 {
+    grid-template-columns: 1fr;
+  }
+
+  .grid-2 {
+    grid-template-columns: 1fr;
+  }
+
+  .nav {
+    margin-left: 0;
+    flex-wrap: wrap;
+  }
+
+  .dashboard-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    position: static;
+  }
+}
+
+@media (max-width: 768px) {
+  .header {
+    padding: 0 16px;
+    position: relative;
+  }
+
+  .nav {
+    display: none;
+  }
+
+  .hamburger-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .mobile-menu {
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    top: 56px;
+    left: 0;
+    right: 0;
+    background: var(--background);
+    z-index: 100;
+    border-bottom: 1px solid var(--border);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    animation: slideDown 0.2s ease;
+    max-height: calc(100vh - 56px);
+    overflow-y: auto;
+  }
+
+  .header-user-btn {
+    margin-left: auto !important;
+  }
+
+  main {
+    padding: 16px 12px 40px;
+  }
 }

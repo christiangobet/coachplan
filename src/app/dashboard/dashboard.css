@@ -1762,11 +1762,11 @@
   }
 
   .dash-page-heading h1 {
-    font-size: 30px;
+    font-size: 26px;
   }
 
   .dash-hero-title {
-    font-size: 20px;
+    font-size: 18px;
   }
 
   .dash-greeting h1 {
@@ -1782,6 +1782,59 @@
   }
 
   .dash-empty-steps {
+    grid-template-columns: 1fr;
+  }
+
+  .dash-card {
+    padding: 14px;
+  }
+
+  .dash-card-header {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .dash-overview-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .dash-stat-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dash-actuals-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .dash-grid {
+    padding: var(--d-space-1) var(--d-space-1) var(--d-space-4);
+    gap: var(--d-space-1);
+  }
+
+  .dash-page-heading h1 {
+    font-size: 22px;
+  }
+
+  .dash-card {
+    padding: 12px;
+    border-radius: var(--d-radius-sm);
+  }
+
+  .dash-card-title {
+    font-size: 14px;
+  }
+
+  .dash-next-hero {
+    padding: 12px;
+  }
+
+  .dash-next-hero-title {
+    font-size: 14px;
+  }
+
+  .dash-overview-grid {
     grid-template-columns: 1fr;
   }
 }

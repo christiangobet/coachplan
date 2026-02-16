@@ -81,9 +81,14 @@
   letter-spacing: -0.02em;
 }
 
-.plans-header p { font-size: 14px; margin-top: 2px; }
+.plans-header p {
+  font-size: 14px;
+  margin-top: 2px;
+}
 
-.plans-section { margin-bottom: 32px; }
+.plans-section {
+  margin-bottom: 32px;
+}
 
 .plans-section-title {
   font-size: 14px;
@@ -101,7 +106,9 @@
   box-shadow: var(--d-shadow);
 }
 
-.plans-empty p { font-size: 14px; }
+.plans-empty p {
+  font-size: 14px;
+}
 
 .plans-grid {
   display: grid;
@@ -130,7 +137,10 @@
   box-shadow: none;
 }
 
-.plan-card.template:hover { box-shadow: none; transform: none; }
+.plan-card.template:hover {
+  box-shadow: none;
+  transform: none;
+}
 
 .plan-card-hero {
   height: 112px;
@@ -176,17 +186,21 @@
   margin-bottom: 2px;
 }
 
-.plan-card > .plan-card-top,
-.plan-card > .plan-card-name,
-.plan-card > .plan-card-meta,
-.plan-card > .plan-card-progress,
-.plan-card > .plan-card-use,
-.plan-card > .plan-card-actions {
+.plan-card>.plan-card-top,
+.plan-card>.plan-card-name,
+.plan-card>.plan-card-meta,
+.plan-card>.plan-card-progress,
+.plan-card>.plan-card-use,
+.plan-card>.plan-card-actions {
   margin-left: 16px;
   margin-right: 16px;
 }
 
-.plan-status-dot { width: 8px; height: 8px; border-radius: 50%; }
+.plan-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
 
 .plan-status-label {
   font-size: 11px;
@@ -207,8 +221,16 @@
   border-radius: 4px;
 }
 
-.plan-card-name { font-size: 16px; font-weight: 700; color: var(--d-text); }
-.plan-card-meta { font-size: 13px; color: var(--d-muted); }
+.plan-card-name {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--d-text);
+}
+
+.plan-card-meta {
+  font-size: 13px;
+  color: var(--d-muted);
+}
 
 .plan-card-progress {
   display: grid;
@@ -243,7 +265,9 @@
   transition: opacity 0.15s;
 }
 
-.plan-card:hover .plan-card-action { opacity: 0.8; }
+.plan-card:hover .plan-card-action {
+  opacity: 0.8;
+}
 
 .plan-card-use {
   margin-top: 10px;
@@ -261,8 +285,15 @@
   text-decoration: none;
 }
 
-.plan-card-use:hover { border-color: var(--accent); color: var(--accent); }
-.plan-card-use:disabled { opacity: 0.45; cursor: not-allowed; }
+.plan-card-use:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.plan-card-use:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
 
 .plan-card-actions {
   margin-top: 10px;
@@ -303,9 +334,20 @@
   letter-spacing: 0.04em;
 }
 
-.plan-detail-status.active { background: rgba(46, 204, 113, 0.08); color: var(--green); }
-.plan-detail-status.draft { background: rgba(243, 156, 18, 0.08); color: var(--amber); }
-.plan-detail-status.archived { background: var(--panel); color: var(--muted); }
+.plan-detail-status.active {
+  background: rgba(46, 204, 113, 0.08);
+  color: var(--green);
+}
+
+.plan-detail-status.draft {
+  background: rgba(243, 156, 18, 0.08);
+  color: var(--amber);
+}
+
+.plan-detail-status.archived {
+  background: var(--panel);
+  color: var(--muted);
+}
 
 /* ══════════════════════════
    Plan calendar view
@@ -977,6 +1019,7 @@
   text-overflow: ellipsis;
   display: -webkit-box;
   -webkit-line-clamp: 2;
+  line-clamp: 2;
   -webkit-box-orient: vertical;
 }
 
@@ -987,13 +1030,33 @@
   color: var(--muted);
 }
 
-.pcal-activity-icon.type-run { color: var(--accent); }
-.pcal-activity-icon.type-strength { color: #6c5ce7; }
-.pcal-activity-icon.type-cross_train { color: #0984e3; }
-.pcal-activity-icon.type-rest { color: var(--green); }
-.pcal-activity-icon.type-mobility { color: #e67e22; }
-.pcal-activity-icon.type-yoga { color: var(--green); }
-.pcal-activity-icon.type-hike { color: #0ea5a6; }
+.pcal-activity-icon.type-run {
+  color: var(--accent);
+}
+
+.pcal-activity-icon.type-strength {
+  color: #6c5ce7;
+}
+
+.pcal-activity-icon.type-cross_train {
+  color: #0984e3;
+}
+
+.pcal-activity-icon.type-rest {
+  color: var(--green);
+}
+
+.pcal-activity-icon.type-mobility {
+  color: #e67e22;
+}
+
+.pcal-activity-icon.type-yoga {
+  color: var(--green);
+}
+
+.pcal-activity-icon.type-hike {
+  color: #0ea5a6;
+}
 
 .pcal-activity-details {
   font-size: 11px;
@@ -1009,6 +1072,7 @@
   text-overflow: ellipsis;
   display: -webkit-box;
   -webkit-line-clamp: 3;
+  line-clamp: 3;
   -webkit-box-orient: vertical;
   margin-top: 2px;
 }
@@ -1107,13 +1171,25 @@
 }
 
 @keyframes pcal-fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes pcal-slide-up {
-  from { opacity: 0; transform: translateY(16px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .pcal-modal {
@@ -1363,52 +1439,65 @@
   .pcal-layout {
     grid-template-columns: 1fr;
   }
+
   .pcal-side {
     position: static;
     top: auto;
   }
+
   .pcal-side-nav {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 6px;
   }
+
   .pcal-side-link {
     justify-content: center;
     text-align: center;
     min-height: 36px;
     padding: 0 8px;
   }
+
   .pcal-race-grid {
     grid-template-columns: 1fr;
   }
+
   .pcal-week {
     grid-template-columns: 1fr;
   }
+
   .pcal-week-label {
     flex-direction: row;
     align-items: center;
     gap: 8px;
     padding: 8px 4px 2px;
   }
+
   .pcal-week-head {
     gap: 8px;
   }
+
   .pcal-week-range {
     font-size: 12px;
   }
+
   .pcal-week-current .pcal-week-grid {
     padding: 0;
     box-shadow: none;
   }
+
   .pcal-week-grid {
     grid-template-columns: repeat(4, 1fr);
   }
+
   .pcal-col-headers {
     display: none;
   }
+
   .pcal-stats {
     flex-wrap: wrap;
     gap: 16px;
   }
+
   .pcal-ai-trainer-meta {
     flex-direction: column;
     align-items: flex-start;
@@ -1420,31 +1509,194 @@
     flex-direction: column;
     align-items: stretch;
   }
+
   .pcal-ai-trainer-toggle {
     width: fit-content;
   }
+
   .pcal-side-nav {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .plans-grid { grid-template-columns: 1fr; }
-  .plans-header { flex-direction: column; }
-  .pcal-header { flex-direction: column; }
+
+  .plans-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .plans-header {
+    flex-direction: column;
+  }
+
+  .pcal-header {
+    flex-direction: column;
+  }
+
   .pcal-header-actions {
     width: 100%;
     justify-content: space-between;
   }
+
   .pcal-race-panel-head {
     flex-direction: column;
     align-items: flex-start;
   }
+
   .pcal-race-actions {
     flex-direction: column;
     align-items: flex-start;
   }
+
   .pcal-week-grid {
     grid-template-columns: repeat(2, 1fr);
   }
+
   .plans-overview-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .plans-page-shell .dash-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .pcal-layout {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .pcal-side {
+    position: static;
+    top: auto;
+  }
+
+  .pcal-side-nav {
+    display: flex;
+    overflow-x: auto;
+    gap: 6px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 4px;
+  }
+
+  .pcal-side-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .pcal-side-link {
+    white-space: nowrap;
+    min-height: 36px;
+    padding: 0 12px;
+    flex-shrink: 0;
+  }
+
+  .pcal-header h1 {
+    font-size: 20px;
+  }
+
+  .pcal-cell {
+    min-height: 80px;
+    padding: 8px;
+  }
+
+  .pcal-cell-date {
+    font-size: 11px;
+  }
+
+  .pcal-activity-title {
+    font-size: 12px;
+  }
+
+  .pcal-activity-meta {
+    font-size: 10px;
+  }
+
+  .pcal-stats {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .plan-card-actions {
+    flex-wrap: wrap;
+  }
+
+  .plan-card-hero {
+    height: 100px;
+  }
+
+  .plan-card-name {
+    font-size: 16px;
+  }
+
+  .pcal-modal-overlay {
+    padding: 0;
+    align-items: flex-end;
+  }
+
+  .pcal-modal {
+    max-width: 100%;
+    max-height: 90vh;
+    border-radius: 16px 16px 0 0;
+    animation: pcal-slide-up 0.25s ease;
+  }
+
+  .pcal-modal-body {
+    padding: 16px;
+  }
+
+  .pcal-modal-close {
+    top: 10px;
+    right: 10px;
+    width: 36px;
+    height: 36px;
+    font-size: 22px;
+  }
+
+  .pcal-modal-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .pcal-modal-actuals-form {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .pcal-week {
+    grid-template-columns: 1fr;
+  }
+
+  .pcal-week-label {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 4px;
+  }
+
+  .pcal-week-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .pcal-cell {
+    min-height: 64px;
+    padding: 10px;
+  }
+
+  .pcal-header h1 {
+    font-size: 18px;
+  }
+
+  .pcal-view-pill {
+    font-size: 11px;
+    padding: 0 8px;
+    min-height: 28px;
+  }
+
+  .plan-card {
+    border-radius: var(--radius);
+  }
+
+  .plan-card-hero {
+    height: 80px;
+    border-radius: var(--radius) var(--radius) 0 0;
   }
 }

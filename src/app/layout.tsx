@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { UserRole } from "@prisma/client";
-import Link from "next/link";
-import { ClerkProvider, SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
+import { ClerkProvider } from "@clerk/nextjs";
 import { getCurrentUserRoleContext, getRoleHomePath, getRoleLabel } from "@/lib/user-roles";
+import Header from "@/components/Header";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -48,6 +48,7 @@ export default async function RootLayout({
   const signedInHome = roleContext && !isAccountInactive
     ? getRoleHomePath(currentRole)
     : "/auth/resolve-role";
+  const isSignedIn = !!roleContext;
 
   return (
     <ClerkProvider
@@ -58,37 +59,16 @@ export default async function RootLayout({
     >
       <html lang="en">
         <body>
-          <header className="header">
-            <SignedOut>
-              <Link className="brand" href="/">CoachPlan</Link>
-              <nav className="nav">
-                <Link href="/">Home</Link>
-              </nav>
-              <div style={{ marginLeft: "auto" }}>
-                <Link className="cta secondary" href="/sign-in">Sign in</Link>
-              </div>
-            </SignedOut>
-            <SignedIn>
-              <Link className="brand" href={signedInHome}>CoachPlan</Link>
-              <span className={`env-chip env-chip-${currentRole.toLowerCase()}`}>
-                {getRoleLabel(currentRole)}
-              </span>
-              <nav className="nav">
-                {isAccountInactive && (
-                  <span className="nav-account-disabled">Account Deactivated</span>
-                )}
-                {!isAccountInactive && navItems.map((item) => (
-                  <Link key={item.href} href={item.href}>{item.label}</Link>
-                ))}
-                {!isAccountInactive && hasMultiRole && (
-                  <Link className="nav-role-switch" href="/select-role">Switch Role</Link>
-                )}
-              </nav>
-              <div style={{ marginLeft: "auto" }}>
-                <UserButton />
-              </div>
-            </SignedIn>
-          </header>
+          <Header
+            brand="CoachPlan"
+            brandHref={signedInHome}
+            roleChip={isSignedIn ? getRoleLabel(currentRole) : undefined}
+            roleChipClass={isSignedIn ? `env-chip-${currentRole.toLowerCase()}` : undefined}
+            navItems={navItems}
+            roleSwitchHref={hasMultiRole ? "/select-role" : null}
+            isSignedIn={isSignedIn}
+            isAccountInactive={isAccountInactive}
+          />
           {isAccountInactive ? (
             <main className="account-disabled-shell">
               <section className="account-disabled-card">
@@ -106,3 +86,4 @@ export default async function RootLayout({
     </ClerkProvider>
   );
 }
+
