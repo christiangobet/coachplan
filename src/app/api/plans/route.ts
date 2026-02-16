@@ -143,10 +143,16 @@ type ParsedPlanOutput = Record<string, unknown> & {
   weeks: ParsedWeekEntry[];
   glossary?: { note?: string | null } & Record<string, unknown>;
   parser?: string;
+  parse_debug?: Record<string, unknown>;
   parse_meta?: {
     selectedParser: string;
     quality: ParseQuality;
-    candidates: Array<{ parser: string; quality: ParseQuality }>;
+    selectedDiagnostics?: Record<string, unknown> | null;
+    candidates: Array<{
+      parser: string;
+      quality: ParseQuality;
+      diagnostics?: Record<string, unknown> | null;
+    }>;
   };
 };
 
@@ -1072,6 +1078,12 @@ type RowCluster = {
   items: PdfTextItem[];
 };
 
+type TableHeader = {
+  y: number;
+  columns: number[];
+  twmColumn: number | null;
+};
+
 function stripSuperscriptFootnotes(text: string) {
   return text
     // Superscript/subscript unicode blocks commonly used for footnote markers in PDFs.
@@ -1117,17 +1129,33 @@ function clusterRows(items: PdfTextItem[], tolerance = 2): RowCluster[] {
     .sort((a, b) => b.y - a.y);
 }
 
-function nearestIndex(target: number, anchors: number[]) {
-  let bestIdx = 0;
-  let bestDist = Number.POSITIVE_INFINITY;
-  for (let i = 0; i < anchors.length; i += 1) {
-    const dist = Math.abs(target - anchors[i]);
-    if (dist < bestDist) {
-      bestDist = dist;
-      bestIdx = i;
-    }
+function buildColumnBoundaries(columns: number[], twmColumn: number | null, pageWidth: number) {
+  const sorted = [...columns].sort((a, b) => a - b);
+  const boundaries: number[] = [];
+  const leadingGap = sorted.length > 1 ? Math.max(20, (sorted[1] - sorted[0]) * 0.5) : 28;
+  boundaries.push(Math.max(0, sorted[0] - leadingGap));
+
+  for (let i = 1; i < sorted.length; i += 1) {
+    boundaries.push((sorted[i - 1] + sorted[i]) / 2);
   }
-  return { index: bestIdx, distance: bestDist };
+
+  const defaultTrailingGap = sorted.length > 1 ? Math.max(26, (sorted[sorted.length - 1] - sorted[sorted.length - 2]) * 0.8) : 48;
+  const trailingBoundary = twmColumn && twmColumn > sorted[sorted.length - 1]
+    ? (sorted[sorted.length - 1] + twmColumn) / 2
+    : Math.min(pageWidth - 2, sorted[sorted.length - 1] + defaultTrailingGap);
+  boundaries.push(trailingBoundary);
+
+  return boundaries;
+}
+
+function getColumnIndexForX(x: number, boundaries: number[]) {
+  if (!Number.isFinite(x)) return -1;
+  if (boundaries.length < 2) return -1;
+  if (x < boundaries[0] || x >= boundaries[boundaries.length - 1]) return -1;
+  for (let i = 0; i < boundaries.length - 1; i += 1) {
+    if (x >= boundaries[i] && x < boundaries[i + 1]) return i;
+  }
+  return -1;
 }
 
 function isLikelyFootnoteOnly(text: string) {
@@ -1135,7 +1163,17 @@ function isLikelyFootnoteOnly(text: string) {
   if (!t) return true;
   if (/^\d{1,2}$/.test(t)) return true;
   if (/^[\[(]?\d{1,2}[\])]?$/.test(t)) return true;
+  if (/^[★♥]+$/.test(t)) return true;
   return false;
+}
+
+function isRepeatedTableHeaderRow(cells: string[]) {
+  const canonical = cells
+    .map((cell) => canonicalizeTableLabel(cell))
+    .filter((label): label is string => Boolean(label));
+  if (!canonical.length) return false;
+  const names = new Set(canonical);
+  return TABLE_LABELS.every((label) => names.has(label));
 }
 
 function findTableHeader(items: PdfTextItem[]) {
@@ -1161,7 +1199,12 @@ function findTableHeader(items: PdfTextItem[]) {
       return candidates[0]?.item.x ?? 0;
     });
 
-    return { y: monday.item.y, columns };
+    const twmCandidates = row
+      .filter((entry) => entry.canonical === 'TWM')
+      .sort((a, b) => a.item.x - b.item.x);
+
+    const twmColumn = twmCandidates[0]?.item.x ?? null;
+    return { y: monday.item.y, columns, twmColumn } as TableHeader;
   }
 
   return null;
@@ -1185,6 +1228,18 @@ async function parsePdfToJsonNode(pdfPath: string, name: string): Promise<Parsed
   });
   const pdf = await loadingTask.promise;
   const weeks = new Map<number, Record<string, string[]>>();
+  const diagnostics = {
+    pagesScanned: pdf.numPages,
+    pagesWithHeader: 0,
+    rowClusters: 0,
+    rowsAssigned: 0,
+    rowsDroppedNoWeek: 0,
+    rowsDroppedHeader: 0,
+    weekMarkersFound: 0,
+    tokenTotal: 0,
+    tokenAssigned: 0
+  };
+  let carryWeekNumber: number | null = null;
 
   for (let pageIndex = 1; pageIndex <= pdf.numPages; pageIndex += 1) {
     const page = await pdf.getPage(pageIndex);
@@ -1199,49 +1254,61 @@ async function parsePdfToJsonNode(pdfPath: string, name: string): Promise<Parsed
 
     const header = findTableHeader(items);
     if (!header) continue;
+    diagnostics.pagesWithHeader += 1;
+    const pageWidth = Number((page as { view?: number[] }).view?.[2] || 1000);
+    const boundaries = buildColumnBoundaries(header.columns, header.twmColumn, pageWidth);
 
     const bodyItems = items.filter((item) => (
       item.y < header.y - 3
-      && item.y > 70
-      && item.x < 740
+      && item.y > 55
+      && item.x >= boundaries[0] - 4
+      && item.x < boundaries[boundaries.length - 1] + 4
     ));
 
     const rows = clusterRows(bodyItems).map((cluster) => {
       const cellParts: string[][] = Array.from({ length: 8 }, () => []);
+      let assignedCount = 0;
 
       for (const item of cluster.items) {
-        const nearest = nearestIndex(item.x, header.columns);
-        if (nearest.distance > 75) continue;
-        cellParts[nearest.index].push(item.str);
+        diagnostics.tokenTotal += 1;
+        const columnIndex = getColumnIndexForX(item.x, boundaries);
+        if (columnIndex < 0 || columnIndex >= cellParts.length) continue;
+        cellParts[columnIndex].push(item.str);
+        assignedCount += 1;
+        diagnostics.tokenAssigned += 1;
       }
 
       return {
         y: cluster.y,
-        cells: cellParts.map((parts) => normalizeWhitespace(parts.join(' ')))
+        cells: cellParts.map((parts) => normalizeWhitespace(parts.join(' '))),
+        assignedCount
       };
     }).filter((row) => row.cells.some(Boolean));
 
-    const markers = rows
-      .map((row) => {
-        const week = extractWeekNumber(row.cells[0] || '');
-        if (!week) return null;
-        return { y: row.y, week };
-      })
-      .filter((marker): marker is { y: number; week: number } => Boolean(marker));
-
-    if (!markers.length) continue;
+    diagnostics.rowClusters += rows.length;
+    let activeWeek = carryWeekNumber;
 
     for (const row of rows) {
+      if (isRepeatedTableHeaderRow(row.cells)) {
+        diagnostics.rowsDroppedHeader += 1;
+        continue;
+      }
+
+      const weekFromCell = extractWeekNumber(row.cells[0] || '');
+      if (weekFromCell) {
+        activeWeek = weekFromCell;
+        carryWeekNumber = weekFromCell;
+        diagnostics.weekMarkersFound += 1;
+      }
+
       const dayCells = row.cells.slice(1, 1 + DAY_KEYS.length);
       if (!dayCells.some((cell) => cell.length > 0)) continue;
 
-      const nearestMarker = markers.reduce((best, marker) => {
-        if (!best) return marker;
-        return Math.abs(marker.y - row.y) < Math.abs(best.y - row.y) ? marker : best;
-      }, null as { y: number; week: number } | null);
-
-      if (!nearestMarker) continue;
-      const weekNumber = nearestMarker.week;
+      if (!activeWeek) {
+        diagnostics.rowsDroppedNoWeek += 1;
+        continue;
+      }
+      const weekNumber = activeWeek;
 
       if (!weeks.has(weekNumber)) {
         weeks.set(weekNumber, DAY_KEYS.reduce((acc, day) => {
@@ -1251,10 +1318,17 @@ async function parsePdfToJsonNode(pdfPath: string, name: string): Promise<Parsed
       }
 
       const bucket = weeks.get(weekNumber)!;
+      let rowStored = false;
       for (let i = 0; i < DAY_KEYS.length; i += 1) {
         const cell = dayCells[i];
         if (!cell || isLikelyFootnoteOnly(cell)) continue;
+        const cellLabel = canonicalizeTableLabel(cell);
+        if (cellLabel && (TABLE_LABELS.includes(cellLabel) || cellLabel === 'TWM')) continue;
         bucket[DAY_KEYS[i]].push(cell);
+        rowStored = true;
+      }
+      if (rowStored || row.assignedCount > 0) {
+        diagnostics.rowsAssigned += 1;
       }
     }
   }
@@ -1280,6 +1354,15 @@ async function parsePdfToJsonNode(pdfPath: string, name: string): Promise<Parsed
     program_name: name,
     generated_at: new Date().toISOString(),
     parser: 'node',
+    parse_debug: {
+      parser: 'node',
+      diagnostics: {
+        ...diagnostics,
+        tokenAssignmentRate: diagnostics.tokenTotal > 0
+          ? Number((diagnostics.tokenAssigned / diagnostics.tokenTotal).toFixed(3))
+          : 0
+      }
+    },
     weeks: parsedWeeks,
     glossary: {
       sections: [],
@@ -1326,7 +1409,12 @@ async function parsePdfToJson(planId: string, pdfPath: string, name: string): Pr
       parse_meta: {
         selectedParser: 'node',
         quality: nodeQuality,
-        candidates: [{ parser: 'node', quality: nodeQuality }]
+        selectedDiagnostics: (nodeParsed.parse_debug as Record<string, unknown>) || null,
+        candidates: [{
+          parser: 'node',
+          quality: nodeQuality,
+          diagnostics: (nodeParsed.parse_debug as Record<string, unknown>) || null
+        }]
       }
     };
   }
@@ -1403,9 +1491,11 @@ async function parsePdfToJson(planId: string, pdfPath: string, name: string): Pr
     parse_meta: {
       selectedParser: selected.parser,
       quality: selected.quality,
+      selectedDiagnostics: (selected.parsed.parse_debug as Record<string, unknown>) || null,
       candidates: candidates.map((candidate) => ({
         parser: candidate.parser,
-        quality: candidate.quality
+        quality: candidate.quality,
+        diagnostics: (candidate.parsed.parse_debug as Record<string, unknown>) || null
       }))
     }
   };
@@ -1477,7 +1567,12 @@ export async function POST(req: Request) {
           parse_meta?: {
             selectedParser?: string;
             quality?: ParseQuality;
-            candidates?: Array<{ parser: string; quality: ParseQuality }>;
+            selectedDiagnostics?: Record<string, unknown> | null;
+            candidates?: Array<{
+              parser: string;
+              quality: ParseQuality;
+              diagnostics?: Record<string, unknown> | null;
+            }>;
           };
         }).parse_meta
         : undefined;
@@ -1497,6 +1592,7 @@ export async function POST(req: Request) {
         planId: plan.id,
         parser: selectedParser,
         quality: parseQuality,
+        diagnostics: parseMeta?.selectedDiagnostics || null,
         candidates: parseMeta?.candidates || null
       });
       const weeks = Array.isArray(parsed?.weeks) ? parsed.weeks : [];
