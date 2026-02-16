@@ -131,6 +131,11 @@
   box-shadow: var(--d-shadow-md);
 }
 
+.plan-card.focused {
+  border-color: rgba(252, 76, 2, 0.5);
+  box-shadow: 0 0 0 2px rgba(252, 76, 2, 0.14), var(--d-shadow-md);
+}
+
 .plan-card.template {
   cursor: default;
   border-style: dashed;
@@ -208,6 +213,19 @@
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--muted);
+}
+
+.plan-focus-badge {
+  margin-left: auto;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+  background: rgba(252, 76, 2, 0.12);
+  border: 1px solid rgba(252, 76, 2, 0.22);
+  padding: 2px 8px;
+  border-radius: 999px;
 }
 
 .plan-template-badge {

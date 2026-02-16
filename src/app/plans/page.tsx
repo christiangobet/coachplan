@@ -1,9 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import AthleteSidebar from '@/components/AthleteSidebar';
-import { SELECTED_PLAN_COOKIE } from '@/lib/plan-selection';
+import { pickSelectedPlan, SELECTED_PLAN_COOKIE } from '@/lib/plan-selection';
 import '../dashboard/dashboard.css';
 import './plans.css';
 
@@ -15,6 +15,8 @@ type Plan = {
   progress?: number;
   raceName?: string | null;
   raceDate?: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
 };
 type Template = { id: string; name: string; weekCount?: number | null };
 
@@ -47,10 +49,28 @@ export default function PlansPage() {
   const [assigning, setAssigning] = useState<string | null>(null);
   const [processingPlanId, setProcessingPlanId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [cookieSelectedPlanId, setCookieSelectedPlanId] = useState<string | null>(null);
 
   const rememberSelectedPlan = (planId: string) => {
     if (!planId) return;
     document.cookie = `${SELECTED_PLAN_COOKIE}=${encodeURIComponent(planId)}; Path=/; Max-Age=31536000; SameSite=Lax`;
+    setCookieSelectedPlanId(planId);
+  };
+
+  const readSelectedPlanCookie = () => {
+    const prefix = `${SELECTED_PLAN_COOKIE}=`;
+    const raw = document.cookie
+      .split(';')
+      .map((item) => item.trim())
+      .find((item) => item.startsWith(prefix));
+    if (!raw) return null;
+    const value = raw.slice(prefix.length);
+    if (!value) return null;
+    try {
+      return decodeURIComponent(value);
+    } catch {
+      return value;
+    }
   };
 
   useEffect(() => {
@@ -71,6 +91,8 @@ export default function PlansPage() {
       .then((r) => r.json())
       .then((d) => setTemplates(d.templates || []))
       .catch(() => setTemplates([]));
+
+    setCookieSelectedPlanId(readSelectedPlanCookie());
   }, []);
 
   const handleUseTemplate = async (templateId: string) => {
@@ -138,6 +160,11 @@ export default function PlansPage() {
   const activePlans = plans.filter((plan) => plan.status === 'ACTIVE');
   const draftPlans = plans.filter((plan) => plan.status === 'DRAFT');
   const archivedPlans = plans.filter((plan) => plan.status === 'ARCHIVED');
+  const focusedPlan = useMemo(
+    () => pickSelectedPlan(plans, { cookiePlanId: cookieSelectedPlanId }),
+    [plans, cookieSelectedPlanId]
+  );
+  const focusedPlanId = focusedPlan?.id || null;
 
   return (
     <main className="dash plans-page-shell">
@@ -165,7 +192,7 @@ export default function PlansPage() {
             ) : (
               <div className="plans-grid">
                 {activePlans.map((plan) => (
-                  <div className="plan-card" key={plan.id}>
+                  <div className={`plan-card${plan.id === focusedPlanId ? ' focused' : ''}`} key={plan.id}>
                     <div className={`plan-card-hero ${heroClass(plan.status)}`}>
                       <span className="plan-card-hero-badge">Training Plan</span>
                     </div>
@@ -175,6 +202,9 @@ export default function PlansPage() {
                         style={{ background: statusColor(plan.status) }}
                       />
                       <span className="plan-status-label">{plan.status}</span>
+                      {plan.id === focusedPlanId && (
+                        <span className="plan-focus-badge">Current Plan</span>
+                      )}
                     </div>
                     <h3 className="plan-card-name">{plan.name}</h3>
                     <span className="plan-card-meta">
@@ -235,7 +265,7 @@ export default function PlansPage() {
             ) : (
               <div className="plans-grid">
                 {draftPlans.map((plan) => (
-                  <div className="plan-card" key={plan.id}>
+                  <div className={`plan-card${plan.id === focusedPlanId ? ' focused' : ''}`} key={plan.id}>
                     <div className={`plan-card-hero ${heroClass(plan.status)}`}>
                       <span className="plan-card-hero-badge">Training Plan</span>
                     </div>
@@ -245,6 +275,9 @@ export default function PlansPage() {
                         style={{ background: statusColor(plan.status) }}
                       />
                       <span className="plan-status-label">{plan.status}</span>
+                      {plan.id === focusedPlanId && (
+                        <span className="plan-focus-badge">Current Plan</span>
+                      )}
                     </div>
                     <h3 className="plan-card-name">{plan.name}</h3>
                     <span className="plan-card-meta">
@@ -305,7 +338,7 @@ export default function PlansPage() {
             ) : (
               <div className="plans-grid">
                 {archivedPlans.map((plan) => (
-                  <div className="plan-card" key={plan.id}>
+                  <div className={`plan-card${plan.id === focusedPlanId ? ' focused' : ''}`} key={plan.id}>
                     <div className={`plan-card-hero ${heroClass(plan.status)}`}>
                       <span className="plan-card-hero-badge">Training Plan</span>
                     </div>
@@ -315,6 +348,9 @@ export default function PlansPage() {
                         style={{ background: statusColor(plan.status) }}
                       />
                       <span className="plan-status-label">{plan.status}</span>
+                      {plan.id === focusedPlanId && (
+                        <span className="plan-focus-badge">Current Plan</span>
+                      )}
                     </div>
                     <h3 className="plan-card-name">{plan.name}</h3>
                     <span className="plan-card-meta">
