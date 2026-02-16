@@ -2,11 +2,32 @@
 
 import Link from 'next/link';
 import { UserButton } from '@clerk/nextjs';
-import { usePathname, useSearchParams } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
-import { appendPlanQueryToHref, extractPlanIdFromPathname } from '@/lib/plan-selection';
+import {
+    appendPlanQueryToHref,
+    extractPlanIdFromPathname,
+    SELECTED_PLAN_COOKIE
+} from '@/lib/plan-selection';
 
 type NavItem = { href: string; label: string };
+
+function readSelectedPlanCookie() {
+    if (typeof document === 'undefined') return null;
+    const prefix = `${SELECTED_PLAN_COOKIE}=`;
+    const rawCookie = document.cookie
+        .split(';')
+        .map((item) => item.trim())
+        .find((item) => item.startsWith(prefix));
+    if (!rawCookie) return null;
+    const value = rawCookie.slice(prefix.length);
+    if (!value) return null;
+    try {
+        return decodeURIComponent(value);
+    } catch {
+        return value;
+    }
+}
 
 export default function Header({
     brand,
@@ -29,8 +50,7 @@ export default function Header({
 }) {
     const [menuOpen, setMenuOpen] = useState(false);
     const pathname = usePathname();
-    const searchParams = useSearchParams();
-    const contextualPlanId = searchParams.get('plan') || extractPlanIdFromPathname(pathname);
+    const contextualPlanId = extractPlanIdFromPathname(pathname) || readSelectedPlanCookie();
 
     // Close menu on route change (resize)
     useEffect(() => {
