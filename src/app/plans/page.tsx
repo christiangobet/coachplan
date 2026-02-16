@@ -171,6 +171,7 @@ export default function PlansPage() {
                     </div>
                     <div className="plan-card-actions">
                       <Link className="plan-card-use" href={`/plans/${plan.id}`}>Open</Link>
+                      <Link className="plan-card-use" href={`/plans/${plan.id}?mode=edit`} style={{ marginLeft: '8px' }}>Edit</Link>
                       <button
                         className="plan-card-use"
                         onClick={() => updatePlanStatus(plan.id, 'DRAFT')}
@@ -234,6 +235,7 @@ export default function PlansPage() {
                     </div>
                     <div className="plan-card-actions">
                       <Link className="plan-card-use" href={`/plans/${plan.id}`}>Open</Link>
+                      <Link className="plan-card-use" href={`/plans/${plan.id}?mode=edit`} style={{ marginLeft: '8px' }}>Edit</Link>
                       <button
                         className="plan-card-use"
                         onClick={() => updatePlanStatus(plan.id, 'ACTIVE')}

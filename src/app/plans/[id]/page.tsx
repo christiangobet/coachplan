@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback, useMemo } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { getDayDateFromWeekStart, resolveWeekBounds } from '@/lib/plan-dates';
 import { isDayMarkedDone } from '@/lib/day-status';
 import ActivityTypeIcon from '@/components/ActivityTypeIcon';
@@ -158,6 +158,7 @@ function describeAiChange(change: AiTrainerChange, lookup: AiChangeLookup) {
 
 export default function PlanDetailPage() {
   const params = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
   const planId = Array.isArray(params?.id) ? params?.id[0] : params?.id;
   const [plan, setPlan] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
@@ -183,6 +184,12 @@ export default function PlanDetailPage() {
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingActivity, setEditingActivity] = useState<any>(null);
   const [addingToDayId, setAddingToDayId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (searchParams && searchParams.get('mode') === 'edit') {
+      setIsEditMode(true);
+    }
+  }, [searchParams]);
 
   const handleSaveActivity = async (data: ActivityFormData) => {
     try {
