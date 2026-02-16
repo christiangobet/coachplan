@@ -60,6 +60,22 @@ function parseIsoDate(input: unknown): string | null {
   return parsed.toISOString().slice(0, 10);
 }
 
+function parseInteger(input: unknown): number | null {
+  if (input === null || input === undefined || input === '') return null;
+  const parsed = Number(input);
+  if (!Number.isFinite(parsed)) return null;
+  const rounded = Math.round(parsed);
+  if (Math.abs(parsed - rounded) > 1e-9) return null;
+  return rounded;
+}
+
+function parseDayOfWeek(input: unknown): number | null {
+  const value = parseInteger(input);
+  if (value === null) return null;
+  if (value < 1 || value > 7) return null;
+  return value;
+}
+
 
 
 function parseProposal(raw: unknown): PlanAdjustmentProposal | null {
@@ -187,6 +203,46 @@ function parseProposal(raw: unknown): PlanAdjustmentProposal | null {
       continue;
     }
 
+    if (op === 'reanchor_subtype_weekly') {
+      const subtype = normalizeText(change.subtype);
+      const targetDayOfWeek = parseDayOfWeek(change.targetDayOfWeek);
+      const fromDayOfWeekRaw = change.fromDayOfWeek;
+      const startWeekIndexRaw = change.startWeekIndex;
+      if (!subtype || targetDayOfWeek === null) return null;
+
+      let fromDayOfWeek: number | null | undefined = undefined;
+      if (fromDayOfWeekRaw !== undefined) {
+        if (fromDayOfWeekRaw === null || fromDayOfWeekRaw === '') {
+          fromDayOfWeek = null;
+        } else {
+          const parsedFromDay = parseDayOfWeek(fromDayOfWeekRaw);
+          if (parsedFromDay === null) return null;
+          fromDayOfWeek = parsedFromDay;
+        }
+      }
+
+      let startWeekIndex: number | null | undefined = undefined;
+      if (startWeekIndexRaw !== undefined) {
+        if (startWeekIndexRaw === null || startWeekIndexRaw === '') {
+          startWeekIndex = null;
+        } else {
+          const parsedStartWeek = parseInteger(startWeekIndexRaw);
+          if (parsedStartWeek === null || parsedStartWeek < 1) return null;
+          startWeekIndex = parsedStartWeek;
+        }
+      }
+
+      changes.push({
+        op,
+        subtype: subtype.slice(0, 60),
+        targetDayOfWeek,
+        ...(fromDayOfWeek !== undefined ? { fromDayOfWeek } : {}),
+        ...(startWeekIndex !== undefined ? { startWeekIndex } : {}),
+        reason
+      });
+      continue;
+    }
+
     return null;
   }
 
@@ -245,6 +301,7 @@ function buildPlanContext(plan: NonNullable<PlanForContext>) {
       activityId: string;
       title: string;
       type: ActivityType;
+      subtype: string | null;
       completed: boolean;
       duration: number | null;
       distance: number | null;
@@ -277,6 +334,7 @@ function buildPlanContext(plan: NonNullable<PlanForContext>) {
           activityId: activity.id,
           title: activity.title,
           type: activity.type,
+          subtype: activity.subtype ?? null,
           completed: activity.completed,
           duration: activity.duration ?? null,
           distance: activity.distance ?? null,
@@ -333,6 +391,9 @@ async function generateAdjustmentProposal(message: string, plan: NonNullable<Pla
       '- You may use extend_plan ONLY when athlete asks to start earlier or add weeks while keeping race date unchanged.',
       '- For extend_plan, provide newStartDate as ISO date (YYYY-MM-DD).',
       '- Do not use extend_plan for race-date changes or other structure changes.',
+      '- For repeated weekly structure changes (example: move long run day across remaining weeks), prefer reanchor_subtype_weekly.',
+      '- For reanchor_subtype_weekly use dayOfWeek numbers where 1=Mon ... 7=Sun.',
+      '- For reanchor_subtype_weekly subtype should be a plain token like lrl, tempo, strength, cross-training, rest, recovery.',
       '- Explain changes briefly in plain language.',
       `Athlete feedback: ${message}`,
       `Plan context JSON: ${JSON.stringify(context)}`
@@ -436,6 +497,19 @@ async function generateAdjustmentProposal(message: string, plan: NonNullable<Pla
                   properties: {
                     op: { type: 'string', const: 'extend_plan' },
                     newStartDate: { type: 'string', minLength: 10, maxLength: 32 },
+                    reason: { type: 'string', minLength: 4, maxLength: 220 }
+                  }
+                },
+                {
+                  type: 'object',
+                  additionalProperties: false,
+                  required: ['op', 'subtype', 'targetDayOfWeek', 'reason'],
+                  properties: {
+                    op: { type: 'string', const: 'reanchor_subtype_weekly' },
+                    subtype: { type: 'string', minLength: 2, maxLength: 60 },
+                    targetDayOfWeek: { type: 'integer', minimum: 1, maximum: 7 },
+                    fromDayOfWeek: { type: ['integer', 'null'], minimum: 1, maximum: 7 },
+                    startWeekIndex: { type: ['integer', 'null'], minimum: 1, maximum: 104 },
                     reason: { type: 'string', minLength: 4, maxLength: 220 }
                   }
                 }

@@ -155,6 +155,14 @@ type AiTrainerChange =
     op: 'extend_plan';
     newStartDate: string;
     reason: string;
+  }
+  | {
+    op: 'reanchor_subtype_weekly';
+    subtype: string;
+    targetDayOfWeek: number;
+    fromDayOfWeek?: number | null;
+    startWeekIndex?: number | null;
+    reason: string;
   };
 
 type AiTrainerProposal = {
@@ -174,6 +182,10 @@ type AiChangeLookup = {
 function describeAiChange(change: AiTrainerChange, lookup: AiChangeLookup) {
   const dayLabel = (dayId: string) => lookup.dayLabelById.get(dayId) || 'a plan day';
   const activityLabel = (activityId: string) => lookup.activityLabelById.get(activityId) || 'a scheduled activity';
+  const dayName = (dayOfWeek: number | null | undefined) => {
+    if (!dayOfWeek || dayOfWeek < 1 || dayOfWeek > 7) return 'a day';
+    return DAY_LABELS[dayOfWeek - 1] || 'a day';
+  };
 
   if (change.op === 'extend_plan') {
     const startDate = new Date(`${change.newStartDate}T00:00:00`);
@@ -181,6 +193,12 @@ function describeAiChange(change: AiTrainerChange, lookup: AiChangeLookup) {
       ? change.newStartDate
       : startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     return `Extend plan to start on ${startText} (prepend weeks, keep race date).`;
+  }
+  if (change.op === 'reanchor_subtype_weekly') {
+    const subtypeLabel = change.subtype.replace(/[-_]+/g, ' ').trim();
+    const sourceText = change.fromDayOfWeek ? ` from ${dayName(change.fromDayOfWeek)}` : '';
+    const startText = change.startWeekIndex ? ` from week ${change.startWeekIndex}` : ' for remaining weeks';
+    return `Move ${subtypeLabel} sessions${sourceText} to ${dayName(change.targetDayOfWeek)}${startText}.`;
   }
   if (change.op === 'move_activity') {
     return `Move ${activityLabel(change.activityId)} to ${dayLabel(change.targetDayId)}.`;

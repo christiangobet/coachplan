@@ -57,12 +57,22 @@ export type ExtendPlanChange = {
     reason: string;
 };
 
+export type ReanchorSubtypeWeeklyChange = {
+    op: 'reanchor_subtype_weekly';
+    subtype: string;
+    targetDayOfWeek: number;
+    fromDayOfWeek?: number | null;
+    startWeekIndex?: number | null;
+    reason: string;
+};
+
 export type PlanAdjustmentChange =
     | MoveActivityChange
     | EditActivityChange
     | AddActivityChange
     | DeleteActivityChange
-    | ExtendPlanChange;
+    | ExtendPlanChange
+    | ReanchorSubtypeWeeklyChange;
 
 export type PlanAdjustmentProposal = {
     coachReply: string;
@@ -197,6 +207,59 @@ function addDays(date: Date, days: number) {
 function diffDays(start: Date, end: Date) {
     const ms = end.getTime() - start.getTime();
     return Math.floor(ms / (24 * 60 * 60 * 1000));
+}
+
+function normalizeSubtypeKey(value: string) {
+    const token = String(value || '')
+        .trim()
+        .toLowerCase()
+        .replace(/[_\s]+/g, '-')
+        .replace(/[^a-z0-9-]/g, '');
+
+    if (!token) return '';
+    if (token === 'lr' || token === 'longrun' || token === 'long-run') return 'lrl';
+    if (token === 'cross-train' || token === 'cross' || token === 'xt') return 'cross-training';
+    return token;
+}
+
+function activityMatchesSubtype(
+    activity: { type: ActivityType; subtype: string | null; title: string },
+    requestedSubtype: string
+) {
+    const subtype = normalizeSubtypeKey(activity.subtype || '');
+    const title = String(activity.title || '').toLowerCase();
+    const target = normalizeSubtypeKey(requestedSubtype);
+    if (!target) return false;
+
+    if (target === 'lrl') {
+        return (
+            subtype === 'lrl'
+            || /\blong run\b/i.test(title)
+            || /\blrl\b/i.test(title)
+        );
+    }
+    if (target === 'rest') {
+        return activity.type === 'REST' || subtype === 'rest' || /\brest\b/i.test(title);
+    }
+    if (target === 'cross-training') {
+        return (
+            activity.type === 'CROSS_TRAIN'
+            || subtype === 'cross-training'
+            || /\bcross[\s-]?training\b/i.test(title)
+            || /\bxt\b/i.test(title)
+        );
+    }
+    if (target === 'strength') {
+        return activity.type === 'STRENGTH' || subtype === 'strength' || /\bstrength\b/i.test(title);
+    }
+    if (target === 'tempo') {
+        return subtype === 'tempo' || /\btempo\b/i.test(title);
+    }
+    if (target === 'recovery') {
+        return subtype === 'recovery' || /\brecovery\b/i.test(title);
+    }
+
+    return subtype === target || title.includes(target.replace(/-/g, ' '));
 }
 
 // Core application logic
@@ -343,6 +406,104 @@ export async function applyAdjustmentProposal(planId: string, proposal: PlanAdju
                 continue;
             }
 
+            if (change.op === 'reanchor_subtype_weekly') {
+                const targetDay = Number(change.targetDayOfWeek);
+                if (!Number.isInteger(targetDay) || targetDay < 1 || targetDay > 7) {
+                    throw new Error('reanchor_subtype_weekly.targetDayOfWeek must be an integer between 1 and 7.');
+                }
+                const fromDay = change.fromDayOfWeek === null || change.fromDayOfWeek === undefined
+                    ? null
+                    : Number(change.fromDayOfWeek);
+                if (fromDay !== null && (!Number.isInteger(fromDay) || fromDay < 1 || fromDay > 7)) {
+                    throw new Error('reanchor_subtype_weekly.fromDayOfWeek must be null or an integer between 1 and 7.');
+                }
+                const startWeekIndex = change.startWeekIndex === null || change.startWeekIndex === undefined
+                    ? 1
+                    : Number(change.startWeekIndex);
+                if (!Number.isInteger(startWeekIndex) || startWeekIndex < 1) {
+                    throw new Error('reanchor_subtype_weekly.startWeekIndex must be null or a positive integer.');
+                }
+
+                const weeks = await tx.planWeek.findMany({
+                    where: { planId },
+                    orderBy: { weekIndex: 'asc' },
+                    include: {
+                        days: {
+                            include: {
+                                activities: {
+                                    select: {
+                                        id: true,
+                                        dayId: true,
+                                        completed: true,
+                                        type: true,
+                                        subtype: true,
+                                        title: true
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+
+                const normalizedTargetSubtype = normalizeSubtypeKey(change.subtype);
+                if (!normalizedTargetSubtype) {
+                    throw new Error('reanchor_subtype_weekly.subtype is required.');
+                }
+
+                let movedForThisChange = 0;
+                for (const week of weeks) {
+                    if (week.weekIndex < startWeekIndex) continue;
+
+                    const orderedDays = [...(week.days || [])].sort((a, b) => a.dayOfWeek - b.dayOfWeek);
+                    const dayByDow = new Map(orderedDays.map((day) => [day.dayOfWeek, day]));
+                    const targetDayEntry = dayByDow.get(targetDay);
+                    if (!targetDayEntry) continue;
+                    if (lockedDayIdSet.has(targetDayEntry.id)) continue;
+
+                    const sourceDays = fromDay
+                        ? (dayByDow.get(fromDay) ? [dayByDow.get(fromDay)!] : [])
+                        : orderedDays;
+
+                    let selectedActivityId: string | null = null;
+                    let selectedFromDayId: string | null = null;
+                    for (const sourceDay of sourceDays) {
+                        if (lockedDayIdSet.has(sourceDay.id)) continue;
+                        const candidate = (sourceDay.activities || []).find((activity) => {
+                            if (activity.completed) return false;
+                            if (!activityMatchesSubtype(activity, normalizedTargetSubtype)) return false;
+                            const lockInfo = activityById.get(activity.id);
+                            if (!lockInfo) return false;
+                            if (lockInfo.completed || lockedDayIdSet.has(lockInfo.dayId)) return false;
+                            return true;
+                        });
+                        if (candidate) {
+                            selectedActivityId = candidate.id;
+                            selectedFromDayId = sourceDay.id;
+                            break;
+                        }
+                    }
+
+                    if (!selectedActivityId || !selectedFromDayId) continue;
+                    if (selectedFromDayId === targetDayEntry.id) continue;
+
+                    await tx.planActivity.update({
+                        where: { id: selectedActivityId },
+                        data: { dayId: targetDayEntry.id }
+                    });
+                    const lockInfo = activityById.get(selectedActivityId);
+                    if (lockInfo) {
+                        activityById.set(selectedActivityId, {
+                            ...lockInfo,
+                            dayId: targetDayEntry.id
+                        });
+                    }
+                    movedForThisChange += 1;
+                }
+
+                appliedCount += movedForThisChange;
+                continue;
+            }
+
             if (change.op === 'delete_activity') {
                 if (!activityIdSet.has(change.activityId)) {
                     throw new Error(`Activity not found in plan: ${change.activityId}`);
@@ -431,28 +592,22 @@ export async function applyAdjustmentProposal(planId: string, proposal: PlanAdju
 
 export function isChangeAllowed(change: PlanAdjustmentChange, lockState: PlanLockState): boolean {
     if (change.op === 'extend_plan') return true;
-
+    if (change.op === 'reanchor_subtype_weekly') return true;
     if (change.op === 'add_activity') {
         return !lockState.lockedDayIdSet.has(change.dayId);
     }
-
-    const activity = lockState.activityById.get(change.activityId);
-    if (!activity) return false; // Activity must exist to be changed
-
-    // Check if source day is locked or activity is completed
-    if (activity.completed || lockState.lockedDayIdSet.has(activity.dayId)) {
-        return false;
-    }
-
     if (change.op === 'move_activity') {
-        // Also check target day for moves
-        // Note: moved logic comment above in applyAdjustmentProposal suggests we might allow moving INTO completed days?
-        // But sanitizeProposalAgainstLockedDays in original code blocked moves touching locked days.
-        // Let's stick to strict safety: cannot touch locked days at all.
+        const activity = lockState.activityById.get(change.activityId);
+        if (!activity) return false;
+        if (activity.completed || lockState.lockedDayIdSet.has(activity.dayId)) return false;
         return !lockState.lockedDayIdSet.has(change.targetDayId);
     }
-
-    return true;
+    if (change.op === 'delete_activity' || change.op === 'edit_activity') {
+        const activity = lockState.activityById.get(change.activityId);
+        if (!activity) return false;
+        return !activity.completed && !lockState.lockedDayIdSet.has(activity.dayId);
+    }
+    return false;
 }
 
 export function changeTouchesLockedDay(change: PlanAdjustmentChange, lockState: PlanLockState): boolean {
