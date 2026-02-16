@@ -23,6 +23,63 @@ type PlanAdjustRequestBody = {
   proposal?: unknown;
 };
 
+const QUALITY_RUN_SUBTYPES = new Set([
+  'tempo',
+  'hills',
+  'hill-pyramid',
+  'incline-treadmill',
+  'progression',
+  'training-race',
+  'race',
+  'fast-finish'
+]);
+
+function normalizeSubtypeToken(value: unknown) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[_\s]+/g, '-')
+    .replace(/[^a-z0-9-]/g, '');
+}
+
+function isLongRunLikeActivity(activity: {
+  type: ActivityType;
+  subtype: string | null;
+  title: string;
+}) {
+  const subtype = normalizeSubtypeToken(activity.subtype || '');
+  const title = String(activity.title || '').toLowerCase();
+  return (
+    activity.type === 'RUN'
+    && (
+      subtype === 'lrl'
+      || /\blong run\b/.test(title)
+      || /\blrl\b/.test(title)
+    )
+  );
+}
+
+function isHardRunLikeActivity(activity: {
+  type: ActivityType;
+  subtype: string | null;
+  title: string;
+  priority: ActivityPriority | null;
+  mustDo: boolean;
+}) {
+  if (activity.type !== 'RUN') return false;
+  const subtype = normalizeSubtypeToken(activity.subtype || '');
+  const title = String(activity.title || '').toLowerCase();
+  return (
+    activity.mustDo
+    || activity.priority === 'KEY'
+    || QUALITY_RUN_SUBTYPES.has(subtype)
+    || /\btempo\b/.test(title)
+    || /\bhill\b/.test(title)
+    || /\binterval\b/.test(title)
+    || /\brace\b/.test(title)
+  );
+}
+
 
 
 function isActivityType(value: unknown): value is ActivityType {
@@ -310,6 +367,18 @@ function buildPlanContext(plan: NonNullable<PlanForContext>) {
       mustDo: boolean;
     }>;
   }> = [];
+  const weekSummaries: Array<{
+    weekIndex: number;
+    startDateISO: string | null;
+    endDateISO: string | null;
+    restDays: number[];
+    longRunDayOfWeek: number | null;
+    hardRunDays: number[];
+    keySessionDays: number[];
+    consecutiveHardPairs: Array<[number, number]>;
+    hasRestAfterLongRun: boolean | null;
+    plannedDurationMin: number | null;
+  }> = [];
 
   for (const week of weeks) {
     const bounds = resolveWeekBounds({
@@ -321,9 +390,37 @@ function buildPlanContext(plan: NonNullable<PlanForContext>) {
       allWeekIndexes
     });
     const days = [...(week.days || [])].sort((a, b) => a.dayOfWeek - b.dayOfWeek);
+    const restDays: number[] = [];
+    const hardRunDays = new Set<number>();
+    const keySessionDays = new Set<number>();
+    let longRunDayOfWeek: number | null = null;
+    let plannedDurationMin = 0;
+    let hasDuration = false;
+
     for (const day of days) {
       const date = getDayDateFromWeekStart(bounds.startDate, day.dayOfWeek);
       const dayActivities = day.activities || [];
+      const hasRestDay = dayActivities.some((activity) => activity.type === 'REST');
+      if (hasRestDay) restDays.push(day.dayOfWeek);
+
+      for (const activity of dayActivities) {
+        const duration = activity.duration ?? null;
+        if (duration !== null && Number.isFinite(duration) && duration >= 0) {
+          plannedDurationMin += duration;
+          hasDuration = true;
+        }
+        if (activity.priority === 'KEY' || activity.mustDo) {
+          keySessionDays.add(day.dayOfWeek);
+        }
+        if (isLongRunLikeActivity(activity)) {
+          longRunDayOfWeek = day.dayOfWeek;
+          keySessionDays.add(day.dayOfWeek);
+        }
+        if (isHardRunLikeActivity(activity)) {
+          hardRunDays.add(day.dayOfWeek);
+        }
+      }
+
       rows.push({
         dayId: day.id,
         weekIndex: week.weekIndex,
@@ -344,6 +441,30 @@ function buildPlanContext(plan: NonNullable<PlanForContext>) {
         }))
       });
     }
+
+    const hardRunDayList = [...hardRunDays].sort((a, b) => a - b);
+    const consecutiveHardPairs: Array<[number, number]> = [];
+    for (let i = 1; i < hardRunDayList.length; i += 1) {
+      if (hardRunDayList[i] === hardRunDayList[i - 1] + 1) {
+        consecutiveHardPairs.push([hardRunDayList[i - 1], hardRunDayList[i]]);
+      }
+    }
+    const hasRestAfterLongRun = longRunDayOfWeek
+      ? restDays.includes(Math.min(7, longRunDayOfWeek + 1))
+      : null;
+
+    weekSummaries.push({
+      weekIndex: week.weekIndex,
+      startDateISO: bounds.startDate ? bounds.startDate.toISOString().slice(0, 10) : null,
+      endDateISO: bounds.endDate ? bounds.endDate.toISOString().slice(0, 10) : null,
+      restDays: [...restDays].sort((a, b) => a - b),
+      longRunDayOfWeek,
+      hardRunDays: hardRunDayList,
+      keySessionDays: [...keySessionDays].sort((a, b) => a - b),
+      consecutiveHardPairs,
+      hasRestAfterLongRun,
+      plannedDurationMin: hasDuration ? plannedDurationMin : null
+    });
   }
 
   const dayDates = rows
@@ -364,7 +485,8 @@ function buildPlanContext(plan: NonNullable<PlanForContext>) {
     },
     todayISO: new Date().toISOString().slice(0, 10),
     lockedDayIds: rows.filter((row) => row.isLocked).map((row) => row.dayId),
-    days: rows
+    days: rows,
+    weekSummaries
   };
 }
 
@@ -380,10 +502,15 @@ async function generateAdjustmentProposal(message: string, plan: NonNullable<Pla
     input: [
       'You are an experienced endurance running coach.',
       'Given athlete feedback and current training plan context, propose safe, practical plan adjustments.',
+      'Act like an expert training advisor, not a simple editor: preserve weekly intent, recovery rhythm, and athlete adherence.',
       'Rules:',
       '- Be conservative when illness/fatigue is mentioned.',
       '- Preserve key sessions when possible, but reduce load if needed.',
       '- Do not increase weekly load aggressively.',
+      '- Keep weekly balance: avoid stacking hard/key run days back-to-back unless the athlete explicitly requests it.',
+      '- When moving long run day, rebalance neighboring days to protect recovery (typically easier/rest before, easier/recovery after).',
+      '- When adapting rest day to work schedule constraints, rebalance surrounding intensity so quality sessions are still recoverable.',
+      '- Use weekSummaries to reason about long-run placement, hard-day clustering, and recovery spacing before proposing changes.',
       '- Use only IDs present in context for day/activity references.',
       '- Days listed in lockedDayIds are completed and must not be modified.',
       '- Do not add activities to completed days.',
@@ -394,6 +521,8 @@ async function generateAdjustmentProposal(message: string, plan: NonNullable<Pla
       '- For repeated weekly structure changes (example: move long run day across remaining weeks), prefer reanchor_subtype_weekly.',
       '- For reanchor_subtype_weekly use dayOfWeek numbers where 1=Mon ... 7=Sun.',
       '- For reanchor_subtype_weekly subtype should be a plain token like lrl, tempo, strength, cross-training, rest, recovery.',
+      '- Use minimal but sufficient changes: include companion edits when a single move would create poor weekly balance.',
+      '- If critical details are missing, ask one concise follow-up question and reduce confidence.',
       '- Explain changes briefly in plain language.',
       `Athlete feedback: ${message}`,
       `Plan context JSON: ${JSON.stringify(context)}`
@@ -418,7 +547,7 @@ async function generateAdjustmentProposal(message: string, plan: NonNullable<Pla
           changes: {
             type: 'array',
             minItems: 0,
-            maxItems: 12,
+            maxItems: 20,
             items: {
               oneOf: [
                 {
