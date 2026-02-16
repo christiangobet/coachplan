@@ -1109,32 +1109,26 @@
   background: rgba(0, 0, 0, 0.03);
 }
 
-/* Toggle checkbox */
-.pcal-toggle {
+/* Completion status indicator */
+.pcal-complete-indicator {
   width: 16px;
   height: 16px;
   border-radius: 50%;
   border: 2px solid var(--border);
-  background: transparent;
+  background: #fff;
   flex-shrink: 0;
-  cursor: pointer;
-  padding: 0;
   transition: all 0.15s;
   position: relative;
   align-self: flex-start;
   margin-top: 2px;
 }
 
-.pcal-toggle:hover {
-  border-color: var(--accent);
-}
-
-.pcal-toggle-done {
+.pcal-complete-indicator-done {
   background: var(--green);
   border-color: var(--green);
 }
 
-.pcal-toggle-done::after {
+.pcal-complete-indicator-done::after {
   content: '';
   position: absolute;
   top: 2px;
@@ -1388,8 +1382,15 @@
 }
 
 .pcal-modal-actuals-hint {
-  margin: 0;
+  margin: 10px 0 0;
   color: var(--muted);
+}
+
+.pcal-modal-actuals-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
 }
 
 .pcal-modal-tags {
@@ -1423,31 +1424,42 @@
   color: var(--accent);
 }
 
-.pcal-modal-complete {
-  width: 100%;
-  padding: 12px;
+.pcal-modal-actuals-secondary {
+  flex: 1;
+  min-height: 38px;
+  min-width: 180px;
+  padding: 10px 12px;
   border-radius: var(--radius);
-  border: none;
-  background: var(--accent);
-  color: #fff;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--ink);
   font-family: inherit;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
   cursor: pointer;
   transition: all 0.15s;
-  margin-top: 8px;
 }
 
-.pcal-modal-complete:hover {
-  background: var(--accent-strong);
+.pcal-modal-actuals-secondary:hover {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
-.pcal-modal-complete-done {
-  background: var(--green);
+.pcal-modal-actuals-secondary.danger:hover {
+  border-color: var(--red);
+  color: var(--red);
 }
 
-.pcal-modal-complete-done:hover {
-  background: #27ae60;
+.pcal-modal-actuals-secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  border-color: var(--border);
+  color: var(--muted);
+}
+
+.pcal-modal-actuals-save {
+  flex: 1;
+  min-width: 180px;
 }
 
 /* ══════════════════════════
@@ -1675,6 +1687,16 @@
 
   .pcal-modal-actuals-form {
     grid-template-columns: 1fr;
+  }
+
+  .pcal-modal-actuals-actions {
+    flex-direction: column;
+  }
+
+  .pcal-modal-actuals-save,
+  .pcal-modal-actuals-secondary {
+    width: 100%;
+    min-width: 0;
   }
 }
 

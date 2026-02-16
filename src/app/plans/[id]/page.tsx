@@ -331,8 +331,7 @@ export default function PlanDetailPage() {
   }, []);
 
   // Toggle activity completion with optimistic update
-  const toggleComplete = useCallback(async (activityId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const toggleComplete = useCallback(async (activityId: string) => {
     if (toggling.has(activityId)) return;
 
     setToggling((prev) => new Set(prev).add(activityId));
@@ -357,6 +356,47 @@ export default function PlanDetailPage() {
       });
     }
   }, [toggling, applyActivityUpdate]);
+
+  const completeActivity = useCallback(async (withActuals: boolean) => {
+    if (!selectedActivity || savingActuals) return;
+    setSavingActuals(true);
+    setActualsError(null);
+
+    const payload = withActuals
+      ? {
+        actualDistance: actualDistance.trim(),
+        actualDuration: actualDuration.trim(),
+        actualPace: actualPace.trim(),
+        actualDistanceUnit: viewerUnits
+      }
+      : { actualDistanceUnit: viewerUnits };
+
+    try {
+      const res = await fetch(`/api/activities/${selectedActivity.id}/complete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setActualsError(data?.error || 'Failed to complete activity');
+        return;
+      }
+      if (data?.activity) {
+        applyActivityUpdate(selectedActivity.id, () => data.activity);
+      }
+    } catch {
+      setActualsError('Failed to complete activity');
+    } finally {
+      setSavingActuals(false);
+    }
+  }, [selectedActivity, savingActuals, actualDistance, actualDuration, actualPace, viewerUnits, applyActivityUpdate]);
+
+  const markActivityIncomplete = useCallback(async () => {
+    if (!selectedActivity || savingActuals) return;
+    setActualsError(null);
+    await toggleComplete(selectedActivity.id);
+  }, [selectedActivity, savingActuals, toggleComplete]);
 
   const saveActuals = useCallback(async () => {
     if (!selectedActivity || savingActuals) return;
@@ -907,11 +947,10 @@ export default function PlanDetailPage() {
                                   }
                                 }}
                               >
-                                <button
-                                  className={`pcal-toggle${a.completed ? ' pcal-toggle-done' : ''}`}
-                                  onClick={(e) => toggleComplete(a.id, e)}
-                                  aria-label={a.completed ? 'Mark incomplete' : 'Mark complete'}
-                                  type="button"
+                                <span
+                                  className={`pcal-complete-indicator${a.completed ? ' pcal-complete-indicator-done' : ''}`}
+                                  aria-hidden="true"
+                                  title={a.completed ? 'Completed' : 'Planned'}
                                 />
                                 <div className="pcal-activity-content">
                                   <span className="pcal-activity-title">
@@ -1025,63 +1064,85 @@ export default function PlanDetailPage() {
               {/* Actuals */}
               <div className="pcal-modal-section">
                 <h3 className="pcal-modal-section-title">Actuals</h3>
-                {selectedActivity.completed ? (
-                  <div className="pcal-modal-actuals-form">
-                    <label>
-                      Distance ({viewerUnitLabel})
-                      <input
-                        type="number"
-                        inputMode="decimal"
-                        min="0"
-                        step="0.01"
-                        value={actualDistance}
-                        onChange={(e) => setActualDistance(e.target.value)}
-                        placeholder={
-                          selectedDistanceDisplay?.value != null
-                            ? String(selectedDistanceDisplay.value)
-                            : 'e.g. 8'
-                        }
-                      />
-                    </label>
-                    <label>
-                      Duration (min)
-                      <input
-                        type="number"
-                        inputMode="numeric"
-                        min="0"
-                        step="1"
-                        value={actualDuration}
-                        onChange={(e) => setActualDuration(e.target.value)}
-                        placeholder={selectedActivity.duration != null ? String(selectedActivity.duration) : 'e.g. 50'}
-                      />
-                    </label>
-                    <label>
-                      Pace
-                      <input
-                        type="text"
-                        value={actualPace}
-                        onChange={(e) => setActualPace(e.target.value)}
-                        placeholder={
-                          selectedPaceDisplay
-                          || `e.g. ${viewerUnitLabel === 'km' ? '4:40 /km' : '7:30 /mi'}`
-                        }
-                      />
-                    </label>
-                    {actualsError && <p className="pcal-modal-form-error">{actualsError}</p>}
+                <div className="pcal-modal-actuals-form">
+                  <label>
+                    Distance ({viewerUnitLabel})
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      min="0"
+                      step="0.01"
+                      value={actualDistance}
+                      onChange={(e) => setActualDistance(e.target.value)}
+                      placeholder={
+                        selectedDistanceDisplay?.value != null
+                          ? String(selectedDistanceDisplay.value)
+                          : 'e.g. 8'
+                      }
+                    />
+                  </label>
+                  <label>
+                    Duration (min)
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      min="0"
+                      step="1"
+                      value={actualDuration}
+                      onChange={(e) => setActualDuration(e.target.value)}
+                      placeholder={selectedActivity.duration != null ? String(selectedActivity.duration) : 'e.g. 50'}
+                    />
+                  </label>
+                  <label>
+                    Pace
+                    <input
+                      type="text"
+                      value={actualPace}
+                      onChange={(e) => setActualPace(e.target.value)}
+                      placeholder={
+                        selectedPaceDisplay
+                        || `e.g. ${viewerUnitLabel === 'km' ? '4:40 /km' : '7:30 /mi'}`
+                      }
+                    />
+                  </label>
+                </div>
+                <p className="pcal-modal-text pcal-modal-actuals-hint">
+                  {selectedActivity.completed
+                    ? 'This activity is marked done. Update actuals or mark it not done.'
+                    : 'Complete this activity in one step, with or without actuals.'}
+                </p>
+                {actualsError && <p className="pcal-modal-form-error">{actualsError}</p>}
+                <div className="pcal-modal-actuals-actions">
+                  <button
+                    className="pcal-modal-actuals-save"
+                    onClick={selectedActivity.completed ? saveActuals : () => completeActivity(true)}
+                    type="button"
+                    disabled={savingActuals || toggling.has(selectedActivity.id)}
+                  >
+                    {(savingActuals || toggling.has(selectedActivity.id))
+                      ? 'Saving…'
+                      : (selectedActivity.completed ? 'Save Actuals' : 'Complete & Save')}
+                  </button>
+                  {selectedActivity.completed ? (
                     <button
-                      className="pcal-modal-actuals-save"
-                      onClick={saveActuals}
+                      className="pcal-modal-actuals-secondary danger"
+                      onClick={markActivityIncomplete}
                       type="button"
-                      disabled={savingActuals}
+                      disabled={savingActuals || toggling.has(selectedActivity.id)}
                     >
-                      {savingActuals ? 'Saving…' : 'Save Actuals'}
+                      Mark Not Done
                     </button>
-                  </div>
-                ) : (
-                  <p className="pcal-modal-text pcal-modal-actuals-hint">
-                    Mark this activity complete to log actual distance, duration, and pace.
-                  </p>
-                )}
+                  ) : (
+                    <button
+                      className="pcal-modal-actuals-secondary"
+                      onClick={() => completeActivity(false)}
+                      type="button"
+                      disabled={savingActuals || toggling.has(selectedActivity.id)}
+                    >
+                      Complete Without Actuals
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Tags */}
@@ -1100,14 +1161,6 @@ export default function PlanDetailPage() {
                 </div>
               )}
 
-              {/* Complete toggle */}
-              <button
-                className={`pcal-modal-complete${selectedActivity.completed ? ' pcal-modal-complete-done' : ''}`}
-                onClick={(e) => toggleComplete(selectedActivity.id, e)}
-                type="button"
-              >
-                {selectedActivity.completed ? 'Completed — Undo' : 'Mark as Complete'}
-              </button>
             </div>
           </div>
         </div>
