@@ -6,7 +6,15 @@ import AthleteSidebar from '@/components/AthleteSidebar';
 import '../dashboard/dashboard.css';
 import './plans.css';
 
-type Plan = { id: string; name: string; weekCount?: number | null; status: string; progress?: number };
+type Plan = {
+  id: string;
+  name: string;
+  weekCount?: number | null;
+  status: string;
+  progress?: number;
+  raceName?: string | null;
+  raceDate?: string | null;
+};
 type Template = { id: string; name: string; weekCount?: number | null };
 
 function statusColor(status: string) {
@@ -21,6 +29,13 @@ function heroClass(status: string) {
   if (status === 'ACTIVE') return 'active';
   if (status === 'DRAFT') return 'draft';
   return 'archived';
+}
+
+function formatRaceDate(value: string | null | undefined) {
+  if (!value) return 'Not set';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return 'Not set';
+  return parsed.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 export default function PlansPage() {
@@ -156,6 +171,12 @@ export default function PlansPage() {
                     <span className="plan-card-meta">
                       {plan.weekCount ? `${plan.weekCount} weeks` : 'No weeks set'}
                     </span>
+                    <span className="plan-card-meta">
+                      Race: {plan.raceName?.trim() || 'Not set'}
+                    </span>
+                    <span className="plan-card-meta">
+                      Date: {formatRaceDate(plan.raceDate)}
+                    </span>
                     <div className="plan-card-progress">
                       <span>{plan.progress ?? 0}% complete</span>
                       <div className="plan-card-progress-track">
@@ -220,6 +241,12 @@ export default function PlansPage() {
                     <span className="plan-card-meta">
                       {plan.weekCount ? `${plan.weekCount} weeks` : 'No weeks set'}
                     </span>
+                    <span className="plan-card-meta">
+                      Race: {plan.raceName?.trim() || 'Not set'}
+                    </span>
+                    <span className="plan-card-meta">
+                      Date: {formatRaceDate(plan.raceDate)}
+                    </span>
                     <div className="plan-card-progress">
                       <span>{plan.progress ?? 0}% complete</span>
                       <div className="plan-card-progress-track">
@@ -283,6 +310,12 @@ export default function PlansPage() {
                     <h3 className="plan-card-name">{plan.name}</h3>
                     <span className="plan-card-meta">
                       {plan.weekCount ? `${plan.weekCount} weeks` : 'No weeks set'}
+                    </span>
+                    <span className="plan-card-meta">
+                      Race: {plan.raceName?.trim() || 'Not set'}
+                    </span>
+                    <span className="plan-card-meta">
+                      Date: {formatRaceDate(plan.raceDate)}
                     </span>
                     <div className="plan-card-progress">
                       <span>{plan.progress ?? 0}% complete</span>
