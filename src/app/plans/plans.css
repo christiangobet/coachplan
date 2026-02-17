@@ -378,13 +378,20 @@
 
 .pcal-layout {
   display: grid;
-  grid-template-columns: 220px minmax(0, 1fr);
+  grid-template-columns: 220px minmax(0, 1fr) 380px;
   gap: 20px;
   align-items: start;
 }
 
 .pcal-main {
   min-width: 0;
+}
+
+.pcal-chat-panel {
+  min-width: 0;
+  position: sticky;
+  top: 88px;
+  align-self: start;
 }
 
 .pcal-side {
@@ -524,6 +531,13 @@
   gap: 12px;
 }
 
+.pcal-ai-trainer-chat {
+  margin: 0;
+  padding: 14px;
+  max-height: calc(100vh - 110px);
+  overflow: auto;
+}
+
 .pcal-ai-trainer-head {
   display: flex;
   align-items: flex-start;
@@ -548,6 +562,98 @@
 .pcal-ai-trainer-toggle {
   min-height: 34px;
   white-space: nowrap;
+}
+
+.pcal-ai-thread {
+  display: grid;
+  gap: 8px;
+  max-height: 260px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.pcal-ai-turn {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+  display: grid;
+  gap: 6px;
+  background: var(--background);
+}
+
+.pcal-ai-turn.role-athlete {
+  border-color: rgba(252, 76, 2, 0.28);
+  background: rgba(252, 76, 2, 0.05);
+}
+
+.pcal-ai-turn.role-system {
+  border-color: rgba(181, 26, 26, 0.24);
+  background: rgba(181, 26, 26, 0.04);
+}
+
+.pcal-ai-turn-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.pcal-ai-turn-head strong {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.pcal-ai-turn p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ink);
+}
+
+.pcal-ai-turn-state {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  border-radius: 999px;
+  padding: 0 8px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.pcal-ai-turn-state.state-active {
+  background: rgba(16, 185, 129, 0.14);
+  color: #0b7d5a;
+}
+
+.pcal-ai-turn-state.state-superseded {
+  background: rgba(107, 114, 128, 0.14);
+  color: #4b5563;
+}
+
+.pcal-ai-turn-state.state-applied {
+  background: rgba(59, 130, 246, 0.14);
+  color: #1d4ed8;
+}
+
+.pcal-ai-turn-use {
+  justify-self: start;
+  min-height: 30px;
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+.pcal-ai-turn-error-code {
+  font-size: 11px;
+  font-weight: 600;
+  color: #9e1f15;
+}
+
+.pcal-ai-composer {
+  display: grid;
+  gap: 8px;
 }
 
 .pcal-ai-trainer textarea {
@@ -720,6 +826,10 @@
 .pcal-ai-trainer-risks li {
   font-size: 12px;
   color: #9e1f15;
+}
+
+.pcal-ai-proposal-empty p {
+  color: var(--muted);
 }
 
 .pcal-ai-trainer-invariants {
@@ -1555,6 +1665,11 @@
     grid-template-columns: 1fr;
   }
 
+  .pcal-chat-panel {
+    position: static;
+    top: auto;
+  }
+
   .pcal-side {
     position: static;
     top: auto;
@@ -1616,6 +1731,21 @@
   .pcal-ai-trainer-meta {
     flex-direction: column;
     align-items: flex-start;
+  }
+}
+
+@media (max-width: 1180px) and (min-width: 901px) {
+  .pcal-layout {
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
+
+  .pcal-chat-panel {
+    position: static;
+    grid-column: 2;
+  }
+
+  .pcal-ai-trainer-chat {
+    max-height: none;
   }
 }
 

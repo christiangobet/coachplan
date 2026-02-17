@@ -202,9 +202,52 @@ type AiTrainerProposal = {
   changes: AiTrainerChange[];
 };
 
+type AiProposalState = 'active' | 'superseded' | 'applied';
+
+type AiChatTurn = {
+  id: string;
+  role: 'athlete' | 'coach' | 'system';
+  text: string;
+  createdAt: number;
+  requestMessage?: string;
+  proposal?: AiTrainerProposal;
+  proposalState?: AiProposalState;
+  errorCode?: string;
+};
+
 function formatDowLabel(dayOfWeek: number | null | undefined) {
   if (!dayOfWeek || dayOfWeek < 1 || dayOfWeek > 7) return '—';
   return DAY_LABELS[dayOfWeek - 1] || '—';
+}
+
+function nextTurnId() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `turn-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function classifyAiError(message: string) {
+  const text = String(message || '');
+  if (/429|resource exhausted|rate limit|quota/i.test(text)) {
+    return {
+      code: 'RATE_LIMIT',
+      summary: 'I could not generate a new recommendation right now.',
+      help: 'The AI coach is temporarily busy. Try again in about 30-60 seconds.'
+    };
+  }
+  if (/clarification|required/i.test(text)) {
+    return {
+      code: 'CLARIFICATION_REQUIRED',
+      summary: text,
+      help: 'Please answer the clarification and generate/apply again.'
+    };
+  }
+  return {
+    code: 'GENERATION_FAILED',
+    summary: 'I could not generate a new recommendation right now.',
+    help: 'Please try again. If it keeps failing, simplify the request to one-week changes.'
+  };
 }
 
 type AiChangeLookup = {
@@ -289,15 +332,24 @@ export default function PlanDetailPage() {
   const [savingActuals, setSavingActuals] = useState(false);
   const [viewerUnits, setViewerUnits] = useState<DistanceUnit>('MILES');
   const [aiTrainerInput, setAiTrainerInput] = useState('');
-  const [aiTrainerProposal, setAiTrainerProposal] = useState<AiTrainerProposal | null>(null);
+  const [aiChatTurns, setAiChatTurns] = useState<AiChatTurn[]>([]);
+  const [activeProposalTurnId, setActiveProposalTurnId] = useState<string | null>(null);
+  const [aiAppliedByTurn, setAiAppliedByTurn] = useState<Record<string, number[]>>({});
   const [aiTrainerLoading, setAiTrainerLoading] = useState(false);
   const [aiTrainerApplyingTarget, setAiTrainerApplyingTarget] = useState<'all' | number | null>(null);
   const [aiTrainerError, setAiTrainerError] = useState<string | null>(null);
   const [aiTrainerStatus, setAiTrainerStatus] = useState<string | null>(null);
-  const [aiTrainerAppliedRows, setAiTrainerAppliedRows] = useState<Set<number>>(new Set());
   const [aiTrainerClarification, setAiTrainerClarification] = useState('');
-  const [showAiTrainer, setShowAiTrainer] = useState(false);
   const aiTrainerApplying = aiTrainerApplyingTarget !== null;
+  const activeProposalTurn = useMemo(
+    () => aiChatTurns.find((turn) => turn.id === activeProposalTurnId && turn.proposal) || null,
+    [aiChatTurns, activeProposalTurnId]
+  );
+  const aiTrainerProposal = activeProposalTurn?.proposal || null;
+  const aiTrainerAppliedRows = useMemo(() => {
+    if (!activeProposalTurnId) return new Set<number>();
+    return new Set(aiAppliedByTurn[activeProposalTurnId] || []);
+  }, [aiAppliedByTurn, activeProposalTurnId]);
 
   // -- Edit Mode State --
   const [isEditMode, setIsEditMode] = useState(false);
@@ -394,17 +446,6 @@ export default function PlanDetailPage() {
   useEffect(() => {
     loadPlan();
   }, [loadPlan]);
-
-  useEffect(() => {
-    const maybeOpenAiTrainerFromHash = () => {
-      if (window.location.hash === '#ai-trainer') {
-        setShowAiTrainer(true);
-      }
-    };
-    maybeOpenAiTrainerFromHash();
-    window.addEventListener('hashchange', maybeOpenAiTrainerFromHash);
-    return () => window.removeEventListener('hashchange', maybeOpenAiTrainerFromHash);
-  }, []);
 
   const applyActivityUpdate = useCallback((activityId: string, updater: (activity: any) => any) => {
     setPlan((prev: any) => {
@@ -551,9 +592,27 @@ export default function PlanDetailPage() {
       setAiTrainerError('Describe what happened so the trainer can adapt the plan.');
       return;
     }
+    const athleteTurn: AiChatTurn = {
+      id: nextTurnId(),
+      role: 'athlete',
+      text: message,
+      createdAt: Date.now()
+    };
     setAiTrainerLoading(true);
     setAiTrainerError(null);
-    setAiTrainerStatus(null);
+    setAiTrainerStatus('Generating new recommendation...');
+    setAiTrainerClarification('');
+    setActiveProposalTurnId(null);
+    setAiChatTurns((prev) => {
+      const next = prev.map((turn) => {
+        if (turn.id === activeProposalTurnId && turn.proposal && turn.proposalState === 'active') {
+          return { ...turn, proposalState: 'superseded' as AiProposalState };
+        }
+        return turn;
+      });
+      next.push(athleteTurn);
+      return next;
+    });
     try {
       const res = await fetch(`/api/plans/${planId}/ai-adjust`, {
         method: 'POST',
@@ -564,26 +623,51 @@ export default function PlanDetailPage() {
       if (!res.ok) {
         throw new Error(data?.error || 'Failed to generate adjustment proposal.');
       }
-      setAiTrainerProposal(data?.proposal || null);
-      setAiTrainerClarification('');
-      setAiTrainerAppliedRows(new Set());
-      if (data?.proposal?.summary) {
-        setAiTrainerStatus(data.proposal.summary);
-      } else {
-        setAiTrainerStatus('Proposal generated. Review and apply if it looks good.');
+
+      const proposal = (data?.proposal || null) as AiTrainerProposal | null;
+      if (!proposal) {
+        throw new Error('No new proposal was generated.');
       }
+
+      const coachTurnId = nextTurnId();
+      const coachTurn: AiChatTurn = {
+        id: coachTurnId,
+        role: 'coach',
+        text: proposal.coachReply || proposal.summary || 'New recommendation generated.',
+        createdAt: Date.now(),
+        requestMessage: message,
+        proposal,
+        proposalState: 'active'
+      };
+      setAiChatTurns((prev) => [...prev, coachTurn]);
+      setActiveProposalTurnId(coachTurnId);
+      setAiAppliedByTurn((prev) => ({ ...prev, [coachTurnId]: [] }));
+      setAiTrainerStatus(proposal.summary || 'New recommendation generated.');
+      setAiTrainerInput('');
     } catch (err: unknown) {
-      setAiTrainerError(err instanceof Error ? err.message : 'Failed to generate adjustment proposal.');
+      const classified = classifyAiError(err instanceof Error ? err.message : 'Failed to generate adjustment proposal.');
+      setAiTrainerError(classified.summary);
+      setAiTrainerStatus(classified.help);
+      setAiChatTurns((prev) => [
+        ...prev,
+        {
+          id: nextTurnId(),
+          role: 'system',
+          text: `${classified.summary} ${classified.help}`,
+          createdAt: Date.now(),
+          errorCode: classified.code
+        }
+      ]);
     } finally {
       setAiTrainerLoading(false);
     }
-  }, [aiTrainerInput, planId]);
+  }, [aiTrainerInput, activeProposalTurnId, planId]);
 
   const applyAiAdjustment = useCallback(async (changeIndex?: number) => {
-    if (!planId || !aiTrainerProposal) return;
-    const message = aiTrainerInput.trim();
+    if (!planId || !aiTrainerProposal || !activeProposalTurn) return;
+    const message = activeProposalTurn.requestMessage || aiTrainerInput.trim();
     if (!message) {
-      setAiTrainerError('Describe what happened so the trainer can adapt the plan.');
+      setAiTrainerError('No source athlete request is available for this proposal. Generate again.');
       return;
     }
     if (aiTrainerProposal.requiresClarification && !aiTrainerClarification.trim()) {
@@ -623,19 +707,17 @@ export default function PlanDetailPage() {
       if (!res.ok) {
         throw new Error(data?.error || 'Failed to apply plan adjustments.');
       }
-      if (typeof changeIndex === 'number') {
-        setAiTrainerAppliedRows((prev) => {
-          const next = new Set(prev);
-          next.add(changeIndex);
-          return next;
-        });
-      } else {
-        setAiTrainerAppliedRows((prev) => {
-          const next = new Set(prev);
-          aiTrainerProposal.changes.forEach((_, idx) => next.add(idx));
-          return next;
-        });
-      }
+      const appliedRowIndexes = typeof changeIndex === 'number'
+        ? [...targetIndexes]
+        : aiTrainerProposal.changes.map((_, idx) => idx);
+      setAiAppliedByTurn((prev) => {
+        const current = new Set(prev[activeProposalTurn.id] || []);
+        for (const idx of appliedRowIndexes) current.add(idx);
+        return {
+          ...prev,
+          [activeProposalTurn.id]: [...current].sort((a, b) => a - b)
+        };
+      });
 
       const extendedWeeks = Number(data?.extendedWeeks || 0);
       const appliedCount = Number(data?.appliedCount || 0);
@@ -644,14 +726,57 @@ export default function PlanDetailPage() {
       } else {
         setAiTrainerStatus(`Applied ${appliedCount} change(s) to the plan.`);
       }
+      const totalAppliedSet = new Set([
+        ...(aiAppliedByTurn[activeProposalTurn.id] || []),
+        ...appliedRowIndexes
+      ]);
+      if (totalAppliedSet.size >= aiTrainerProposal.changes.length) {
+        setAiChatTurns((prev) =>
+          prev.map((turn) =>
+            turn.id === activeProposalTurn.id
+              ? { ...turn, proposalState: 'applied' as AiProposalState }
+              : turn
+          )
+        );
+        setActiveProposalTurnId(null);
+      }
       setSelectedActivity(null);
       await loadPlan();
     } catch (err: unknown) {
-      setAiTrainerError(err instanceof Error ? err.message : 'Failed to apply plan adjustments.');
+      const classified = classifyAiError(err instanceof Error ? err.message : 'Failed to apply plan adjustments.');
+      setAiTrainerError(classified.summary);
+      setAiTrainerStatus(classified.help);
+      setAiChatTurns((prev) => [
+        ...prev,
+        {
+          id: nextTurnId(),
+          role: 'system',
+          text: `${classified.summary} ${classified.help}`,
+          createdAt: Date.now(),
+          errorCode: classified.code
+        }
+      ]);
     } finally {
       setAiTrainerApplyingTarget(null);
     }
-  }, [aiTrainerClarification, aiTrainerInput, aiTrainerProposal, aiTrainerAppliedRows, loadPlan, planId]);
+  }, [aiTrainerClarification, aiTrainerInput, aiTrainerProposal, aiTrainerAppliedRows, aiAppliedByTurn, activeProposalTurn, loadPlan, planId]);
+
+  const activateProposalTurn = useCallback((turnId: string) => {
+    setAiChatTurns((prev) =>
+      prev.map((turn) => {
+        if (!turn.proposal) return turn;
+        if (turn.id === turnId) return { ...turn, proposalState: turn.proposalState === 'applied' ? 'applied' : 'active' };
+        if (turn.proposalState === 'active') {
+          return { ...turn, proposalState: 'superseded' };
+        }
+        return turn;
+      })
+    );
+    setActiveProposalTurnId(turnId);
+    setAiTrainerClarification('');
+    setAiTrainerError(null);
+    setAiTrainerStatus('Previous recommendation re-opened.');
+  }, []);
 
   // Close modal on Escape
   useEffect(() => {
@@ -823,181 +948,6 @@ export default function PlanDetailPage() {
             </div>
           </div>
 
-          <section className="pcal-ai-trainer" id="ai-trainer">
-            <div className="pcal-ai-trainer-head">
-              <div>
-                <h2>AI Trainer</h2>
-                <p>Tell the coach what happened (missed day, sickness, fatigue, schedule changes) and get safe adjustments.</p>
-              </div>
-              <button
-                className="cta secondary pcal-ai-trainer-toggle"
-                type="button"
-                onClick={() => setShowAiTrainer((prev) => !prev)}
-              >
-                {showAiTrainer ? 'Hide AI Trainer' : 'Open AI Trainer'}
-              </button>
-            </div>
-            {showAiTrainer && (
-              <>
-                <textarea
-                  value={aiTrainerInput}
-                  onChange={(e) => setAiTrainerInput(e.target.value)}
-                  placeholder="Example: I missed Tuesday intervals and felt sick for two days. Please adjust this week and next week safely."
-                  rows={4}
-                />
-                <div className="pcal-ai-trainer-actions">
-                  <button
-                    className="cta"
-                    type="button"
-                    onClick={generateAiAdjustment}
-                    disabled={aiTrainerLoading || aiTrainerApplying}
-                  >
-                    {aiTrainerLoading ? 'Generating…' : 'Generate Adjustment'}
-                  </button>
-                </div>
-                {aiTrainerError && <p className="pcal-ai-trainer-error">{aiTrainerError}</p>}
-                {aiTrainerStatus && (
-                  <p className="pcal-ai-trainer-status">
-                    {humanizeAiText(aiTrainerStatus, aiChangeLookup)}
-                  </p>
-                )}
-
-                {aiTrainerProposal && (
-                  <div className="pcal-ai-trainer-proposal">
-                    <div className="pcal-ai-trainer-meta">
-                      <strong>Coach Reply</strong>
-                      <span>Confidence: {aiTrainerProposal.confidence}</span>
-                    </div>
-                    <p>{humanizeAiText(aiTrainerProposal.coachReply, aiChangeLookup)}</p>
-                    {aiTrainerProposal.followUpQuestion && (
-                      <p className="pcal-ai-trainer-followup">
-                        Follow-up: {humanizeAiText(aiTrainerProposal.followUpQuestion, aiChangeLookup)}
-                      </p>
-                    )}
-                    {aiTrainerProposal.requiresClarification && (
-                      <div className="pcal-ai-trainer-followup">
-                        <p>
-                          Clarification required: {humanizeAiText(aiTrainerProposal.clarificationPrompt || 'Please confirm constraints before applying.', aiChangeLookup)}
-                        </p>
-                        <textarea
-                          value={aiTrainerClarification}
-                          onChange={(e) => setAiTrainerClarification(e.target.value)}
-                          placeholder="Example: Keep long run on Sunday, max 1 hard session mid-week, no added mileage this week."
-                          rows={3}
-                        />
-                      </div>
-                    )}
-                    {aiTrainerProposal.invariantReport && aiTrainerProposal.invariantReport.weeks.length > 0 && (
-                      <div className="pcal-ai-trainer-invariants">
-                        <div className="pcal-ai-trainer-meta">
-                          <strong>Week Balance Check</strong>
-                          <span>
-                            Mode: {aiTrainerProposal.invariantReport.selectedMode.replace(/_/g, ' ')} · Score: {aiTrainerProposal.invariantReport.candidateScore}
-                          </span>
-                        </div>
-                        <div className="pcal-ai-trainer-invariant-grid">
-                          {aiTrainerProposal.invariantReport.weeks.map((week) => (
-                            <article key={`inv-${week.weekIndex}`} className="pcal-ai-trainer-invariant-week">
-                              <header>
-                                <strong>Week {week.weekIndex}</strong>
-                              </header>
-                              <p>Rest: {week.before.restDays} → {week.after.restDays}</p>
-                              <p>Hard days: {week.before.hardDays} → {week.after.hardDays}</p>
-                              <p>Long run: {formatDowLabel(week.before.longRunDayOfWeek)} → {formatDowLabel(week.after.longRunDayOfWeek)}</p>
-                              <p>Planned duration: {week.before.plannedDurationMin}m → {week.after.plannedDurationMin}m</p>
-                              {week.flags.length > 0 && (
-                                <ul>
-                                  {week.flags.map((flag, idx) => (
-                                    <li key={`${week.weekIndex}-${flag}-${idx}`}>{flag}</li>
-                                  ))}
-                                </ul>
-                              )}
-                            </article>
-                          ))}
-                        </div>
-                        {aiTrainerProposal.invariantReport.summaryFlags.length > 0 && (
-                          <div className="pcal-ai-trainer-risks">
-                            <strong>Balance Notes</strong>
-                            <ul>
-                              {aiTrainerProposal.invariantReport.summaryFlags.map((flag, idx) => (
-                                <li key={`summary-${idx}`}>{flag}</li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                    <div className="pcal-ai-trainer-meta">
-                      <strong>Planned Changes ({aiTrainerProposal.changes.length})</strong>
-                    </div>
-                    {aiTrainerProposal.changes.length === 0 && (
-                      <p className="pcal-ai-trainer-followup">
-                        This request needs a plan-structure update (weeks/dates), which is not supported in AI Trainer yet.
-                      </p>
-                    )}
-                    <ul className="pcal-ai-trainer-change-list">
-                      {aiTrainerProposal.changes.map((change, idx) => (
-                        <li
-                          key={`${change.op}-${idx}`}
-                          className={aiTrainerAppliedRows.has(idx) ? 'is-applied' : ''}
-                        >
-                          <div className="pcal-ai-trainer-change-head">
-                            <span className="pcal-ai-trainer-op">{change.op.replace(/_/g, ' ')}</span>
-                            <strong>{describeAiChange(change, aiChangeLookup)}</strong>
-                            <button
-                              className="cta secondary pcal-ai-trainer-apply-one"
-                              type="button"
-                              onClick={() => applyAiAdjustment(idx)}
-                              disabled={
-                                aiTrainerAppliedRows.has(idx)
-                                || aiTrainerLoading
-                                || aiTrainerApplying
-                                || (aiTrainerProposal.requiresClarification && !aiTrainerClarification.trim())
-                              }
-                            >
-                              {aiTrainerAppliedRows.has(idx)
-                                ? 'Applied'
-                                : aiTrainerApplyingTarget === idx
-                                  ? 'Applying…'
-                                  : 'Apply'}
-                            </button>
-                          </div>
-                          <p>{humanizeAiText(change.reason, aiChangeLookup)}</p>
-                        </li>
-                      ))}
-                    </ul>
-                    <div className="pcal-ai-trainer-apply-all">
-                      <button
-                        className="cta"
-                        type="button"
-                        onClick={() => applyAiAdjustment()}
-                        disabled={
-                          aiTrainerProposal.changes.length === 0
-                          || aiTrainerAppliedRows.size >= aiTrainerProposal.changes.length
-                          || aiTrainerLoading
-                          || aiTrainerApplying
-                          || (aiTrainerProposal.requiresClarification && !aiTrainerClarification.trim())
-                        }
-                      >
-                        {aiTrainerApplyingTarget === 'all' ? 'Applying all…' : 'Apply All Changes'}
-                      </button>
-                    </div>
-                    {(aiTrainerProposal.riskFlags || []).length > 0 && (
-                      <div className="pcal-ai-trainer-risks">
-                        <strong>Risk Flags</strong>
-                        <ul>
-                          {(aiTrainerProposal.riskFlags || []).map((flag, idx) => (
-                            <li key={`${flag}-${idx}`}>{humanizeAiText(flag, aiChangeLookup)}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </>
-            )}
-          </section>
-
           {/* Stats bar */}
           <div className="pcal-stats">
             <div className="pcal-stat">
@@ -1161,6 +1111,218 @@ export default function PlanDetailPage() {
             })}
           </div>
         </section>
+
+        <aside className="pcal-chat-panel" id="ai-trainer">
+          <section className="pcal-ai-trainer pcal-ai-trainer-chat">
+            <div className="pcal-ai-trainer-head">
+              <div>
+                <h2>AI Trainer</h2>
+                <p>Chat with your coach. Each new request creates a new recommendation. Older ones move to history.</p>
+              </div>
+            </div>
+
+            <div className="pcal-ai-thread">
+              {aiChatTurns.length === 0 && (
+                <p className="pcal-ai-trainer-status">
+                  Start with one clear request, for example: "Move this week’s long run to Sunday and rebalance recovery."
+                </p>
+              )}
+              {aiChatTurns.map((turn) => (
+                <article key={turn.id} className={`pcal-ai-turn role-${turn.role}`}>
+                  <div className="pcal-ai-turn-head">
+                    <strong>
+                      {turn.role === 'athlete' ? 'You' : turn.role === 'coach' ? 'Coach' : 'System'}
+                    </strong>
+                    {turn.proposal && (
+                      <span className={`pcal-ai-turn-state state-${turn.proposalState || 'superseded'}`}>
+                        {turn.proposalState === 'active'
+                          ? 'Active proposal'
+                          : turn.proposalState === 'applied'
+                            ? 'Applied'
+                            : 'History'}
+                      </span>
+                    )}
+                  </div>
+                  <p>{humanizeAiText(turn.text, aiChangeLookup)}</p>
+                  {turn.errorCode && (
+                    <span className="pcal-ai-turn-error-code">{turn.errorCode}</span>
+                  )}
+                  {turn.proposal && turn.proposalState !== 'active' && turn.proposalState !== 'applied' && (
+                    <button
+                      className="cta secondary pcal-ai-turn-use"
+                      type="button"
+                      onClick={() => activateProposalTurn(turn.id)}
+                    >
+                      Use this proposal
+                    </button>
+                  )}
+                </article>
+              ))}
+            </div>
+
+            <div className="pcal-ai-composer">
+              <textarea
+                value={aiTrainerInput}
+                onChange={(e) => setAiTrainerInput(e.target.value)}
+                placeholder="Example: Move this week's long run to Sunday because I'll ski Saturday, and rebalance the week safely."
+                rows={4}
+              />
+              <div className="pcal-ai-trainer-actions">
+                <button
+                  className="cta"
+                  type="button"
+                  onClick={generateAiAdjustment}
+                  disabled={aiTrainerLoading || aiTrainerApplying}
+                >
+                  {aiTrainerLoading ? 'Generating…' : 'Generate Recommendation'}
+                </button>
+              </div>
+              {aiTrainerError && <p className="pcal-ai-trainer-error">{aiTrainerError}</p>}
+              {aiTrainerStatus && (
+                <p className="pcal-ai-trainer-status">
+                  {humanizeAiText(aiTrainerStatus, aiChangeLookup)}
+                </p>
+              )}
+            </div>
+
+            {aiTrainerProposal ? (
+              <div className="pcal-ai-trainer-proposal">
+                <div className="pcal-ai-trainer-meta">
+                  <strong>Active Recommendation</strong>
+                  <span>Confidence: {aiTrainerProposal.confidence}</span>
+                </div>
+                <p>{humanizeAiText(aiTrainerProposal.coachReply, aiChangeLookup)}</p>
+                {aiTrainerProposal.followUpQuestion && (
+                  <p className="pcal-ai-trainer-followup">
+                    Follow-up: {humanizeAiText(aiTrainerProposal.followUpQuestion, aiChangeLookup)}
+                  </p>
+                )}
+                {aiTrainerProposal.requiresClarification && (
+                  <div className="pcal-ai-trainer-followup">
+                    <p>
+                      Clarification required: {humanizeAiText(aiTrainerProposal.clarificationPrompt || 'Please confirm constraints before applying.', aiChangeLookup)}
+                    </p>
+                    <textarea
+                      value={aiTrainerClarification}
+                      onChange={(e) => setAiTrainerClarification(e.target.value)}
+                      placeholder="Example: Keep long run on Sunday, max 1 hard session mid-week, no added mileage this week."
+                      rows={3}
+                    />
+                  </div>
+                )}
+                {aiTrainerProposal.invariantReport && aiTrainerProposal.invariantReport.weeks.length > 0 && (
+                  <div className="pcal-ai-trainer-invariants">
+                    <div className="pcal-ai-trainer-meta">
+                      <strong>Week Balance Check</strong>
+                      <span>
+                        Mode: {aiTrainerProposal.invariantReport.selectedMode.replace(/_/g, ' ')} · Score: {aiTrainerProposal.invariantReport.candidateScore}
+                      </span>
+                    </div>
+                    <div className="pcal-ai-trainer-invariant-grid">
+                      {aiTrainerProposal.invariantReport.weeks.map((week) => (
+                        <article key={`inv-${week.weekIndex}`} className="pcal-ai-trainer-invariant-week">
+                          <header>
+                            <strong>Week {week.weekIndex}</strong>
+                          </header>
+                          <p>Rest: {week.before.restDays} → {week.after.restDays}</p>
+                          <p>Hard days: {week.before.hardDays} → {week.after.hardDays}</p>
+                          <p>Long run: {formatDowLabel(week.before.longRunDayOfWeek)} → {formatDowLabel(week.after.longRunDayOfWeek)}</p>
+                          <p>Planned duration: {week.before.plannedDurationMin}m → {week.after.plannedDurationMin}m</p>
+                          {week.flags.length > 0 && (
+                            <ul>
+                              {week.flags.map((flag, idx) => (
+                                <li key={`${week.weekIndex}-${flag}-${idx}`}>{flag}</li>
+                              ))}
+                            </ul>
+                          )}
+                        </article>
+                      ))}
+                    </div>
+                    {aiTrainerProposal.invariantReport.summaryFlags.length > 0 && (
+                      <div className="pcal-ai-trainer-risks">
+                        <strong>Balance Notes</strong>
+                        <ul>
+                          {aiTrainerProposal.invariantReport.summaryFlags.map((flag, idx) => (
+                            <li key={`summary-${idx}`}>{flag}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                )}
+                <div className="pcal-ai-trainer-meta">
+                  <strong>Planned Changes ({aiTrainerProposal.changes.length})</strong>
+                </div>
+                {aiTrainerProposal.changes.length === 0 && (
+                  <p className="pcal-ai-trainer-followup">
+                    This request needs a plan-structure update (weeks/dates), which is not supported yet.
+                  </p>
+                )}
+                <ul className="pcal-ai-trainer-change-list">
+                  {aiTrainerProposal.changes.map((change, idx) => (
+                    <li
+                      key={`${change.op}-${idx}`}
+                      className={aiTrainerAppliedRows.has(idx) ? 'is-applied' : ''}
+                    >
+                      <div className="pcal-ai-trainer-change-head">
+                        <span className="pcal-ai-trainer-op">{change.op.replace(/_/g, ' ')}</span>
+                        <strong>{describeAiChange(change, aiChangeLookup)}</strong>
+                        <button
+                          className="cta secondary pcal-ai-trainer-apply-one"
+                          type="button"
+                          onClick={() => applyAiAdjustment(idx)}
+                          disabled={
+                            aiTrainerAppliedRows.has(idx)
+                            || aiTrainerLoading
+                            || aiTrainerApplying
+                            || (aiTrainerProposal.requiresClarification && !aiTrainerClarification.trim())
+                          }
+                        >
+                          {aiTrainerAppliedRows.has(idx)
+                            ? 'Applied'
+                            : aiTrainerApplyingTarget === idx
+                              ? 'Applying…'
+                              : 'Apply'}
+                        </button>
+                      </div>
+                      <p>{humanizeAiText(change.reason, aiChangeLookup)}</p>
+                    </li>
+                  ))}
+                </ul>
+                <div className="pcal-ai-trainer-apply-all">
+                  <button
+                    className="cta"
+                    type="button"
+                    onClick={() => applyAiAdjustment()}
+                    disabled={
+                      aiTrainerProposal.changes.length === 0
+                      || aiTrainerAppliedRows.size >= aiTrainerProposal.changes.length
+                      || aiTrainerLoading
+                      || aiTrainerApplying
+                      || (aiTrainerProposal.requiresClarification && !aiTrainerClarification.trim())
+                    }
+                  >
+                    {aiTrainerApplyingTarget === 'all' ? 'Applying all…' : 'Apply All Changes'}
+                  </button>
+                </div>
+                {(aiTrainerProposal.riskFlags || []).length > 0 && (
+                  <div className="pcal-ai-trainer-risks">
+                    <strong>Risk Flags</strong>
+                    <ul>
+                      {(aiTrainerProposal.riskFlags || []).map((flag, idx) => (
+                        <li key={`${flag}-${idx}`}>{humanizeAiText(flag, aiChangeLookup)}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="pcal-ai-trainer-proposal pcal-ai-proposal-empty">
+                <p>No active recommendation. Generate a new one from the chat above.</p>
+              </div>
+            )}
+          </section>
+        </aside>
       </div>
 
       {/* Activity detail modal */}
