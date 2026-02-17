@@ -103,7 +103,7 @@ export default function StravaActivityMatchTable() {
 
   const load = useCallback(async (options?: { silent?: boolean }) => {
     const silent = Boolean(options?.silent);
-    if (!silent || !data) {
+    if (!silent) {
       setLoading(true);
     }
     try {
@@ -123,11 +123,9 @@ export default function StravaActivityMatchTable() {
     } catch {
       setStatus('Failed to load Strava table');
     } finally {
-      if (!silent || !data) {
-        setLoading(false);
-      }
+      if (!silent) setLoading(false);
     }
-  }, [selectedPlanId, data]);
+  }, [selectedPlanId]);
 
   useEffect(() => {
     load();
