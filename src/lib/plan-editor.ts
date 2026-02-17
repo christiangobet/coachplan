@@ -80,6 +80,8 @@ export type PlanAdjustmentProposal = {
     createdAt?: string;
     applyToken?: string;
     mode?: 'minimal_changes' | 'balanced' | 'aggressive' | 'injury_cautious';
+    requiresClarification?: boolean;
+    clarificationPrompt?: string;
     coachReply: string;
     summary: string;
     confidence: 'low' | 'medium' | 'high';

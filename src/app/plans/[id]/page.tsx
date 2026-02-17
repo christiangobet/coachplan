@@ -171,6 +171,8 @@ type AiTrainerProposal = {
   createdAt?: string;
   applyToken?: string;
   mode?: 'minimal_changes' | 'balanced' | 'aggressive' | 'injury_cautious';
+  requiresClarification?: boolean;
+  clarificationPrompt?: string;
   coachReply: string;
   summary: string;
   confidence: 'low' | 'medium' | 'high';
@@ -267,6 +269,7 @@ export default function PlanDetailPage() {
   const [aiTrainerError, setAiTrainerError] = useState<string | null>(null);
   const [aiTrainerStatus, setAiTrainerStatus] = useState<string | null>(null);
   const [aiTrainerAppliedRows, setAiTrainerAppliedRows] = useState<Set<number>>(new Set());
+  const [aiTrainerClarification, setAiTrainerClarification] = useState('');
   const [showAiTrainer, setShowAiTrainer] = useState(false);
   const aiTrainerApplying = aiTrainerApplyingTarget !== null;
 
@@ -536,6 +539,7 @@ export default function PlanDetailPage() {
         throw new Error(data?.error || 'Failed to generate adjustment proposal.');
       }
       setAiTrainerProposal(data?.proposal || null);
+      setAiTrainerClarification('');
       setAiTrainerAppliedRows(new Set());
       if (data?.proposal?.summary) {
         setAiTrainerStatus(data.proposal.summary);
@@ -556,12 +560,20 @@ export default function PlanDetailPage() {
       setAiTrainerError('Describe what happened so the trainer can adapt the plan.');
       return;
     }
+    if (aiTrainerProposal.requiresClarification && !aiTrainerClarification.trim()) {
+      setAiTrainerError(aiTrainerProposal.clarificationPrompt || 'Please answer the clarification before applying this adjustment.');
+      return;
+    }
 
-    const targetChanges =
+    const targetIndexes =
       typeof changeIndex === 'number'
-        ? aiTrainerProposal.changes.filter((_, idx) => idx === changeIndex && !aiTrainerAppliedRows.has(idx))
-        : aiTrainerProposal.changes.filter((_, idx) => !aiTrainerAppliedRows.has(idx));
-    if (targetChanges.length === 0) {
+        ? aiTrainerProposal.changes
+          .map((_, idx) => idx)
+          .filter((idx) => idx === changeIndex && !aiTrainerAppliedRows.has(idx))
+        : aiTrainerProposal.changes
+          .map((_, idx) => idx)
+          .filter((idx) => !aiTrainerAppliedRows.has(idx));
+    if (targetIndexes.length === 0) {
       setAiTrainerError('No changes available to apply.');
       return;
     }
@@ -576,10 +588,9 @@ export default function PlanDetailPage() {
         body: JSON.stringify({
           message,
           apply: true,
-          proposal: {
-            ...aiTrainerProposal,
-            changes: targetChanges
-          }
+          clarificationResponse: aiTrainerClarification.trim() || undefined,
+          changeIndexes: targetIndexes,
+          proposal: aiTrainerProposal
         })
       });
       const data = await res.json().catch(() => null);
@@ -614,7 +625,7 @@ export default function PlanDetailPage() {
     } finally {
       setAiTrainerApplyingTarget(null);
     }
-  }, [aiTrainerInput, aiTrainerProposal, aiTrainerAppliedRows, loadPlan, planId]);
+  }, [aiTrainerClarification, aiTrainerInput, aiTrainerProposal, aiTrainerAppliedRows, loadPlan, planId]);
 
   // Close modal on Escape
   useEffect(() => {
@@ -837,6 +848,19 @@ export default function PlanDetailPage() {
                         Follow-up: {humanizeAiText(aiTrainerProposal.followUpQuestion, aiChangeLookup)}
                       </p>
                     )}
+                    {aiTrainerProposal.requiresClarification && (
+                      <div className="pcal-ai-trainer-followup">
+                        <p>
+                          Clarification required: {humanizeAiText(aiTrainerProposal.clarificationPrompt || 'Please confirm constraints before applying.', aiChangeLookup)}
+                        </p>
+                        <textarea
+                          value={aiTrainerClarification}
+                          onChange={(e) => setAiTrainerClarification(e.target.value)}
+                          placeholder="Example: Keep long run on Sunday, max 1 hard session mid-week, no added mileage this week."
+                          rows={3}
+                        />
+                      </div>
+                    )}
                     <div className="pcal-ai-trainer-meta">
                       <strong>Planned Changes ({aiTrainerProposal.changes.length})</strong>
                     </div>
@@ -858,7 +882,12 @@ export default function PlanDetailPage() {
                               className="cta secondary pcal-ai-trainer-apply-one"
                               type="button"
                               onClick={() => applyAiAdjustment(idx)}
-                              disabled={aiTrainerAppliedRows.has(idx) || aiTrainerLoading || aiTrainerApplying}
+                              disabled={
+                                aiTrainerAppliedRows.has(idx)
+                                || aiTrainerLoading
+                                || aiTrainerApplying
+                                || (aiTrainerProposal.requiresClarification && !aiTrainerClarification.trim())
+                              }
                             >
                               {aiTrainerAppliedRows.has(idx)
                                 ? 'Applied'
@@ -881,6 +910,7 @@ export default function PlanDetailPage() {
                           || aiTrainerAppliedRows.size >= aiTrainerProposal.changes.length
                           || aiTrainerLoading
                           || aiTrainerApplying
+                          || (aiTrainerProposal.requiresClarification && !aiTrainerClarification.trim())
                         }
                       >
                         {aiTrainerApplyingTarget === 'all' ? 'Applying all…' : 'Apply All Changes'}

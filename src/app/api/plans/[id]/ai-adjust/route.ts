@@ -22,6 +22,8 @@ type PlanAdjustRequestBody = {
   message?: unknown;
   apply?: unknown;
   proposal?: unknown;
+  changeIndexes?: unknown;
+  clarificationResponse?: unknown;
 };
 
 const PLAN_PATCH_SCHEMA_VERSION = 'coachplan.plan_patch.v1';
@@ -45,7 +47,15 @@ function buildApplyToken(planId: string, proposal: PlanAdjustmentProposal): stri
     schemaVersion: proposal.schemaVersion || PLAN_PATCH_SCHEMA_VERSION,
     patchId: proposal.patchId || '',
     createdAt: proposal.createdAt || '',
-    mode: proposal.mode || 'balanced'
+    mode: proposal.mode || 'balanced',
+    requiresClarification: Boolean(proposal.requiresClarification),
+    clarificationPrompt: proposal.clarificationPrompt || null,
+    coachReply: proposal.coachReply,
+    summary: proposal.summary,
+    confidence: proposal.confidence,
+    riskFlags: proposal.riskFlags || [],
+    followUpQuestion: proposal.followUpQuestion || null,
+    changes: proposal.changes
   });
 
   return createHash('sha256')
@@ -79,6 +89,22 @@ function isRecentTimestamp(value: string | undefined): boolean {
   if (Number.isNaN(date.getTime())) return false;
   const ageMs = Date.now() - date.getTime();
   return ageMs >= 0 && ageMs <= 1000 * 60 * 60 * 48;
+}
+
+function hashProposalContent(proposal: PlanAdjustmentProposal): string {
+  return createHash('sha256')
+    .update(JSON.stringify({
+      mode: proposal.mode || 'balanced',
+      requiresClarification: Boolean(proposal.requiresClarification),
+      clarificationPrompt: proposal.clarificationPrompt || null,
+      coachReply: proposal.coachReply,
+      summary: proposal.summary,
+      confidence: proposal.confidence,
+      riskFlags: proposal.riskFlags || [],
+      followUpQuestion: proposal.followUpQuestion || null,
+      changes: proposal.changes
+    }))
+    .digest('hex');
 }
 
 function applyAdvisorySafetyPolicy(message: string, proposal: PlanAdjustmentProposal): PlanAdjustmentProposal {
@@ -260,6 +286,8 @@ function parseProposal(raw: unknown): PlanAdjustmentProposal | null {
   const applyToken = normalizeText(payload.applyToken) || undefined;
   const modeRaw = normalizeText(payload.mode);
   const mode = modeRaw && VALID_MODES.has(modeRaw) ? (modeRaw as PlanAdjustmentProposal['mode']) : undefined;
+  const requiresClarification = payload.requiresClarification === true;
+  const clarificationPrompt = normalizeText(payload.clarificationPrompt) || undefined;
   const coachReply = normalizeText(payload.coachReply);
   const summary = normalizeText(payload.summary);
   const confidence = payload.confidence;
@@ -436,6 +464,8 @@ function parseProposal(raw: unknown): PlanAdjustmentProposal | null {
     createdAt,
     applyToken,
     mode,
+    requiresClarification,
+    clarificationPrompt,
     coachReply: coachReply.slice(0, 1200),
     summary: summary.slice(0, 260),
     confidence,
@@ -617,6 +647,369 @@ function buildPlanContext(plan: NonNullable<PlanForContext>) {
   };
 }
 
+type PlanContext = ReturnType<typeof buildPlanContext>;
+type ContextDay = PlanContext['days'][number];
+type ContextActivity = ContextDay['activities'][number];
+
+type WeekMetrics = {
+  weekIndex: number;
+  restDays: number;
+  hardDays: number[];
+  longRunDayOfWeek: number | null;
+  plannedDurationMin: number;
+};
+
+function isLikelyHardRunText(text: string | null | undefined) {
+  const normalized = String(text || '').toLowerCase();
+  return /\b(tempo|threshold|interval|hills?|race pace|vo2|max effort|speed)\b/.test(normalized);
+}
+
+function cloneContextDays(days: PlanContext['days']): ContextDay[] {
+  return days.map((day) => ({
+    ...day,
+    activities: day.activities.map((activity) => ({ ...activity }))
+  }));
+}
+
+function buildWeekMaps(context: PlanContext) {
+  const dayWeekMap = new Map<string, number>();
+  const activityWeekMap = new Map<string, number>();
+  for (const day of context.days) {
+    dayWeekMap.set(day.dayId, day.weekIndex);
+    for (const activity of day.activities) {
+      activityWeekMap.set(activity.activityId, day.weekIndex);
+    }
+  }
+  return { dayWeekMap, activityWeekMap };
+}
+
+function findActivityLocation(days: ContextDay[], activityId: string) {
+  for (let dayIdx = 0; dayIdx < days.length; dayIdx += 1) {
+    const activityIdx = days[dayIdx].activities.findIndex((activity) => activity.activityId === activityId);
+    if (activityIdx >= 0) return { dayIdx, activityIdx };
+  }
+  return null;
+}
+
+function activityMatchesReanchorSubtype(activity: ContextActivity, subtype: string) {
+  const token = normalizeSubtypeToken(subtype);
+  if (!token) return false;
+  const activitySubtype = normalizeSubtypeToken(activity.subtype || '');
+  const title = String(activity.title || '').toLowerCase();
+
+  if (token === 'lrl') {
+    return activity.type === 'RUN' && (activitySubtype === 'lrl' || /\blong run\b|\blrl\b/.test(title));
+  }
+  if (token === 'rest') {
+    return activity.type === 'REST' || activitySubtype === 'rest' || /\brest\b/.test(title);
+  }
+  if (token === 'cross-training') {
+    return activity.type === 'CROSS_TRAIN' || /\bcross[\s-]?training\b|\bxt\b/.test(title);
+  }
+  if (token === 'strength') {
+    return activity.type === 'STRENGTH' || /\bstrength\b/.test(title);
+  }
+  if (token === 'tempo') {
+    return activity.type === 'RUN' && /\btempo\b/.test(title);
+  }
+  return activitySubtype === token || title.includes(token.replace(/-/g, ' '));
+}
+
+function simulateProposalDays(context: PlanContext, proposal: PlanAdjustmentProposal) {
+  const days = cloneContextDays(context.days);
+  let virtualActivityCounter = 0;
+
+  for (const change of proposal.changes) {
+    if (change.op === 'extend_plan') {
+      continue;
+    }
+    if (change.op === 'move_activity') {
+      const source = findActivityLocation(days, change.activityId);
+      const targetDayIdx = days.findIndex((day) => day.dayId === change.targetDayId);
+      if (!source || targetDayIdx < 0) continue;
+      const [activity] = days[source.dayIdx].activities.splice(source.activityIdx, 1);
+      days[targetDayIdx].activities.push(activity);
+      continue;
+    }
+    if (change.op === 'delete_activity') {
+      const source = findActivityLocation(days, change.activityId);
+      if (!source) continue;
+      days[source.dayIdx].activities.splice(source.activityIdx, 1);
+      continue;
+    }
+    if (change.op === 'edit_activity') {
+      const source = findActivityLocation(days, change.activityId);
+      if (!source) continue;
+      const activity = days[source.dayIdx].activities[source.activityIdx];
+      if (change.type !== undefined) activity.type = change.type;
+      if (change.title !== undefined) activity.title = change.title;
+      if (change.duration !== undefined) activity.duration = change.duration;
+      if (change.distance !== undefined) activity.distance = change.distance;
+      if (change.distanceUnit !== undefined) activity.distanceUnit = change.distanceUnit;
+      if (change.priority !== undefined) activity.priority = change.priority;
+      if (change.mustDo !== undefined) activity.mustDo = change.mustDo;
+      continue;
+    }
+    if (change.op === 'add_activity') {
+      const targetDayIdx = days.findIndex((day) => day.dayId === change.dayId);
+      if (targetDayIdx < 0) continue;
+      days[targetDayIdx].activities.push({
+        activityId: `virtual-${virtualActivityCounter += 1}`,
+        title: change.title,
+        type: change.type,
+        subtype: null,
+        completed: false,
+        duration: change.duration ?? null,
+        distance: change.distance ?? null,
+        distanceUnit: change.distanceUnit ?? null,
+        priority: change.priority ?? null,
+        mustDo: change.mustDo ?? false
+      });
+      continue;
+    }
+    if (change.op === 'reanchor_subtype_weekly') {
+      const weekIndexes = [...new Set(days.map((day) => day.weekIndex))].sort((a, b) => a - b);
+      const startWeek = change.startWeekIndex ?? 1;
+      for (const weekIndex of weekIndexes) {
+        if (weekIndex < startWeek) continue;
+        const weekDays = days
+          .filter((day) => day.weekIndex === weekIndex)
+          .sort((a, b) => a.dayOfWeek - b.dayOfWeek);
+        const targetDay = weekDays.find((day) => day.dayOfWeek === change.targetDayOfWeek);
+        if (!targetDay) continue;
+        const sourceDays = change.fromDayOfWeek
+          ? weekDays.filter((day) => day.dayOfWeek === change.fromDayOfWeek)
+          : weekDays;
+        let moved = false;
+        for (const sourceDay of sourceDays) {
+          const idx = sourceDay.activities.findIndex((activity) =>
+            !activity.completed && activityMatchesReanchorSubtype(activity, change.subtype)
+          );
+          if (idx < 0) continue;
+          const [activity] = sourceDay.activities.splice(idx, 1);
+          targetDay.activities.push(activity);
+          moved = true;
+          break;
+        }
+        if (!moved) continue;
+      }
+      continue;
+    }
+  }
+  return days;
+}
+
+function computeWeekMetricsFromDays(days: ContextDay[]): WeekMetrics[] {
+  const weekMap = new Map<number, ContextDay[]>();
+  for (const day of days) {
+    const existing = weekMap.get(day.weekIndex) || [];
+    existing.push(day);
+    weekMap.set(day.weekIndex, existing);
+  }
+  const weekIndexes = [...weekMap.keys()].sort((a, b) => a - b);
+  return weekIndexes.map((weekIndex) => {
+    const weekDays = (weekMap.get(weekIndex) || []).sort((a, b) => a.dayOfWeek - b.dayOfWeek);
+    const hardDays = new Set<number>();
+    let restDays = 0;
+    let longRunDayOfWeek: number | null = null;
+    let plannedDurationMin = 0;
+    for (const day of weekDays) {
+      let hasRest = false;
+      let hasHard = false;
+      for (const activity of day.activities) {
+        if (activity.type === 'REST') hasRest = true;
+        if (isLongRunLikeActivity(activity)) longRunDayOfWeek = day.dayOfWeek;
+        if (isHardRunLikeActivity(activity)) hasHard = true;
+        if (activity.duration !== null && Number.isFinite(activity.duration) && activity.duration >= 0) {
+          plannedDurationMin += activity.duration;
+        }
+      }
+      if (hasRest) restDays += 1;
+      if (hasHard) hardDays.add(day.dayOfWeek);
+    }
+    return {
+      weekIndex,
+      restDays,
+      hardDays: [...hardDays].sort((a, b) => a - b),
+      longRunDayOfWeek,
+      plannedDurationMin
+    };
+  });
+}
+
+function scoreProposalCandidate(message: string, context: PlanContext, proposal: PlanAdjustmentProposal) {
+  const simulatedDays = simulateProposalDays(context, proposal);
+  const baseWeeks = computeWeekMetricsFromDays(context.days);
+  const weeks = computeWeekMetricsFromDays(simulatedDays);
+  const baseHardByWeek = new Map(baseWeeks.map((week) => [week.weekIndex, week.hardDays.length]));
+  let score = proposal.changes.length * 0.6;
+  const diagnostics: string[] = [];
+
+  for (const week of weeks) {
+    if (week.restDays === 0) {
+      score += 25;
+      diagnostics.push(`Week ${week.weekIndex} has no rest day.`);
+    }
+    if (week.hardDays.length > 2) {
+      const extraHard = week.hardDays.length - 2;
+      score += extraHard * 15;
+      diagnostics.push(`Week ${week.weekIndex} has ${week.hardDays.length} hard days.`);
+    }
+    for (let i = 1; i < week.hardDays.length; i += 1) {
+      if (week.hardDays[i] === week.hardDays[i - 1] + 1) {
+        score += 10;
+        diagnostics.push(`Week ${week.weekIndex} has back-to-back hard days.`);
+      }
+    }
+    if (week.longRunDayOfWeek && week.hardDays.includes(Math.max(1, week.longRunDayOfWeek - 1))) {
+      score += 8;
+      diagnostics.push(`Week ${week.weekIndex} has a hard day before long run.`);
+    }
+    if (week.longRunDayOfWeek && week.hardDays.includes(Math.min(7, week.longRunDayOfWeek + 1))) {
+      score += 8;
+      diagnostics.push(`Week ${week.weekIndex} has a hard day after long run.`);
+    }
+    if (INJURY_OR_ILLNESS_PATTERN.test(message)) {
+      const baselineHard = baseHardByWeek.get(week.weekIndex) || 0;
+      if (week.hardDays.length > baselineHard) {
+        score += 18;
+        diagnostics.push(`Week ${week.weekIndex} increases hard-load during illness/injury context.`);
+      }
+    }
+  }
+
+  for (let i = 1; i < weeks.length; i += 1) {
+    const prev = weeks[i - 1].plannedDurationMin;
+    const curr = weeks[i].plannedDurationMin;
+    if (prev <= 0 || curr <= 0) continue;
+    const deltaRatio = (curr - prev) / prev;
+    if (deltaRatio > 0.2) {
+      const penalty = Math.min(40, (deltaRatio - 0.2) * 100);
+      score += penalty;
+      diagnostics.push(`Week ${weeks[i].weekIndex} duration jump exceeds 20%.`);
+    }
+  }
+
+  return { score, diagnostics };
+}
+
+function normalizeProposalForMode(
+  proposal: PlanAdjustmentProposal,
+  mode: NonNullable<PlanAdjustmentProposal['mode']>
+): PlanAdjustmentProposal {
+  return { ...proposal, mode };
+}
+
+function buildMinimalVariant(proposal: PlanAdjustmentProposal): PlanAdjustmentProposal {
+  const prioritized = proposal.changes.filter((change) =>
+    change.op === 'move_activity' || change.op === 'edit_activity' || change.op === 'reanchor_subtype_weekly'
+  );
+  const fallback = prioritized.length > 0 ? prioritized : proposal.changes;
+  const reducedChanges = fallback.slice(0, Math.min(8, fallback.length));
+  return normalizeProposalForMode({
+    ...proposal,
+    summary: proposal.summary,
+    changes: reducedChanges
+  }, 'minimal_changes');
+}
+
+function buildInjuryCautiousVariant(proposal: PlanAdjustmentProposal): PlanAdjustmentProposal {
+  const conservativeChanges = proposal.changes.filter((change) => {
+    if (change.op === 'add_activity') {
+      if (change.type !== 'RUN') return true;
+      return !isLikelyHardRunText(change.title) && !isLikelyHardRunText(change.reason);
+    }
+    if (change.op === 'edit_activity') {
+      if (change.type && change.type !== 'RUN') return true;
+      return !isLikelyHardRunText(change.title) && !isLikelyHardRunText(change.reason);
+    }
+    return true;
+  }).slice(0, 10);
+
+  return normalizeProposalForMode({
+    ...proposal,
+    confidence: proposal.confidence === 'high' ? 'medium' : proposal.confidence,
+    changes: conservativeChanges
+  }, 'injury_cautious');
+}
+
+function selectBestProposalCandidate(message: string, context: PlanContext, proposal: PlanAdjustmentProposal) {
+  const candidates: PlanAdjustmentProposal[] = [normalizeProposalForMode(proposal, proposal.mode || 'balanced')];
+  if (proposal.changes.length > 6) {
+    candidates.push(buildMinimalVariant(proposal));
+  }
+  if (INJURY_OR_ILLNESS_PATTERN.test(message)) {
+    candidates.push(buildInjuryCautiousVariant(proposal));
+  }
+
+  let best = candidates[0];
+  let bestScore = Number.POSITIVE_INFINITY;
+  let bestDiagnostics: string[] = [];
+
+  for (const candidate of candidates) {
+    const { score, diagnostics } = scoreProposalCandidate(message, context, candidate);
+    if (score < bestScore) {
+      best = candidate;
+      bestScore = score;
+      bestDiagnostics = diagnostics;
+    }
+  }
+
+  const riskFlags = [...(best.riskFlags || [])];
+  for (const diagnostic of bestDiagnostics.slice(0, 2)) {
+    if (!riskFlags.includes(diagnostic)) riskFlags.push(diagnostic);
+  }
+
+  return {
+    ...best,
+    riskFlags: riskFlags.slice(0, 6)
+  };
+}
+
+function applyMajorClarificationPolicy(context: PlanContext, proposal: PlanAdjustmentProposal) {
+  const { dayWeekMap, activityWeekMap } = buildWeekMaps(context);
+  const touchedWeeks = new Set<number>();
+  let hasStructuralChange = false;
+
+  for (const change of proposal.changes) {
+    if (change.op === 'extend_plan' || change.op === 'reanchor_subtype_weekly') {
+      hasStructuralChange = true;
+    }
+    if (change.op === 'add_activity') {
+      const week = dayWeekMap.get(change.dayId);
+      if (week) touchedWeeks.add(week);
+    }
+    if (change.op === 'move_activity') {
+      const fromWeek = activityWeekMap.get(change.activityId);
+      const toWeek = dayWeekMap.get(change.targetDayId);
+      if (fromWeek) touchedWeeks.add(fromWeek);
+      if (toWeek) touchedWeeks.add(toWeek);
+    }
+    if (change.op === 'edit_activity' || change.op === 'delete_activity') {
+      const week = activityWeekMap.get(change.activityId);
+      if (week) touchedWeeks.add(week);
+    }
+  }
+
+  const isMajor = hasStructuralChange || proposal.changes.length >= 10 || (proposal.changes.length >= 6 && touchedWeeks.size >= 3);
+  if (!isMajor) {
+    return {
+      ...proposal,
+      requiresClarification: false,
+      clarificationPrompt: undefined
+    };
+  }
+
+  return {
+    ...proposal,
+    requiresClarification: true,
+    clarificationPrompt:
+      proposal.clarificationPrompt
+      || proposal.followUpQuestion
+      || 'This is a major plan reshuffle. Confirm constraints (available days, non-negotiable sessions, and acceptable load changes) before applying.'
+  };
+}
+
 
 
 
@@ -673,6 +1066,7 @@ async function generateAdjustmentProposal(message: string, plan: NonNullable<Pla
         additionalProperties: false,
         required: ['coachReply', 'summary', 'confidence', 'changes'],
         properties: {
+          mode: { type: 'string', enum: ['minimal_changes', 'balanced', 'aggressive', 'injury_cautious'] },
           coachReply: { type: 'string', minLength: 12, maxLength: 1200 },
           summary: { type: 'string', minLength: 6, maxLength: 260 },
           confidence: { type: 'string', enum: ['low', 'medium', 'high'] },
@@ -830,11 +1224,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       const lockState = buildLockStateFromPlan(plan);
       const sanitized = sanitizeProposalAgainstLockedDays(parsed, lockState);
       const safetyAdjusted = applyAdvisorySafetyPolicy(message, sanitized);
-      const guardrailError = validatePatchGuardrails(message, safetyAdjusted);
+      const context = buildPlanContext(plan);
+      const candidateSelected = selectBestProposalCandidate(message, context, safetyAdjusted);
+      const clarified = applyMajorClarificationPolicy(context, candidateSelected);
+      const guardrailError = validatePatchGuardrails(message, clarified);
       if (guardrailError) {
         return NextResponse.json({ error: guardrailError }, { status: 422 });
       }
-      const enveloped = withPatchEnvelope(plan.id, safetyAdjusted);
+      const enveloped = withPatchEnvelope(plan.id, clarified);
       return NextResponse.json({
         proposal: enveloped,
         plan: {
@@ -870,36 +1267,68 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ error: 'Proposal content changed. Regenerate and review before applying.' }, { status: 400 });
   }
 
-  const sanitizedProposal = sanitizeProposalAgainstLockedDays(parsedProposal, buildLockStateFromPlan(plan));
-  const safetyAdjusted = applyAdvisorySafetyPolicy(message, sanitizedProposal);
-  const guardrailError = validatePatchGuardrails(message, safetyAdjusted);
+  let selectedChanges = parsedProposal.changes;
+  if (Array.isArray(body.changeIndexes) && body.changeIndexes.length > 0) {
+    const indexes = [...new Set(
+      body.changeIndexes
+        .map((value) => parseInteger(value))
+        .filter((value): value is number => value !== null && value >= 0 && value < parsedProposal.changes.length)
+    )].sort((a, b) => a - b);
+    if (indexes.length === 0) {
+      return NextResponse.json({ error: 'No valid change indexes provided.' }, { status: 400 });
+    }
+    selectedChanges = indexes.map((index) => parsedProposal.changes[index]);
+  }
+
+  const proposalToApply: PlanAdjustmentProposal = {
+    ...parsedProposal,
+    changes: selectedChanges
+  };
+
+  if (parsedProposal.requiresClarification) {
+    const clarificationResponse = normalizeText(body.clarificationResponse);
+    if (!clarificationResponse) {
+      return NextResponse.json(
+        {
+          error: parsedProposal.clarificationPrompt || 'Clarification is required before applying this major plan change.',
+          requiresClarification: true
+        },
+        { status: 409 }
+      );
+    }
+  }
+
+  const sanitizedProposal = sanitizeProposalAgainstLockedDays(proposalToApply, buildLockStateFromPlan(plan));
+  if (hashProposalContent(sanitizedProposal) !== hashProposalContent(proposalToApply)) {
+    return NextResponse.json(
+      { error: 'Plan state changed since this proposal was generated. Please regenerate the adjustment.' },
+      { status: 409 }
+    );
+  }
+  const guardrailError = validatePatchGuardrails(message, proposalToApply);
   if (guardrailError) {
     return NextResponse.json({ error: guardrailError }, { status: 422 });
   }
 
-  const finalProposal = withPatchEnvelope(plan.id, safetyAdjusted);
-  if (finalProposal.applyToken !== parsedProposal.applyToken) {
-    return NextResponse.json({ error: 'Proposal drift detected. Please regenerate and apply again.' }, { status: 400 });
-  }
-  if (finalProposal.changes.length === 0) {
+  if (proposalToApply.changes.length === 0) {
     return NextResponse.json(
-      { error: finalProposal.summary || 'No changes to apply.' },
+      { error: proposalToApply.summary || 'No changes to apply.' },
       { status: 400 }
     );
   }
 
   try {
-    const result = await applyAdjustmentProposal(plan.id, finalProposal);
+    const result = await applyAdjustmentProposal(plan.id, proposalToApply);
     const refreshed = await loadPlanForUser(plan.id, user.id);
     if (!refreshed) {
       return NextResponse.json({ error: 'Plan refresh failed after apply' }, { status: 500 });
     }
     return NextResponse.json({
       applied: true,
-      patchId: finalProposal.patchId,
+      patchId: proposalToApply.patchId,
       appliedCount: result.appliedCount,
       extendedWeeks: result.extendedWeeks,
-      summary: finalProposal.summary,
+      summary: proposalToApply.summary,
       plan: await appendSourcePlanName(refreshed)
     });
   } catch (error: unknown) {
