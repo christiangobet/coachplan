@@ -497,13 +497,15 @@ async function applyMatchedExternalToWorkout(args: {
   if (args.avgHeartRate) stats.push(`avg HR ${args.avgHeartRate} bpm`);
   if (args.calories) stats.push(`${Math.round(args.calories)} cal`);
 
-  const syncTag = `[Synced from ${sourceLabel} ${new Date().toISOString().slice(0, 10)}]`;
+  const sourceActivityDate = args.startTime.toISOString().slice(0, 10);
+  const syncTag = `[Synced from ${sourceLabel} activity ${sourceActivityDate}]`;
   const detailTag = stats.length ? `${syncTag} ${stats.join(' · ')}` : syncTag;
-  const nextNotes = workout.notes?.includes('[Synced from')
-    ? workout.notes
-    : workout.notes
-      ? `${workout.notes}\n${detailTag}`
-      : detailTag;
+  const cleanedNotes = (workout.notes || '')
+    .split('\n')
+    .filter((line) => !/\[Synced from /i.test(line))
+    .join('\n')
+    .trim();
+  const nextNotes = cleanedNotes ? `${cleanedNotes}\n${detailTag}` : detailTag;
 
   await prisma.planActivity.update({
     where: { id: workout.id },
