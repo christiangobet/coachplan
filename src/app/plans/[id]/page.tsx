@@ -217,6 +217,20 @@ type AiChatTurn = {
 
 const AI_GREETING = "Hi, I'm your AI Trainer. Tell me what changed this week (missed session, travel, fatigue, sickness) and I'll propose safe plan adjustments.";
 
+function createAiGreetingTurn(): AiChatTurn {
+  return {
+    id: nextTurnId(),
+    role: 'coach',
+    text: AI_GREETING,
+    createdAt: Date.now()
+  };
+}
+
+function keepOnlyGreeting(turns: AiChatTurn[]): AiChatTurn[] {
+  const existing = turns.find((turn) => turn.role === 'coach' && turn.text === AI_GREETING && !turn.proposal);
+  return existing ? [existing] : [createAiGreetingTurn()];
+}
+
 function formatDowLabel(dayOfWeek: number | null | undefined) {
   if (!dayOfWeek || dayOfWeek < 1 || dayOfWeek > 7) return '—';
   return DAY_LABELS[dayOfWeek - 1] || '—';
@@ -336,12 +350,7 @@ export default function PlanDetailPage() {
   const [viewerUnits, setViewerUnits] = useState<DistanceUnit>('MILES');
   const [aiTrainerInput, setAiTrainerInput] = useState('');
   const [aiChatTurns, setAiChatTurns] = useState<AiChatTurn[]>(() => [
-    {
-      id: nextTurnId(),
-      role: 'coach',
-      text: AI_GREETING,
-      createdAt: Date.now()
-    }
+    createAiGreetingTurn()
   ]);
   const [activeProposalTurnId, setActiveProposalTurnId] = useState<string | null>(null);
   const [aiAppliedByTurn, setAiAppliedByTurn] = useState<Record<string, number[]>>({});
@@ -629,16 +638,12 @@ export default function PlanDetailPage() {
     setAiTrainerError(null);
     setAiTrainerStatus('Generating new recommendation...');
     setAiTrainerClarification('');
+    setAiTrainerInput('');
     setActiveProposalTurnId(null);
+    setAiAppliedByTurn({});
     setAiChatTurns((prev) => {
-      const next = prev.map((turn) => {
-        if (turn.id === activeProposalTurnId && turn.proposal && turn.proposalState === 'active') {
-          return { ...turn, proposalState: 'superseded' as AiProposalState };
-        }
-        return turn;
-      });
-      next.push(athleteTurn);
-      return next;
+      const greetingOnly = keepOnlyGreeting(prev);
+      return [...greetingOnly, athleteTurn];
     });
     try {
       const res = await fetch(`/api/plans/${planId}/ai-adjust`, {
@@ -666,29 +671,35 @@ export default function PlanDetailPage() {
         proposal,
         proposalState: 'active'
       };
-      setAiChatTurns((prev) => [...prev, coachTurn]);
+      setAiChatTurns((prev) => {
+        const greetingOnly = keepOnlyGreeting(prev);
+        return [...greetingOnly, athleteTurn, coachTurn];
+      });
       setActiveProposalTurnId(coachTurnId);
-      setAiAppliedByTurn((prev) => ({ ...prev, [coachTurnId]: [] }));
+      setAiAppliedByTurn({ [coachTurnId]: [] });
       setAiTrainerStatus(proposal.summary || 'New recommendation generated.');
-      setAiTrainerInput('');
     } catch (err: unknown) {
       const classified = classifyAiError(err instanceof Error ? err.message : 'Failed to generate adjustment proposal.');
       setAiTrainerError(classified.summary);
       setAiTrainerStatus(classified.help);
-      setAiChatTurns((prev) => [
-        ...prev,
-        {
+      setAiChatTurns((prev) => {
+        const greetingOnly = keepOnlyGreeting(prev);
+        return [
+          ...greetingOnly,
+          athleteTurn,
+          {
           id: nextTurnId(),
           role: 'system',
           text: `${classified.summary} ${classified.help}`,
           createdAt: Date.now(),
           errorCode: classified.code
-        }
-      ]);
+          }
+        ];
+      });
     } finally {
       setAiTrainerLoading(false);
     }
-  }, [aiTrainerInput, activeProposalTurnId, planId]);
+  }, [aiTrainerInput, planId]);
 
   const applyAiAdjustment = useCallback(async (changeIndex?: number) => {
     if (!planId || !aiTrainerProposal || !activeProposalTurn) return;
@@ -803,6 +814,16 @@ export default function PlanDetailPage() {
     setAiTrainerClarification('');
     setAiTrainerError(null);
     setAiTrainerStatus('Previous recommendation re-opened.');
+  }, []);
+
+  const clearAiChat = useCallback(() => {
+    setAiChatTurns([createAiGreetingTurn()]);
+    setActiveProposalTurnId(null);
+    setAiAppliedByTurn({});
+    setAiTrainerClarification('');
+    setAiTrainerInput('');
+    setAiTrainerError(null);
+    setAiTrainerStatus(null);
   }, []);
 
   // Close modal on Escape
@@ -1149,7 +1170,17 @@ export default function PlanDetailPage() {
             <div className="pcal-ai-trainer-head">
               <div>
                 <h2>AI Trainer</h2>
-                <p>Chat with your coach. Each new request creates a new recommendation. Older ones move to history.</p>
+                <p>Chat with your coach. Each new request starts a fresh recommendation thread.</p>
+              </div>
+              <div className="pcal-ai-trainer-head-actions">
+                <button
+                  className="cta secondary"
+                  type="button"
+                  onClick={clearAiChat}
+                  disabled={aiTrainerLoading || aiTrainerApplying}
+                >
+                  Clear chat
+                </button>
               </div>
             </div>
 

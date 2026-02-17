@@ -606,6 +606,12 @@
   gap: 10px;
 }
 
+.pcal-ai-trainer-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .pcal-ai-trainer-head h2 {
   font-size: 16px;
   font-weight: 800;
