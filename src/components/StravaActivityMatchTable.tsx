@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import ActivityTypeIcon from '@/components/ActivityTypeIcon';
 import {
   convertDistanceForDisplay,
@@ -93,7 +93,6 @@ function formatDate(value: string | null | undefined) {
 }
 
 export default function StravaActivityMatchTable() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const selectedPlanId = searchParams.get('plan') || '';
   const [data, setData] = useState<ReviewResponse | null>(null);
@@ -102,8 +101,11 @@ export default function StravaActivityMatchTable() {
   const [syncing, setSyncing] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (options?: { silent?: boolean }) => {
+    const silent = Boolean(options?.silent);
+    if (!silent || !data) {
+      setLoading(true);
+    }
     try {
       const reviewUrl = new URL(`/api/integrations/strava/review?ts=${Date.now()}`, window.location.origin);
       if (selectedPlanId) reviewUrl.searchParams.set('plan', selectedPlanId);
@@ -121,9 +123,11 @@ export default function StravaActivityMatchTable() {
     } catch {
       setStatus('Failed to load Strava table');
     } finally {
-      setLoading(false);
+      if (!silent || !data) {
+        setLoading(false);
+      }
     }
-  }, [selectedPlanId]);
+  }, [selectedPlanId, data]);
 
   useEffect(() => {
     load();
@@ -152,8 +156,7 @@ export default function StravaActivityMatchTable() {
       setStatus(
         `Synced: ${summary.imported ?? 0} imported, ${summary.matched ?? 0} matched, ${summary.workoutsUpdated ?? 0} updated${truncatedNote}`
       );
-      await load();
-      router.refresh();
+      await load({ silent: true });
     } catch {
       setStatus('Sync failed');
     } finally {
@@ -187,8 +190,7 @@ export default function StravaActivityMatchTable() {
           `Imported ${summary.date}: ${totalCount} Strava activities, ${matchedCount} matched, ${summary.workoutsUpdated ?? 0} workout logs updated`
         );
       }
-      await load();
-      router.refresh();
+      await load({ silent: true });
     } catch {
       setStatus('Import failed');
     } finally {
