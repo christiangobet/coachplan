@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import {
   convertDistanceValue,
   convertPaceForDisplay,
+  derivePaceFromDistanceDuration,
   normalizeDistanceUnit,
   type DistanceUnit
 } from '@/lib/unit-display';
@@ -133,9 +134,25 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     );
   }
 
-  if (typeof actualPace === 'string' && actualPace && storageUnit) {
+  let finalActualPace = actualPace;
+  if (typeof finalActualPace === 'string' && finalActualPace && storageUnit) {
     const sourceUnit = providedUnit || storageUnit;
-    actualPace = convertPaceForDisplay(actualPace, storageUnit, sourceUnit) || actualPace;
+    finalActualPace = convertPaceForDisplay(finalActualPace, storageUnit, sourceUnit) || finalActualPace;
+  }
+
+  const nextActualDistance =
+    resolvedActualDistance !== undefined
+      ? resolvedActualDistance
+      : activity.actualDistance;
+  const nextActualDuration =
+    actualDuration.provided
+      ? (actualDuration.value ?? null)
+      : activity.actualDuration;
+  const derivedPace = storageUnit
+    ? derivePaceFromDistanceDuration(nextActualDistance, nextActualDuration, storageUnit)
+    : null;
+  if (derivedPace) {
+    finalActualPace = derivedPace;
   }
 
   const updated = await prisma.planActivity.update({
@@ -143,7 +160,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     data: {
       actualDistance: resolvedActualDistance,
       actualDuration: actualDuration.provided ? actualDuration.value : undefined,
-      actualPace,
+      actualPace: finalActualPace,
       notes
     }
   });

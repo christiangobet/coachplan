@@ -126,3 +126,17 @@ export function convertPaceForDisplay(
   const end = start + withUnit[0].length;
   return `${text.slice(0, start)}${replacement}${text.slice(end)}`.trim();
 }
+
+export function derivePaceFromDistanceDuration(
+  distance: number | null | undefined,
+  durationMinutes: number | null | undefined,
+  unit: DistanceUnit
+) {
+  if (!distance || !durationMinutes || distance <= 0 || durationMinutes <= 0) return null;
+  const secondsPerUnit = Math.round((durationMinutes * 60) / distance);
+  if (!Number.isFinite(secondsPerUnit) || secondsPerUnit <= 0) return null;
+
+  const minutes = Math.floor(secondsPerUnit / 60);
+  const seconds = secondsPerUnit % 60;
+  return `${minutes}:${String(seconds).padStart(2, '0')} /${distanceUnitLabel(unit)}`;
+}

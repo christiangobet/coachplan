@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { currentUser } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
+import { derivePaceFromDistanceDuration, normalizeDistanceUnit } from '@/lib/unit-display';
 
 function hasField(obj: Record<string, unknown>, key: string) {
   return Object.prototype.hasOwnProperty.call(obj, key);
@@ -84,6 +85,17 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     }
   }
 
+  let finalActualPace = actualPace;
+  const storageUnit = normalizeDistanceUnit(activity.distanceUnit);
+  const nextActualDistance = actualDistance.provided ? (actualDistance.value ?? null) : activity.actualDistance;
+  const nextActualDuration = actualDuration.provided ? (actualDuration.value ?? null) : activity.actualDuration;
+  const derivedPace = storageUnit
+    ? derivePaceFromDistanceDuration(nextActualDistance, nextActualDuration, storageUnit)
+    : null;
+  if (derivedPace) {
+    finalActualPace = derivedPace;
+  }
+
   const updated = await prisma.planActivity.update({
     where: { id: activity.id },
     data: {
@@ -91,7 +103,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       completedAt: new Date(),
       actualDistance: actualDistance.provided ? actualDistance.value : undefined,
       actualDuration: actualDuration.provided ? actualDuration.value : undefined,
-      actualPace,
+      actualPace: finalActualPace,
       notes
     }
   });
