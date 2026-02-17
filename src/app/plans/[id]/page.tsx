@@ -215,6 +215,8 @@ type AiChatTurn = {
   errorCode?: string;
 };
 
+const AI_GREETING = "Hi, I'm your AI Trainer. Tell me what changed this week (missed session, travel, fatigue, sickness) and I'll propose safe plan adjustments.";
+
 function formatDowLabel(dayOfWeek: number | null | undefined) {
   if (!dayOfWeek || dayOfWeek < 1 || dayOfWeek > 7) return '—';
   return DAY_LABELS[dayOfWeek - 1] || '—';
@@ -332,7 +334,14 @@ export default function PlanDetailPage() {
   const [savingActuals, setSavingActuals] = useState(false);
   const [viewerUnits, setViewerUnits] = useState<DistanceUnit>('MILES');
   const [aiTrainerInput, setAiTrainerInput] = useState('');
-  const [aiChatTurns, setAiChatTurns] = useState<AiChatTurn[]>([]);
+  const [aiChatTurns, setAiChatTurns] = useState<AiChatTurn[]>(() => [
+    {
+      id: nextTurnId(),
+      role: 'coach',
+      text: AI_GREETING,
+      createdAt: Date.now()
+    }
+  ]);
   const [activeProposalTurnId, setActiveProposalTurnId] = useState<string | null>(null);
   const [aiAppliedByTurn, setAiAppliedByTurn] = useState<Record<string, number[]>>({});
   const [aiTrainerLoading, setAiTrainerLoading] = useState(false);
