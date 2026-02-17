@@ -173,6 +173,27 @@ type AiTrainerProposal = {
   mode?: 'minimal_changes' | 'balanced' | 'aggressive' | 'injury_cautious';
   requiresClarification?: boolean;
   clarificationPrompt?: string;
+  invariantReport?: {
+    selectedMode: 'minimal_changes' | 'balanced' | 'aggressive' | 'injury_cautious';
+    candidateScore: number;
+    summaryFlags: string[];
+    weeks: Array<{
+      weekIndex: number;
+      before: {
+        restDays: number;
+        hardDays: number;
+        longRunDayOfWeek: number | null;
+        plannedDurationMin: number;
+      };
+      after: {
+        restDays: number;
+        hardDays: number;
+        longRunDayOfWeek: number | null;
+        plannedDurationMin: number;
+      };
+      flags: string[];
+    }>;
+  };
   coachReply: string;
   summary: string;
   confidence: 'low' | 'medium' | 'high';
@@ -180,6 +201,11 @@ type AiTrainerProposal = {
   followUpQuestion?: string;
   changes: AiTrainerChange[];
 };
+
+function formatDowLabel(dayOfWeek: number | null | undefined) {
+  if (!dayOfWeek || dayOfWeek < 1 || dayOfWeek > 7) return '—';
+  return DAY_LABELS[dayOfWeek - 1] || '—';
+}
 
 type AiChangeLookup = {
   dayLabelById: Map<string, string>;
@@ -859,6 +885,46 @@ export default function PlanDetailPage() {
                           placeholder="Example: Keep long run on Sunday, max 1 hard session mid-week, no added mileage this week."
                           rows={3}
                         />
+                      </div>
+                    )}
+                    {aiTrainerProposal.invariantReport && aiTrainerProposal.invariantReport.weeks.length > 0 && (
+                      <div className="pcal-ai-trainer-invariants">
+                        <div className="pcal-ai-trainer-meta">
+                          <strong>Week Balance Check</strong>
+                          <span>
+                            Mode: {aiTrainerProposal.invariantReport.selectedMode.replace(/_/g, ' ')} · Score: {aiTrainerProposal.invariantReport.candidateScore}
+                          </span>
+                        </div>
+                        <div className="pcal-ai-trainer-invariant-grid">
+                          {aiTrainerProposal.invariantReport.weeks.map((week) => (
+                            <article key={`inv-${week.weekIndex}`} className="pcal-ai-trainer-invariant-week">
+                              <header>
+                                <strong>Week {week.weekIndex}</strong>
+                              </header>
+                              <p>Rest: {week.before.restDays} → {week.after.restDays}</p>
+                              <p>Hard days: {week.before.hardDays} → {week.after.hardDays}</p>
+                              <p>Long run: {formatDowLabel(week.before.longRunDayOfWeek)} → {formatDowLabel(week.after.longRunDayOfWeek)}</p>
+                              <p>Planned duration: {week.before.plannedDurationMin}m → {week.after.plannedDurationMin}m</p>
+                              {week.flags.length > 0 && (
+                                <ul>
+                                  {week.flags.map((flag, idx) => (
+                                    <li key={`${week.weekIndex}-${flag}-${idx}`}>{flag}</li>
+                                  ))}
+                                </ul>
+                              )}
+                            </article>
+                          ))}
+                        </div>
+                        {aiTrainerProposal.invariantReport.summaryFlags.length > 0 && (
+                          <div className="pcal-ai-trainer-risks">
+                            <strong>Balance Notes</strong>
+                            <ul>
+                              {aiTrainerProposal.invariantReport.summaryFlags.map((flag, idx) => (
+                                <li key={`summary-${idx}`}>{flag}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
                       </div>
                     )}
                     <div className="pcal-ai-trainer-meta">

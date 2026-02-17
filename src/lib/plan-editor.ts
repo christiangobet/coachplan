@@ -82,6 +82,27 @@ export type PlanAdjustmentProposal = {
     mode?: 'minimal_changes' | 'balanced' | 'aggressive' | 'injury_cautious';
     requiresClarification?: boolean;
     clarificationPrompt?: string;
+    invariantReport?: {
+        selectedMode: 'minimal_changes' | 'balanced' | 'aggressive' | 'injury_cautious';
+        candidateScore: number;
+        summaryFlags: string[];
+        weeks: Array<{
+            weekIndex: number;
+            before: {
+                restDays: number;
+                hardDays: number;
+                longRunDayOfWeek: number | null;
+                plannedDurationMin: number;
+            };
+            after: {
+                restDays: number;
+                hardDays: number;
+                longRunDayOfWeek: number | null;
+                plannedDurationMin: number;
+            };
+            flags: string[];
+        }>;
+    };
     coachReply: string;
     summary: string;
     confidence: 'low' | 'medium' | 'high';

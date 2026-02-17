@@ -722,6 +722,53 @@
   color: #9e1f15;
 }
 
+.pcal-ai-trainer-invariants {
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px;
+  background: #f7f8fa;
+}
+
+.pcal-ai-trainer-invariant-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.pcal-ai-trainer-invariant-week {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--background);
+  padding: 8px;
+  display: grid;
+  gap: 4px;
+}
+
+.pcal-ai-trainer-invariant-week header strong {
+  font-size: 12px;
+  color: var(--ink);
+}
+
+.pcal-ai-trainer-invariant-week p {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.pcal-ai-trainer-invariant-week ul {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 2px;
+}
+
+.pcal-ai-trainer-invariant-week li {
+  font-size: 11px;
+  color: #9e1f15;
+}
+
 .pcal-race-panel {
   margin: 14px 0 20px;
   padding: 16px 20px;
@@ -1580,6 +1627,10 @@
 
   .pcal-ai-trainer-toggle {
     width: fit-content;
+  }
+
+  .pcal-ai-trainer-invariant-grid {
+    grid-template-columns: 1fr;
   }
 
   .pcal-side-nav {

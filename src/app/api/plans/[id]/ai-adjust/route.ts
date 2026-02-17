@@ -659,6 +659,30 @@ type WeekMetrics = {
   plannedDurationMin: number;
 };
 
+type InvariantWeekDelta = {
+  weekIndex: number;
+  before: {
+    restDays: number;
+    hardDays: number;
+    longRunDayOfWeek: number | null;
+    plannedDurationMin: number;
+  };
+  after: {
+    restDays: number;
+    hardDays: number;
+    longRunDayOfWeek: number | null;
+    plannedDurationMin: number;
+  };
+  flags: string[];
+};
+
+type InvariantReport = {
+  selectedMode: NonNullable<PlanAdjustmentProposal['mode']>;
+  candidateScore: number;
+  summaryFlags: string[];
+  weeks: InvariantWeekDelta[];
+};
+
 function isLikelyHardRunText(text: string | null | undefined) {
   const normalized = String(text || '').toLowerCase();
   return /\b(tempo|threshold|interval|hills?|race pace|vo2|max effort|speed)\b/.test(normalized);
@@ -837,6 +861,112 @@ function computeWeekMetricsFromDays(days: ContextDay[]): WeekMetrics[] {
   });
 }
 
+function getTouchedWeekIndexes(context: PlanContext, proposal: PlanAdjustmentProposal) {
+  const { dayWeekMap, activityWeekMap } = buildWeekMaps(context);
+  const touchedWeeks = new Set<number>();
+
+  for (const change of proposal.changes) {
+    if (change.op === 'extend_plan' || change.op === 'reanchor_subtype_weekly') {
+      for (const week of context.weekSummaries) touchedWeeks.add(week.weekIndex);
+      continue;
+    }
+    if (change.op === 'add_activity') {
+      const week = dayWeekMap.get(change.dayId);
+      if (week) touchedWeeks.add(week);
+      continue;
+    }
+    if (change.op === 'move_activity') {
+      const fromWeek = activityWeekMap.get(change.activityId);
+      const toWeek = dayWeekMap.get(change.targetDayId);
+      if (fromWeek) touchedWeeks.add(fromWeek);
+      if (toWeek) touchedWeeks.add(toWeek);
+      continue;
+    }
+    if (change.op === 'edit_activity' || change.op === 'delete_activity') {
+      const week = activityWeekMap.get(change.activityId);
+      if (week) touchedWeeks.add(week);
+    }
+  }
+
+  return [...touchedWeeks].sort((a, b) => a - b);
+}
+
+function formatDelta(before: number, after: number) {
+  const delta = after - before;
+  if (delta === 0) return '0';
+  return delta > 0 ? `+${delta}` : String(delta);
+}
+
+function buildInvariantReport(
+  context: PlanContext,
+  proposal: PlanAdjustmentProposal,
+  candidateScore: number,
+  scoreDiagnostics: string[]
+): InvariantReport {
+  const beforeWeeks = computeWeekMetricsFromDays(context.days);
+  const afterWeeks = computeWeekMetricsFromDays(simulateProposalDays(context, proposal));
+  const beforeByWeek = new Map(beforeWeeks.map((week) => [week.weekIndex, week]));
+  const afterByWeek = new Map(afterWeeks.map((week) => [week.weekIndex, week]));
+  const touchedWeekIndexes = getTouchedWeekIndexes(context, proposal);
+
+  const weekRows: InvariantWeekDelta[] = touchedWeekIndexes.map((weekIndex) => {
+    const before = beforeByWeek.get(weekIndex) || {
+      weekIndex,
+      restDays: 0,
+      hardDays: [],
+      longRunDayOfWeek: null,
+      plannedDurationMin: 0
+    };
+    const after = afterByWeek.get(weekIndex) || before;
+    const flags: string[] = [];
+
+    if (after.restDays === 0) flags.push('No rest day.');
+    if (after.hardDays.length > 2) flags.push(`Hard days ${after.hardDays.length} (>2).`);
+    for (let i = 1; i < after.hardDays.length; i += 1) {
+      if (after.hardDays[i] === after.hardDays[i - 1] + 1) {
+        flags.push('Back-to-back hard days.');
+        break;
+      }
+    }
+
+    return {
+      weekIndex,
+      before: {
+        restDays: before.restDays,
+        hardDays: before.hardDays.length,
+        longRunDayOfWeek: before.longRunDayOfWeek,
+        plannedDurationMin: before.plannedDurationMin
+      },
+      after: {
+        restDays: after.restDays,
+        hardDays: after.hardDays.length,
+        longRunDayOfWeek: after.longRunDayOfWeek,
+        plannedDurationMin: after.plannedDurationMin
+      },
+      flags
+    };
+  });
+
+  const summaryFlags = [
+    ...scoreDiagnostics,
+    ...weekRows.flatMap((row) => row.flags.map((flag) => `W${row.weekIndex}: ${flag}`)),
+    ...weekRows
+      .map((row) => {
+        const durationDelta = row.after.plannedDurationMin - row.before.plannedDurationMin;
+        if (durationDelta === 0) return null;
+        return `W${row.weekIndex}: duration ${formatDelta(row.before.plannedDurationMin, row.after.plannedDurationMin)} min`;
+      })
+      .filter((flag): flag is string => Boolean(flag))
+  ].slice(0, 8);
+
+  return {
+    selectedMode: (proposal.mode || 'balanced') as NonNullable<PlanAdjustmentProposal['mode']>,
+    candidateScore: Number(candidateScore.toFixed(1)),
+    summaryFlags,
+    weeks: weekRows
+  };
+}
+
 function scoreProposalCandidate(message: string, context: PlanContext, proposal: PlanAdjustmentProposal) {
   const simulatedDays = simulateProposalDays(context, proposal);
   const baseWeeks = computeWeekMetricsFromDays(context.days);
@@ -960,9 +1090,15 @@ function selectBestProposalCandidate(message: string, context: PlanContext, prop
     if (!riskFlags.includes(diagnostic)) riskFlags.push(diagnostic);
   }
 
-  return {
+  const selectedProposal = {
     ...best,
     riskFlags: riskFlags.slice(0, 6)
+  };
+
+  return {
+    proposal: selectedProposal,
+    score: bestScore,
+    diagnostics: bestDiagnostics
   };
 }
 
@@ -1226,7 +1362,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       const safetyAdjusted = applyAdvisorySafetyPolicy(message, sanitized);
       const context = buildPlanContext(plan);
       const candidateSelected = selectBestProposalCandidate(message, context, safetyAdjusted);
-      const clarified = applyMajorClarificationPolicy(context, candidateSelected);
+      const withInvariantReport: PlanAdjustmentProposal = {
+        ...candidateSelected.proposal,
+        invariantReport: buildInvariantReport(
+          context,
+          candidateSelected.proposal,
+          candidateSelected.score,
+          candidateSelected.diagnostics
+        )
+      };
+      const clarified = applyMajorClarificationPolicy(context, withInvariantReport);
       const guardrailError = validatePatchGuardrails(message, clarified);
       if (guardrailError) {
         return NextResponse.json({ error: guardrailError }, { status: 422 });
