@@ -819,6 +819,69 @@
   color: var(--d-text-mid);
 }
 
+.cal-activity-log {
+  display: grid;
+  gap: 8px;
+  border-top: 1px solid var(--d-border-light);
+  padding-top: 8px;
+  margin-top: 2px;
+}
+
+.cal-activity-log-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.cal-activity-log label {
+  display: grid;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--d-muted);
+}
+
+.cal-activity-log input {
+  height: 34px;
+  border: 1px solid var(--d-border);
+  border-radius: 8px;
+  background: #fff;
+  padding: 0 10px;
+  font-size: 13px;
+  color: var(--d-text);
+}
+
+.cal-activity-log input:focus {
+  outline: none;
+  border-color: var(--d-orange);
+  box-shadow: 0 0 0 2px rgba(252, 76, 2, 0.12);
+}
+
+.cal-activity-log-pace {
+  grid-column: 1 / -1;
+}
+
+.cal-activity-log-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.cal-activity-log-status {
+  font-size: 12px;
+  color: #0f8a47;
+  font-weight: 600;
+}
+
+.cal-activity-log-disabled {
+  margin: 0;
+  font-size: 12px;
+  color: var(--d-text-mid);
+}
+
 @media (max-width: 1200px) {
   .cal-grid {
     gap: 6px;
@@ -861,6 +924,10 @@
 
   .cal-day {
     min-height: 110px;
+  }
+
+  .cal-activity-log-grid {
+    grid-template-columns: 1fr;
   }
 
   .cal-mobile-day-done {

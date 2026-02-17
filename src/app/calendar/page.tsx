@@ -15,6 +15,7 @@ import {
   type DistanceUnit
 } from "@/lib/unit-display";
 import AthleteSidebar from "@/components/AthleteSidebar";
+import CalendarActivityLogger from "@/components/CalendarActivityLogger";
 import DayCompletionButton from "@/components/DayCompletionButton";
 import RaceDetailsEditor from "@/components/RaceDetailsEditor";
 import SelectedPlanCookie from "@/components/SelectedPlanCookie";
@@ -677,6 +678,11 @@ export default async function CalendarPage({
                     )}
                     {activity.notes && <span>Notes: {activity.notes}</span>}
                   </div>
+                  <CalendarActivityLogger
+                    activity={activity}
+                    viewerUnit={viewerUnits}
+                    enabled={selectedIsPastOrToday}
+                  />
                 </div>
               ))}
             </div>
