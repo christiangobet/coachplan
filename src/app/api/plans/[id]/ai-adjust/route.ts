@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { currentUser } from '@clerk/nextjs/server';
 import { ActivityPriority, ActivityType, Units } from '@prisma/client';
+import { createHash, randomUUID } from 'node:crypto';
 import { prisma } from '@/lib/prisma';
 import { getDefaultAiModel, openaiJsonSchema } from '@/lib/openai';
 import { ensureUserFromAuth } from '@/lib/user-sync';
@@ -23,6 +24,11 @@ type PlanAdjustRequestBody = {
   proposal?: unknown;
 };
 
+const PLAN_PATCH_SCHEMA_VERSION = 'coachplan.plan_patch.v1';
+const MAX_PATCH_CHANGES = 24;
+const INJURY_OR_ILLNESS_PATTERN = /\b(injur|pain|sick|ill|fever|flu|achilles|shin|knee|hip|hamstring|calf)\b/i;
+const VALID_MODES = new Set(['minimal_changes', 'balanced', 'aggressive', 'injury_cautious']);
+
 const QUALITY_RUN_SUBTYPES = new Set([
   'tempo',
   'hills',
@@ -33,6 +39,116 @@ const QUALITY_RUN_SUBTYPES = new Set([
   'race',
   'fast-finish'
 ]);
+
+function buildApplyToken(planId: string, proposal: PlanAdjustmentProposal): string {
+  const payload = JSON.stringify({
+    schemaVersion: proposal.schemaVersion || PLAN_PATCH_SCHEMA_VERSION,
+    patchId: proposal.patchId || '',
+    createdAt: proposal.createdAt || '',
+    mode: proposal.mode || 'balanced'
+  });
+
+  return createHash('sha256')
+    .update(`coachplan:ai-adjust:${planId}:${payload}`)
+    .digest('hex');
+}
+
+function withPatchEnvelope(planId: string, proposal: PlanAdjustmentProposal): PlanAdjustmentProposal {
+  const normalized: PlanAdjustmentProposal = {
+    ...proposal,
+    schemaVersion: proposal.schemaVersion || PLAN_PATCH_SCHEMA_VERSION,
+    patchId: proposal.patchId || randomUUID(),
+    createdAt: proposal.createdAt || new Date().toISOString(),
+    mode: proposal.mode || 'balanced'
+  };
+
+  return {
+    ...normalized,
+    applyToken: buildApplyToken(planId, normalized)
+  };
+}
+
+function isValidPatchId(value: string | undefined): boolean {
+  if (!value) return false;
+  return /^[a-zA-Z0-9_-]{8,80}$/.test(value);
+}
+
+function isRecentTimestamp(value: string | undefined): boolean {
+  if (!value) return false;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return false;
+  const ageMs = Date.now() - date.getTime();
+  return ageMs >= 0 && ageMs <= 1000 * 60 * 60 * 48;
+}
+
+function applyAdvisorySafetyPolicy(message: string, proposal: PlanAdjustmentProposal): PlanAdjustmentProposal {
+  const next = { ...proposal };
+  const riskFlags = [...(proposal.riskFlags || [])];
+  const mentionsInjuryOrIllness = INJURY_OR_ILLNESS_PATTERN.test(message);
+  const isLargePatch = proposal.changes.length >= 10;
+
+  if (mentionsInjuryOrIllness) {
+    if (next.confidence === 'high') next.confidence = 'medium';
+    if (!next.followUpQuestion) {
+      next.followUpQuestion = 'Any acute pain or medical guidance we should respect before applying bigger changes?';
+    }
+    riskFlags.unshift('Caution: injury/illness language detected. Keep changes conservative.');
+  }
+
+  if (isLargePatch && !next.followUpQuestion) {
+    next.followUpQuestion = 'This is a larger change set. Confirm you want these broader adjustments applied together.';
+  }
+
+  next.riskFlags = riskFlags.slice(0, 6);
+  return next;
+}
+
+function validatePatchGuardrails(message: string, proposal: PlanAdjustmentProposal): string | null {
+  if (proposal.changes.length === 0) return null;
+  if (proposal.changes.length > MAX_PATCH_CHANGES) {
+    return `Proposal has ${proposal.changes.length} changes, exceeding max ${MAX_PATCH_CHANGES}.`;
+  }
+
+  let extendPlanCount = 0;
+  const touchedActivityOps = new Map<string, Set<string>>();
+  const duplicateMoveTargets = new Set<string>();
+
+  for (const change of proposal.changes) {
+    if (change.op === 'extend_plan') {
+      extendPlanCount += 1;
+      continue;
+    }
+
+    if (change.op === 'move_activity' || change.op === 'edit_activity' || change.op === 'delete_activity') {
+      const opSet = touchedActivityOps.get(change.activityId) || new Set<string>();
+      opSet.add(change.op);
+      touchedActivityOps.set(change.activityId, opSet);
+      if (change.op === 'move_activity') {
+        const key = `${change.activityId}:${change.targetDayId}`;
+        if (duplicateMoveTargets.has(key)) {
+          return `Proposal has duplicate move for activity ${change.activityId}.`;
+        }
+        duplicateMoveTargets.add(key);
+      }
+    }
+  }
+
+  if (extendPlanCount > 1) {
+    return 'Proposal can include at most one extend_plan operation.';
+  }
+
+  for (const [activityId, ops] of touchedActivityOps.entries()) {
+    if (ops.has('delete_activity') && ops.size > 1) {
+      return `Proposal conflicts on activity ${activityId}: delete cannot be combined with edit/move.`;
+    }
+  }
+
+  if (INJURY_OR_ILLNESS_PATTERN.test(message) && proposal.changes.length > 14) {
+    return 'Too many changes for an injury/illness scenario. Keep the adjustment set smaller and safer.';
+  }
+
+  return null;
+}
 
 function normalizeSubtypeToken(value: unknown) {
   return String(value || '')
@@ -138,6 +254,12 @@ function parseDayOfWeek(input: unknown): number | null {
 function parseProposal(raw: unknown): PlanAdjustmentProposal | null {
   if (!raw || typeof raw !== 'object') return null;
   const payload = raw as Record<string, unknown>;
+  const schemaVersion = normalizeText(payload.schemaVersion) || undefined;
+  const patchId = normalizeText(payload.patchId) || undefined;
+  const createdAt = normalizeText(payload.createdAt) || undefined;
+  const applyToken = normalizeText(payload.applyToken) || undefined;
+  const modeRaw = normalizeText(payload.mode);
+  const mode = modeRaw && VALID_MODES.has(modeRaw) ? (modeRaw as PlanAdjustmentProposal['mode']) : undefined;
   const coachReply = normalizeText(payload.coachReply);
   const summary = normalizeText(payload.summary);
   const confidence = payload.confidence;
@@ -309,6 +431,11 @@ function parseProposal(raw: unknown): PlanAdjustmentProposal | null {
   const followUpQuestion = normalizeText(payload.followUpQuestion) || undefined;
 
   return {
+    schemaVersion,
+    patchId,
+    createdAt,
+    applyToken,
+    mode,
     coachReply: coachReply.slice(0, 1200),
     summary: summary.slice(0, 260),
     confidence,
@@ -702,8 +829,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       }
       const lockState = buildLockStateFromPlan(plan);
       const sanitized = sanitizeProposalAgainstLockedDays(parsed, lockState);
+      const safetyAdjusted = applyAdvisorySafetyPolicy(message, sanitized);
+      const guardrailError = validatePatchGuardrails(message, safetyAdjusted);
+      if (guardrailError) {
+        return NextResponse.json({ error: guardrailError }, { status: 422 });
+      }
+      const enveloped = withPatchEnvelope(plan.id, safetyAdjusted);
       return NextResponse.json({
-        proposal: sanitized,
+        proposal: enveloped,
         plan: {
           id: plan.id,
           name: plan.name,
@@ -720,25 +853,53 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (!parsedProposal) {
     return NextResponse.json({ error: 'proposal is required when apply=true' }, { status: 400 });
   }
+  if (parsedProposal.schemaVersion !== PLAN_PATCH_SCHEMA_VERSION) {
+    return NextResponse.json({ error: 'Unsupported proposal schema version.' }, { status: 400 });
+  }
+  if (!isValidPatchId(parsedProposal.patchId)) {
+    return NextResponse.json({ error: 'Proposal patchId is missing or invalid.' }, { status: 400 });
+  }
+  if (!isRecentTimestamp(parsedProposal.createdAt)) {
+    return NextResponse.json({ error: 'Proposal is stale. Generate a fresh adjustment first.' }, { status: 400 });
+  }
+  if (!parsedProposal.applyToken) {
+    return NextResponse.json({ error: 'Proposal apply token is missing.' }, { status: 400 });
+  }
+  const expectedToken = buildApplyToken(plan.id, parsedProposal);
+  if (parsedProposal.applyToken !== expectedToken) {
+    return NextResponse.json({ error: 'Proposal content changed. Regenerate and review before applying.' }, { status: 400 });
+  }
+
   const sanitizedProposal = sanitizeProposalAgainstLockedDays(parsedProposal, buildLockStateFromPlan(plan));
-  if (sanitizedProposal.changes.length === 0) {
+  const safetyAdjusted = applyAdvisorySafetyPolicy(message, sanitizedProposal);
+  const guardrailError = validatePatchGuardrails(message, safetyAdjusted);
+  if (guardrailError) {
+    return NextResponse.json({ error: guardrailError }, { status: 422 });
+  }
+
+  const finalProposal = withPatchEnvelope(plan.id, safetyAdjusted);
+  if (finalProposal.applyToken !== parsedProposal.applyToken) {
+    return NextResponse.json({ error: 'Proposal drift detected. Please regenerate and apply again.' }, { status: 400 });
+  }
+  if (finalProposal.changes.length === 0) {
     return NextResponse.json(
-      { error: sanitizedProposal.summary || 'No changes to apply.' },
+      { error: finalProposal.summary || 'No changes to apply.' },
       { status: 400 }
     );
   }
 
   try {
-    const result = await applyAdjustmentProposal(plan.id, sanitizedProposal);
+    const result = await applyAdjustmentProposal(plan.id, finalProposal);
     const refreshed = await loadPlanForUser(plan.id, user.id);
     if (!refreshed) {
       return NextResponse.json({ error: 'Plan refresh failed after apply' }, { status: 500 });
     }
     return NextResponse.json({
       applied: true,
+      patchId: finalProposal.patchId,
       appliedCount: result.appliedCount,
       extendedWeeks: result.extendedWeeks,
-      summary: sanitizedProposal.summary,
+      summary: finalProposal.summary,
       plan: await appendSourcePlanName(refreshed)
     });
   } catch (error: unknown) {

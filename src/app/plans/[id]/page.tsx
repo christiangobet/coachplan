@@ -166,6 +166,11 @@ type AiTrainerChange =
   };
 
 type AiTrainerProposal = {
+  schemaVersion?: string;
+  patchId?: string;
+  createdAt?: string;
+  applyToken?: string;
+  mode?: 'minimal_changes' | 'balanced' | 'aggressive' | 'injury_cautious';
   coachReply: string;
   summary: string;
   confidence: 'low' | 'medium' | 'high';
