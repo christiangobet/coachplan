@@ -383,6 +383,10 @@
   align-items: start;
 }
 
+.pcal-layout.pcal-layout-sidebar-collapsed {
+  grid-template-columns: 88px minmax(0, 1fr) 360px;
+}
+
 .pcal-main {
   min-width: 0;
 }
@@ -406,6 +410,13 @@
   gap: 10px;
 }
 
+.pcal-side-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .pcal-side-title {
   font-size: 11px;
   font-weight: 700;
@@ -413,6 +424,24 @@
   letter-spacing: 0.05em;
   color: var(--muted);
   padding: 2px 4px;
+}
+
+.pcal-side-toggle {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--background);
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.pcal-side-toggle:hover {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .pcal-side-nav {
@@ -433,6 +462,14 @@
   border: 1px solid transparent;
 }
 
+.pcal-side-link-short {
+  display: none;
+}
+
+.pcal-side-link-label {
+  display: inline;
+}
+
 .pcal-side-link:hover {
   background: var(--panel);
   color: var(--ink);
@@ -451,6 +488,30 @@
 
 .pcal-side-link.back {
   width: 100%;
+}
+
+.pcal-side.is-collapsed {
+  padding: 10px 8px;
+}
+
+.pcal-side.is-collapsed .pcal-side-title {
+  padding: 2px 0;
+}
+
+.pcal-side.is-collapsed .pcal-side-link {
+  justify-content: center;
+  padding: 0 6px;
+}
+
+.pcal-side.is-collapsed .pcal-side-link-short {
+  display: inline;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.pcal-side.is-collapsed .pcal-side-link-label {
+  display: none;
 }
 
 .pcal-header {
@@ -1749,16 +1810,7 @@
 
 @media (max-width: 1450px) and (min-width: 901px) {
   .pcal-layout {
-    grid-template-columns: 220px minmax(0, 1fr);
-  }
-
-  .pcal-chat-panel {
-    position: static;
-    grid-column: 2;
-  }
-
-  .pcal-ai-trainer-chat {
-    max-height: none;
+    grid-template-columns: minmax(88px, 220px) minmax(0, 1fr) 332px;
   }
 }
 

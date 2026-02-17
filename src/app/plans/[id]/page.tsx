@@ -332,6 +332,7 @@ export default function PlanDetailPage() {
   const [stravaSyncStatus, setStravaSyncStatus] = useState<string | null>(null);
   const [syncingStrava, setSyncingStrava] = useState(false);
   const [savingActuals, setSavingActuals] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [viewerUnits, setViewerUnits] = useState<DistanceUnit>('MILES');
   const [aiTrainerInput, setAiTrainerInput] = useState('');
   const [aiChatTurns, setAiChatTurns] = useState<AiChatTurn[]>(() => [
@@ -370,6 +371,23 @@ export default function PlanDetailPage() {
       setIsEditMode(true);
     }
   }, [searchParams]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+
+    const mediaQuery = window.matchMedia('(max-width: 1450px) and (min-width: 901px)');
+    const applyMatch = (matches: boolean) => setSidebarCollapsed(matches);
+    applyMatch(mediaQuery.matches);
+
+    const onChange = (event: MediaQueryListEvent) => applyMatch(event.matches);
+    if (typeof mediaQuery.addEventListener === 'function') {
+      mediaQuery.addEventListener('change', onChange);
+      return () => mediaQuery.removeEventListener('change', onChange);
+    }
+
+    mediaQuery.addListener(onChange);
+    return () => mediaQuery.removeListener(onChange);
+  }, []);
 
   const handleSaveActivity = async (data: ActivityFormData) => {
     try {
@@ -914,8 +932,13 @@ export default function PlanDetailPage() {
   return (
     <main className="pcal">
       <SelectedPlanCookie planId={plan.status === 'ACTIVE' ? plan.id : null} />
-      <div className="pcal-layout">
-        <PlanSidebar planId={plan.id} active="overview" />
+      <div className={`pcal-layout${sidebarCollapsed ? ' pcal-layout-sidebar-collapsed' : ''}`}>
+        <PlanSidebar
+          planId={plan.id}
+          active="overview"
+          collapsed={sidebarCollapsed}
+          onToggleCollapse={() => setSidebarCollapsed((prev) => !prev)}
+        />
 
         <section className="pcal-main">
           {/* Header */}
