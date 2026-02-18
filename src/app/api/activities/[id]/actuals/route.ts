@@ -154,10 +154,18 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (derivedPace) {
     finalActualPace = derivedPace;
   }
+  const shouldMarkCompleted = !activity.completed
+    && (actualDistance.provided || actualDuration.provided || hasField(body, 'actualPace'));
 
   const updated = await prisma.planActivity.update({
     where: { id: activity.id },
     data: {
+      ...(shouldMarkCompleted
+        ? {
+            completed: true,
+            completedAt: new Date()
+          }
+        : {}),
       actualDistance: resolvedActualDistance,
       actualDuration: actualDuration.provided ? actualDuration.value : undefined,
       actualPace: finalActualPace,
