@@ -347,6 +347,8 @@ export default function PlanDetailPage() {
   const params = useParams<{ id: string }>();
   const searchParams = useSearchParams();
   const planId = Array.isArray(params?.id) ? params?.id[0] : params?.id;
+  const aiPromptParam = searchParams?.get('aiPrompt')?.trim() || '';
+  const aiPromptSource = searchParams?.get('aiSource')?.trim() || '';
   const [plan, setPlan] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedActivity, setSelectedActivity] = useState<any>(null);
@@ -392,6 +394,14 @@ export default function PlanDetailPage() {
       setIsEditMode(true);
     }
   }, [searchParams]);
+
+  useEffect(() => {
+    if (!aiPromptParam) return;
+    setAiTrainerInput((prev) => (prev.trim().length > 0 ? prev : aiPromptParam));
+    if (aiPromptSource) {
+      setAiTrainerStatus(`Adjustment prompt loaded from ${aiPromptSource}. Review and generate recommendation.`);
+    }
+  }, [aiPromptParam, aiPromptSource]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
@@ -1202,7 +1212,7 @@ export default function PlanDetailPage() {
             <div className="pcal-ai-thread">
               {aiChatTurns.length === 0 && (
                 <p className="pcal-ai-trainer-status">
-                  Start with one clear request, for example: "Move this week’s long run to Sunday and rebalance recovery."
+                  Start with one clear request, for example: &quot;Move this week’s long run to Sunday and rebalance recovery.&quot;
                 </p>
               )}
               {aiChatTurns.map((turn) => (

@@ -251,6 +251,9 @@ export default function PlanReviewPage() {
   const params = useParams<{ id: string }>();
   const searchParams = useSearchParams();
   const planId = Array.isArray(params?.id) ? params?.id[0] : params?.id;
+  const arrivedFromUpload = searchParams?.get('fromUpload') === '1';
+  const parseWarningMsg = searchParams?.get('parseWarningMsg');
+  const hasParseWarning = searchParams?.get('parseWarning') === '1';
 
   const [plan, setPlan] = useState<ReviewPlan | null>(null);
   const [loading, setLoading] = useState(true);
@@ -363,18 +366,27 @@ export default function PlanReviewPage() {
   }, []);
 
   useEffect(() => {
-    if (!searchParams) return;
-    const parseWarningMsg = searchParams.get('parseWarningMsg');
-    if (searchParams.get('parseWarning') === '1') {
+    if (hasParseWarning) {
       setNotice(
         parseWarningMsg
           ? `Automatic parse could not complete (${parseWarningMsg}). Fallback mode is active: review and add activities manually.`
           : 'Automatic parse could not complete. Fallback mode is active: review and add activities manually.'
       );
-    } else if (searchParams.get('fromUpload') === '1') {
+    } else if (arrivedFromUpload) {
       setNotice('Upload completed. Review and adjust activities before publishing.');
     }
-  }, [searchParams]);
+  }, [arrivedFromUpload, hasParseWarning, parseWarningMsg]);
+
+  const goToDashboard = useCallback(() => {
+    if (!planId) {
+      window.location.href = '/dashboard';
+      return;
+    }
+    const params = new URLSearchParams();
+    params.set('activated', '1');
+    params.set('plan', planId);
+    window.location.href = `/dashboard?${params.toString()}`;
+  }, [planId]);
 
   const loadPaceSources = useCallback(async () => {
     if (!planId) return;
@@ -749,17 +761,17 @@ export default function PlanReviewPage() {
         setNotice('Plan published. Continue to dashboard or personalize run paces now.');
         return;
       }
-      window.location.href = '/dashboard';
+      goToDashboard();
     } catch (publishError: unknown) {
       setError(publishError instanceof Error ? publishError.message : 'Publish failed');
     } finally {
       setPublishing(false);
     }
-  }, [autosaveState.busy, planId]);
+  }, [autosaveState.busy, goToDashboard, planId]);
 
   const skipPacePersonalization = useCallback(() => {
-    window.location.href = '/dashboard';
-  }, []);
+    goToDashboard();
+  }, [goToDashboard]);
 
   const setManualField = useCallback((id: string, field: keyof ManualResultDraft, value: string) => {
     setManualResults((prev) => prev.map((item) => (
@@ -864,7 +876,7 @@ export default function PlanReviewPage() {
       }
       const personalized = Number(data?.summary?.updated || 0);
       setNotice(`Pace targets personalized for ${personalized} run activities.`);
-      window.location.href = '/dashboard';
+      goToDashboard();
     } catch {
       setPaceModalError('Failed to personalize paces.');
     } finally {
@@ -883,7 +895,8 @@ export default function PlanReviewPage() {
     raceDistanceValue,
     savePaceProfile,
     selectedStravaId,
-    targetGoalTimeSec
+    targetGoalTimeSec,
+    goToDashboard
   ]);
 
   if (loading) {
@@ -911,12 +924,17 @@ export default function PlanReviewPage() {
       <section className="review-page-card review-hero">
         <div className="review-hero-head">
           <div>
-            <h1>Review and Edit Before Publish</h1>
+            <h1>{arrivedFromUpload ? 'Confirm Parse and Activate Plan' : 'Review and Edit Before Publish'}</h1>
             <p>Plan: <strong>{plan.name}</strong> · Status: <strong>{plan.status}</strong></p>
+            {arrivedFromUpload && (
+              <p className="review-publish-copy">
+                You are one step away. Confirm this parsed plan, then activate it to unlock Today and Training Log.
+              </p>
+            )}
           </div>
           <div className="review-hero-actions">
             <button className="cta" onClick={handlePublish} disabled={publishing || autosaveState.busy}>
-              {publishing ? 'Publishing…' : 'Publish Plan'}
+              {publishing ? (arrivedFromUpload ? 'Activating…' : 'Publishing…') : (arrivedFromUpload ? 'Activate Plan' : 'Publish Plan')}
             </button>
             <Link className="cta secondary" href={`/plans/${plan.id}`}>View Plan</Link>
           </div>

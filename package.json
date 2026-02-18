@@ -8,6 +8,12 @@
     "postinstall": "prisma generate",
     "start": "next start",
     "lint": "eslint",
+    "audit:auth": "node scripts/save-audit-auth-state.mjs",
+    "audit:auth:onboarding": "node scripts/save-audit-auth-state.mjs --profile onboarding-athlete --start-path /sign-up",
+    "audit:screens": "node scripts/capture-audit.mjs",
+    "audit:screens:onboarding": "node scripts/capture-audit.mjs --profile onboarding-athlete --out-dir artifacts/audit-shots-onboarding",
+    "audit:screens:manual": "node scripts/capture-audit-manual.mjs",
+    "audit:screens:manual:onboarding": "node scripts/capture-audit-manual.mjs --profile onboarding-athlete --out-dir artifacts/audit-shots-onboarding-manual",
     "test:parser-i18n": "node scripts/test-plan-parser-i18n.mjs",
     "make-admin": "node scripts/promote-admin.js",
     "backfill-plan-dates": "node scripts/backfill-plan-dates.js"
@@ -27,6 +33,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
+    "playwright": "^1.58.2",
     "prisma": "^5.22.0",
     "typescript": "^5"
   }

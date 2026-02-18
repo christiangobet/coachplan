@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { currentUser } from "@clerk/nextjs/server";
+import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { getDayDateFromWeekStart, resolveWeekBounds } from "@/lib/plan-dates";
 import { ensureUserFromAuth } from "@/lib/user-sync";
@@ -33,6 +34,7 @@ const ACTIVITY_TYPE_ABBR: Record<string, string> = {
 };
 type DashboardSearchParams = {
   plan?: string;
+  activated?: string;
 };
 
 function getIsoDay(date: Date) {
@@ -61,6 +63,13 @@ function toDateKey(date: Date) {
   const mm = String(date.getMonth() + 1).padStart(2, "0");
   const dd = String(date.getDate()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
+}
+
+function buildAiAdjustHref(planId: string, prompt: string) {
+  const params = new URLSearchParams();
+  params.set("aiPrompt", prompt);
+  params.set("aiSource", "dashboard");
+  return `/plans/${planId}?${params.toString()}#ai-trainer`;
 }
 
 function buildPlannedMetricParts(activity: any, viewerUnits: DistanceUnit) {
@@ -98,6 +107,7 @@ export default async function DashboardPage({
 
   const params = (await searchParams) || {};
   const requestedPlanId = typeof params.plan === "string" ? params.plan : "";
+  const showActivatedNotice = params.activated === "1";
   const cookieStore = await cookies();
   const cookiePlanId = cookieStore.get(SELECTED_PLAN_COOKIE)?.value || "";
 
@@ -111,6 +121,14 @@ export default async function DashboardPage({
 
   const totalPlanCount = await prisma.trainingPlan.count({
     where: { athleteId: user.id, isTemplate: false }
+  });
+  const latestDraftPlan = await prisma.trainingPlan.findFirst({
+    where: { athleteId: user.id, isTemplate: false, status: "DRAFT" },
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      name: true
+    }
   });
 
   const plans = await prisma.trainingPlan.findMany({
@@ -144,8 +162,8 @@ export default async function DashboardPage({
               <h3>Get a plan in</h3>
               <p>Upload a PDF or start from a template.</p>
               <div className="dash-empty-actions">
-                <a className="dash-empty-cta" href="/upload">Upload PDF</a>
-                <a className="dash-empty-cta-outline" href="/plans">Templates</a>
+                <Link className="dash-empty-cta" href="/upload">Upload PDF</Link>
+                <Link className="dash-empty-cta-outline" href="/plans">Templates</Link>
               </div>
             </div>
             <div className="dash-empty-step">
@@ -153,7 +171,7 @@ export default async function DashboardPage({
               <h3>Review and publish</h3>
               <p>Confirm parsed workouts and activate the plan.</p>
               <div className="dash-empty-actions">
-                <a className="dash-empty-cta-outline" href="/plans">Open Plans Management</a>
+                <Link className="dash-empty-cta-outline" href="/plans">Open Plans Management</Link>
               </div>
             </div>
             <div className="dash-empty-step">
@@ -166,8 +184,8 @@ export default async function DashboardPage({
               <h3>Coach and integrations</h3>
               <p>Connect Strava or invite a coach after your plan is running.</p>
               <div className="dash-empty-actions">
-                <a className="dash-empty-cta-outline" href="/profile">Profile setup</a>
-                <a className="dash-empty-cta-outline" href="/coach">Coach workspace</a>
+                <Link className="dash-empty-cta-outline" href="/profile">Profile setup</Link>
+                <Link className="dash-empty-cta-outline" href="/coach">Coach workspace</Link>
               </div>
             </div>
           </div>
@@ -184,16 +202,34 @@ export default async function DashboardPage({
         <div className="dash-empty-content">
           <div className="dash-empty-hero">
             <h1>Welcome, {name}</h1>
-            <p>You have plans, but none are active yet.</p>
+            <p>Your plan upload is in. Next step: activate one plan to start today guidance.</p>
           </div>
           <div className="dash-empty-steps">
             <div className="dash-empty-step">
               <span className="dash-empty-num">01</span>
-              <h3>Activate a plan</h3>
-              <p>Open plan management and set one draft plan to Active.</p>
+              <h3>Review parsed plan</h3>
+              <p>
+                {latestDraftPlan
+                  ? `Open "${latestDraftPlan.name}" and confirm the parse.`
+                  : "Open plans and verify your uploaded draft."}
+              </p>
               <div className="dash-empty-actions">
-                <a className="dash-empty-cta" href="/plans">Plans Management</a>
-                <a className="dash-empty-cta-outline" href="/upload">Upload Plan</a>
+                <Link
+                  className="dash-empty-cta"
+                  href={latestDraftPlan ? `/plans/${latestDraftPlan.id}/review?fromUpload=1` : "/plans"}
+                >
+                  Open Review
+                </Link>
+                <Link className="dash-empty-cta-outline" href="/plans">Plans Management</Link>
+              </div>
+            </div>
+            <div className="dash-empty-step">
+              <span className="dash-empty-num">02</span>
+              <h3>Activate and launch</h3>
+              <p>Publish one plan. Dashboard and Training Log unlock once a plan is active.</p>
+              <div className="dash-empty-actions">
+                <Link className="dash-empty-cta-outline" href="/dashboard">Refresh Dashboard</Link>
+                <Link className="dash-empty-cta-outline" href="/upload">Upload Another PDF</Link>
               </div>
             </div>
           </div>
@@ -488,6 +524,13 @@ export default async function DashboardPage({
             <p>{greeting}, {name} · {dateStr}</p>
           </div>
 
+          {showActivatedNotice && (
+            <div className="dash-card dash-activation-banner">
+              <strong>Plan activated.</strong>
+              <span>Your training schedule is now live. Use Adjust whenever life changes the plan.</span>
+            </div>
+          )}
+
           <div className="dash-card dash-plan-summary">
             <div className="dash-greeting-meta">
               <div className="dash-greeting-meta-item">
@@ -559,6 +602,21 @@ export default async function DashboardPage({
                   </a>
                 </>
               )}
+            </div>
+            <div className="dash-adjust-actions">
+              <span className="dash-adjust-label">Need to adapt?</span>
+              <a className="dash-adjust-link" href={buildAiAdjustHref(activePlan.id, "I missed today's workout. Rebalance this week safely.")}>
+                I missed this
+              </a>
+              <a className="dash-adjust-link" href={buildAiAdjustHref(activePlan.id, "I'm feeling extra tired this week. Suggest a lower-load adjustment.")}>
+                Low energy
+              </a>
+              <a className="dash-adjust-link" href={buildAiAdjustHref(activePlan.id, "I'm traveling and have limited training time. Adjust this week.")}>
+                Traveling
+              </a>
+              <a className="dash-adjust-link" href={buildAiAdjustHref(activePlan.id, "Replace today's workout with an equivalent option.")}>
+                Swap workout
+              </a>
             </div>
           </div>
 

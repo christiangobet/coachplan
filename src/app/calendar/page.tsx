@@ -181,6 +181,13 @@ function buildCalendarHref(month: Date, planId: string, selectedDate?: string | 
   return `/calendar?${params.toString()}`;
 }
 
+function buildAdjustHref(planId: string, prompt: string) {
+  const params = new URLSearchParams();
+  params.set("aiPrompt", prompt);
+  params.set("aiSource", "calendar");
+  return `/plans/${planId}?${params.toString()}#ai-trainer`;
+}
+
 function formatClock(value: Date) {
   return value.toLocaleTimeString("en-US", {
     hour: "numeric",
@@ -856,6 +863,18 @@ export default async function CalendarPage({
               <Link href="/dashboard">Go to Today</Link>
               <Link href="/strava">Open Import Strava</Link>
               <Link href="/progress">View Progress</Link>
+              <Link href={buildAdjustHref(selectedPlan.id, "I missed this workout. Rebalance this week safely.")}>
+                Adjust: I missed this
+              </Link>
+              <Link href={buildAdjustHref(selectedPlan.id, "I am unusually tired this week. Suggest a lower-load adjustment.")}>
+                Adjust: Low energy
+              </Link>
+              <Link href={buildAdjustHref(selectedPlan.id, "I'm traveling and time-constrained this week. Adjust the plan.")}>
+                Adjust: Traveling
+              </Link>
+              <Link href={buildAdjustHref(selectedPlan.id, "Replace today's workout with an equivalent session.")}>
+                Adjust: Swap workout
+              </Link>
             </div>
           </div>
         </aside>

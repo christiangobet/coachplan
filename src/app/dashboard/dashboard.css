@@ -524,6 +524,56 @@
   border-color: var(--d-text-mid);
 }
 
+.dash-activation-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--d-space-2);
+  border: 1px solid rgba(15, 138, 71, 0.35);
+  background: rgba(15, 138, 71, 0.08);
+}
+
+.dash-activation-banner strong {
+  font-size: 14px;
+  color: #0f8a47;
+}
+
+.dash-activation-banner span {
+  font-size: 13px;
+  color: var(--d-text-mid);
+}
+
+.dash-adjust-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.dash-adjust-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--d-text-mid);
+  margin-right: 2px;
+}
+
+.dash-adjust-link {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #1d4ed8;
+  border: 1px solid rgba(29, 78, 216, 0.24);
+  background: rgba(29, 78, 216, 0.08);
+}
+
+.dash-adjust-link:hover {
+  background: rgba(29, 78, 216, 0.14);
+}
+
 /* Complete + actuals modal */
 .dash-actuals-overlay {
   position: fixed;
