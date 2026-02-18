@@ -949,22 +949,54 @@
     flex: 1;
   }
 
-  .cal-weekdays {
-    display: none;
+  .cal-month-card {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .cal-weekdays,
+  .cal-grid {
+    min-width: 700px;
   }
 
   .cal-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(7, minmax(92px, 1fr));
   }
 }
 
 @media (max-width: 640px) {
+  .cal-weekdays,
   .cal-grid {
-    grid-template-columns: 1fr;
+    min-width: 630px;
   }
 
   .cal-day {
-    min-height: 110px;
+    min-height: 104px;
+    padding: 6px;
+  }
+
+  .cal-day-list {
+    gap: 4px;
+  }
+
+  .cal-activity {
+    padding: 4px;
+  }
+
+  .cal-activity em {
+    display: none;
+  }
+
+  .cal-activity-code {
+    min-width: 26px;
+    height: 16px;
+    font-size: 9px;
+    padding: 0 5px;
+  }
+
+  .cal-more,
+  .cal-log-pill {
+    font-size: 9px;
   }
 
   .cal-activity-log-grid {
@@ -986,5 +1018,47 @@
     border-radius: 10px;
     background: #fff;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
+  }
+}
+
+@media (max-width: 480px) {
+  .cal-weekdays,
+  .cal-grid {
+    min-width: 560px;
+  }
+
+  .cal-day {
+    min-height: 92px;
+    padding: 5px;
+    border-radius: 10px;
+  }
+
+  .cal-day.today::after {
+    display: none;
+  }
+
+  .cal-day-number {
+    min-width: 20px;
+    min-height: 20px;
+    font-size: 12px;
+  }
+
+  .cal-day-check {
+    width: 14px;
+    height: 14px;
+    font-size: 9px;
+  }
+
+  .cal-plan-dot {
+    width: 6px;
+    height: 6px;
+  }
+
+  .cal-day-list {
+    gap: 3px;
+  }
+
+  .cal-log-pill {
+    padding: 1px 6px;
   }
 }
