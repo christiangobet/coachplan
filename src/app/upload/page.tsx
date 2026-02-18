@@ -75,6 +75,8 @@ export default function UploadPage() {
 
   const stage = UPLOAD_STAGES[Math.min(stageIndex, UPLOAD_STAGES.length - 1)];
   const stageProgress = Math.min(92, Math.round(((stageIndex + 1) / UPLOAD_STAGES.length) * 100));
+  const isFinalStage = stageIndex >= UPLOAD_STAGES.length - 1;
+  const progressLabel = isFinalStage ? 'Final step' : `${stageProgress}%`;
   const timeHint = useMemo(() => {
     if (elapsedSec >= 90) return 'Still working. Complex PDFs can take up to 4 minutes.';
     if (elapsedSec >= 30) return 'Still parsing. Thanks for waiting.';
@@ -91,9 +93,10 @@ export default function UploadPage() {
     setMessage('');
     setUploadStartedAt(Date.now());
     setElapsedSec(0);
+    let timeoutId: number | null = null;
     try {
       const controller = new AbortController();
-      const timeoutId = window.setTimeout(() => controller.abort(), 240000);
+      timeoutId = window.setTimeout(() => controller.abort(), 240000);
       const form = new FormData();
       form.append('name', name.trim());
       if (raceName.trim()) form.append('raceName', raceName.trim());
@@ -105,7 +108,6 @@ export default function UploadPage() {
         body: form,
         signal: controller.signal
       });
-      window.clearTimeout(timeoutId);
       const data = await res.json();
       if (!res.ok) {
         const details = data?.details ? `: ${data.details}` : '';
@@ -130,6 +132,7 @@ export default function UploadPage() {
         setMessage(err instanceof Error ? err.message : 'Upload failed');
       }
     } finally {
+      if (timeoutId) window.clearTimeout(timeoutId);
       setStatus('idle');
       setUploadStartedAt(null);
     }
@@ -227,15 +230,23 @@ export default function UploadPage() {
                   <div className="upload-progress-card" role="status" aria-live="polite">
                     <div className="upload-progress-head">
                       <strong>{stage.title}</strong>
-                      <span>{stageProgress}%</span>
+                      <span>{progressLabel}</span>
                     </div>
                     <p>{stage.detail}</p>
                     <div className="upload-progress-track" aria-hidden="true">
-                      <div className="upload-progress-fill" style={{ width: `${stageProgress}%` }} />
+                      <div
+                        className={`upload-progress-fill${isFinalStage ? ' indeterminate' : ''}`}
+                        style={isFinalStage ? undefined : { width: `${stageProgress}%` }}
+                      />
                     </div>
                     <p className="upload-progress-meta">
                       Elapsed: {elapsedSec}s · {timeHint}
                     </p>
+                    {isFinalStage && (
+                      <p className="upload-progress-meta upload-progress-meta-strong">
+                        Waiting for parser response. Keep this tab open.
+                      </p>
+                    )}
                   </div>
                 )}
                 {message && (

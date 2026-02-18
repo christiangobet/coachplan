@@ -237,8 +237,30 @@
   transition: width 320ms ease;
 }
 
+.upload-progress-fill.indeterminate {
+  width: 42%;
+  animation: uploadProgressIndeterminate 1.25s ease-in-out infinite;
+}
+
 .upload-progress-meta {
   color: #64748b;
+}
+
+.upload-progress-meta-strong {
+  font-weight: 700;
+  color: #475569;
+}
+
+@keyframes uploadProgressIndeterminate {
+  0% {
+    transform: translateX(-80%);
+  }
+  50% {
+    transform: translateX(85%);
+  }
+  100% {
+    transform: translateX(-80%);
+  }
 }
 
 @media (max-width: 768px) {
