@@ -273,7 +273,6 @@ export default function PlanReviewPage() {
   const [deletingActivityId, setDeletingActivityId] = useState<string | null>(null);
   const [viewerUnits, setViewerUnits] = useState<DistanceUnitValue>('MILES');
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
-  const [showPacePersonalization, setShowPacePersonalization] = useState(false);
   const [paceFormOpen, setPaceFormOpen] = useState(false);
   const [paceStep, setPaceStep] = useState<1 | 2>(1);
   const [paceApplying, setPaceApplying] = useState(false);
@@ -366,6 +365,10 @@ export default function PlanReviewPage() {
   }, []);
 
   useEffect(() => {
+    if (plan?.status === 'ACTIVE') {
+      setNotice('Plan published. Continue to Today or personalize run paces now.');
+      return;
+    }
     if (hasParseWarning) {
       setNotice(
         parseWarningMsg
@@ -374,8 +377,10 @@ export default function PlanReviewPage() {
       );
     } else if (arrivedFromUpload) {
       setNotice('Upload completed. Review and adjust activities before publishing.');
+    } else {
+      setNotice(null);
     }
-  }, [arrivedFromUpload, hasParseWarning, parseWarningMsg]);
+  }, [arrivedFromUpload, hasParseWarning, parseWarningMsg, plan?.status]);
 
   const goToDashboard = useCallback(() => {
     if (!planId) {
@@ -418,11 +423,6 @@ export default function PlanReviewPage() {
     }
   }, [planId]);
 
-  useEffect(() => {
-    if (!showPacePersonalization || !paceFormOpen) return;
-    void loadPaceSources();
-  }, [loadPaceSources, paceFormOpen, showPacePersonalization]);
-
   const weeks = useMemo(() => {
     if (!plan?.weeks) return [];
     return [...plan.weeks].sort((a, b) => a.weekIndex - b.weekIndex);
@@ -436,8 +436,9 @@ export default function PlanReviewPage() {
   const summary = useMemo(() => {
     const totalWeeks = plan?.weeks?.length || 0;
     const totalActivities = plan?.activities?.length || 0;
+    const runActivities = (plan?.activities || []).filter((activity) => activity.type === 'RUN').length;
     const unassignedCount = unassigned?.length || 0;
-    return { totalWeeks, totalActivities, unassignedCount };
+    return { totalWeeks, totalActivities, runActivities, unassignedCount };
   }, [plan, unassigned]);
 
   const autosaveState = useMemo(() => {
@@ -451,6 +452,14 @@ export default function PlanReviewPage() {
         : 'Changes save automatically';
     return { busy, label };
   }, [lastSavedAt, queuedActivityIds, queuedDayIds, savingActivityIds, savingDayIds]);
+  const isActivated = plan.status === 'ACTIVE';
+  const effectiveRunCount = Math.max(paceRunCount, summary.runActivities);
+  const showPaceCta = effectiveRunCount > 0;
+
+  useEffect(() => {
+    if (!paceFormOpen || !isActivated || !showPaceCta) return;
+    void loadPaceSources();
+  }, [isActivated, loadPaceSources, paceFormOpen, showPaceCta]);
 
   const raceDistanceValue = Number(raceDistanceKm);
 
@@ -753,7 +762,6 @@ export default function PlanReviewPage() {
       setPlan((prev) => (prev ? { ...prev, status: 'ACTIVE' } : prev));
       setPaceRunCount(runCount);
       if (runCount > 0) {
-        setShowPacePersonalization(true);
         setPaceFormOpen(false);
         setPaceStep(1);
         setPaceSource('TARGET_TIME');
@@ -768,10 +776,6 @@ export default function PlanReviewPage() {
       setPublishing(false);
     }
   }, [autosaveState.busy, goToDashboard, planId]);
-
-  const skipPacePersonalization = useCallback(() => {
-    goToDashboard();
-  }, [goToDashboard]);
 
   const setManualField = useCallback((id: string, field: keyof ManualResultDraft, value: string) => {
     setManualResults((prev) => prev.map((item) => (
@@ -921,22 +925,57 @@ export default function PlanReviewPage() {
 
   return (
     <main className="review-page-shell">
-      <section className="review-page-card review-hero">
+      <section className={`review-page-card review-hero${isActivated ? ' review-hero-live' : ''}`}>
         <div className="review-hero-head">
           <div>
-            <h1>{arrivedFromUpload ? 'Confirm Parse and Activate Plan' : 'Review and Edit Before Publish'}</h1>
-            <p>Plan: <strong>{plan.name}</strong> · Status: <strong>{plan.status}</strong></p>
-            {arrivedFromUpload && (
+            <h1>
+              {isActivated
+                ? 'Plan is live'
+                : (arrivedFromUpload ? 'Confirm Parse and Activate Plan' : 'Review and Edit Before Publish')}
+            </h1>
+            <p>
+              Plan: <strong>{plan.name}</strong>
+              {!isActivated && <> · Status: <strong>{plan.status}</strong></>}
+            </p>
+            {!isActivated && arrivedFromUpload && (
               <p className="review-publish-copy">
                 You are one step away. Confirm this parsed plan, then activate it to unlock Today and Training Log.
               </p>
             )}
+            {isActivated && (
+              <p className="review-publish-copy">
+                Your training plan is active. Open Today to start logging, and personalize pace targets when ready.
+              </p>
+            )}
           </div>
           <div className="review-hero-actions">
-            <button className="cta" onClick={handlePublish} disabled={publishing || autosaveState.busy}>
-              {publishing ? (arrivedFromUpload ? 'Activating…' : 'Publishing…') : (arrivedFromUpload ? 'Activate Plan' : 'Publish Plan')}
-            </button>
-            <Link className="cta secondary" href={`/plans/${plan.id}`}>View Plan</Link>
+            {isActivated ? (
+              <>
+                <button className="cta" type="button" onClick={goToDashboard}>
+                  Go to Today
+                </button>
+                {showPaceCta && (
+                  <button
+                    className="cta secondary"
+                    type="button"
+                    onClick={() => {
+                      setPaceFormOpen((prev) => !prev);
+                      setPaceStep(1);
+                      setPaceModalError(null);
+                    }}
+                  >
+                    {paceFormOpen ? 'Hide Pace Setup' : 'Personalize Paces (Optional)'}
+                  </button>
+                )}
+              </>
+            ) : (
+              <>
+                <button className="cta" onClick={handlePublish} disabled={publishing || autosaveState.busy}>
+                  {publishing ? (arrivedFromUpload ? 'Activating…' : 'Publishing…') : (arrivedFromUpload ? 'Activate Plan' : 'Publish Plan')}
+                </button>
+                <Link className="cta secondary" href={`/plans/${plan.id}`}>View Plan</Link>
+              </>
+            )}
           </div>
         </div>
 
@@ -950,15 +989,17 @@ export default function PlanReviewPage() {
             <span>Activities</span>
           </div>
           <div>
-            <strong>{summary.unassignedCount}</strong>
-            <span>Unassigned days</span>
+            <strong>{summary.runActivities}</strong>
+            <span>Run activities</span>
           </div>
         </div>
 
-        <p className={`review-autosave ${autosaveState.busy ? 'busy' : ''}`}>{autosaveState.label}</p>
+        {!isActivated && (
+          <p className={`review-autosave ${autosaveState.busy ? 'busy' : ''}`}>{autosaveState.label}</p>
+        )}
 
         {notice && <p className="review-notice">{notice}</p>}
-        {hasParseWarning && (
+        {!isActivated && hasParseWarning && (
           <div className="review-fallback-panel">
             <div className="review-fallback-copy">
               <h3>Parse needs manual confirmation</h3>
@@ -981,38 +1022,31 @@ export default function PlanReviewPage() {
         {error && <p className="review-error">{error}</p>}
       </section>
 
-      {showPacePersonalization && (
+      {isActivated && showPaceCta && (
         <section className="review-page-card review-publish-panel">
           <div className="review-publish-head">
             <div>
-              <h3>Plan Published</h3>
+              <h3>Optional: personalize run paces</h3>
               <p>
-                {paceRunCount > 0
-                  ? `Your plan is active with ${paceRunCount} run activities.`
-                  : 'Your plan is now active.'}
+                Generate personalized targets for {effectiveRunCount} run activities using target time, past results, or Strava.
               </p>
             </div>
             <div className="review-publish-actions">
-              <button className="cta" type="button" onClick={skipPacePersonalization}>
-                Go to Today
+              <button
+                className="cta secondary"
+                type="button"
+                onClick={() => {
+                  setPaceFormOpen((prev) => !prev);
+                  setPaceStep(1);
+                  setPaceModalError(null);
+                }}
+              >
+                {paceFormOpen ? 'Hide Pace Setup' : 'Open Pace Setup'}
               </button>
-              {paceRunCount > 0 && (
-                <button
-                  className="cta secondary"
-                  type="button"
-                  onClick={() => {
-                    setPaceFormOpen((prev) => !prev);
-                    setPaceStep(1);
-                    setPaceModalError(null);
-                  }}
-                >
-                  {paceFormOpen ? 'Hide Pace Setup' : 'Personalize Paces'}
-                </button>
-              )}
             </div>
           </div>
 
-          {paceRunCount > 0 && paceFormOpen && (
+          {paceFormOpen && (
             <div className="review-publish-body">
               <p className="review-publish-copy">
                 {paceStep === 1
@@ -1265,8 +1299,17 @@ export default function PlanReviewPage() {
               {paceModalError && <p className="review-error">{paceModalError}</p>}
 
               <div className="review-modal-actions">
-                <button className="cta secondary" type="button" onClick={skipPacePersonalization} disabled={paceApplying}>
-                  Skip for now
+                <button
+                  className="cta secondary"
+                  type="button"
+                  onClick={() => {
+                    setPaceFormOpen(false);
+                    setPaceStep(1);
+                    setPaceModalError(null);
+                  }}
+                  disabled={paceApplying}
+                >
+                  Not now
                 </button>
                 {paceStep === 2 && (
                   <button className="cta secondary" type="button" onClick={() => setPaceStep(1)} disabled={paceApplying}>
@@ -1293,7 +1336,7 @@ export default function PlanReviewPage() {
         </section>
       )}
 
-      {!showPacePersonalization && (
+      {!isActivated && (
         <section className="review-week-grid" id="review-week-grid">
           {weeks.map((week) => {
           const days = sortDays(week.days || []);
@@ -1504,7 +1547,7 @@ export default function PlanReviewPage() {
         </section>
       )}
 
-      {!showPacePersonalization && unassigned.length > 0 && (
+      {!isActivated && unassigned.length > 0 && (
         <section className="review-page-card">
           <h3>Unassigned Days</h3>
           <div className="review-unassigned-list">

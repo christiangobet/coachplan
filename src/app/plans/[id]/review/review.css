@@ -21,6 +21,11 @@
   gap: 10px;
 }
 
+.review-hero-live {
+  border-color: #cde7d9;
+  background: linear-gradient(180deg, #f8fff9 0%, #ffffff 100%);
+}
+
 .review-hero-head {
   display: flex;
   align-items: flex-start;
