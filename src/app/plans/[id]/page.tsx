@@ -78,6 +78,18 @@ function toLocalDateKey(date: Date) {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+function formatLocalDateKey(value: string | null | undefined) {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const parsed = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric'
+  });
+}
+
 function locateActivityInPlan(plan: any, activityId: string) {
   if (!plan?.weeks || !activityId) return null;
   const sortedWeeks = [...plan.weeks].sort((a: any, b: any) => a.weekIndex - b.weekIndex);
@@ -949,6 +961,9 @@ export default function PlanDetailPage() {
   const selectedPaceDisplay = selectedActivity
     ? formatDisplayPace(selectedActivity.paceTarget, selectedActivity.distanceUnit)
     : null;
+  const selectedActivityDateLabel = selectedActivity
+    ? formatLocalDateKey(selectedActivity.dayDateISO)
+    : null;
 
   return (
     <main className="pcal">
@@ -1414,6 +1429,11 @@ export default function PlanDetailPage() {
                 {formatType(selectedActivity.type)}
               </span>
               <h2 className="pcal-modal-title">{selectedActivity.title}</h2>
+              {selectedActivityDateLabel && (
+                <p className="pcal-modal-day-context">
+                  {selectedActivityDateLabel}
+                </p>
+              )}
 
               {/* Stats row */}
               <div className="pcal-modal-stats">
@@ -1481,7 +1501,12 @@ export default function PlanDetailPage() {
 
               {/* Actuals */}
               <div className="pcal-modal-section">
-                <h3 className="pcal-modal-section-title">Actuals</h3>
+                <div className="pcal-modal-section-head">
+                  <h3 className="pcal-modal-section-title">Actuals</h3>
+                  {selectedActivityDateLabel && (
+                    <span className="pcal-modal-day-chip">{selectedActivityDateLabel}</span>
+                  )}
+                </div>
                 <div className="pcal-modal-actuals-form">
                   <label>
                     Distance ({viewerUnitLabel})
