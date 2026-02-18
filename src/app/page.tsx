@@ -46,7 +46,7 @@ export default async function Home() {
           </p>
           <div className={styles.ctas}>
             <Link className={styles.ctaPrimary} href="/sign-in">Sign in</Link>
-            <Link className={styles.ctaSecondary} href="/plans">Explore plans</Link>
+            <Link className={styles.ctaSecondary} href="/plans">Open Plans Management</Link>
           </div>
           <div className={styles.metrics}>
             <div className={styles.metric}>

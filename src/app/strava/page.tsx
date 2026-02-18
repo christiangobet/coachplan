@@ -72,7 +72,7 @@ export default async function StravaPage({
             </div>
             <div className="strava-links">
               <Link className="dash-connect-btn" href={appendPlanQueryToHref("/calendar", selectedPlanId)}>
-                Open Calendar
+                Open Training Log
               </Link>
               <Link className="dash-connect-btn" href={appendPlanQueryToHref("/progress", selectedPlanId)}>
                 Open Progress

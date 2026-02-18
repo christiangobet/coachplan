@@ -153,7 +153,7 @@ export default async function DashboardPage({
               <h3>Review and publish</h3>
               <p>Confirm parsed workouts and activate the plan.</p>
               <div className="dash-empty-actions">
-                <a className="dash-empty-cta-outline" href="/plans">Open plans</a>
+                <a className="dash-empty-cta-outline" href="/plans">Open Plans Management</a>
               </div>
             </div>
             <div className="dash-empty-step">
@@ -192,7 +192,7 @@ export default async function DashboardPage({
               <h3>Activate a plan</h3>
               <p>Open plan management and set one draft plan to Active.</p>
               <div className="dash-empty-actions">
-                <a className="dash-empty-cta" href="/plans">Manage Plans</a>
+                <a className="dash-empty-cta" href="/plans">Plans Management</a>
                 <a className="dash-empty-cta-outline" href="/upload">Upload Plan</a>
               </div>
             </div>

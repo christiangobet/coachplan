@@ -918,7 +918,7 @@ export default function PlanReviewPage() {
             <button className="cta" onClick={handlePublish} disabled={publishing || autosaveState.busy}>
               {publishing ? 'Publishing…' : 'Publish Plan'}
             </button>
-            <Link className="cta secondary" href={`/plans/${plan.id}`}>View Calendar</Link>
+            <Link className="cta secondary" href={`/plans/${plan.id}`}>View Plan</Link>
           </div>
         </div>
 

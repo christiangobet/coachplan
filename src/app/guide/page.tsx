@@ -12,7 +12,7 @@ const playbooks = [
     description: "Open Today, complete the workout, and log actual distance, duration, and pace.",
     actions: [
       { label: "Go to Today", href: "/dashboard" },
-      { label: "View Calendar", href: "/calendar" }
+      { label: "View Training Log", href: "/calendar" }
     ]
   },
   {
@@ -20,7 +20,7 @@ const playbooks = [
     description: "Upload your plan, review parsing output, and align week timing to race day.",
     actions: [
       { label: "Upload Plan", href: "/upload" },
-      { label: "Manage Plans", href: "/plans" }
+      { label: "Plans Management", href: "/plans" }
     ]
   },
   {
@@ -87,9 +87,9 @@ export default async function GuidePage() {
             </div>
             <div className="guide-links">
               <Link href="/dashboard">Today dashboard</Link>
-              <Link href="/calendar">Workout calendar</Link>
+              <Link href="/calendar">Workout training log</Link>
               <Link href="/progress">Progress metrics</Link>
-              <Link href="/plans">Plans library</Link>
+              <Link href="/plans">Plans Management</Link>
               <Link href="/upload">Upload new PDF</Link>
             </div>
           </div>

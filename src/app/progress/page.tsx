@@ -629,8 +629,8 @@ export default async function ProgressPage({
             </div>
             <div className="prog-actions">
               <Link href="/dashboard">Open dashboard</Link>
-              <Link href={`/plans/${selectedPlan.id}`}>Open plan calendar</Link>
-              <Link href="/calendar">Review calendar</Link>
+              <Link href={`/plans/${selectedPlan.id}`}>Open plan detail</Link>
+              <Link href="/calendar">Review training log</Link>
               <Link href="/profile">Manage profile & units</Link>
             </div>
           </div>

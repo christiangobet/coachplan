@@ -442,7 +442,7 @@ export default function ProfilePage() {
             </div>
             <div className="athlete-link-list">
               <Link href="/dashboard">Go to today dashboard</Link>
-              <Link href="/plans">Open plans library</Link>
+              <Link href="/plans">Open Plans Management</Link>
               <Link href="/upload">Upload a new plan</Link>
             </div>
           </div>

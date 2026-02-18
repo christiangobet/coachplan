@@ -751,6 +751,7 @@
   border-radius: 10px;
   background: #fff;
   padding: 10px;
+  overflow: hidden;
 }
 
 .cal-day-detail-item.done {
@@ -773,6 +774,8 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
+  flex: 1;
 }
 
 .cal-day-detail-type-pill {
@@ -801,6 +804,10 @@
 .cal-day-detail-title strong {
   font-size: 13px;
   line-height: 1.3;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .cal-day-detail-title span {
@@ -817,6 +824,8 @@
 .cal-day-detail-meta span {
   font-size: 12px;
   color: var(--d-text-mid);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .cal-activity-log {
@@ -836,6 +845,7 @@
 .cal-activity-log label {
   display: grid;
   gap: 4px;
+  min-width: 0;
   font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
@@ -845,6 +855,11 @@
 
 .cal-activity-log input {
   height: 34px;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+  appearance: none;
+  -webkit-appearance: none;
   border: 1px solid var(--d-border);
   border-radius: 8px;
   background: #fff;
@@ -859,8 +874,34 @@
   box-shadow: 0 0 0 2px rgba(252, 76, 2, 0.12);
 }
 
+.cal-activity-log input[type="number"]::-webkit-outer-spin-button,
+.cal-activity-log input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.cal-activity-log input[type="number"] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
 .cal-activity-log-pace {
   grid-column: 1 / -1;
+}
+
+.cal-activity-log-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--d-text-mid);
+}
+
+.cal-day-detail-warning {
+  color: #b42318 !important;
+  font-weight: 600;
+}
+
+.cal-day-details-card .cal-activity-log-grid {
+  grid-template-columns: 1fr;
 }
 
 .cal-activity-log-actions {

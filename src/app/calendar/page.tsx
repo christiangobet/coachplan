@@ -58,6 +58,7 @@ type DayExternalLog = {
   name: string;
   sportType: string | null;
   startTime: Date;
+  startTimeLabel: string | null;
   distanceM: number | null;
   durationSec: number | null;
   avgHeartRate: number | null;
@@ -117,6 +118,10 @@ function dateKey(value: Date) {
   const mm = String(value.getMonth() + 1).padStart(2, "0");
   const dd = String(value.getDate()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
+}
+
+function dateKeyUtc(value: Date) {
+  return value.toISOString().slice(0, 10);
 }
 
 function monthParam(value: Date) {
@@ -183,6 +188,18 @@ function formatClock(value: Date) {
   });
 }
 
+function formatClockFromIsoText(value: string | null | undefined) {
+  if (!value) return null;
+  const match = value.match(/T(\d{2}):(\d{2})/);
+  if (!match) return null;
+  const rawHour = Number(match[1]);
+  const minute = match[2];
+  if (!Number.isInteger(rawHour) || rawHour < 0 || rawHour > 23) return null;
+  const suffix = rawHour >= 12 ? "PM" : "AM";
+  const hour12 = rawHour % 12 || 12;
+  return `${hour12}:${minute} ${suffix}`;
+}
+
 function formatDurationMinutes(value: number | null | undefined) {
   if (!value || value <= 0) return "—";
   return `${value} min`;
@@ -223,15 +240,49 @@ function formatPace(value: string | null | undefined, viewerUnit: DistanceUnit, 
   return convertPaceForDisplay(value, viewerUnit, sourceUnit || viewerUnit) || "—";
 }
 
-function getExternalDateKey(raw: unknown, startTime: Date) {
+function parseExternalRawDateKey(raw: unknown) {
   if (raw && typeof raw === "object") {
     const payload = raw as Record<string, unknown>;
-    const local = payload.start_date_local;
-    if (typeof local === "string" && /^\d{4}-\d{2}-\d{2}/.test(local)) {
-      return local.slice(0, 10);
+    const localStart = payload.start_date_local;
+    if (typeof localStart === "string" && /^\d{4}-\d{2}-\d{2}/.test(localStart)) {
+      return localStart.slice(0, 10);
+    }
+    const utcStart = payload.start_date;
+    if (typeof utcStart === "string" && /^\d{4}-\d{2}-\d{2}/.test(utcStart)) {
+      return utcStart.slice(0, 10);
     }
   }
-  return dateKey(startTime);
+  return null;
+}
+
+function parseExternalRawTimeLabel(raw: unknown) {
+  if (raw && typeof raw === "object") {
+    const payload = raw as Record<string, unknown>;
+    const localStart = typeof payload.start_date_local === "string" ? payload.start_date_local : null;
+    const utcStart = typeof payload.start_date === "string" ? payload.start_date : null;
+    return formatClockFromIsoText(localStart) || formatClockFromIsoText(utcStart);
+  }
+  return null;
+}
+
+function getExternalDateKey(raw: unknown, startTime: Date) {
+  return parseExternalRawDateKey(raw) || dateKeyUtc(startTime);
+}
+
+function parseSyncedSourceDate(notes: string | null | undefined) {
+  if (!notes) return null;
+  const match = notes.match(/\[Synced from [^\]]* activity (\d{4}-\d{2}-\d{2})\]/i);
+  return match?.[1] || null;
+}
+
+function stripSyncTagLine(notes: string | null | undefined) {
+  if (!notes) return null;
+  const next = notes
+    .split("\n")
+    .filter((line) => !/\[Synced from /i.test(line))
+    .join("\n")
+    .trim();
+  return next || null;
 }
 
 export default async function CalendarPage({
@@ -436,6 +487,7 @@ export default async function CalendarPage({
       name: item.name || item.sportType || "External activity",
       sportType: item.sportType,
       startTime: item.startTime,
+      startTimeLabel: parseExternalRawTimeLabel(item.raw),
       distanceM: item.distanceM ?? null,
       durationSec: item.durationSec ?? null,
       avgHeartRate: item.avgHeartRate ?? null,
@@ -496,7 +548,7 @@ export default async function CalendarPage({
             <div className="cal-header-actions">
               <div className="cal-view-toggle" aria-label="Plan views">
                 <Link className="cal-view-pill" href={`/plans/${selectedPlan.id}`}>Plan</Link>
-                <span className="cal-view-pill active">Calendar</span>
+                <span className="cal-view-pill active">Training Log</span>
                 <Link className="cal-view-pill" href="/strava">Import Strava</Link>
               </div>
               <div className="cal-month-nav">
@@ -605,7 +657,7 @@ export default async function CalendarPage({
           <div className="dash-card cal-type-glossary" aria-label="Activity type glossary">
             <div className="cal-type-glossary-head">
               <strong>Type Glossary</strong>
-              <span>Abbreviations used in calendar cells</span>
+              <span>Abbreviations used in training log cells</span>
             </div>
             <div className="cal-type-glossary-list">
               {TYPE_GLOSSARY_ORDER.map((type) => (
@@ -623,7 +675,7 @@ export default async function CalendarPage({
             <div className="dash-card-header">
               <span className="dash-card-title">Day Details</span>
             </div>
-            <p className="cal-day-detail-hint">Click any day card in the calendar to update this panel.</p>
+            <p className="cal-day-detail-hint">Click any day card in the training log to update this panel.</p>
             <div className="cal-day-detail-header">
               <strong>
                 {selectedDate.toLocaleDateString("en-US", {
@@ -653,31 +705,47 @@ export default async function CalendarPage({
               )}
               {selectedPlanActivities.map((activity) => (
                 <div key={activity.id} className={`cal-day-detail-item${activity.completed ? " done" : ""}`}>
-                  <div className="cal-day-detail-title">
-                    <span className="cal-day-detail-main">
-                      <span
-                        className={`cal-day-detail-type-pill type-${activity.type.toLowerCase()}`}
-                        title={formatType(activity.type)}
-                      >
-                        {getTypeAbbr(activity.type)}
-                      </span>
-                      <strong>{activity.title}</strong>
-                    </span>
-                    <span>{formatType(activity.type)}</span>
-                  </div>
-                  <div className="cal-day-detail-meta">
-                    <span>
-                      Planned: {formatDistance(activity.distance, activity.distanceUnit, viewerUnits)} · {formatDurationMinutes(activity.duration)}
-                    </span>
-                    <span>Status: {activity.completed ? "Done" : "Planned"}</span>
-                    {(activity.actualDistance || activity.actualDuration || activity.actualPace) && (
-                      <span>
-                        Logged: {formatDistance(activity.actualDistance, activity.distanceUnit, viewerUnits)} · {formatDurationMinutes(activity.actualDuration)}
-                        {activity.actualPace ? ` · ${formatPace(activity.actualPace, viewerUnits, activity.distanceUnit)}` : ""}
-                      </span>
-                    )}
-                    {activity.notes && <span>Notes: {activity.notes}</span>}
-                  </div>
+                  {(() => {
+                    const syncedSourceDate = parseSyncedSourceDate(activity.notes);
+                    const hasSyncedDateMismatch = Boolean(
+                      syncedSourceDate && syncedSourceDate !== selectedDateKey
+                    );
+                    const manualNotes = stripSyncTagLine(activity.notes);
+                    return (
+                      <>
+                        <div className="cal-day-detail-title">
+                          <span className="cal-day-detail-main">
+                            <span
+                              className={`cal-day-detail-type-pill type-${activity.type.toLowerCase()}`}
+                              title={formatType(activity.type)}
+                            >
+                              {getTypeAbbr(activity.type)}
+                            </span>
+                            <strong>{activity.title}</strong>
+                          </span>
+                        </div>
+                        <div className="cal-day-detail-meta">
+                          <span>
+                            Planned: {formatDistance(activity.distance, activity.distanceUnit, viewerUnits)} · {formatDurationMinutes(activity.duration)}
+                          </span>
+                          <span>Status: {activity.completed ? "Done" : "Planned"}</span>
+                          {!hasSyncedDateMismatch && (activity.actualDistance || activity.actualDuration || activity.actualPace) && (
+                            <span>
+                              Logged: {formatDistance(activity.actualDistance, activity.distanceUnit, viewerUnits)} · {formatDurationMinutes(activity.actualDuration)}
+                              {activity.actualPace ? ` · ${formatPace(activity.actualPace, viewerUnits, activity.distanceUnit)}` : ""}
+                            </span>
+                          )}
+                          {hasSyncedDateMismatch && syncedSourceDate && (
+                            <span className="cal-day-detail-warning">
+                              Synced activity date {syncedSourceDate} does not match this card day.
+                            </span>
+                          )}
+                          {!hasSyncedDateMismatch && activity.notes && <span>Notes: {activity.notes}</span>}
+                          {hasSyncedDateMismatch && manualNotes && <span>Notes: {manualNotes}</span>}
+                        </div>
+                      </>
+                    );
+                  })()}
                   <CalendarActivityLogger
                     activity={activity}
                     viewerUnit={viewerUnits}
@@ -699,7 +767,7 @@ export default async function CalendarPage({
                 <div key={log.id} className="cal-day-detail-item log">
                   <div className="cal-day-detail-title">
                     <strong>{log.name}</strong>
-                    <span>{log.provider} · {formatClock(log.startTime)}</span>
+                    <span>{log.provider} · {log.startTimeLabel || formatClock(log.startTime)}</span>
                   </div>
                   <div className="cal-day-detail-meta">
                     <span>{formatDistanceMeters(log.distanceM, viewerUnits)} · {formatDurationSeconds(log.durationSec)}</span>

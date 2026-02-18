@@ -16,7 +16,7 @@ function navItemsForRole(role: UserRole): TopNavItem[] {
   if (role === "COACH") {
     return [
       { href: "/coach", label: "Coach" },
-      { href: "/plans", label: "Plans" },
+      { href: "/plans", label: "Plans Management" },
       { href: "/profile", label: "Profile" }
     ];
   }
@@ -27,10 +27,10 @@ function navItemsForRole(role: UserRole): TopNavItem[] {
 
   return [
     { href: "/dashboard", label: "Dashboard" },
-    { href: "/calendar", label: "Calendar" },
+    { href: "/calendar", label: "Training Log" },
     { href: "/strava", label: "Import Strava" },
     { href: "/progress", label: "Progress" },
-    { href: "/plans", label: "Plans" },
+    { href: "/plans", label: "Plans Management" },
     { href: "/upload", label: "Upload" },
     { href: "/profile", label: "Profile" }
   ];

@@ -39,6 +39,7 @@ type StravaActivity = {
 
 type PlannedActivityCandidate = {
   id: string;
+  dateKey: string;
   type: ActivityType;
   distanceM: number | null;
   durationSec: number | null;
@@ -98,13 +99,6 @@ function toDateKey(date: Date) {
   const mm = String(date.getMonth() + 1).padStart(2, '0');
   const dd = String(date.getDate()).padStart(2, '0');
   return `${yyyy}-${mm}-${dd}`;
-}
-
-function shiftDateKey(key: string, deltaDays: number) {
-  const parsed = new Date(`${key}T00:00:00Z`);
-  if (Number.isNaN(parsed.getTime())) return null;
-  parsed.setUTCDate(parsed.getUTCDate() + deltaDays);
-  return parsed.toISOString().slice(0, 10);
 }
 
 function parseIsoDate(value: string | null | undefined): Date | null {
@@ -380,6 +374,7 @@ async function buildPlanActivityCandidates(
         const durationSec = activity.duration ? activity.duration * 60 : null;
         row.push({
           id: activity.id,
+          dateKey: key,
           type: activity.type,
           distanceM,
           durationSec,
@@ -451,25 +446,13 @@ function buildDateBuckets(
   const buckets: DateMatchBucket[] = [];
   const sameDay = byDate.get(primaryDateKey) || [];
   if (sameDay.length) buckets.push({ candidates: sameDay, dayPenalty: 0 });
-
-  const prev = shiftDateKey(primaryDateKey, -1);
-  if (prev) {
-    const prevCandidates = byDate.get(prev) || [];
-    if (prevCandidates.length) buckets.push({ candidates: prevCandidates, dayPenalty: 22 });
-  }
-
-  const next = shiftDateKey(primaryDateKey, 1);
-  if (next) {
-    const nextCandidates = byDate.get(next) || [];
-    if (nextCandidates.length) buckets.push({ candidates: nextCandidates, dayPenalty: 22 });
-  }
-
   return buckets;
 }
 
 async function applyMatchedExternalToWorkout(args: {
   planActivityId: string;
   startTime: Date;
+  sourceDateKey?: string | null;
   distanceM: number | null;
   durationSec: number | null;
   userUnits: Units | null;
@@ -497,7 +480,9 @@ async function applyMatchedExternalToWorkout(args: {
   if (args.avgHeartRate) stats.push(`avg HR ${args.avgHeartRate} bpm`);
   if (args.calories) stats.push(`${Math.round(args.calories)} cal`);
 
-  const sourceActivityDate = args.startTime.toISOString().slice(0, 10);
+  const sourceActivityDate = args.sourceDateKey && /^\d{4}-\d{2}-\d{2}$/.test(args.sourceDateKey)
+    ? args.sourceDateKey
+    : args.startTime.toISOString().slice(0, 10);
   const syncTag = `[Synced from ${sourceLabel} activity ${sourceActivityDate}]`;
   const detailTag = stats.length ? `${syncTag} ${stats.join(' · ')}` : syncTag;
   const cleanedNotes = (workout.notes || '')
@@ -741,16 +726,20 @@ export async function syncStravaActivitiesForUser(args: {
     const existingMatchedCandidate = existing?.matchedPlanActivityId
       ? plannedCandidates.byId.get(existing.matchedPlanActivityId) ?? null
       : null;
+    const canReuseExistingMatch = Boolean(
+      existingMatchedCandidate && dateKey && existingMatchedCandidate.dateKey === dateKey
+    );
 
     const dateBuckets = buildDateBuckets(plannedCandidates.byDate, dateKey);
-    const matchedCandidate = existingMatchedCandidate
-      || pickBestPlannedActivityFromBuckets(
-        dateBuckets,
-        actualType,
-        durationSec,
-        distanceM,
-        usedPlanActivityIds
-      );
+    const matchedCandidate = canReuseExistingMatch
+      ? existingMatchedCandidate
+      : pickBestPlannedActivityFromBuckets(
+          dateBuckets,
+          actualType,
+          durationSec,
+          distanceM,
+          usedPlanActivityIds
+        );
 
     const matchedPlanActivityId = matchedCandidate?.id || null;
     if (matchedPlanActivityId) usedPlanActivityIds.add(matchedPlanActivityId);
@@ -809,6 +798,7 @@ export async function syncStravaActivitiesForUser(args: {
       const updated = await applyMatchedExternalToWorkout({
         planActivityId: record.matchedPlanActivityId,
         startTime,
+        sourceDateKey: dateKey,
         distanceM,
         durationSec,
         userUnits: user?.units ?? null,
@@ -1097,6 +1087,7 @@ export async function importStravaDayForUser(args: {
       const updated = await applyMatchedExternalToWorkout({
         planActivityId: matchedPlanActivityId,
         startTime: activity.startTime,
+        sourceDateKey: getExternalActivityDateKey(activity),
         distanceM,
         durationSec,
         avgHeartRate: activity.avgHeartRate,

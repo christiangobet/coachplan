@@ -175,7 +175,7 @@ export default function PlansPage() {
           <div className="dash-card plans-shell-header">
             <div className="plans-header">
               <div>
-                <h1>Plans</h1>
+                <h1>Plans Management</h1>
                 <p className="muted">Your training plans and available templates.</p>
               </div>
               <Link className="cta" href="/upload">Upload Plan</Link>

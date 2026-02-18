@@ -10,7 +10,7 @@ const ITEMS: Array<{
   href: (planId: string) => string;
 }> = [
   { id: 'overview', label: 'Overview', shortLabel: 'OV', href: (planId) => `/plans/${planId}#plan-overview` },
-  { id: 'calendar', label: 'Calendar', shortLabel: 'CAL', href: (planId) => `/calendar?plan=${planId}` },
+  { id: 'calendar', label: 'Training Log', shortLabel: 'LOG', href: (planId) => `/calendar?plan=${planId}` },
   { id: 'ai', label: 'AI Trainer', shortLabel: 'AI', href: (planId) => `/plans/${planId}#ai-trainer` },
   { id: 'strava', label: 'Import Strava', shortLabel: 'IMP', href: (planId) => appendPlanQueryToHref('/strava', planId) },
   { id: 'progress', label: 'Progress', shortLabel: 'PRG', href: (planId) => `/progress?plan=${planId}` }
@@ -56,9 +56,9 @@ export default function PlanSidebar({
         ))}
       </nav>
       <div className="pcal-side-footer">
-        <Link className="pcal-side-link back" href="/plans" title="Back to Plans">
+        <Link className="pcal-side-link back" href="/plans" title="Back to Plans Management">
           <span className="pcal-side-link-short">BK</span>
-          <span className="pcal-side-link-label">Back to Plans</span>
+          <span className="pcal-side-link-label">Back to Plans Management</span>
         </Link>
       </div>
     </aside>

@@ -5,7 +5,7 @@ import { getCurrentUserRoleContext, getRoleLabel } from '@/lib/user-roles';
 import './select-role.css';
 
 const roleDescriptions: Record<UserRole, string> = {
-  ATHLETE: 'Track daily workouts, view your plan calendar, and monitor progress.',
+  ATHLETE: 'Track daily workouts, use your training log, and monitor progress.',
   COACH: 'Create templates, assign plans, and manage your athletes.',
   ADMIN: 'Access platform-level operations and oversight metrics.'
 };
