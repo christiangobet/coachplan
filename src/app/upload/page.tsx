@@ -2,10 +2,38 @@
 
 import Link from 'next/link';
 import { SignedIn, SignedOut, useUser } from '@clerk/nextjs';
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import AthleteSidebar from '@/components/AthleteSidebar';
 import '../dashboard/dashboard.css';
 import '../athlete-pages.css';
+
+const UPLOAD_STAGES = [
+  {
+    afterMs: 0,
+    title: 'Uploading plan file',
+    detail: 'Sending your PDF securely.'
+  },
+  {
+    afterMs: 4000,
+    title: 'Extracting workout text',
+    detail: 'Reading page structure and week labels.'
+  },
+  {
+    afterMs: 12000,
+    title: 'Structuring weeks and sessions',
+    detail: 'Converting text into training days and activities.'
+  },
+  {
+    afterMs: 22000,
+    title: 'Scoring parse quality',
+    detail: 'Checking confidence and preparing fallback if needed.'
+  },
+  {
+    afterMs: 35000,
+    title: 'Finalizing review workspace',
+    detail: 'Preparing editable plan details before activation.'
+  }
+] as const;
 
 export default function UploadPage() {
   const { user } = useUser();
@@ -15,9 +43,43 @@ export default function UploadPage() {
   const [file, setFile] = useState<File | null>(null);
   const [status, setStatus] = useState<'idle' | 'saving' | 'error'>('idle');
   const [message, setMessage] = useState('');
+  const [uploadStartedAt, setUploadStartedAt] = useState<number | null>(null);
+  const [elapsedSec, setElapsedSec] = useState(0);
+  const [stageIndex, setStageIndex] = useState(0);
 
   const deriveNameFromFile = (filename: string) =>
     filename.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim();
+
+  useEffect(() => {
+    if (status !== 'saving') {
+      setStageIndex(0);
+      return;
+    }
+    setStageIndex(0);
+    const timers = UPLOAD_STAGES.slice(1).map((stage, index) => (
+      window.setTimeout(() => setStageIndex(index + 1), stage.afterMs)
+    ));
+    return () => timers.forEach((timer) => window.clearTimeout(timer));
+  }, [status]);
+
+  useEffect(() => {
+    if (status !== 'saving' || !uploadStartedAt) {
+      setElapsedSec(0);
+      return;
+    }
+    const interval = window.setInterval(() => {
+      setElapsedSec(Math.floor((Date.now() - uploadStartedAt) / 1000));
+    }, 1000);
+    return () => window.clearInterval(interval);
+  }, [status, uploadStartedAt]);
+
+  const stage = UPLOAD_STAGES[Math.min(stageIndex, UPLOAD_STAGES.length - 1)];
+  const stageProgress = Math.min(92, Math.round(((stageIndex + 1) / UPLOAD_STAGES.length) * 100));
+  const timeHint = useMemo(() => {
+    if (elapsedSec >= 90) return 'Still working. Complex PDFs can take up to 4 minutes.';
+    if (elapsedSec >= 30) return 'Still parsing. Thanks for waiting.';
+    return 'Most plans finish in under a minute.';
+  }, [elapsedSec]);
 
   const handleSubmit = async () => {
     if (!name.trim()) {
@@ -27,6 +89,8 @@ export default function UploadPage() {
     }
     setStatus('saving');
     setMessage('');
+    setUploadStartedAt(Date.now());
+    setElapsedSec(0);
     try {
       const controller = new AbortController();
       const timeoutId = window.setTimeout(() => controller.abort(), 240000);
@@ -67,6 +131,7 @@ export default function UploadPage() {
       }
     } finally {
       setStatus('idle');
+      setUploadStartedAt(null);
     }
   };
 
@@ -158,8 +223,25 @@ export default function UploadPage() {
                     {status === 'saving' ? 'Uploading…' : 'Upload and parse'}
                   </button>
                 </div>
+                {status === 'saving' && (
+                  <div className="upload-progress-card" role="status" aria-live="polite">
+                    <div className="upload-progress-head">
+                      <strong>{stage.title}</strong>
+                      <span>{stageProgress}%</span>
+                    </div>
+                    <p>{stage.detail}</p>
+                    <div className="upload-progress-track" aria-hidden="true">
+                      <div className="upload-progress-fill" style={{ width: `${stageProgress}%` }} />
+                    </div>
+                    <p className="upload-progress-meta">
+                      Elapsed: {elapsedSec}s · {timeHint}
+                    </p>
+                  </div>
+                )}
                 {message && (
-                  <p className="muted" style={{ marginTop: 10, color: '#b42318' }}>{message}</p>
+                  <p className="muted" style={{ marginTop: 10, color: status === 'error' ? '#b42318' : undefined }}>
+                    {message}
+                  </p>
                 )}
               </div>
 

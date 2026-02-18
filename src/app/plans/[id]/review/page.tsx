@@ -958,6 +958,26 @@ export default function PlanReviewPage() {
         <p className={`review-autosave ${autosaveState.busy ? 'busy' : ''}`}>{autosaveState.label}</p>
 
         {notice && <p className="review-notice">{notice}</p>}
+        {hasParseWarning && (
+          <div className="review-fallback-panel">
+            <div className="review-fallback-copy">
+              <h3>Parse needs manual confirmation</h3>
+              <p>
+                We created a safe draft so you can keep moving. Choose one recovery path below, then activate once the plan looks right.
+              </p>
+              {parseWarningMsg && (
+                <p className="review-fallback-detail">
+                  Parser warning: {parseWarningMsg}
+                </p>
+              )}
+            </div>
+            <div className="review-fallback-actions">
+              <Link className="cta secondary" href="/upload">Re-upload PDF</Link>
+              <a className="cta secondary" href="#review-week-grid">Continue Manual Review</a>
+              <Link className="cta secondary" href="/plans">Use Template Instead</Link>
+            </div>
+          </div>
+        )}
         {error && <p className="review-error">{error}</p>}
       </section>
 
@@ -1274,7 +1294,7 @@ export default function PlanReviewPage() {
       )}
 
       {!showPacePersonalization && (
-        <section className="review-week-grid">
+        <section className="review-week-grid" id="review-week-grid">
           {weeks.map((week) => {
           const days = sortDays(week.days || []);
           const weekActivityCount = days.reduce((sum, day) => sum + (day.activities?.length || 0), 0);
