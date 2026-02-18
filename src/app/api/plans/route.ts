@@ -36,6 +36,7 @@ function parseBoundedNumber(value: string | undefined, fallback: number, min: nu
 
 const UPLOAD_PARSE_TIMEOUT_MS = parseTimeoutMs(process.env.UPLOAD_PARSE_TIMEOUT_MS, 120000);
 const AI_WEEK_PARSE_TIMEOUT_MS = parseTimeoutMs(process.env.AI_WEEK_PARSE_TIMEOUT_MS, 8000);
+const AI_WEEK_PARSE_TOTAL_BUDGET_MS = parseTimeoutMs(process.env.AI_WEEK_PARSE_TOTAL_BUDGET_MS, 30000);
 const AI_WEEK_PARSE_MODEL = process.env.AI_WEEK_PARSE_MODEL?.trim() || undefined;
 const AI_WEEK_PARSE_MAX_DAYS = Math.floor(
   parseBoundedNumber(process.env.AI_WEEK_PARSE_MAX_DAYS, 3, 1, DAY_KEYS.length)
@@ -1610,6 +1611,8 @@ export async function POST(req: Request) {
       }
 
       const activities: any[] = [];
+      const aiEnrichmentStartedAt = Date.now();
+      let aiBudgetExceeded = false;
       for (let i = 0; i < weeks.length; i += 1) {
         const week = weeks[i];
         const weekId = weekRecords[i]?.id;
@@ -1624,7 +1627,10 @@ export async function POST(req: Request) {
         const aiTargetSet = new Set(aiTargetDayKeys);
 
         let aiWeek = null;
-        if (ENABLE_AI_WEEK_PARSE && aiTargetDayKeys.length > 0) {
+        const aiElapsedMs = Date.now() - aiEnrichmentStartedAt;
+        const aiBudgetRemainingMs = Math.max(0, AI_WEEK_PARSE_TOTAL_BUDGET_MS - aiElapsedMs);
+        const canRunAiWeekParse = ENABLE_AI_WEEK_PARSE && aiTargetDayKeys.length > 0 && aiBudgetRemainingMs >= 1200;
+        if (canRunAiWeekParse) {
           const aiInputDays: Record<string, string> = {};
           DAY_KEYS.forEach((key) => {
             aiInputDays[key] = aiTargetSet.has(key) ? rawDays[key] : '';
@@ -1638,12 +1644,14 @@ export async function POST(req: Request) {
                 legend: parsed?.glossary?.note || undefined,
                 model: AI_WEEK_PARSE_MODEL
               }),
-              AI_WEEK_PARSE_TIMEOUT_MS,
+              Math.min(AI_WEEK_PARSE_TIMEOUT_MS, aiBudgetRemainingMs),
               'AI week parse timed out.'
             );
           } catch {
             aiWeek = null;
           }
+        } else if (ENABLE_AI_WEEK_PARSE && aiTargetDayKeys.length > 0) {
+          aiBudgetExceeded = true;
         }
 
         for (let d = 0; d < DAY_KEYS.length; d += 1) {
@@ -1708,6 +1716,12 @@ export async function POST(req: Request) {
         if (!Number.isNaN(parsedRaceDate.getTime())) {
           await alignWeeksToRaceDate(plan.id, weeks.length, parsedRaceDate);
         }
+      }
+      if (aiBudgetExceeded) {
+        console.info('AI enrichment budget reached; remaining weeks will use deterministic parser only.', {
+          planId: plan.id,
+          budgetMs: AI_WEEK_PARSE_TOTAL_BUDGET_MS
+        });
       }
     } catch (error) {
       const reason = (error as Error).message || 'Unknown parser error';

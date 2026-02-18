@@ -34,6 +34,7 @@ const UPLOAD_STAGES = [
     detail: 'Preparing editable plan details before activation.'
   }
 ] as const;
+const CLIENT_UPLOAD_TIMEOUT_MS = 295000;
 
 export default function UploadPage() {
   const { user } = useUser();
@@ -96,7 +97,7 @@ export default function UploadPage() {
     let timeoutId: number | null = null;
     try {
       const controller = new AbortController();
-      timeoutId = window.setTimeout(() => controller.abort(), 240000);
+      timeoutId = window.setTimeout(() => controller.abort(), CLIENT_UPLOAD_TIMEOUT_MS);
       const form = new FormData();
       form.append('name', name.trim());
       if (raceName.trim()) form.append('raceName', raceName.trim());
@@ -113,6 +114,9 @@ export default function UploadPage() {
         const details = data?.details ? `: ${data.details}` : '';
         throw new Error((data?.error || 'Upload failed') + details);
       }
+      if (!data?.plan?.id) {
+        throw new Error('Upload finished but no plan was returned. Please retry.');
+      }
       if (data?.plan?.id) {
         if (file) {
           const parseWarning = typeof data?.parseWarning === 'string' ? data.parseWarning : '';
@@ -127,7 +131,7 @@ export default function UploadPage() {
     } catch (err: unknown) {
       setStatus('error');
       if (err instanceof DOMException && err.name === 'AbortError') {
-        setMessage('Upload timed out. Please try again or use a smaller/simpler PDF.');
+        setMessage('Upload timed out before parsing finished. Please retry or use a smaller/simpler PDF.');
       } else {
         setMessage(err instanceof Error ? err.message : 'Upload failed');
       }
