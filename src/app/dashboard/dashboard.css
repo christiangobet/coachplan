@@ -1731,6 +1731,21 @@
   border-bottom: 1px solid var(--d-border-light);
 }
 
+.dash-status-item-link {
+  text-decoration: none;
+  color: var(--d-text-mid);
+}
+
+.dash-status-item-link:hover {
+  color: var(--d-text);
+}
+
+.dash-status-item-link:focus-visible {
+  outline: 2px solid rgba(255, 95, 31, 0.28);
+  outline-offset: 2px;
+  border-radius: 10px;
+}
+
 .dash-status-item:last-child {
   border-bottom: none;
   padding-bottom: 0;
@@ -1749,6 +1764,13 @@
 
 .dash-status-dot.warn {
   background: var(--d-amber);
+}
+
+.dash-status-cta {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--d-primary);
 }
 
 /* ══════════════════════════

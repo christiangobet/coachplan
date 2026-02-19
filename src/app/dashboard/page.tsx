@@ -65,6 +65,20 @@ function toDateKey(date: Date) {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+function toMonthParam(date: Date) {
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  return `${yyyy}-${mm}`;
+}
+
+function buildCalendarDayDetailsHref(planId: string, date: Date) {
+  const params = new URLSearchParams();
+  params.set("plan", planId);
+  params.set("month", toMonthParam(date));
+  params.set("date", toDateKey(date));
+  return `/calendar?${params.toString()}#day-details-card`;
+}
+
 function buildAiAdjustHref(planId: string, prompt: string) {
   const params = new URLSearchParams();
   params.set("aiPrompt", prompt);
@@ -410,7 +424,8 @@ export default async function DashboardPage({
         if (day.dayOfWeek < isoDay) {
           return {
             alert: true,
-            text: `${dayLabel} · Pending`
+            text: `${dayLabel} · Pending`,
+            href: dayDate ? buildCalendarDayDetailsHref(activePlan.id, dayDate) : null
           };
         }
         return {
@@ -422,7 +437,7 @@ export default async function DashboardPage({
     : [];
 
   /* Status items */
-  const statusItems: { alert: boolean; text: string }[] = [];
+  const statusItems: { alert: boolean; text: string; href?: string | null }[] = [];
   for (const day of weekDays) {
     if (isDayMarkedDone(day.notes)) {
       statusItems.push({
@@ -439,7 +454,12 @@ export default async function DashboardPage({
           statusItems.push({ alert: false, text: "Rest day logged" });
         }
       } else if (isTodayInsideCurrentWeek && day.dayOfWeek < isoDay) {
-        statusItems.push({ alert: true, text: `Missed ${a.title || a.type}` });
+        const dayDate = getDayDateFromWeekStart(currentBounds?.startDate || null, day.dayOfWeek);
+        statusItems.push({
+          alert: true,
+          text: `Missed ${a.title || a.type}`,
+          href: dayDate ? buildCalendarDayDetailsHref(activePlan.id, dayDate) : null
+        });
       }
     }
   }
@@ -498,6 +518,7 @@ export default async function DashboardPage({
     : 0;
   const keyCompletionPct = keyActivities.length > 0 ? Math.round((completedKey / keyActivities.length) * 100) : 0;
   const weeklyTimePct = Math.min(100, Math.round((totalMinutes / 420) * 100));
+  const statusFeedItems = recentDayStatuses.length > 0 ? recentDayStatuses : statusItems.slice(0, 5);
 
   return (
     <main className="dash">
@@ -759,14 +780,22 @@ export default async function DashboardPage({
           {/* Status feed */}
           <div className="dash-card">
             <div className="dash-card-header">
-              <span className="dash-card-title">Status</span>
+              <span className="dash-card-title">Training Log Status</span>
             </div>
             <div className="dash-status-feed">
-              {(recentDayStatuses.length > 0 ? recentDayStatuses : statusItems.slice(0, 5)).map((s, i) => (
-                <div className="dash-status-item" key={i}>
-                  <span className={`dash-status-dot ${s.alert ? "warn" : "ok"}`} />
-                  {s.text}
-                </div>
+              {statusFeedItems.map((s, i) => (
+                s.href ? (
+                  <Link className="dash-status-item dash-status-item-link" href={s.href} key={i}>
+                    <span className={`dash-status-dot ${s.alert ? "warn" : "ok"}`} />
+                    <span>{s.text}</span>
+                    <span className="dash-status-cta">Log now</span>
+                  </Link>
+                ) : (
+                  <div className="dash-status-item" key={i}>
+                    <span className={`dash-status-dot ${s.alert ? "warn" : "ok"}`} />
+                    <span>{s.text}</span>
+                  </div>
+                )
               ))}
             </div>
           </div>
