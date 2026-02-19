@@ -1656,72 +1656,72 @@
   width: 20px;
   height: 20px;
   border-radius: 999px;
-  color: #fff;
+  overflow: hidden;
   flex-shrink: 0;
-  background: radial-gradient(circle at 28% 24%, #ffa93a 0%, #ff9800 48%, #f57c00 100%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 1px 2px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
 }
 
-.ext-sport-icon-glyph {
-  width: 12px;
-  height: 12px;
-  filter: drop-shadow(0 0.4px 0 rgba(0, 0, 0, 0.2));
+.ext-sport-icon-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 .ext-sport-run {
-  background: radial-gradient(circle at 28% 24%, #ffa93a 0%, #ff9800 48%, #f57c00 100%);
+  background: #fff;
 }
 
 .ext-sport-trail-run {
-  background: radial-gradient(circle at 28% 24%, #ffa93a 0%, #ff9800 48%, #f57c00 100%);
+  background: #fff;
 }
 
 .ext-sport-walk {
-  background: radial-gradient(circle at 28% 24%, #ffa93a 0%, #ff9800 48%, #f57c00 100%);
+  background: #fff;
 }
 
 .ext-sport-strength {
-  background: radial-gradient(circle at 28% 24%, #ffa93a 0%, #ff9800 48%, #f57c00 100%);
+  background: #fff;
 }
 
 .ext-sport-cross-train {
-  background: radial-gradient(circle at 28% 24%, #ffa93a 0%, #ff9800 48%, #f57c00 100%);
+  background: #fff;
 }
 
 .ext-sport-rest {
-  background: radial-gradient(circle at 28% 24%, #ffa93a 0%, #ff9800 48%, #f57c00 100%);
+  background: #fff;
 }
 
 .ext-sport-bike {
-  background: radial-gradient(circle at 28% 24%, #ffa93a 0%, #ff9800 48%, #f57c00 100%);
+  background: #fff;
 }
 
 .ext-sport-swim {
-  background: radial-gradient(circle at 28% 24%, #ffa93a 0%, #ff9800 48%, #f57c00 100%);
+  background: #fff;
 }
 
 .ext-sport-hike {
-  background: radial-gradient(circle at 28% 24%, #ffa93a 0%, #ff9800 48%, #f57c00 100%);
+  background: #fff;
 }
 
 .ext-sport-treadmill-run {
-  background: radial-gradient(circle at 28% 24%, #ffa93a 0%, #ff9800 48%, #f57c00 100%);
+  background: #fff;
 }
 
 .ext-sport-yoga-mobility {
-  background: radial-gradient(circle at 28% 24%, #ffa93a 0%, #ff9800 48%, #f57c00 100%);
+  background: #fff;
 }
 
 .ext-sport-virtual-ride {
-  background: radial-gradient(circle at 28% 24%, #ffa93a 0%, #ff9800 48%, #f57c00 100%);
+  background: #fff;
 }
 
 .ext-sport-ski {
-  background: radial-gradient(circle at 28% 24%, #ffa93a 0%, #ff9800 48%, #f57c00 100%);
+  background: #fff;
 }
 
 .ext-sport-other {
-  background: radial-gradient(circle at 28% 24%, #ffa93a 0%, #ff9800 48%, #f57c00 100%);
+  background: #fff;
 }
 
 .dash-day-match-note {

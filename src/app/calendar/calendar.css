@@ -581,9 +581,9 @@
   height: 14px;
 }
 
-.cal-strava-icon .ext-sport-icon-glyph {
-  width: 9px;
-  height: 9px;
+.cal-strava-icon .ext-sport-icon-img {
+  width: 100%;
+  height: 100%;
 }
 
 .cal-strava-pill-more {
@@ -866,9 +866,9 @@
   height: 18px;
 }
 
-.cal-day-log-icon .ext-sport-icon-glyph {
-  width: 11px;
-  height: 11px;
+.cal-day-log-icon .ext-sport-icon-img {
+  width: 100%;
+  height: 100%;
 }
 
 .cal-day-detail-title span {
@@ -1066,9 +1066,9 @@
     height: 12px;
   }
 
-  .cal-strava-icon .ext-sport-icon-glyph {
-    width: 8px;
-    height: 8px;
+  .cal-strava-icon .ext-sport-icon-img {
+    width: 100%;
+    height: 100%;
   }
 
   .cal-activity-log-grid {
