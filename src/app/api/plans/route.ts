@@ -10,6 +10,7 @@ import { parseWeekWithAI } from '@/lib/ai-plan-parser';
 import { alignWeeksToRaceDate } from '@/lib/clone-plan';
 import { canonicalizeTableLabel, extractWeekNumber, normalizePlanText } from '@/lib/plan-parser-i18n.mjs';
 import { hasConfiguredAiProvider } from '@/lib/openai';
+import { buildProgramDocumentProfile, type ProgramDocumentProfile } from '@/lib/plan-document-profile';
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { pathToFileURL } from 'url';
 
@@ -46,6 +47,7 @@ const PARSE_MIN_DAY_COVERAGE = parseBoundedNumber(process.env.PARSE_MIN_DAY_COVE
 
 const RUN_SUBTYPES = new Set([
   'tempo',
+  'interval',
   'hills',
   'hill-pyramid',
   'incline-treadmill',
@@ -55,6 +57,7 @@ const RUN_SUBTYPES = new Set([
   'easy-run',
   'training-race',
   'race',
+  'time-trial',
   'fast-finish',
   'lrl',
   'unknown'
@@ -64,6 +67,7 @@ const SUBTYPE_TITLES: Record<string, string> = {
   'lrl': 'Long Run',
   'easy-run': 'Easy Run',
   'tempo': 'Tempo Run',
+  'interval': 'Interval Session',
   'hills': 'Hill Workout',
   'hill-pyramid': 'Hill Pyramid',
   'incline-treadmill': 'Incline Treadmill',
@@ -72,9 +76,12 @@ const SUBTYPE_TITLES: Record<string, string> = {
   'recovery': 'Recovery Run',
   'fast-finish': 'Fast Finish',
   'training-race': 'Training Race',
+  'time-trial': 'Time Trial',
   'race': 'Race',
   'strength': 'Strength',
   'cross-training': 'Cross Training',
+  'mobility': 'Mobility',
+  'yoga': 'Yoga',
   'hike': 'Hike',
 };
 
@@ -135,7 +142,7 @@ type ParseQuality = {
 };
 
 type ParseCandidate = {
-  parser: 'python' | 'node';
+  parser: 'python' | 'node' | 'node-text';
   parsed: ParsedPlanOutput;
   quality: ParseQuality;
 };
@@ -143,6 +150,7 @@ type ParseCandidate = {
 type ParsedPlanOutput = Record<string, unknown> & {
   weeks: ParsedWeekEntry[];
   glossary?: { note?: string | null } & Record<string, unknown>;
+  program_profile?: ProgramDocumentProfile;
   parser?: string;
   parse_debug?: Record<string, unknown>;
   parse_meta?: {
@@ -156,6 +164,13 @@ type ParsedPlanOutput = Record<string, unknown> & {
     }>;
   };
 };
+
+function buildProfileFromParsed(planName: string, parsed: ParsedPlanOutput): ProgramDocumentProfile {
+  return buildProgramDocumentProfile({
+    planName,
+    weeks: Array.isArray(parsed.weeks) ? parsed.weeks : []
+  });
+}
 
 function toParsedDayEntry(value: unknown): ParsedDayEntry {
   if (!value || typeof value !== 'object') return {};
@@ -250,12 +265,17 @@ function scoreParsedResult(parsed: unknown): ParseQuality {
 }
 
 function selectBestParseCandidate(candidates: ParseCandidate[]) {
+  const parserPriority: Record<ParseCandidate['parser'], number> = {
+    python: 0,
+    node: 1,
+    'node-text': 2
+  };
   const sorted = [...candidates].sort((a, b) => {
     if (b.quality.score !== a.quality.score) return b.quality.score - a.quality.score;
     if (b.quality.dayCoverage !== a.quality.dayCoverage) return b.quality.dayCoverage - a.quality.dayCoverage;
     if (b.quality.weekCount !== a.quality.weekCount) return b.quality.weekCount - a.quality.weekCount;
     if (a.parser === b.parser) return 0;
-    return a.parser === 'python' ? -1 : 1;
+    return parserPriority[a.parser] - parserPriority[b.parser];
   });
   return sorted[0];
 }
@@ -537,7 +557,9 @@ function normalizeSubtypeToken(value: string | null | undefined) {
   if (token === 'recovery' || token === 'recovery-run' || token === 'rec') return 'recovery';
   if (token === 'trail' || token === 'trail-run') return 'trail-run';
   if (token === 'fast-finish' || token === 'ff') return 'fast-finish';
-  if (token === 'long-run' || token === 'lr' || token === 'lrl') return 'lrl';
+  if (token === 'long-run' || token === 'longrun' || token === 'lr' || token === 'lrl') return 'lrl';
+  if (token === 'interval' || token === 'intervals') return 'interval';
+  if (token === 'time-trial' || token === 'timetrial') return 'time-trial';
   if (token === 'hills' || token === 'hill') return 'hills';
   if (token === 'hill-pyramid') return 'hill-pyramid';
   if (token === 'incline-treadmill') return 'incline-treadmill';
@@ -579,18 +601,49 @@ function mapActivityType(subtype: string) {
   if (subtype === 'cross-training') return 'CROSS_TRAIN';
   if (subtype === 'rest') return 'REST';
   if (subtype === 'hike') return 'HIKE';
-  if (subtype === 'yoga') return 'OTHER';
+  if (subtype === 'yoga') return 'YOGA';
+  if (subtype === 'mobility') return 'MOBILITY';
   if (RUN_SUBTYPES.has(subtype)) return 'RUN';
   return 'OTHER';
 }
 
 function mapAiTypeToActivityType(type: string | null | undefined) {
-  if (type === 'run') return 'RUN';
-  if (type === 'strength') return 'STRENGTH';
-  if (type === 'cross_train') return 'CROSS_TRAIN';
-  if (type === 'rest') return 'REST';
-  if (type === 'hike') return 'HIKE';
+  const normalized = String(type || '').trim().toLowerCase();
+  if (normalized === 'run') return 'RUN';
+  if (normalized === 'strength') return 'STRENGTH';
+  if (normalized === 'cross_train') return 'CROSS_TRAIN';
+  if (normalized === 'rest') return 'REST';
+  if (normalized === 'hike') return 'HIKE';
+  if (normalized === 'yoga') return 'YOGA';
+  if (normalized === 'mobility') return 'MOBILITY';
   return 'OTHER';
+}
+
+function mapAiSessionTypeToSubtype(sessionType: string | null | undefined) {
+  const token = String(sessionType || '').trim().toLowerCase();
+  if (!token) return null;
+  if (token === 'easy') return 'easy-run';
+  if (token === 'long_run') return 'lrl';
+  if (token === 'interval') return 'interval';
+  if (token === 'tempo') return 'tempo';
+  if (token === 'hill') return 'hills';
+  if (token === 'recovery') return 'recovery';
+  if (token === 'rest') return 'rest';
+  if (token === 'cross_train') return 'cross-training';
+  if (token === 'strength') return 'strength';
+  if (token === 'race') return 'race';
+  if (token === 'time_trial') return 'time-trial';
+  return null;
+}
+
+function mapAiPrimarySportToType(primarySport: string | null | undefined) {
+  const normalized = String(primarySport || '').trim().toLowerCase();
+  if (!normalized) return null;
+  if (normalized === 'run') return 'RUN';
+  if (normalized === 'strength') return 'STRENGTH';
+  if (normalized === 'mobility') return 'MOBILITY';
+  if (normalized === 'bike' || normalized === 'swim') return 'CROSS_TRAIN';
+  return null;
 }
 
 function parseRange(value: string) {
@@ -1023,14 +1076,19 @@ function buildAiActivities(args: {
     const instructionText = normalizeWhitespace(String(a.instruction_text || ''));
     const displayRawText = instructionText || decodedRawText || null;
     const normalizedSubtype = normalizeSubtypeToken(a.subtype || null);
+    const sessionSubtype = mapAiSessionTypeToSubtype(a.session_type || null);
     const inferredSubtype = inferSubtype(displayRawText || String(a.title || ''));
     const effectiveSubtype =
       normalizedSubtype && normalizedSubtype !== 'unknown'
         ? normalizedSubtype
+        : sessionSubtype
+          ? sessionSubtype
         : inferredSubtype !== 'unknown'
           ? inferredSubtype
           : null;
     const aiType = mapAiTypeToActivityType(a.type || null);
+    const primarySportType = mapAiPrimarySportToType(a.primary_sport || null);
+    const effectiveType = aiType === 'OTHER' && primarySportType ? primarySportType : aiType;
     const aiDistance = resolveDistanceFromValueUnit(
       a.metrics?.distance?.value ?? null,
       a.metrics?.distance?.unit ?? null,
@@ -1042,24 +1100,37 @@ function buildAiActivities(args: {
     const storageDistance = convertDistanceToStorageUnit(fallbackTextDistance, storageDistanceUnit);
     const aiDuration = a.metrics?.duration_min ?? resolveDurationFromText(decodedRawText || dayRawText || '') ?? null;
     const normalizedTitle = normalizeWhitespace(String(a.title || ''));
+    const intensityType = String(a.target_intensity?.type || '').trim().toLowerCase();
+    const intensityValue = normalizeWhitespace(String(a.target_intensity?.value || ''));
+    const paceFromTarget = intensityType === 'pace' ? intensityValue : null;
+    const effortFromTarget = intensityType && intensityType !== 'pace'
+      ? `${intensityType.toUpperCase()}: ${intensityValue}`.trim()
+      : null;
+    const inferredPriority = a.is_key_session === true
+      ? 'KEY'
+      : a.priority
+        ? String(a.priority).toUpperCase()
+        : null;
+    const warmupCooldownTag = a.warmup_cooldown_included === true ? ['warmup_cooldown_included'] : [];
+    const existingTags = Array.isArray(a.tags) ? a.tags : [];
     const fallbackTitle = effectiveSubtype
       ? SUBTYPE_TITLES[effectiveSubtype] || titleCase(effectiveSubtype)
       : 'Workout';
     drafts.push(ensureDistanceConsistency({
       planId,
       dayId,
-      type: aiType,
+      type: effectiveType,
       subtype: effectiveSubtype,
       title: normalizedTitle || fallbackTitle,
       rawText: displayRawText,
       distance: storageDistance.distance,
       distanceUnit: storageDistance.distanceUnit,
       duration: aiDuration,
-      paceTarget: a.metrics?.pace_target ?? null,
-      effortTarget: a.metrics?.effort_target ?? null,
+      paceTarget: a.metrics?.pace_target ?? paceFromTarget,
+      effortTarget: a.metrics?.effort_target ?? effortFromTarget,
       structure: a.structure || null,
-      tags: a.tags || null,
-      priority: a.priority ? String(a.priority).toUpperCase() : null,
+      tags: [...existingTags, ...warmupCooldownTag],
+      priority: inferredPriority,
       bailAllowed: Boolean(a.constraints?.bail_allowed),
       mustDo: Boolean(a.constraints?.must_do)
     }));
@@ -1656,6 +1727,10 @@ async function parsePdfToJsonNode(pdfPath: string, name: string): Promise<Parsed
   if (!parsedWeeks.length) {
     throw new Error('Node parser found no recognizable week/day content in this PDF.');
   }
+  const programProfile = buildProgramDocumentProfile({
+    planName: name,
+    weeks: parsedWeeks
+  });
 
   return {
     source_pdf: path.basename(pdfPath),
@@ -1677,6 +1752,7 @@ async function parsePdfToJsonNode(pdfPath: string, name: string): Promise<Parsed
       }
     },
     weeks: parsedWeeks,
+    program_profile: programProfile,
     glossary: {
       sections: [],
       entries: {},
@@ -1719,8 +1795,10 @@ async function parsePdfToJson(planId: string, pdfPath: string, name: string): Pr
   if (process.env.VERCEL) {
     const nodeParsed = await parsePdfToJsonNode(pdfPath, name);
     const nodeQuality = scoreParsedResult(nodeParsed);
+    const programProfile = nodeParsed.program_profile || buildProfileFromParsed(name, nodeParsed);
     return {
       ...nodeParsed,
+      program_profile: programProfile,
       parse_meta: {
         selectedParser: 'node',
         quality: nodeQuality,
@@ -1801,8 +1879,10 @@ async function parsePdfToJson(planId: string, pdfPath: string, name: string): Pr
   }
 
   const selected = selectBestParseCandidate(viable);
+  const programProfile = selected.parsed.program_profile || buildProfileFromParsed(name, selected.parsed);
   return {
     ...selected.parsed,
+    program_profile: programProfile,
     parse_meta: {
       selectedParser: selected.parser,
       quality: selected.quality,
@@ -1911,6 +1991,10 @@ export async function POST(req: Request) {
         candidates: parseMeta?.candidates || null
       });
       const weeks = Array.isArray(parsed?.weeks) ? parsed.weeks : [];
+      const parsedProgramProfile = (parsed as { program_profile?: unknown })?.program_profile;
+      const programProfile = parsedProgramProfile && typeof parsedProgramProfile === 'object'
+        ? parsedProgramProfile as ProgramDocumentProfile
+        : buildProgramDocumentProfile({ planName: name, weeks });
 
       const weekRecords: { id: string }[] = [];
       for (let i = 0; i < weeks.length; i += 1) {
@@ -1956,6 +2040,7 @@ export async function POST(req: Request) {
                 weekNumber: i + 1,
                 days: aiInputDays,
                 legend: parsed?.glossary?.note || undefined,
+                programProfile,
                 model: AI_WEEK_PARSE_MODEL
               }),
               Math.min(AI_WEEK_PARSE_TIMEOUT_MS, aiBudgetRemainingMs),
@@ -2021,6 +2106,7 @@ export async function POST(req: Request) {
         where: { id: plan.id },
         data: {
           weekCount: weeks.length || null,
+          parseProfile: programProfile,
           status: 'DRAFT'
         }
       });

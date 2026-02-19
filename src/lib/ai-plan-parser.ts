@@ -1,4 +1,5 @@
 import { getDefaultAiModel, openaiJsonSchema } from "./openai";
+import type { ProgramDocumentProfile } from "./plan-document-profile";
 
 const WEEK_SCHEMA = {
   name: "week_plan",
@@ -70,6 +71,27 @@ const WEEK_SCHEMA = {
             ]
           },
           subtype: { type: ["string", "null"] },
+          session_type: {
+            type: ["string", "null"],
+            enum: [
+              "easy",
+              "long_run",
+              "interval",
+              "tempo",
+              "hill",
+              "recovery",
+              "rest",
+              "cross_train",
+              "strength",
+              "race",
+              "time_trial",
+              null
+            ]
+          },
+          primary_sport: {
+            type: ["string", "null"],
+            enum: ["run", "bike", "swim", "strength", "mobility", "other", null]
+          },
           title: { type: "string" },
           raw_text: { type: "string" },
           instruction_text: { type: ["string", "null"] },
@@ -90,9 +112,19 @@ const WEEK_SCHEMA = {
               effort_target: { type: ["string", "null"] }
             }
           },
+          target_intensity: {
+            type: ["object", "null"],
+            additionalProperties: false,
+            properties: {
+              type: { type: "string", enum: ["pace", "hr", "rpe"] },
+              value: { type: "string" }
+            }
+          },
           structure: { type: ["object", "null"] },
           tags: { type: ["array", "null"], items: { type: "string" } },
           priority: { type: ["string", "null"], enum: ["key", "medium", "optional", null] },
+          is_key_session: { type: ["boolean", "null"] },
+          warmup_cooldown_included: { type: ["boolean", "null"] },
           constraints: {
             type: ["object", "null"],
             additionalProperties: false,
@@ -118,6 +150,7 @@ export async function parseWeekWithAI(args: {
   weekNumber: number;
   days: Record<string, string>;
   legend?: string;
+  programProfile?: ProgramDocumentProfile;
   model?: string;
 }) {
   const model = args.model || getDefaultAiModel();
@@ -139,8 +172,13 @@ export async function parseWeekWithAI(args: {
     "Interpret ★ as must_do and ♥ as bail_allowed.",
     "Preserve raw_text exactly as written in each cell when possible.",
     "Also provide instruction_text as plain, readable coaching text with abbreviations expanded.",
+    "Infer session_type and primary_sport when possible (leave null when uncertain).",
+    "Use target_intensity.type/value for explicit pace/heart-rate/RPE targets when present.",
     "For days where the raw cell is empty, return zero activities.",
     `Plan name: ${args.planName}`,
+    args.programProfile
+      ? `Program context (hints only; raw cells win if they conflict):\n${JSON.stringify(args.programProfile, null, 2)}`
+      : "",
     args.legend ? `Legend:\n${args.legend}` : "",
     `Week ${args.weekNumber} raw cells:`,
     JSON.stringify(args.days, null, 2)

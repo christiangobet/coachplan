@@ -50,6 +50,7 @@ export async function POST(req: Request) {
       raceDate,
       raceType: template.raceType,
       difficulty: template.difficulty,
+      ...(template.parseProfile !== null ? { parseProfile: template.parseProfile } : {}),
       ownerId: user.id,
       athleteId: user.id,
       sourceId: template.id,

@@ -32,6 +32,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       raceName: body?.raceName || plan.raceName || null,
       raceType: body?.raceType || plan.raceType || null,
       difficulty: body?.difficulty || null,
+      ...(plan.parseProfile !== null ? { parseProfile: plan.parseProfile } : {}),
       ownerId: user.id,
       sourceId: plan.id,
     },

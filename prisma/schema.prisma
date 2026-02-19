@@ -111,6 +111,7 @@ model TrainingPlan {
   difficulty  Difficulty?
   isPublic    Boolean     @default(false)
   sourceId    String?
+  parseProfile Json?
   createdAt   DateTime    @default(now())
 
   ownerId    String?

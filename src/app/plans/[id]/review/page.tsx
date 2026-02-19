@@ -84,10 +84,50 @@ type ReviewPlan = {
   id: string;
   name: string;
   status: string;
+  parseProfile?: unknown;
   weeks: ReviewWeek[];
   days: ReviewDay[];
   activities: ReviewActivity[];
 };
+
+type ReviewProgramProfile = {
+  plan_length_weeks: number | null;
+  days_per_week: number | null;
+  distance_type: string | null;
+  intensity_model: string | null;
+  units: string | null;
+  language_hint: string | null;
+  peak_week_km: number | null;
+  peak_long_run_km: number | null;
+  taper_weeks: number | null;
+  structure_tags: string[];
+  includes_quality: {
+    intervals: boolean;
+    tempo: boolean;
+    hills: boolean;
+    strides: boolean;
+    strength: boolean;
+    cross_training: boolean;
+  } | null;
+};
+
+function toFiniteNumber(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function toStringValue(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed || null;
+}
+
+function humanizeToken(value: string | null) {
+  if (!value) return 'Unknown';
+  return value
+    .replace(/[_-]+/g, ' ')
+    .toLowerCase()
+    .replace(/\b[a-z]/g, (match) => match.toUpperCase());
+}
 
 type ActivityDraft = {
   title: string;
@@ -440,6 +480,58 @@ export default function PlanReviewPage() {
     const unassignedCount = unassigned?.length || 0;
     return { totalWeeks, totalActivities, runActivities, unassignedCount };
   }, [plan, unassigned]);
+
+  const parseProfile = useMemo<ReviewProgramProfile | null>(() => {
+    const source = plan?.parseProfile;
+    if (!source || typeof source !== 'object' || Array.isArray(source)) return null;
+
+    const profile = source as Record<string, unknown>;
+    const rawQuality = profile.includes_quality;
+    const includesQuality = rawQuality && typeof rawQuality === 'object' && !Array.isArray(rawQuality)
+      ? {
+        intervals: Boolean((rawQuality as Record<string, unknown>).intervals),
+        tempo: Boolean((rawQuality as Record<string, unknown>).tempo),
+        hills: Boolean((rawQuality as Record<string, unknown>).hills),
+        strides: Boolean((rawQuality as Record<string, unknown>).strides),
+        strength: Boolean((rawQuality as Record<string, unknown>).strength),
+        cross_training: Boolean((rawQuality as Record<string, unknown>).cross_training)
+      }
+      : null;
+
+    const structureTags = Array.isArray(profile.structure_tags)
+      ? profile.structure_tags
+        .filter((value): value is string => typeof value === 'string')
+        .map((value) => value.trim())
+        .filter(Boolean)
+      : [];
+
+    return {
+      plan_length_weeks: toFiniteNumber(profile.plan_length_weeks),
+      days_per_week: toFiniteNumber(profile.days_per_week),
+      distance_type: toStringValue(profile.distance_type),
+      intensity_model: toStringValue(profile.intensity_model),
+      units: toStringValue(profile.units),
+      language_hint: toStringValue(profile.language_hint),
+      peak_week_km: toFiniteNumber(profile.peak_week_km),
+      peak_long_run_km: toFiniteNumber(profile.peak_long_run_km),
+      taper_weeks: toFiniteNumber(profile.taper_weeks),
+      structure_tags: structureTags,
+      includes_quality: includesQuality
+    };
+  }, [plan?.parseProfile]);
+
+  const qualityFlags = useMemo(() => {
+    if (!parseProfile?.includes_quality) return [];
+    const entries: Array<{ key: keyof NonNullable<ReviewProgramProfile['includes_quality']>; label: string }> = [
+      { key: 'intervals', label: 'Intervals' },
+      { key: 'tempo', label: 'Tempo' },
+      { key: 'hills', label: 'Hills' },
+      { key: 'strides', label: 'Strides' },
+      { key: 'strength', label: 'Strength' },
+      { key: 'cross_training', label: 'Cross training' }
+    ];
+    return entries.filter((entry) => parseProfile.includes_quality?.[entry.key]).map((entry) => entry.label);
+  }, [parseProfile]);
 
   const autosaveState = useMemo(() => {
     const queuedCount = Object.keys(queuedDayIds).length + Object.keys(queuedActivityIds).length;
@@ -993,6 +1085,64 @@ export default function PlanReviewPage() {
             <span>Run activities</span>
           </div>
         </div>
+
+        {parseProfile && (
+          <div className="review-profile-panel">
+            <div className="review-profile-head">
+              <h3>Detected Plan Profile</h3>
+              <p>Auto-inferred document context used to guide structured parsing.</p>
+            </div>
+            <div className="review-profile-grid">
+              <div>
+                <strong>{parseProfile.plan_length_weeks ?? summary.totalWeeks}</strong>
+                <span>Plan length (weeks)</span>
+              </div>
+              <div>
+                <strong>{parseProfile.days_per_week ?? '—'}</strong>
+                <span>Days per week</span>
+              </div>
+              <div>
+                <strong>{humanizeToken(parseProfile.distance_type)}</strong>
+                <span>Distance type</span>
+              </div>
+              <div>
+                <strong>{humanizeToken(parseProfile.intensity_model)}</strong>
+                <span>Intensity model</span>
+              </div>
+              <div>
+                <strong>{humanizeToken(parseProfile.units)}</strong>
+                <span>Units</span>
+              </div>
+              <div>
+                <strong>{humanizeToken(parseProfile.language_hint)}</strong>
+                <span>Language hint</span>
+              </div>
+              <div>
+                <strong>{parseProfile.peak_week_km !== null ? `${parseProfile.peak_week_km.toFixed(1)} km` : '—'}</strong>
+                <span>Peak week</span>
+              </div>
+              <div>
+                <strong>{parseProfile.peak_long_run_km !== null ? `${parseProfile.peak_long_run_km.toFixed(1)} km` : '—'}</strong>
+                <span>Peak long run</span>
+              </div>
+              <div>
+                <strong>{parseProfile.taper_weeks ?? '—'}</strong>
+                <span>Taper weeks</span>
+              </div>
+            </div>
+
+            {(qualityFlags.length > 0 || parseProfile.structure_tags.length > 0) && (
+              <div className="review-profile-tags">
+                {qualityFlags.map((label) => (
+                  <span key={`quality-${label}`} className="review-profile-tag">{label}</span>
+                ))}
+                {parseProfile.structure_tags.map((tag) => (
+                  <span key={`tag-${tag}`} className="review-profile-tag alt">{humanizeToken(tag)}</span>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {!isActivated && (
           <p className={`review-autosave ${autosaveState.busy ? 'busy' : ''}`}>{autosaveState.label}</p>
