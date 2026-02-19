@@ -67,6 +67,43 @@ function toWindowKey(raw: string | undefined): WindowKey {
   return "28d";
 }
 
+function buildExecutionSummary({
+  totalWorkouts,
+  completionRate,
+  keyRate,
+  missedDays
+}: {
+  totalWorkouts: number;
+  completionRate: number;
+  keyRate: number;
+  missedDays: number;
+}) {
+  if (totalWorkouts === 0) {
+    return "No scheduled workouts in this range yet. Expand the window or switch plan.";
+  }
+  if (completionRate >= 85 && keyRate >= 75) {
+    return "Execution is strong. Keep this rhythm through your key sessions.";
+  }
+  if (completionRate >= 65) {
+    return `Progress is steady. Close ${missedDays} missed ${missedDays === 1 ? "day" : "days"} to stay race-ready.`;
+  }
+  return "Execution is slipping. Prioritize today and the next key session to reset momentum.";
+}
+
+function buildReadinessSignal({
+  completionRate,
+  keyRate,
+  missedDays
+}: {
+  completionRate: number;
+  keyRate: number;
+  missedDays: number;
+}) {
+  if (completionRate >= 85 && keyRate >= 75) return "On track";
+  if (completionRate >= 65 && keyRate >= 50 && missedDays <= 4) return "Recoverable";
+  return "Needs adjustment";
+}
+
 function buildProgressHref(planId: string, window: WindowKey) {
   const params = new URLSearchParams();
   params.set("plan", planId);
@@ -137,16 +174,6 @@ export default async function ProgressPage({
   });
   if (!selectedPlan) redirect("/dashboard");
 
-  const sourcePlanName = selectedPlan.sourceId
-    ? (
-      await prisma.trainingPlan.findUnique({
-        where: { id: selectedPlan.sourceId },
-        select: { name: true }
-      })
-    )?.name || null
-    : null;
-  const planDisplayName = sourcePlanName || selectedPlan.name;
-
   const weeks = [...selectedPlan.weeks].sort((a, b) => a.weekIndex - b.weekIndex);
   const allWeekIndexes = weeks.map((w) => w.weekIndex);
 
@@ -159,7 +186,6 @@ export default async function ProgressPage({
     activities: typeof selectedPlan.weeks[number]["days"][number]["activities"];
   }> = [];
 
-  const weekBoundsById = new Map<string, { startDate: Date | null; endDate: Date | null }>();
   for (const week of weeks) {
     const bounds = resolveWeekBounds({
       weekIndex: week.weekIndex,
@@ -169,7 +195,6 @@ export default async function ProgressPage({
       weekCount: selectedPlan.weekCount,
       allWeekIndexes
     });
-    weekBoundsById.set(week.id, { startDate: bounds.startDate, endDate: bounds.endDate });
 
     for (const day of week.days || []) {
       const dayDate = getDayDateFromWeekStart(bounds.startDate, day.dayOfWeek);
@@ -388,6 +413,22 @@ export default async function ProgressPage({
 
   const stravaUnmatched = Math.max(0, stravaWindowCount - stravaMatchedCount);
   const stravaMatchRate = percent(stravaMatchedCount, stravaWindowCount);
+  const windowModeLabel = WINDOW_OPTIONS.find((option) => option.key === windowKey)?.label || "Custom";
+  const executionSummary = buildExecutionSummary({
+    totalWorkouts,
+    completionRate,
+    keyRate,
+    missedDays
+  });
+  const readinessSignal = buildReadinessSignal({
+    completionRate,
+    keyRate,
+    missedDays
+  });
+  const reviewAdjustmentsHref = `/plans/${selectedPlan.id}?${new URLSearchParams({
+    aiPrompt: "Review this week's execution and propose adaptive adjustments.",
+    aiSource: "progress"
+  }).toString()}#ai-trainer`;
 
   return (
     <main className="dash prog-page-shell">
@@ -396,41 +437,53 @@ export default async function ProgressPage({
         <AthleteSidebar active="progress" name={name} selectedPlanId={selectedPlan.id} />
 
         <section className="dash-center">
-          <div className="dash-card prog-header-card">
-            <h1>Progress</h1>
-            <p>Execution analytics for <strong>{planDisplayName}</strong> in the selected window.</p>
-          </div>
-
-          <div className="dash-card prog-filter-card">
-            <div className="prog-filter-block">
-              <strong>Plan</strong>
-              <div className="prog-filter-chips">
-                {plans.map((plan) => {
-                  const active = plan.id === selectedPlan.id;
-                  return (
-                    <Link
-                      key={plan.id}
-                      href={buildProgressHref(plan.id, windowKey)}
-                      className={active ? "prog-chip active" : "prog-chip"}
-                    >
-                      {plan.name}
-                    </Link>
-                  );
-                })}
+          <div className="dash-card prog-top-card">
+            <div className="prog-top-header">
+              <div className="prog-top-title">
+                <h1>Progress</h1>
+                <p>{executionSummary}</p>
+              </div>
+              <div className="prog-top-actions">
+                <Link href={reviewAdjustmentsHref} className="dash-btn-primary prog-top-action-link">
+                  Review this week adjustments
+                </Link>
+                <Link href="/dashboard" className="dash-btn-secondary prog-top-action-link">
+                  Go to Today
+                </Link>
               </div>
             </div>
-            <div className="prog-filter-block">
-              <strong>Window</strong>
-              <div className="prog-filter-chips">
-                {WINDOW_OPTIONS.map((option) => (
-                  <Link
-                    key={option.key}
-                    href={buildProgressHref(selectedPlan.id, option.key)}
-                    className={windowKey === option.key ? "prog-chip active" : "prog-chip"}
-                  >
-                    {option.label}
-                  </Link>
-                ))}
+
+            <div className="prog-filter-grid">
+              <div className="prog-filter-block">
+                <strong>Plan</strong>
+                <div className="prog-filter-chips">
+                  {plans.map((plan) => {
+                    const active = plan.id === selectedPlan.id;
+                    return (
+                      <Link
+                        key={plan.id}
+                        href={buildProgressHref(plan.id, windowKey)}
+                        className={active ? "prog-chip active" : "prog-chip"}
+                      >
+                        {plan.name}
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="prog-filter-block">
+                <strong>Window</strong>
+                <div className="prog-filter-chips">
+                  {WINDOW_OPTIONS.map((option) => (
+                    <Link
+                      key={option.key}
+                      href={buildProgressHref(selectedPlan.id, option.key)}
+                      className={windowKey === option.key ? "prog-chip active" : "prog-chip"}
+                    >
+                      {option.label}
+                    </Link>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
@@ -530,10 +583,6 @@ export default async function ProgressPage({
             </div>
             <div className="prog-highlight-list">
               <div>
-                <strong>Plan</strong>
-                <span>{planDisplayName}</span>
-              </div>
-              <div>
                 <strong>Race</strong>
                 <span>{selectedPlan.raceName || "Not set"}</span>
               </div>
@@ -542,8 +591,12 @@ export default async function ProgressPage({
                 <span>{formatDateLabel(planStartDate)} - {formatDateLabel(planEndDate)}</span>
               </div>
               <div>
-                <strong>Analysis range</strong>
+                <strong>Current analysis range</strong>
                 <span>{formatDateLabel(windowStart)} - {formatDateLabel(today)}</span>
+              </div>
+              <div>
+                <strong>Window mode</strong>
+                <span>{windowModeLabel}</span>
               </div>
             </div>
           </div>
@@ -617,21 +670,13 @@ export default async function ProgressPage({
                 </span>
               </div>
               <div>
-                <strong>Window mode</strong>
-                <span>{WINDOW_OPTIONS.find((option) => option.key === windowKey)?.label || "Custom"}</span>
+                <strong>Readiness signal</strong>
+                <span>{readinessSignal}</span>
               </div>
-            </div>
-          </div>
-
-          <div className="dash-card">
-            <div className="dash-card-header">
-              <span className="dash-card-title">Actions</span>
-            </div>
-            <div className="prog-actions">
-              <Link href="/dashboard">Open dashboard</Link>
-              <Link href={`/plans/${selectedPlan.id}`}>Open plan detail</Link>
-              <Link href="/calendar">Review training log</Link>
-              <Link href="/profile">Manage profile & units</Link>
+              <div>
+                <strong>Key sessions landed</strong>
+                <span>{keyCompleted} of {keyWorkouts.length}</span>
+              </div>
             </div>
           </div>
         </aside>
