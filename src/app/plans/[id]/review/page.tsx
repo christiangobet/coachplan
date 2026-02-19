@@ -452,7 +452,7 @@ export default function PlanReviewPage() {
         : 'Changes save automatically';
     return { busy, label };
   }, [lastSavedAt, queuedActivityIds, queuedDayIds, savingActivityIds, savingDayIds]);
-  const isActivated = plan.status === 'ACTIVE';
+  const isActivated = plan?.status === 'ACTIVE';
   const effectiveRunCount = Math.max(paceRunCount, summary.runActivities);
   const showPaceCta = effectiveRunCount > 0;
 
