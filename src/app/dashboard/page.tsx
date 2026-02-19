@@ -756,6 +756,21 @@ export default async function DashboardPage({
             </div>
           </div>
 
+          {/* Status feed */}
+          <div className="dash-card">
+            <div className="dash-card-header">
+              <span className="dash-card-title">Status</span>
+            </div>
+            <div className="dash-status-feed">
+              {(recentDayStatuses.length > 0 ? recentDayStatuses : statusItems.slice(0, 5)).map((s, i) => (
+                <div className="dash-status-item" key={i}>
+                  <span className={`dash-status-dot ${s.alert ? "warn" : "ok"}`} />
+                  {s.text}
+                </div>
+              ))}
+            </div>
+          </div>
+
           <div className="dash-card dash-week-snapshot">
             <div className="dash-card-header">
               <span className="dash-card-title">This Week</span>
@@ -866,21 +881,6 @@ export default async function DashboardPage({
                 </a>
               </div>
             </details>
-          </div>
-
-          {/* Status feed */}
-          <div className="dash-card">
-            <div className="dash-card-header">
-              <span className="dash-card-title">Status</span>
-            </div>
-            <div className="dash-status-feed">
-              {(recentDayStatuses.length > 0 ? recentDayStatuses : statusItems.slice(0, 5)).map((s, i) => (
-                <div className="dash-status-item" key={i}>
-                  <span className={`dash-status-dot ${s.alert ? "warn" : "ok"}`} />
-                  {s.text}
-                </div>
-              ))}
-            </div>
           </div>
         </aside>
       </div>
