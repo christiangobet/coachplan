@@ -41,6 +41,9 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const hasClerkEnv = Boolean(
+    process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY && process.env.CLERK_SECRET_KEY
+  );
   const roleContext = await getCurrentUserRoleContext();
   const currentRole = roleContext?.currentRole || "ATHLETE";
   const isAccountInactive = !!(roleContext && !roleContext.isActive);
@@ -50,6 +53,38 @@ export default async function RootLayout({
     ? getRoleHomePath(currentRole)
     : "/auth/resolve-role";
   const isSignedIn = !!roleContext;
+  const content = (
+    <html lang="en">
+      <body>
+        <Header
+          brand="CoachPlan"
+          brandHref={signedInHome}
+          roleChip={isSignedIn ? getRoleLabel(currentRole) : undefined}
+          roleChipClass={isSignedIn ? `env-chip-${currentRole.toLowerCase()}` : undefined}
+          navItems={navItems}
+          roleSwitchHref={hasMultiRole ? "/select-role" : null}
+          isSignedIn={isSignedIn}
+          isAccountInactive={isAccountInactive}
+        />
+        {isAccountInactive ? (
+          <main className="account-disabled-shell">
+            <section className="account-disabled-card">
+              <h1>Account Deactivated</h1>
+              <p>
+                Your account is currently deactivated. Contact an administrator to reactivate access.
+              </p>
+            </section>
+          </main>
+        ) : (
+          children
+        )}
+      </body>
+    </html>
+  );
+
+  if (!hasClerkEnv) {
+    return content;
+  }
 
   return (
     <ClerkProvider
@@ -58,32 +93,7 @@ export default async function RootLayout({
       afterSignInUrl="/auth/resolve-role"
       afterSignUpUrl="/auth/resolve-role"
     >
-      <html lang="en">
-        <body>
-          <Header
-            brand="CoachPlan"
-            brandHref={signedInHome}
-            roleChip={isSignedIn ? getRoleLabel(currentRole) : undefined}
-            roleChipClass={isSignedIn ? `env-chip-${currentRole.toLowerCase()}` : undefined}
-            navItems={navItems}
-            roleSwitchHref={hasMultiRole ? "/select-role" : null}
-            isSignedIn={isSignedIn}
-            isAccountInactive={isAccountInactive}
-          />
-          {isAccountInactive ? (
-            <main className="account-disabled-shell">
-              <section className="account-disabled-card">
-                <h1>Account Deactivated</h1>
-                <p>
-                  Your account is currently deactivated. Contact an administrator to reactivate access.
-                </p>
-              </section>
-            </main>
-          ) : (
-            children
-          )}
-        </body>
-      </html>
+      {content}
     </ClerkProvider>
   );
 }
