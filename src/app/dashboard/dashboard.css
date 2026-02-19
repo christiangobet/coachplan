@@ -1658,59 +1658,70 @@
   border-radius: 999px;
   color: #fff;
   flex-shrink: 0;
+  background: radial-gradient(circle at 28% 24%, #ffa93a 0%, #ff9800 48%, #f57c00 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
 .ext-sport-icon-glyph {
   width: 12px;
   height: 12px;
+  filter: drop-shadow(0 0.4px 0 rgba(0, 0, 0, 0.2));
 }
 
 .ext-sport-run {
-  background: #fc4c02;
+  background: radial-gradient(circle at 28% 24%, #ffa93a 0%, #ff9800 48%, #f57c00 100%);
 }
 
-.ext-sport-ride {
-  background: #0b7dda;
+.ext-sport-trail-run {
+  background: radial-gradient(circle at 28% 24%, #ffa93a 0%, #ff9800 48%, #f57c00 100%);
+}
+
+.ext-sport-walk {
+  background: radial-gradient(circle at 28% 24%, #ffa93a 0%, #ff9800 48%, #f57c00 100%);
+}
+
+.ext-sport-strength {
+  background: radial-gradient(circle at 28% 24%, #ffa93a 0%, #ff9800 48%, #f57c00 100%);
+}
+
+.ext-sport-cross-train {
+  background: radial-gradient(circle at 28% 24%, #ffa93a 0%, #ff9800 48%, #f57c00 100%);
+}
+
+.ext-sport-rest {
+  background: radial-gradient(circle at 28% 24%, #ffa93a 0%, #ff9800 48%, #f57c00 100%);
+}
+
+.ext-sport-bike {
+  background: radial-gradient(circle at 28% 24%, #ffa93a 0%, #ff9800 48%, #f57c00 100%);
 }
 
 .ext-sport-swim {
-  background: #10a6be;
+  background: radial-gradient(circle at 28% 24%, #ffa93a 0%, #ff9800 48%, #f57c00 100%);
 }
 
-.ext-sport-walk-hike {
-  background: #0f8a47;
+.ext-sport-hike {
+  background: radial-gradient(circle at 28% 24%, #ffa93a 0%, #ff9800 48%, #f57c00 100%);
 }
 
-.ext-sport-alpine-ski {
-  background: #1d4ed8;
+.ext-sport-treadmill-run {
+  background: radial-gradient(circle at 28% 24%, #ffa93a 0%, #ff9800 48%, #f57c00 100%);
 }
 
-.ext-sport-nordic-ski {
-  background: #0e7490;
+.ext-sport-yoga-mobility {
+  background: radial-gradient(circle at 28% 24%, #ffa93a 0%, #ff9800 48%, #f57c00 100%);
 }
 
-.ext-sport-backcountry-ski {
-  background: #5b21b6;
+.ext-sport-virtual-ride {
+  background: radial-gradient(circle at 28% 24%, #ffa93a 0%, #ff9800 48%, #f57c00 100%);
 }
 
-.ext-sport-snowboard {
-  background: #374151;
-}
-
-.ext-sport-workout {
-  background: #6c5ce7;
-}
-
-.ext-sport-yoga {
-  background: #16a34a;
-}
-
-.ext-sport-row {
-  background: #2563eb;
+.ext-sport-ski {
+  background: radial-gradient(circle at 28% 24%, #ffa93a 0%, #ff9800 48%, #f57c00 100%);
 }
 
 .ext-sport-other {
-  background: #6b7280;
+  background: radial-gradient(circle at 28% 24%, #ffa93a 0%, #ff9800 48%, #f57c00 100%);
 }
 
 .dash-day-match-note {

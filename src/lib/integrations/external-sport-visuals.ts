@@ -1,15 +1,17 @@
 export type ExternalSportVisualCode =
   | "RUN"
-  | "RIDE"
+  | "TRAIL_RUN"
+  | "WALK"
+  | "STRENGTH"
+  | "CROSS_TRAIN"
+  | "REST"
+  | "BIKE"
   | "SWIM"
-  | "WALK_HIKE"
-  | "ALPINE_SKI"
-  | "NORDIC_SKI"
-  | "BACKCOUNTRY_SKI"
-  | "SNOWBOARD"
-  | "WORKOUT"
-  | "YOGA"
-  | "ROW"
+  | "HIKE"
+  | "TREADMILL_RUN"
+  | "YOGA_MOBILITY"
+  | "VIRTUAL_RIDE"
+  | "SKI"
   | "OTHER";
 
 export type ExternalSportVisual = {
@@ -31,26 +33,34 @@ export function mapStravaSportTypeToVisualCode(sportType: string | null | undefi
   const normalized = normalizeSportType(sportType);
   if (!normalized) return "OTHER";
 
-  if (normalized.includes("ALPINE_SKI")) return "ALPINE_SKI";
-  if (normalized.includes("BACKCOUNTRY_SKI")) return "BACKCOUNTRY_SKI";
-  if (normalized.includes("NORDIC_SKI") || normalized.includes("CROSS_COUNTRY_SKI")) return "NORDIC_SKI";
-  if (normalized.includes("SNOWBOARD")) return "SNOWBOARD";
+  if (normalized.includes("TRAIL_RUN")) return "TRAIL_RUN";
+  if (normalized.includes("TREADMILL")) return "TREADMILL_RUN";
+  if (normalized.includes("VIRTUAL_RIDE") || normalized.includes("VIRTUAL_CYCLING")) return "VIRTUAL_RIDE";
+  if (normalized.includes("REST") || normalized.includes("SLEEP")) return "REST";
+  if (normalized.includes("WALK")) return "WALK";
+  if (normalized.includes("HIKE")) return "HIKE";
   if (normalized.includes("RUN")) return "RUN";
-  if (normalized.includes("RIDE") || normalized.includes("BIKE") || normalized.includes("CYCL")) return "RIDE";
-  if (normalized.includes("SWIM")) return "SWIM";
-  if (normalized.includes("WALK") || normalized.includes("HIKE")) return "WALK_HIKE";
-  if (normalized.includes("YOGA")) return "YOGA";
-  if (normalized.includes("ROW")) return "ROW";
   if (
-    normalized.includes("WORKOUT")
-    || normalized.includes("WEIGHT")
-    || normalized.includes("ELLIPTICAL")
+    normalized.includes("WEIGHT")
+    || normalized.includes("WORKOUT")
+    || normalized.includes("TRAINING")
+    || normalized.includes("CROSSFIT")
+  ) {
+    return "STRENGTH";
+  }
+  if (
+    normalized.includes("ELLIPTICAL")
     || normalized.includes("STAIR")
     || normalized.includes("STEPPER")
-    || normalized.includes("TRAINING")
+    || normalized.includes("ROW")
+    || normalized.includes("PADDLE")
   ) {
-    return "WORKOUT";
+    return "CROSS_TRAIN";
   }
+  if (normalized.includes("RIDE") || normalized.includes("BIKE") || normalized.includes("CYCL")) return "BIKE";
+  if (normalized.includes("SWIM")) return "SWIM";
+  if (normalized.includes("YOGA") || normalized.includes("PILATES") || normalized.includes("MOBILITY")) return "YOGA_MOBILITY";
+  if (normalized.includes("SKI") || normalized.includes("SNOWBOARD")) return "SKI";
 
   return "OTHER";
 }
@@ -64,16 +74,18 @@ export function getExternalSportVisual(
 
   const labelByCode: Record<ExternalSportVisualCode, string> = {
     RUN: "Run",
-    RIDE: "Ride",
+    TRAIL_RUN: "Trail Run",
+    WALK: "Walk",
+    STRENGTH: "Strength",
+    CROSS_TRAIN: "Cross Training",
+    REST: "Rest",
+    BIKE: "Bike",
     SWIM: "Swim",
-    WALK_HIKE: "Walk / Hike",
-    ALPINE_SKI: "Alpine Ski",
-    NORDIC_SKI: "Nordic Ski",
-    BACKCOUNTRY_SKI: "Backcountry Ski",
-    SNOWBOARD: "Snowboard",
-    WORKOUT: "Workout",
-    YOGA: "Yoga",
-    ROW: "Row",
+    HIKE: "Hike",
+    TREADMILL_RUN: "Treadmill Run",
+    YOGA_MOBILITY: "Yoga / Mobility",
+    VIRTUAL_RIDE: "Virtual Ride",
+    SKI: "Ski",
     OTHER: "External Activity"
   };
 
