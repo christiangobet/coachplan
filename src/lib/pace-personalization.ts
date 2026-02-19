@@ -1,6 +1,5 @@
 import { ActivityType, Units } from '@prisma/client';
-
-type PaceZone = 'RECOVERY' | 'EASY' | 'LONG' | 'RACE' | 'TEMPO' | 'THRESHOLD' | 'INTERVAL';
+import { inferPaceBucketFromText, type PaceBucket } from '@/lib/intensity-targets';
 
 export type DerivedPaceProfile = {
   unit: Units;
@@ -15,7 +14,7 @@ export type DerivedPaceProfile = {
   interval: string;
 };
 
-const ZONE_MULTIPLIERS: Record<PaceZone, number> = {
+const ZONE_MULTIPLIERS: Record<PaceBucket, number> = {
   RECOVERY: 1.22,
   EASY: 1.14,
   LONG: 1.09,
@@ -45,7 +44,7 @@ export function derivePaceProfileFromRaceTarget(args: {
   const raceDistanceKm = Math.max(0.1, args.raceDistanceKm);
   const goalTimeSec = Math.max(60, args.goalTimeSec);
   const raceSecPerKm = goalTimeSec / raceDistanceKm;
-  const pace = (zone: PaceZone) => formatPace(raceSecPerKm * ZONE_MULTIPLIERS[zone], args.unit);
+  const pace = (zone: PaceBucket) => formatPace(raceSecPerKm * ZONE_MULTIPLIERS[zone], args.unit);
 
   return {
     unit: args.unit,
@@ -75,15 +74,8 @@ export function classifyRunPaceBucket(activity: {
   const text = [activity.subtype, activity.title, activity.rawText].map(normalizeText).join(' ');
 
   if (/\b(rest|off)\b/.test(text)) return null;
-  if (/\b(race pace|rp\b|goal pace|marathon pace|mp\b)\b/.test(text)) return 'RACE' as const;
-  if (/\b(interval|repeat|repeats|fartlek|track|reps?)\b/.test(text) || /\b\d+\s*x\s*\d+/.test(text)) return 'INTERVAL' as const;
-  if (/\b(threshold|t pace|t-pace|lt)\b/.test(text)) return 'THRESHOLD' as const;
-  if (/\b(tempo|steady state)\b/.test(text)) return 'TEMPO' as const;
-  if (/\b(long run|long|lr)\b/.test(text)) return 'LONG' as const;
-  if (/\b(recovery)\b/.test(text)) return 'RECOVERY' as const;
-  if (/\b(easy|aerobic)\b/.test(text)) return 'EASY' as const;
-  if (/\b(progression|fast finish)\b/.test(text)) return 'TEMPO' as const;
-  return 'EASY' as const;
+  const inferred = inferPaceBucketFromText(text);
+  return inferred || ('EASY' as const);
 }
 
 export function buildPaceTargetText(

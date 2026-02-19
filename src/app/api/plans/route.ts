@@ -11,6 +11,14 @@ import { alignWeeksToRaceDate } from '@/lib/clone-plan';
 import { canonicalizeTableLabel, extractWeekNumber, normalizePlanText } from '@/lib/plan-parser-i18n.mjs';
 import { hasConfiguredAiProvider } from '@/lib/openai';
 import { buildProgramDocumentProfile, type ProgramDocumentProfile } from '@/lib/plan-document-profile';
+import {
+  extractEffortTargetFromText,
+  extractPaceTargetFromText,
+  hasConcretePaceValue,
+  inferSymbolicPaceBucketFromText,
+  paceBucketLabel,
+  type PaceBucket
+} from '@/lib/intensity-targets';
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { pathToFileURL } from 'url';
 
@@ -861,6 +869,71 @@ function chooseActivityRawText(baseRaw: string | null | undefined, aiRaw: string
   return base;
 }
 
+function normalizeTargetText(value: unknown) {
+  const text = String(value || '').replace(/\s+/g, ' ').trim();
+  return text || null;
+}
+
+function paceBucketFromSubtype(subtype: string | null | undefined): PaceBucket | null {
+  if (!subtype) return null;
+  if (subtype === 'recovery') return 'RECOVERY';
+  if (subtype === 'easy-run') return 'EASY';
+  if (subtype === 'lrl') return 'LONG';
+  if (subtype === 'race' || subtype === 'training-race' || subtype === 'time-trial') return 'RACE';
+  if (subtype === 'tempo' || subtype === 'progression' || subtype === 'fast-finish') return 'TEMPO';
+  if (subtype === 'interval' || subtype === 'hills' || subtype === 'hill-pyramid' || subtype === 'incline-treadmill') return 'INTERVAL';
+  return null;
+}
+
+function deriveDeterministicIntensityTargets(args: {
+  rawText: string;
+  metrics: Record<string, unknown>;
+  activityType: string;
+  subtype: string | null;
+}) {
+  const { rawText, metrics, activityType, subtype } = args;
+  const metricPaceTarget = normalizeTargetText(metrics?.pace_target);
+  const metricEffortTarget = normalizeTargetText(metrics?.effort_target);
+  const textPaceTarget = extractPaceTargetFromText(rawText);
+  const textEffortTarget = extractEffortTargetFromText(rawText);
+  const subtypeBucket = paceBucketFromSubtype(subtype);
+  const subtypePaceTarget = activityType === 'RUN' && subtypeBucket
+    ? paceBucketLabel(subtypeBucket)
+    : null;
+
+  return {
+    paceTarget: metricPaceTarget ?? textPaceTarget ?? subtypePaceTarget ?? null,
+    effortTarget: metricEffortTarget ?? textEffortTarget ?? null
+  };
+}
+
+function choosePaceTarget(baseTarget: string | null | undefined, aiTarget: string | null | undefined) {
+  const base = normalizeTargetText(baseTarget);
+  const ai = normalizeTargetText(aiTarget);
+  if (!base) return ai;
+  if (!ai) return base;
+
+  const baseConcrete = hasConcretePaceValue(base);
+  const aiConcrete = hasConcretePaceValue(ai);
+  if (baseConcrete !== aiConcrete) return aiConcrete ? ai : base;
+
+  const baseSymbolic = inferSymbolicPaceBucketFromText(base) !== null;
+  const aiSymbolic = inferSymbolicPaceBucketFromText(ai) !== null;
+  if (baseSymbolic !== aiSymbolic) return aiSymbolic ? ai : base;
+
+  if (ai.length >= base.length + 6) return ai;
+  return base;
+}
+
+function chooseEffortTarget(baseTarget: string | null | undefined, aiTarget: string | null | undefined) {
+  const base = normalizeTargetText(baseTarget);
+  const ai = normalizeTargetText(aiTarget);
+  if (!base) return ai;
+  if (!ai) return base;
+  if (ai.length >= base.length + 6) return ai;
+  return base;
+}
+
 function scoreDayForAiPass(rawText: string) {
   const text = normalizeWhitespace(rawText || '');
   if (!text) return 0;
@@ -936,8 +1009,8 @@ function mergeActivityDraft(base: ActivityDraft, ai: ActivityDraft): ActivityDra
     distance: base.distance ?? ai.distance,
     distanceUnit: base.distanceUnit ?? ai.distanceUnit,
     duration: base.duration ?? ai.duration,
-    paceTarget: base.paceTarget ?? ai.paceTarget ?? null,
-    effortTarget: base.effortTarget ?? ai.effortTarget ?? null,
+    paceTarget: choosePaceTarget(base.paceTarget, ai.paceTarget),
+    effortTarget: chooseEffortTarget(base.effortTarget, ai.effortTarget),
     structure: base.structure || ai.structure || null,
     tags: base.tags || ai.tags || null,
     priority: base.priority ?? ai.priority ?? null,
@@ -1037,6 +1110,12 @@ function buildDeterministicActivities(args: {
         activityType === 'REST'
           ? 'Rest Day'
           : SUBTYPE_TITLES[subtype] || titleCase(subtype === 'unknown' ? 'Workout' : subtype);
+      const intensityTargets = deriveDeterministicIntensityTargets({
+        rawText: decodedText || originalText,
+        metrics,
+        activityType,
+        subtype
+      });
 
       drafts.push(ensureDistanceConsistency({
         planId,
@@ -1048,6 +1127,8 @@ function buildDeterministicActivities(args: {
         distance: storageDistance.distance,
         distanceUnit: storageDistance.distanceUnit,
         duration,
+        paceTarget: intensityTargets.paceTarget,
+        effortTarget: intensityTargets.effortTarget,
         structure: structure || null,
         priority: mustDo ? 'KEY' : bailAllowed ? 'OPTIONAL' : null,
         mustDo,
@@ -1116,6 +1197,8 @@ function buildAiActivities(args: {
     const fallbackTitle = effectiveSubtype
       ? SUBTYPE_TITLES[effectiveSubtype] || titleCase(effectiveSubtype)
       : 'Workout';
+    const textPaceTarget = extractPaceTargetFromText(displayRawText || decodedRawText || dayRawText || '');
+    const textEffortTarget = extractEffortTargetFromText(displayRawText || decodedRawText || dayRawText || '');
     drafts.push(ensureDistanceConsistency({
       planId,
       dayId,
@@ -1126,8 +1209,8 @@ function buildAiActivities(args: {
       distance: storageDistance.distance,
       distanceUnit: storageDistance.distanceUnit,
       duration: aiDuration,
-      paceTarget: a.metrics?.pace_target ?? paceFromTarget,
-      effortTarget: a.metrics?.effort_target ?? effortFromTarget,
+      paceTarget: choosePaceTarget(a.metrics?.pace_target ?? paceFromTarget, textPaceTarget),
+      effortTarget: chooseEffortTarget(a.metrics?.effort_target ?? effortFromTarget, textEffortTarget),
       structure: a.structure || null,
       tags: [...existingTags, ...warmupCooldownTag],
       priority: inferredPriority,

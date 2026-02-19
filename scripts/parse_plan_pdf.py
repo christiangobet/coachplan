@@ -83,6 +83,19 @@ DISTANCE_RANGE_RE = re.compile(
 )
 MIN_RE = re.compile(r'(?P<min>\d+)\s*(?:minutes?|mins?|min|m)\b')
 RANGE_MIN_RE = re.compile(r'(?P<min1>\d+)\s*[\u2013-]\s*(?P<min2>\d+)\s*(?:minutes?|mins?|m\b)')
+PACE_VALUE_RE = re.compile(
+    r'(?P<pace>\d{1,2}[:.]\d{2}(?:\s*[\u2013\-]\s*\d{1,2}[:.]\d{2})?\s*(?:min(?:ute)?s?)?\s*(?:/|per\s*)(?:km|mi|mile|miles))',
+    re.I
+)
+RPE_RE = re.compile(
+    r'\brpe\s*[:@]?\s*(?P<rpe>\d(?:\.\d)?(?:\s*[\u2013\-]\s*\d(?:\.\d)?)?(?:\s*/\s*10)?)\b',
+    re.I
+)
+BARE_RPE_RE = re.compile(r'\b(?P<rpe>\d(?:\.\d)?)\s*/\s*10\b', re.I)
+HR_ZONE_RE = re.compile(r'\b(?:hr|heart rate)?\s*(?:zone\s*(?P<zone1>[1-5])|z(?P<zone2>[1-5]))\b', re.I)
+HR_BPM_RANGE_RE = re.compile(r'\b(?P<range>\d{2,3}\s*(?:[\u2013\-]|to)\s*\d{2,3}\s*bpm)\b', re.I)
+HR_BPM_SINGLE_RE = re.compile(r'\b(?P<bpm>\d{2,3}\s*bpm)\b', re.I)
+EFFORT_WORD_RE = re.compile(r'\b(?P<effort>easy|moderate|hard)\s+effort\b', re.I)
 
 SEGMENT_RULES = [
     ('strength', re.compile(r'^strength\s*\d+', re.I)),
@@ -174,6 +187,70 @@ def to_km(value, unit):
     return None
 
 
+def infer_symbolic_pace_target(text):
+    normalized = normalize_text(text or '').lower()
+    if re.search(r'\b(?:race pace|goal pace|marathon pace|mp\b|rp\b|half marathon pace|hm pace|10k pace|5k pace)\b', normalized, re.I):
+        return 'Race pace'
+    if re.search(r'\b(?:threshold|t[\s-]?pace|lt pace|lactate threshold)\b', normalized, re.I):
+        return 'Threshold pace'
+    if re.search(r'\b(?:tempo|steady state|progression|fast finish)\b', normalized, re.I):
+        return 'Tempo pace'
+    if re.search(r'\b(?:interval|repeats?|reps?|track|fartlek|vo2|max|hills?)\b', normalized, re.I) or re.search(r'\b\d+\s*x\s*\d+\b', normalized, re.I):
+        return 'Interval pace'
+    if re.search(r'\b(?:long run|lrl\b|lr\b)\b', normalized, re.I):
+        return 'Long run pace'
+    if re.search(r'\b(?:recovery)\b', normalized, re.I):
+        return 'Recovery pace'
+    if re.search(r'\b(?:easy|aerobic)\b', normalized, re.I):
+        return 'Easy pace'
+    return None
+
+
+def parse_intensity_targets(text):
+    normalized = normalize_text(text or '')
+    pace_target = None
+    effort_target = None
+
+    pace_match = PACE_VALUE_RE.search(normalized)
+    if pace_match:
+        pace_target = normalize_text(pace_match.group('pace')).replace(' per ', '/')
+    else:
+        pace_target = infer_symbolic_pace_target(normalized)
+
+    rpe_match = RPE_RE.search(normalized)
+    if rpe_match:
+        rpe_value = normalize_text(rpe_match.group('rpe'))
+        effort_target = f"RPE {rpe_value}" if '/10' in rpe_value else f"RPE {rpe_value}/10"
+    else:
+        bare_rpe = BARE_RPE_RE.search(normalized)
+        if bare_rpe:
+            effort_target = f"RPE {bare_rpe.group('rpe')}/10"
+
+    if effort_target is None:
+        zone_match = HR_ZONE_RE.search(normalized)
+        if zone_match:
+            zone_value = zone_match.group('zone1') or zone_match.group('zone2')
+            effort_target = f"HR Zone Z{zone_value}"
+
+    if effort_target is None:
+        bpm_range = HR_BPM_RANGE_RE.search(normalized)
+        if bpm_range:
+            effort_target = f"HR {normalize_text(bpm_range.group('range')).replace(' to ', '-')}"
+
+    if effort_target is None:
+        bpm_single = HR_BPM_SINGLE_RE.search(normalized)
+        if bpm_single:
+            effort_target = f"HR {normalize_text(bpm_single.group('bpm'))}"
+
+    if effort_target is None:
+        effort_word = EFFORT_WORD_RE.search(normalized)
+        if effort_word:
+            value = effort_word.group('effort')
+            effort_target = f"{value[:1].upper()}{value[1:].lower()} effort"
+
+    return pace_target, effort_target
+
+
 def parse_metrics(text):
     t = normalize_plan_text(text).lower()
     miles = None
@@ -187,6 +264,7 @@ def parse_metrics(text):
     distance_range = None
     mins = None
     mins_range = None
+    pace_target, effort_target = parse_intensity_targets(t)
 
     rm = DISTANCE_RANGE_RE.search(t)
     text_without_distance = t
@@ -247,6 +325,8 @@ def parse_metrics(text):
         'distance_meters_range': meters_range,
         'duration_minutes': mins,
         'duration_minutes_range': mins_range,
+        'pace_target': pace_target,
+        'effort_target': effort_target,
     }
 
 

@@ -7,6 +7,7 @@ import {
   classifyRunPaceBucket,
   derivePaceProfileFromRaceTarget
 } from '@/lib/pace-personalization';
+import { inferSymbolicPaceBucketFromText } from '@/lib/intensity-targets';
 import {
   PaceEvidence,
   estimateGoalTimeFromEvidence,
@@ -332,14 +333,19 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   for (const activity of plan.activities) {
     if (activity.type !== 'RUN') continue;
     runCount += 1;
-    if (!overrideExisting && activity.paceTarget && activity.paceTarget.trim()) {
+    const existingPaceTarget = activity.paceTarget && activity.paceTarget.trim()
+      ? activity.paceTarget.trim()
+      : null;
+    const symbolicBucket = inferSymbolicPaceBucketFromText(existingPaceTarget);
+    if (!overrideExisting && existingPaceTarget && !symbolicBucket) {
       skippedExisting += 1;
       continue;
     }
 
-    const bucket = classifyRunPaceBucket(activity);
+    const bucket = symbolicBucket || classifyRunPaceBucket(activity);
     const paceTarget = buildPaceTargetText(bucket, profile);
     if (!paceTarget) continue;
+    if (existingPaceTarget === paceTarget) continue;
     updates.push({ id: activity.id, paceTarget });
   }
 
