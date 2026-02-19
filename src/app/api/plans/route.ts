@@ -1085,6 +1085,30 @@ type TableHeader = {
   twmColumn: number | null;
 };
 
+type WeekDayBuckets = Record<string, string[]>;
+
+type DayTextSegment = {
+  dayKey: string;
+  content: string;
+};
+
+type TextFallbackDiagnostics = {
+  pagesScanned: number;
+  rowClusters: number;
+  weekMarkersFound: number;
+  dayMarkersFound: number;
+  linesAssigned: number;
+  continuationLines: number;
+  linesDroppedNoWeek: number;
+  linesDroppedNoDay: number;
+};
+
+type PendingImplicitLine = {
+  dayKey: string;
+  content: string;
+  continuation: boolean;
+};
+
 function stripSuperscriptFootnotes(text: string) {
   return text
     // Superscript/subscript unicode blocks commonly used for footnote markers in PDFs.
@@ -1128,6 +1152,30 @@ function clusterRows(items: PdfTextItem[], tolerance = 2): RowCluster[] {
       items: cluster.items.sort((a, b) => a.x - b.x)
     }))
     .sort((a, b) => b.y - a.y);
+}
+
+function splitRowItemsByLargeXGaps(items: PdfTextItem[], pageWidth: number) {
+  if (items.length <= 1) return [items];
+
+  const sorted = [...items].sort((a, b) => a.x - b.x);
+  const gapThreshold = Math.max(110, Math.min(220, pageWidth * 0.18));
+  const segments: PdfTextItem[][] = [];
+  let current: PdfTextItem[] = [sorted[0]];
+
+  for (let i = 1; i < sorted.length; i += 1) {
+    const prev = sorted[i - 1];
+    const next = sorted[i];
+    const xGap = next.x - prev.x;
+    if (xGap > gapThreshold) {
+      segments.push(current);
+      current = [next];
+      continue;
+    }
+    current.push(next);
+  }
+
+  if (current.length) segments.push(current);
+  return segments;
 }
 
 function buildColumnBoundaries(columns: number[], twmColumn: number | null, pageWidth: number) {
@@ -1211,6 +1259,264 @@ function findTableHeader(items: PdfTextItem[]) {
   return null;
 }
 
+function createWeekDayBuckets(): WeekDayBuckets {
+  return DAY_KEYS.reduce((acc, day) => {
+    acc[day] = [];
+    return acc;
+  }, {} as WeekDayBuckets);
+}
+
+function ensureWeekBucket(weeks: Map<number, WeekDayBuckets>, weekNumber: number) {
+  if (!weeks.has(weekNumber)) {
+    weeks.set(weekNumber, createWeekDayBuckets());
+  }
+  return weeks.get(weekNumber)!;
+}
+
+function dayKeyFromLabel(label: string): string | null {
+  const normalized = normalizePlanText(label || '').toLowerCase().trim();
+  const dayNumber = normalized.match(/^day\s*([1-7])$/i);
+  if (dayNumber) {
+    const index = Number(dayNumber[1]) - 1;
+    return DAY_KEYS[index] || null;
+  }
+
+  const canonical = canonicalizeTableLabel(normalized);
+  if (!canonical) return null;
+  const dayIndex = DAY_LABELS.indexOf(canonical);
+  if (dayIndex < 0) return null;
+  return DAY_KEYS[dayIndex];
+}
+
+function extractDaySegmentsFromLine(line: string): DayTextSegment[] {
+  const text = normalizeWhitespace(line);
+  if (!text) return [];
+
+  const markerRegex = /\b(Day\s*[1-7]|[A-Za-zÀ-ÿ]{2,12})\b\s*:\s*/gi;
+  const validMarkers = [...text.matchAll(markerRegex)]
+    .map((match) => {
+      const label = match[1] || '';
+      const dayKey = dayKeyFromLabel(label);
+      return {
+        index: match.index ?? -1,
+        marker: match[0] || '',
+        dayKey
+      };
+    })
+    .filter((marker) => marker.index >= 0 && marker.dayKey);
+
+  if (validMarkers.length > 0) {
+    return validMarkers.map((marker, index) => {
+      const start = marker.index + marker.marker.length;
+      const end = index + 1 < validMarkers.length ? validMarkers[index + 1].index : text.length;
+      return {
+        dayKey: marker.dayKey as string,
+        content: normalizeWhitespace(text.slice(start, end))
+      };
+    });
+  }
+
+  const lineStartMarker = text.match(/^(?:[-*•]\s*)?(Day\s*[1-7]|[A-Za-zÀ-ÿ]{2,12})\b\.?\s*(?:[:\-]\s*)?(.*)$/i);
+  if (!lineStartMarker) return [];
+  const dayKey = dayKeyFromLabel(lineStartMarker[1] || '');
+  if (!dayKey) return [];
+
+  return [{
+    dayKey,
+    content: normalizeWhitespace(lineStartMarker[2] || '')
+  }];
+}
+
+function extractWeekHeading(line: string) {
+  const text = normalizeWhitespace(line);
+  if (!text) return null;
+
+  const explicit = text.match(/^(?:week|wk|woche|semaine|semana|sem)\s*[:#-]?\s*(\d{1,2})\b[.:;\-]?\s*(.*)$/i);
+  if (explicit) {
+    return {
+      weekNumber: Number(explicit[1]),
+      remainder: normalizeWhitespace(explicit[2] || '')
+    };
+  }
+
+  const weekNumber = extractWeekNumber(text);
+  if (!weekNumber) return null;
+  if (!/\b(?:week|wk|woche|semaine|semana|sem)\b/i.test(normalizePlanText(text))) return null;
+
+  const remainder = normalizeWhitespace(
+    text.replace(/^(?:.*?\b(?:week|wk|woche|semaine|semana|sem)\b\s*[:#-]?\s*\d{1,2}\b[.:;\-]?)/i, '')
+  );
+  return { weekNumber, remainder };
+}
+
+function buildParsedWeeks(weeks: Map<number, WeekDayBuckets>) {
+  return [...weeks.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([weekNumber, dayValues]) => ({
+      week_number: weekNumber,
+      days: DAY_KEYS.reduce((acc, day) => {
+        const raw = normalizeWhitespace((dayValues[day] || []).join(' '))
+          .replace(/\b([A-Za-z]+)-([A-Za-z]+)\b/g, '$1$2');
+        acc[day] = { raw };
+        return acc;
+      }, {} as Record<string, { raw: string }>)
+    }));
+}
+
+function hasStrongImplicitWeekSignal(daySequence: string[]) {
+  if (!daySequence.length) return false;
+  const deduped = daySequence.filter((day, index) => index === 0 || day !== daySequence[index - 1]);
+  const uniqueDays = new Set(deduped);
+  if (uniqueDays.size >= 5) return true;
+  for (let i = 0; i <= deduped.length - 3; i += 1) {
+    if (deduped[i] === 'monday' && deduped[i + 1] === 'tuesday' && deduped[i + 2] === 'wednesday') {
+      return true;
+    }
+  }
+  return false;
+}
+
+async function parseTextStructuredWeeks(pdf: any) {
+  const weeks = new Map<number, WeekDayBuckets>();
+  const diagnostics: TextFallbackDiagnostics = {
+    pagesScanned: pdf.numPages,
+    rowClusters: 0,
+    weekMarkersFound: 0,
+    dayMarkersFound: 0,
+    linesAssigned: 0,
+    continuationLines: 0,
+    linesDroppedNoWeek: 0,
+    linesDroppedNoDay: 0
+  };
+
+  let activeWeek: number | null = null;
+  let activeDay: string | null = null;
+  let nextImplicitWeek = 1;
+  let pendingImplicitActiveDay: string | null = null;
+  let pendingImplicitLines: PendingImplicitLine[] = [];
+  let pendingImplicitDaySequence: string[] = [];
+
+  const resetPendingImplicit = () => {
+    pendingImplicitActiveDay = null;
+    pendingImplicitLines = [];
+    pendingImplicitDaySequence = [];
+  };
+
+  const flushPendingImplicitToWeek = (weekBucket: WeekDayBuckets) => {
+    for (const pending of pendingImplicitLines) {
+      const content = normalizeWhitespace(pending.content || '');
+      if (!content || isLikelyFootnoteOnly(content)) continue;
+      weekBucket[pending.dayKey].push(content);
+      diagnostics.linesAssigned += 1;
+      if (pending.continuation) diagnostics.continuationLines += 1;
+    }
+    resetPendingImplicit();
+  };
+
+  for (let pageIndex = 1; pageIndex <= pdf.numPages; pageIndex += 1) {
+    const page = await pdf.getPage(pageIndex);
+    const textContent = await page.getTextContent();
+    const items: PdfTextItem[] = (textContent.items as any[])
+      .map((item) => ({
+        str: String(item.str || '').trim(),
+        x: Number(item.transform?.[4] || 0),
+        y: Number(item.transform?.[5] || 0)
+      }))
+      .filter((item) => item.str && item.y > 35);
+    const pageWidth = Number((page as { view?: number[] }).view?.[2] || 1000);
+
+    const rowTexts = clusterRows(items)
+      .flatMap((cluster) => splitRowItemsByLargeXGaps(cluster.items, pageWidth)
+        .map((segment) => normalizeWhitespace(segment.map((item) => item.str).join(' '))))
+      .filter(Boolean);
+
+    diagnostics.rowClusters += rowTexts.length;
+
+    for (const rowTextValue of rowTexts) {
+      let rowText = normalizeWhitespace(rowTextValue);
+      if (!rowText || isLikelyFootnoteOnly(rowText)) continue;
+      if (/^(?:page\s*)?\d+\s*(?:of\s*\d+)?$/i.test(rowText)) continue;
+
+      const weekHeading = extractWeekHeading(rowText);
+      if (weekHeading) {
+        resetPendingImplicit();
+        activeWeek = weekHeading.weekNumber;
+        nextImplicitWeek = Math.max(nextImplicitWeek, activeWeek + 1);
+        ensureWeekBucket(weeks, activeWeek);
+        diagnostics.weekMarkersFound += 1;
+        activeDay = null;
+        rowText = weekHeading.remainder;
+        if (!rowText) continue;
+      }
+
+      const daySegments = extractDaySegmentsFromLine(rowText);
+      if (daySegments.length > 0) {
+        if (!activeWeek) {
+          for (const segment of daySegments) {
+            diagnostics.dayMarkersFound += 1;
+            pendingImplicitActiveDay = segment.dayKey;
+            pendingImplicitDaySequence.push(segment.dayKey);
+            const content = normalizeWhitespace(segment.content);
+            if (!content || isLikelyFootnoteOnly(content)) continue;
+            pendingImplicitLines.push({
+              dayKey: segment.dayKey,
+              content,
+              continuation: false
+            });
+          }
+
+          if (hasStrongImplicitWeekSignal(pendingImplicitDaySequence)) {
+            activeWeek = nextImplicitWeek;
+            nextImplicitWeek += 1;
+            const promotedActiveDay = pendingImplicitActiveDay;
+            const weekBucket = ensureWeekBucket(weeks, activeWeek);
+            flushPendingImplicitToWeek(weekBucket);
+            activeDay = promotedActiveDay;
+          }
+          continue;
+        }
+
+        const weekBucket = ensureWeekBucket(weeks, activeWeek);
+        let assignedInLine = 0;
+        for (const segment of daySegments) {
+          diagnostics.dayMarkersFound += 1;
+          activeDay = segment.dayKey;
+          const content = normalizeWhitespace(segment.content);
+          if (!content || isLikelyFootnoteOnly(content)) continue;
+          weekBucket[segment.dayKey].push(content);
+          assignedInLine += 1;
+        }
+        if (assignedInLine > 0) diagnostics.linesAssigned += 1;
+        continue;
+      }
+
+      if (!activeWeek) {
+        if (pendingImplicitActiveDay) {
+          pendingImplicitLines.push({
+            dayKey: pendingImplicitActiveDay,
+            content: rowText,
+            continuation: true
+          });
+          continue;
+        }
+        diagnostics.linesDroppedNoWeek += 1;
+        continue;
+      }
+      if (!activeDay) {
+        diagnostics.linesDroppedNoDay += 1;
+        continue;
+      }
+
+      const weekBucket = ensureWeekBucket(weeks, activeWeek);
+      weekBucket[activeDay].push(rowText);
+      diagnostics.linesAssigned += 1;
+      diagnostics.continuationLines += 1;
+    }
+  }
+
+  return { weeks, diagnostics };
+}
+
 async function parsePdfToJsonNode(pdfPath: string, name: string): Promise<ParsedPlanOutput> {
   const bytes = await fs.readFile(pdfPath);
   const workerPath = path.join(
@@ -1229,7 +1535,7 @@ async function parsePdfToJsonNode(pdfPath: string, name: string): Promise<Parsed
   });
   const pdf = await loadingTask.promise;
   const weeks = new Map<number, Record<string, string[]>>();
-  const diagnostics = {
+  const tableDiagnostics = {
     pagesScanned: pdf.numPages,
     pagesWithHeader: 0,
     rowClusters: 0,
@@ -1255,7 +1561,7 @@ async function parsePdfToJsonNode(pdfPath: string, name: string): Promise<Parsed
 
     const header = findTableHeader(items);
     if (!header) continue;
-    diagnostics.pagesWithHeader += 1;
+    tableDiagnostics.pagesWithHeader += 1;
     const pageWidth = Number((page as { view?: number[] }).view?.[2] || 1000);
     const boundaries = buildColumnBoundaries(header.columns, header.twmColumn, pageWidth);
 
@@ -1271,12 +1577,12 @@ async function parsePdfToJsonNode(pdfPath: string, name: string): Promise<Parsed
       let assignedCount = 0;
 
       for (const item of cluster.items) {
-        diagnostics.tokenTotal += 1;
+        tableDiagnostics.tokenTotal += 1;
         const columnIndex = getColumnIndexForX(item.x, boundaries);
         if (columnIndex < 0 || columnIndex >= cellParts.length) continue;
         cellParts[columnIndex].push(item.str);
         assignedCount += 1;
-        diagnostics.tokenAssigned += 1;
+        tableDiagnostics.tokenAssigned += 1;
       }
 
       return {
@@ -1286,12 +1592,12 @@ async function parsePdfToJsonNode(pdfPath: string, name: string): Promise<Parsed
       };
     }).filter((row) => row.cells.some(Boolean));
 
-    diagnostics.rowClusters += rows.length;
+    tableDiagnostics.rowClusters += rows.length;
     let activeWeek = carryWeekNumber;
 
     for (const row of rows) {
       if (isRepeatedTableHeaderRow(row.cells)) {
-        diagnostics.rowsDroppedHeader += 1;
+        tableDiagnostics.rowsDroppedHeader += 1;
         continue;
       }
 
@@ -1299,14 +1605,14 @@ async function parsePdfToJsonNode(pdfPath: string, name: string): Promise<Parsed
       if (weekFromCell) {
         activeWeek = weekFromCell;
         carryWeekNumber = weekFromCell;
-        diagnostics.weekMarkersFound += 1;
+        tableDiagnostics.weekMarkersFound += 1;
       }
 
       const dayCells = row.cells.slice(1, 1 + DAY_KEYS.length);
       if (!dayCells.some((cell) => cell.length > 0)) continue;
 
       if (!activeWeek) {
-        diagnostics.rowsDroppedNoWeek += 1;
+        tableDiagnostics.rowsDroppedNoWeek += 1;
         continue;
       }
       const weekNumber = activeWeek;
@@ -1329,25 +1635,26 @@ async function parsePdfToJsonNode(pdfPath: string, name: string): Promise<Parsed
         rowStored = true;
       }
       if (rowStored || row.assignedCount > 0) {
-        diagnostics.rowsAssigned += 1;
+        tableDiagnostics.rowsAssigned += 1;
       }
     }
   }
 
-  const parsedWeeks = [...weeks.entries()]
-    .sort((a, b) => a[0] - b[0])
-    .map(([weekNumber, dayValues]) => ({
-      week_number: weekNumber,
-      days: DAY_KEYS.reduce((acc, day) => {
-        const raw = normalizeWhitespace((dayValues[day] || []).join(' '))
-          .replace(/\b([A-Za-z]+)-([A-Za-z]+)\b/g, '$1$2');
-        acc[day] = { raw };
-        return acc;
-      }, {} as Record<string, { raw: string }>)
-    }));
+  let parseMode: 'table' | 'text' = 'table';
+  let parsedWeeks = buildParsedWeeks(weeks);
+  let textFallbackDiagnostics: TextFallbackDiagnostics | null = null;
 
   if (!parsedWeeks.length) {
-    throw new Error('Node parser found no recognizable week/day table in this PDF.');
+    const fallback = await parseTextStructuredWeeks(pdf);
+    parsedWeeks = buildParsedWeeks(fallback.weeks);
+    textFallbackDiagnostics = fallback.diagnostics;
+    if (parsedWeeks.length) {
+      parseMode = 'text';
+    }
+  }
+
+  if (!parsedWeeks.length) {
+    throw new Error('Node parser found no recognizable week/day content in this PDF.');
   }
 
   return {
@@ -1357,11 +1664,16 @@ async function parsePdfToJsonNode(pdfPath: string, name: string): Promise<Parsed
     parser: 'node',
     parse_debug: {
       parser: 'node',
+      parseMode,
       diagnostics: {
-        ...diagnostics,
-        tokenAssignmentRate: diagnostics.tokenTotal > 0
-          ? Number((diagnostics.tokenAssigned / diagnostics.tokenTotal).toFixed(3))
-          : 0
+        ...(parseMode === 'table'
+          ? {
+            ...tableDiagnostics,
+            tokenAssignmentRate: tableDiagnostics.tokenTotal > 0
+              ? Number((tableDiagnostics.tokenAssigned / tableDiagnostics.tokenTotal).toFixed(3))
+              : 0
+          }
+          : (textFallbackDiagnostics || {}))
       }
     },
     weeks: parsedWeeks,
@@ -1369,7 +1681,9 @@ async function parsePdfToJsonNode(pdfPath: string, name: string): Promise<Parsed
       sections: [],
       entries: {},
       review_needed: [],
-      note: 'Parsed with Node fallback parser.'
+      note: parseMode === 'table'
+        ? 'Parsed with Node fallback parser (table mode).'
+        : 'Parsed with Node fallback parser (text-structured mode).'
     }
   };
 }
