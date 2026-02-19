@@ -5,10 +5,12 @@ import { useRouter } from 'next/navigation';
 
 export default function DayCompletionButton({
   dayId,
-  completed
+  completed,
+  successRedirectHref = null
 }: {
   dayId: string;
   completed: boolean;
+  successRedirectHref?: string | null;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -26,6 +28,10 @@ export default function DayCompletionButton({
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         setError(data?.error || 'Failed to update day status');
+        return;
+      }
+      if (successRedirectHref) {
+        router.replace(successRedirectHref);
         return;
       }
       router.refresh();

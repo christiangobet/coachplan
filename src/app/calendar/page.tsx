@@ -17,6 +17,7 @@ import {
 import AthleteSidebar from "@/components/AthleteSidebar";
 import CalendarActivityLogger from "@/components/CalendarActivityLogger";
 import DayCompletionButton from "@/components/DayCompletionButton";
+import ExternalSportIcon from "@/components/ExternalSportIcon";
 import RaceDetailsEditor from "@/components/RaceDetailsEditor";
 import SelectedPlanCookie from "@/components/SelectedPlanCookie";
 import "../dashboard/dashboard.css";
@@ -26,6 +27,7 @@ type CalendarSearchParams = {
   plan?: string;
   month?: string;
   date?: string;
+  returnTo?: string;
 };
 
 type ActivityType =
@@ -108,6 +110,13 @@ function formatType(type: string) {
   return type.replace(/_/g, " ").toLowerCase().replace(/^\w/, (c) => c.toUpperCase());
 }
 
+function formatProviderName(provider: string | null | undefined) {
+  const normalized = String(provider || "").trim().toUpperCase();
+  if (normalized === "STRAVA") return "Strava";
+  if (normalized === "GARMIN") return "Garmin";
+  return provider || "External";
+}
+
 function getTypeAbbr(type: string) {
   const key = (type in ACTIVITY_TYPE_ABBR ? type : "OTHER") as ActivityType;
   return ACTIVITY_TYPE_ABBR[key];
@@ -173,11 +182,12 @@ function toDateInputValue(value: Date | null | undefined) {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-function buildCalendarHref(month: Date, planId: string, selectedDate?: string | null) {
+function buildCalendarHref(month: Date, planId: string, selectedDate?: string | null, returnTo?: string | null) {
   const params = new URLSearchParams();
   params.set("month", monthParam(month));
   if (planId) params.set("plan", planId);
   if (selectedDate) params.set("date", selectedDate);
+  if (returnTo === "dashboard") params.set("returnTo", returnTo);
   return `/calendar?${params.toString()}`;
 }
 
@@ -312,6 +322,9 @@ export default async function CalendarPage({
   const requestedPlanId = typeof params.plan === "string" ? params.plan : "";
   const requestedMonth = typeof params.month === "string" ? params.month : undefined;
   const requestedDate = typeof params.date === "string" ? params.date : undefined;
+  const requestedReturnTo = typeof params.returnTo === "string" ? params.returnTo : "";
+  const returnToDashboard = requestedReturnTo === "dashboard";
+  const returnToParam = returnToDashboard ? "dashboard" : null;
   const cookieStore = await cookies();
   const cookiePlanId = cookieStore.get(SELECTED_PLAN_COOKIE)?.value || "";
 
@@ -454,8 +467,9 @@ export default async function CalendarPage({
     );
   const selectedDateKey = dateKey(defaultSelectedDate);
 
-  const prevMonthHref = buildCalendarHref(addMonths(monthStart, -1), selectedPlan.id, selectedDateKey);
-  const nextMonthHref = buildCalendarHref(addMonths(monthStart, 1), selectedPlan.id, selectedDateKey);
+  const prevMonthHref = buildCalendarHref(addMonths(monthStart, -1), selectedPlan.id, selectedDateKey, returnToParam);
+  const nextMonthHref = buildCalendarHref(addMonths(monthStart, 1), selectedPlan.id, selectedDateKey, returnToParam);
+  const dashboardReturnHref = returnToDashboard ? `/dashboard?plan=${encodeURIComponent(selectedPlan.id)}` : null;
 
   const externalRangeStart = normalizeDate(new Date(gridStart));
   const externalRangeEnd = normalizeDate(new Date(gridEnd));
@@ -575,7 +589,7 @@ export default async function CalendarPage({
               <span>Plan:</span>
               <div className="cal-plan-pills">
                 {plans.map((plan) => {
-                  const href = buildCalendarHref(monthStart, plan.id, selectedDateKey);
+                  const href = buildCalendarHref(monthStart, plan.id, selectedDateKey, returnToParam);
                   const isActive = plan.id === selectedPlan.id;
                   return (
                     <Link key={plan.id} href={href} className={`cal-plan-pill${isActive ? " active" : ""}`}>
@@ -606,8 +620,13 @@ export default async function CalendarPage({
                 const inPlan = planDateKeys.has(key);
                 const dayAutoDone = dayActivities.length > 0 && dayActivities.every((activity) => activity.completed);
                 const dayDone = Boolean(dayInfo?.manualDone || dayAutoDone);
+                const matchedStravaLogs = dayLogs.filter(
+                  (log) => log.provider === "STRAVA" && Boolean(log.matchedPlanActivityId)
+                );
+                const stravaMarkerLogs = matchedStravaLogs.slice(0, 3);
+                const stravaOverflow = Math.max(0, matchedStravaLogs.length - stravaMarkerLogs.length);
                 const moreCount = dayActivities.length > 3 ? dayActivities.length - 3 : 0;
-                const dayHref = `${buildCalendarHref(monthStart, selectedPlan.id, key)}#day-details-card`;
+                const dayHref = `${buildCalendarHref(monthStart, selectedPlan.id, key, returnToParam)}#day-details-card`;
                 return (
                   <div
                     key={key}
@@ -649,7 +668,24 @@ export default async function CalendarPage({
                           +{moreCount} more
                         </span>
                       )}
-                      {dayLogs.length > 0 && (
+                      {matchedStravaLogs.length > 0 ? (
+                        <span className="cal-strava-pill">
+                          <span className="cal-strava-pill-label">Strava:</span>
+                          <span className="cal-strava-pill-icons">
+                            {stravaMarkerLogs.map((log) => (
+                              <ExternalSportIcon
+                                key={log.id}
+                                provider={log.provider}
+                                sportType={log.sportType}
+                                className="cal-strava-icon"
+                              />
+                            ))}
+                            {stravaOverflow > 0 && (
+                              <span className="cal-strava-pill-more">+{stravaOverflow}</span>
+                            )}
+                          </span>
+                        </span>
+                      ) : dayLogs.length > 0 && (
                         <span className="cal-log-pill">
                           {dayLogs.length} log{dayLogs.length > 1 ? "s" : ""}
                         </span>
@@ -702,6 +738,7 @@ export default async function CalendarPage({
               <DayCompletionButton
                 dayId={selectedDayInfo.dayId}
                 completed={selectedDayDone}
+                successRedirectHref={dashboardReturnHref}
               />
             )}
 
@@ -757,6 +794,7 @@ export default async function CalendarPage({
                     activity={activity}
                     viewerUnit={viewerUnits}
                     enabled={selectedIsPastOrToday}
+                    successRedirectHref={dashboardReturnHref}
                   />
                 </div>
               ))}
@@ -773,8 +811,15 @@ export default async function CalendarPage({
               {selectedIsPastOrToday && selectedExternalLogs.map((log) => (
                 <div key={log.id} className="cal-day-detail-item log">
                   <div className="cal-day-detail-title">
-                    <strong>{log.name}</strong>
-                    <span>{log.provider} · {log.startTimeLabel || formatClock(log.startTime)}</span>
+                    <strong className="cal-day-log-title">
+                      <ExternalSportIcon
+                        provider={log.provider}
+                        sportType={log.sportType}
+                        className="cal-day-log-icon"
+                      />
+                      <span>{log.name}</span>
+                    </strong>
+                    <span>{formatProviderName(log.provider)} · {log.startTimeLabel || formatClock(log.startTime)}</span>
                   </div>
                   <div className="cal-day-detail-meta">
                     <span>{formatDistanceMeters(log.distanceM, viewerUnits)} · {formatDurationSeconds(log.durationSec)}</span>
@@ -790,6 +835,7 @@ export default async function CalendarPage({
                 <DayCompletionButton
                   dayId={selectedDayInfo.dayId}
                   completed={selectedDayDone}
+                  successRedirectHref={dashboardReturnHref}
                 />
               </div>
             )}

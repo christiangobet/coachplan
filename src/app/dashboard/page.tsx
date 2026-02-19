@@ -76,6 +76,7 @@ function buildCalendarDayDetailsHref(planId: string, date: Date) {
   params.set("plan", planId);
   params.set("month", toMonthParam(date));
   params.set("date", toDateKey(date));
+  params.set("returnTo", "dashboard");
   return `/calendar?${params.toString()}#day-details-card`;
 }
 

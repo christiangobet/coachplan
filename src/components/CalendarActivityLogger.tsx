@@ -23,6 +23,7 @@ type CalendarActivityLoggerProps = {
   };
   viewerUnit: DistanceUnit;
   enabled: boolean;
+  successRedirectHref?: string | null;
 };
 
 function toFieldValue(value: number | null | undefined) {
@@ -41,7 +42,8 @@ function parseNumericOrNull(raw: string) {
 export default function CalendarActivityLogger({
   activity,
   viewerUnit,
-  enabled
+  enabled,
+  successRedirectHref = null
 }: CalendarActivityLoggerProps) {
   const router = useRouter();
   const [actualDistance, setActualDistance] = useState('');
@@ -111,6 +113,10 @@ export default function CalendarActivityLogger({
       }
 
       setStatus(activity.completed ? 'Actuals updated.' : 'Activity completed and logged.');
+      if (successRedirectHref) {
+        router.replace(successRedirectHref);
+        return;
+      }
       router.refresh();
     } catch {
       setError('Failed to save log');

@@ -1649,6 +1649,70 @@
   background: #6b6b76;
 }
 
+.ext-sport-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.ext-sport-icon-glyph {
+  width: 12px;
+  height: 12px;
+}
+
+.ext-sport-run {
+  background: #fc4c02;
+}
+
+.ext-sport-ride {
+  background: #0b7dda;
+}
+
+.ext-sport-swim {
+  background: #10a6be;
+}
+
+.ext-sport-walk-hike {
+  background: #0f8a47;
+}
+
+.ext-sport-alpine-ski {
+  background: #1d4ed8;
+}
+
+.ext-sport-nordic-ski {
+  background: #0e7490;
+}
+
+.ext-sport-backcountry-ski {
+  background: #5b21b6;
+}
+
+.ext-sport-snowboard {
+  background: #374151;
+}
+
+.ext-sport-workout {
+  background: #6c5ce7;
+}
+
+.ext-sport-yoga {
+  background: #16a34a;
+}
+
+.ext-sport-row {
+  background: #2563eb;
+}
+
+.ext-sport-other {
+  background: #6b7280;
+}
+
 .dash-day-match-note {
   color: #0f8a47 !important;
   font-weight: 600;

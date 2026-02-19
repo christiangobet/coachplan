@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import ActivityTypeIcon from '@/components/ActivityTypeIcon';
+import ExternalSportIcon from '@/components/ExternalSportIcon';
+import { getExternalSportVisual } from '@/lib/integrations/external-sport-visuals';
 import {
   convertDistanceForDisplay,
   distanceUnitLabel,
@@ -58,6 +60,10 @@ type ReviewResponse = {
 
 function formatType(type: string) {
   return type.replace(/_/g, ' ').toLowerCase().replace(/^\w/, (char) => char.toUpperCase());
+}
+
+function formatStravaSportType(type: string | null | undefined) {
+  return getExternalSportVisual('STRAVA', type).label;
 }
 
 function formatPlanActivity(activity: PlanActivityRow, viewerUnits: DistanceUnit) {
@@ -329,15 +335,13 @@ export default function StravaActivityMatchTable() {
                           {day.stravaActivities.map((activity) => (
                             <div key={activity.id} className="dash-day-item strava">
                               <strong>
-                                <span className={`dash-type-icon type-${String(activity.sportType || 'OTHER').toLowerCase()}`}>
-                                  <ActivityTypeIcon
-                                    type={String(activity.sportType || 'OTHER')}
-                                    className="dash-type-icon-glyph"
-                                  />
-                                </span>
+                                <ExternalSportIcon
+                                  provider="STRAVA"
+                                  sportType={activity.sportType}
+                                />
                                 {activity.name}
                               </strong>
-                              <span>{formatType(activity.sportType || 'OTHER')}</span>
+                              <span>{formatStravaSportType(activity.sportType)}</span>
                               {formatStravaActivity(activity, viewerUnits) && <em>{formatStravaActivity(activity, viewerUnits)}</em>}
                             </div>
                           ))}
