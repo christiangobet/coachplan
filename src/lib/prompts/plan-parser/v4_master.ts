@@ -293,14 +293,18 @@ No explanations.
 No markdown.
 No commentary.
 
-COMPACT OUTPUT — MANDATORY (token budget is tight, output MUST fit 16 384 tokens):
-- Omit any key whose value would be null. NEVER write "key": null.
-- Omit any key whose value would be []. NEVER write "key": [].
-- Omit "priority" when false. ONLY write "priority": true when the session is a key session.
-- Omit "optional" when false. ONLY write "optional": true when the session is optional.
-- NEVER emit a "notes" field at all — it is not in the schema.
+OUTPUT FORMAT — CRITICAL (token budget is 16 384 tokens — every character counts):
+- Output MINIFIED JSON: no spaces between tokens, no newlines, no indentation.
+  Good: {"week_number":1,"sessions":[{"day_of_week":"Mon","activity_type":"Run","raw_text":"4 miles easy","distance_miles":4}]}
+  Bad:  {\n  "week_number": 1,\n  "sessions": [\n    {\n      "day_of_week": "Mon", ...
+- Omit any key whose value would be null. NEVER write "key":null.
+- Omit any key whose value would be []. NEVER write "key":[].
+- Omit "priority" when false. ONLY write "priority":true for key sessions.
+- Omit "optional" when false. ONLY write "optional":true for optional sessions.
+- NEVER emit a "notes" field — it is not in the schema.
 - NEVER omit distance_miles or distance_km when you can extract a number.
 - NEVER omit duration_minutes when a duration is present.
-- raw_text: maximum 50 characters. Include the distance/duration so the value is useful.
+- raw_text: maximum 50 characters. Include the distance/duration.
 - All other text values: maximum 60 characters each.
-- assumptions and program_notes: maximum 3 items, one sentence each.`;
+- assumptions and program_notes: maximum 3 items, one sentence each.
+- glossary values: maximum 80 characters each (abbreviate if needed).`;

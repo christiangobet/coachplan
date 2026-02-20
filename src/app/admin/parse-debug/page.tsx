@@ -23,16 +23,17 @@ function extractSummary(json: unknown): {
   sessionCount: number;
   qc: QualityChecks | null;
   truncated: boolean;
+  twoPass: boolean;
 } {
   if (!json || typeof json !== 'object') {
-    return { weeksDetected: null, weekNumbers: [], sessionCount: 0, qc: null, truncated: false };
+    return { weeksDetected: null, weekNumbers: [], sessionCount: 0, qc: null, truncated: false, twoPass: false };
   }
 
   const obj = json as Record<string, unknown>;
 
   // Detect truncation artifact
   if (obj._truncated === true) {
-    return { weeksDetected: null, weekNumbers: [], sessionCount: 0, qc: null, truncated: true };
+    return { weeksDetected: null, weekNumbers: [], sessionCount: 0, qc: null, truncated: true, twoPass: false };
   }
 
   const qc = (obj.quality_checks ?? null) as QualityChecks | null;
@@ -51,7 +52,8 @@ function extractSummary(json: unknown): {
     weekNumbers,
     sessionCount,
     qc,
-    truncated: false
+    truncated: false,
+    twoPass: obj._twoPass === true
   };
 }
 
@@ -171,6 +173,20 @@ export default async function ParseDebugPage() {
                         }}
                       >
                         TRUNCATED
+                      </span>
+                    )}
+                    {summary.twoPass && (
+                      <span
+                        style={{
+                          background: '#ede9fe',
+                          color: '#5b21b6',
+                          fontSize: 11,
+                          fontWeight: 600,
+                          padding: '1px 6px',
+                          borderRadius: 999
+                        }}
+                      >
+                        2-PASS
                       </span>
                     )}
                   </div>
