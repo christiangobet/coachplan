@@ -76,7 +76,7 @@ const PROGRAM_JSON_V1_SCHEMA = {
               items: {
                 type: 'object',
                 additionalProperties: false,
-                required: ['activity_type', 'priority', 'optional', 'raw_text'],
+                required: ['activity_type', 'raw_text'],
                 properties: {
                   day_of_week: {
                     type: ['string', 'null'],
@@ -89,15 +89,14 @@ const PROGRAM_JSON_V1_SCHEMA = {
                   },
                   priority: { type: 'boolean' },
                   optional: { type: 'boolean' },
-                  distance_km: { type: ['number', 'null'] },
-                  distance_miles: { type: ['number', 'null'] },
-                  duration_minutes: { type: ['integer', 'null'] },
-                  duration_min_minutes: { type: ['integer', 'null'] },
-                  duration_max_minutes: { type: ['integer', 'null'] },
-                  intensity: { type: ['string', 'null'] },
+                  distance_km: { type: 'number' },
+                  distance_miles: { type: 'number' },
+                  duration_minutes: { type: 'integer' },
+                  duration_min_minutes: { type: 'integer' },
+                  duration_max_minutes: { type: 'integer' },
+                  intensity: { type: 'string' },
                   steps: { type: 'array', items: { type: 'object', additionalProperties: true } },
                   optional_alternatives: { type: 'array', items: {} },
-                  notes: { type: ['string', 'null'] },
                   raw_text: { type: 'string' }
                 }
               }

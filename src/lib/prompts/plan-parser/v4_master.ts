@@ -70,23 +70,22 @@ OUTPUT STRUCTURE (STRICT)
           "session_role": string | null,
           "activity_type": "Run"|"Walk"|"CrossTraining"|"Strength"|"Rest"|"Race"|"Other",
 
-          "priority": boolean,
-          "optional": boolean,
+          "priority": true,         // ONLY emit when true; OMIT when false
+          "optional": true,          // ONLY emit when true; OMIT when false
 
-          "distance_km": number | null,
-          "distance_miles": number | null,
-          "duration_minutes": integer | null,
-          "duration_min_minutes": integer | null,
-          "duration_max_minutes": integer | null,
+          "distance_miles": number,  // OMIT if no distance
+          "distance_km": number,     // OMIT if no distance
 
-          "intensity": string | null,
+          "duration_minutes": integer,      // OMIT if no duration
+          "duration_min_minutes": integer,  // OMIT if no range
+          "duration_max_minutes": integer,  // OMIT if no range
 
-          "steps": [],
+          "intensity": string,       // OMIT if no intensity info
 
-          "optional_alternatives": [],
+          "steps": [],               // OMIT if empty
+          "optional_alternatives": [],// OMIT if empty
 
-          "notes": string | null,
-          "raw_text": string
+          "raw_text": string         // REQUIRED — max 50 chars
         }
       ]
     }
@@ -294,11 +293,14 @@ No explanations.
 No markdown.
 No commentary.
 
-COMPACT OUTPUT — MANDATORY (token budget is tight):
-- Omit any key whose value would be null. Do NOT write "key": null.
-- Omit any key whose value would be []. Do NOT write "key": [].
-- NEVER omit distance_miles or distance_km when you can extract a number — these are required data.
+COMPACT OUTPUT — MANDATORY (token budget is tight, output MUST fit 16 384 tokens):
+- Omit any key whose value would be null. NEVER write "key": null.
+- Omit any key whose value would be []. NEVER write "key": [].
+- Omit "priority" when false. ONLY write "priority": true when the session is a key session.
+- Omit "optional" when false. ONLY write "optional": true when the session is optional.
+- NEVER emit a "notes" field at all — it is not in the schema.
+- NEVER omit distance_miles or distance_km when you can extract a number.
 - NEVER omit duration_minutes when a duration is present.
-- raw_text: maximum 50 characters. Copy the core workout description including distance/duration.
+- raw_text: maximum 50 characters. Include the distance/duration so the value is useful.
 - All other text values: maximum 60 characters each.
 - assumptions and program_notes: maximum 3 items, one sentence each.`;
