@@ -620,11 +620,9 @@ export default async function CalendarPage({
                 const inPlan = planDateKeys.has(key);
                 const dayAutoDone = dayActivities.length > 0 && dayActivities.every((activity) => activity.completed);
                 const dayDone = Boolean(dayInfo?.manualDone || dayAutoDone);
-                const matchedStravaLogs = dayLogs.filter(
-                  (log) => log.provider === "STRAVA" && Boolean(log.matchedPlanActivityId)
-                );
-                const stravaMarkerLogs = matchedStravaLogs.slice(0, 3);
-                const stravaOverflow = Math.max(0, matchedStravaLogs.length - stravaMarkerLogs.length);
+                const stravaLogs = dayLogs.filter((log) => log.provider === "STRAVA");
+                const stravaMarkerLogs = stravaLogs.slice(0, 3);
+                const stravaOverflow = Math.max(0, stravaLogs.length - stravaMarkerLogs.length);
                 const moreCount = dayActivities.length > 3 ? dayActivities.length - 3 : 0;
                 const dayHref = `${buildCalendarHref(monthStart, selectedPlan.id, key, returnToParam)}#day-details-card`;
                 return (
@@ -668,7 +666,7 @@ export default async function CalendarPage({
                           +{moreCount} more
                         </span>
                       )}
-                      {matchedStravaLogs.length > 0 ? (
+                      {stravaLogs.length > 0 ? (
                         <span className="cal-strava-pill">
                           <span className="cal-strava-pill-label">Strava:</span>
                           <span className="cal-strava-pill-icons">
