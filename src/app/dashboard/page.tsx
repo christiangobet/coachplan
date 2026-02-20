@@ -501,6 +501,7 @@ export default async function DashboardPage({
     ? convertPaceForDisplay(todayActivity.actualPace, viewerUnits, todayActivity.distanceUnit || viewerUnits)
     : null;
   const todayDateKey = toDateKey(today);
+  const todayLogHref = buildCalendarDayDetailsHref(activePlan.id, today);
   const todayPlannedMetricParts = todayActivity
     ? buildPlannedMetricParts(todayActivity, viewerUnits)
     : [];
@@ -575,7 +576,7 @@ export default async function DashboardPage({
           <div className={`dash-hero${isRestDay ? " dash-hero-rest" : ""}`}>
             <div className="dash-hero-top">
               <span className="dash-hero-chip">Up Next</span>
-              <a className="dash-hero-top-link" href={`/plans/${activePlan.id}`}>View Plan</a>
+              <Link className="dash-hero-top-link" href={todayLogHref}>Log Day</Link>
             </div>
             <div className="dash-hero-label">TODAY · {dateStr}</div>
             {todayActivity && (
@@ -611,6 +612,9 @@ export default async function DashboardPage({
                     plannedDuration={todayActivity.duration}
                     distanceUnit={viewerUnits}
                   />
+                  <Link className="dash-btn-secondary" href={todayLogHref}>
+                    Log Day
+                  </Link>
                   <StravaDaySyncButton dateISO={todayDateKey} className="dash-btn-secondary" />
                   <a className="dash-btn-secondary" href={`/plans/${activePlan.id}`}>
                     View Plan
@@ -618,6 +622,9 @@ export default async function DashboardPage({
                 </>
               ) : (
                 <>
+                  <Link className="dash-btn-secondary" href={todayLogHref}>
+                    Log Day
+                  </Link>
                   <StravaDaySyncButton dateISO={todayDateKey} className="dash-btn-secondary" />
                   <a className="dash-btn-secondary" href={`/plans/${activePlan.id}`}>
                     View Plan
