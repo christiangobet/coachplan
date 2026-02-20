@@ -7,6 +7,8 @@ import os from 'os';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { parseWeekWithAI, maybeRunParserV4 } from '@/lib/ai-plan-parser';
+import { FLAGS } from '@/lib/feature-flags';
+import { populatePlanFromV4 } from '@/lib/parsing/v4-to-plan';
 import { alignWeeksToRaceDate } from '@/lib/clone-plan';
 import { canonicalizeTableLabel, extractWeekNumber, normalizePlanText } from '@/lib/plan-parser-i18n.mjs';
 import { hasConfiguredAiProvider } from '@/lib/openai';
@@ -2035,9 +2037,27 @@ export async function POST(req: Request) {
       const pdfPath = path.join(uploadDir, `${plan.id}.pdf`);
       await fs.writeFile(pdfPath, buffer);
 
-      // Parser V4: awaited so it completes before the serverless function exits.
-      // Errors are caught inside maybeRunParserV4 — legacy output is never affected.
-      await maybeRunParserV4(buffer, plan.id);
+      // Parser V4: run first, always awaited.
+      const v4Data = await maybeRunParserV4(buffer, plan.id);
+
+      // When V4 is primary and returned validated data, use it to populate the plan
+      // and skip the legacy per-week parser entirely.
+      if (FLAGS.PARSER_V4_PRIMARY && v4Data) {
+        const { weeksCreated, activitiesCreated } = await populatePlanFromV4(plan.id, v4Data);
+        console.info('[ParserV4] Primary mode: populated plan from V4', {
+          planId: plan.id,
+          weeksCreated,
+          activitiesCreated
+        });
+        if (raceDate && weeksCreated > 0) {
+          const parsedRaceDate = new Date(raceDate);
+          if (!Number.isNaN(parsedRaceDate.getTime())) {
+            await alignWeeksToRaceDate(plan.id, weeksCreated, parsedRaceDate);
+          }
+        }
+      }
+
+      if (!(FLAGS.PARSER_V4_PRIMARY && v4Data)) {
 
       const parsed = await withTimeout(
         parsePdfToJson(plan.id, pdfPath, name),
@@ -2210,6 +2230,7 @@ export async function POST(req: Request) {
           budgetMs: AI_WEEK_PARSE_TOTAL_BUDGET_MS
         });
       }
+      } // end if (legacy parser path)
     } catch (error) {
       const reason = (error as Error).message || 'Unknown parser error';
       parseWarning = reason;

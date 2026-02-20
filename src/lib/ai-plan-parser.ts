@@ -202,8 +202,9 @@ export async function parseWeekWithAI(args: {
 }
 
 /**
- * Bridge: run Parser V4 in parallel after the legacy parser has the PDF buffer.
- * Always resolves — never throws. Safe to call fire-and-forget.
+ * Bridge: run Parser V4 on the PDF buffer.
+ * Always resolves — never throws.
+ * Returns the validated ProgramJsonV1 data if parsing succeeded, or null.
  *
  * @param pdfBuffer  Raw PDF bytes from the upload
  * @param planId     Optional plan ID for linking the ParseJob record
@@ -211,9 +212,8 @@ export async function parseWeekWithAI(args: {
 export async function maybeRunParserV4(
   pdfBuffer: Buffer,
   planId?: string
-): Promise<void> {
-  if (!FLAGS.PARSER_V4) return;
-
+): Promise<import('./schemas/program-json-v1').ProgramJsonV1 | null> {
+  if (!FLAGS.PARSER_V4) return null;
   let jobId: string | null = null;
 
   const fail = async (err: unknown, phase: string) => {
@@ -238,7 +238,7 @@ export async function maybeRunParserV4(
     console.info('[ParserV4] Text extracted', { planId, chars: fullText.length });
   } catch (err) {
     await fail(err, 'extractPdfText');
-    return;
+    return null;
   }
 
   // 2. Create ParseJob
@@ -252,7 +252,7 @@ export async function maybeRunParserV4(
         planId,
         error: err instanceof Error ? err.message : String(err)
       });
-      return;
+      return null;
     }
   }
 
@@ -295,4 +295,6 @@ export async function maybeRunParserV4(
       await fail(err, 'saveArtifact');
     }
   }
+
+  return result?.validated && result.data ? result.data : null;
 }
