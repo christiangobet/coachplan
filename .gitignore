@@ -46,3 +46,7 @@ next-env.d.ts
 
 # PDF training plans
 *.pdf
+
+# local tooling artifacts
+.claude/
+.playwright-mcp/

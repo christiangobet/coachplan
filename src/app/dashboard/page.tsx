@@ -5,7 +5,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { getDayDateFromWeekStart, resolveWeekBounds } from "@/lib/plan-dates";
 import { ensureUserFromAuth } from "@/lib/user-sync";
-import { isDayMarkedDone } from "@/lib/day-status";
+import { getDayStatus } from "@/lib/day-status";
 import { pickSelectedPlan, SELECTED_PLAN_COOKIE } from "@/lib/plan-selection";
 import {
   convertDistanceForDisplay,
@@ -400,7 +400,6 @@ export default async function DashboardPage({
     ? weekDays
       .filter((day) => day.dayOfWeek <= isoDay)
       .map((day) => {
-        const manualDone = isDayMarkedDone(day.notes);
         const dayDate = getDayDateFromWeekStart(currentBounds?.startDate || null, day.dayOfWeek);
         const dayLabel = dayDate
           ? dayDate.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })
@@ -409,11 +408,20 @@ export default async function DashboardPage({
         const nonRest = activities.filter((activity: any) => activity.type !== "REST");
         const completedNonRest = nonRest.length > 0 && nonRest.every((activity: any) => activity.completed);
         const isRestOnly = activities.length > 0 && nonRest.length === 0;
+        const dayStatus = getDayStatus(day.notes);
+        const manualDone = dayStatus === 'DONE';
+        const manualMissed = dayStatus === 'MISSED';
 
         if (manualDone) {
           return {
             alert: false,
             text: `${dayLabel} · Done (manual)`
+          };
+        }
+        if (manualMissed) {
+          return {
+            alert: false,
+            text: `${dayLabel} · Missed (closed)`
           };
         }
         if (completedNonRest || isRestOnly) {
@@ -440,10 +448,18 @@ export default async function DashboardPage({
   /* Status items */
   const statusItems: { alert: boolean; text: string; href?: string | null }[] = [];
   for (const day of weekDays) {
-    if (isDayMarkedDone(day.notes)) {
+    const dayStatus = getDayStatus(day.notes);
+    if (dayStatus === 'DONE') {
       statusItems.push({
         alert: false,
         text: `${DAY_LABELS[Math.max(0, (day.dayOfWeek || 1) - 1)]} marked done`
+      });
+      continue;
+    }
+    if (dayStatus === 'MISSED') {
+      statusItems.push({
+        alert: false,
+        text: `${DAY_LABELS[Math.max(0, (day.dayOfWeek || 1) - 1)]} marked missed`
       });
       continue;
     }
@@ -469,7 +485,8 @@ export default async function DashboardPage({
       (a) => {
         const day = weekDays.find((d) => d.activities?.includes(a));
         if (!day) return false;
-        if (isDayMarkedDone(day.notes)) return false;
+        const dayStatus = getDayStatus(day.notes);
+        if (dayStatus === 'DONE' || dayStatus === 'MISSED') return false;
         return !a.completed && day.dayOfWeek < isoDay;
       }
     )
@@ -851,10 +868,12 @@ export default async function DashboardPage({
                     const day = idx + 1;
                     const dayEntry = weekByDay.get(day);
                     const hasActivities = dayEntry?.activities?.length > 0;
-                    const manualDone = isDayMarkedDone(dayEntry?.notes);
+                    const dayStatus = getDayStatus(dayEntry?.notes);
+                    const manualDone = dayStatus === 'DONE';
+                    const manualMissed = dayStatus === 'MISSED';
                     const allDone = manualDone || (hasActivities && dayEntry.activities.every((a: any) => a.completed));
                     const isToday = isTodayInsideCurrentWeek && day === isoDay;
-                    const isMissed = isTodayInsideCurrentWeek && hasActivities && !allDone && day < isoDay;
+                    const isMissed = manualMissed || (isTodayInsideCurrentWeek && hasActivities && !allDone && day < isoDay);
 
                     let dotClass = "dash-week-dot";
                     let dotContent = "";

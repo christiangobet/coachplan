@@ -3,7 +3,7 @@ import { cookies } from 'next/headers';
 import { prisma } from '@/lib/prisma';
 import { requireRoleApi } from '@/lib/role-guards';
 import { getDayDateFromWeekStart, resolveWeekBounds } from '@/lib/plan-dates';
-import { isDayMarkedDone } from '@/lib/day-status';
+import { isDayClosed } from '@/lib/day-status';
 import { pickSelectedPlan, SELECTED_PLAN_COOKIE } from '@/lib/plan-selection';
 
 function toDateKey(date: Date) {
@@ -42,7 +42,7 @@ function getStravaDateKeyFromRaw(raw: unknown, fallbackStartTime: Date) {
 }
 
 function isLockedPlanDay(notes: string | null | undefined, activities: Array<{ completed: boolean }>) {
-  return isDayMarkedDone(notes) || (activities.length > 0 && activities.every((activity) => activity.completed));
+  return isDayClosed(notes) || (activities.length > 0 && activities.every((activity) => activity.completed));
 }
 
 export async function GET(req: Request) {

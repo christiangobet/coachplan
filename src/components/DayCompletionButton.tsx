@@ -1,29 +1,40 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import type { DayStatus } from '@/lib/day-status';
 
 export default function DayCompletionButton({
   dayId,
-  completed,
+  status,
+  missedReason,
   successRedirectHref = null
 }: {
   dayId: string;
-  completed: boolean;
+  status: DayStatus;
+  missedReason?: string | null;
   successRedirectHref?: string | null;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [reasonDraft, setReasonDraft] = useState(missedReason || '');
 
-  async function toggle() {
+  useEffect(() => {
+    setReasonDraft(missedReason || '');
+  }, [missedReason, status]);
+
+  async function save(nextStatus: DayStatus) {
     setBusy(true);
     setError(null);
     try {
       const res = await fetch(`/api/plan-days/${dayId}/complete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ completed: !completed })
+        body: JSON.stringify({
+          status: nextStatus,
+          reason: nextStatus === 'MISSED' ? reasonDraft : null
+        })
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -44,14 +55,44 @@ export default function DayCompletionButton({
 
   return (
     <div className="cal-day-toggle">
-      <button
-        type="button"
-        className={`dash-sync-btn ${completed ? 'is-done' : ''}`}
-        onClick={toggle}
-        disabled={busy}
-      >
-        {busy ? 'Saving...' : completed ? 'Mark Day Not Done' : 'Mark Day Done'}
-      </button>
+      {status === 'MISSED' && (
+        <textarea
+          value={reasonDraft}
+          onChange={(event) => setReasonDraft(event.target.value)}
+          maxLength={240}
+          placeholder="Optional: why this day was missed"
+          className="cal-day-missed-reason"
+          disabled={busy}
+        />
+      )}
+      <div className="cal-day-toggle-actions">
+        <button
+          type="button"
+          className={`dash-sync-btn ${status === 'DONE' ? 'is-done' : ''}`}
+          onClick={() => save('DONE')}
+          disabled={busy || status === 'DONE'}
+        >
+          {busy && status !== 'DONE' ? 'Saving...' : status === 'DONE' ? 'Day Done' : 'Mark Day Done'}
+        </button>
+        <button
+          type="button"
+          className={`dash-sync-btn is-warning ${status === 'MISSED' ? 'is-missed' : ''}`}
+          onClick={() => save('MISSED')}
+          disabled={busy}
+        >
+          {busy && status !== 'MISSED' ? 'Saving...' : status === 'MISSED' ? 'Update Missed Day' : 'Close as Missed'}
+        </button>
+        {status !== 'OPEN' && (
+          <button
+            type="button"
+            className="dash-sync-btn is-neutral"
+            onClick={() => save('OPEN')}
+            disabled={busy}
+          >
+            Reopen Day
+          </button>
+        )}
+      </div>
       {error && <span className="cal-day-toggle-error">{error}</span>}
     </div>
   );

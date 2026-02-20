@@ -6,7 +6,7 @@ import { prisma } from '@/lib/prisma';
 import { getDefaultAiModel, openaiJsonSchema } from '@/lib/openai';
 import { ensureUserFromAuth } from '@/lib/user-sync';
 import { getDayDateFromWeekStart, resolveWeekBounds } from '@/lib/plan-dates';
-import { isDayMarkedDone } from '@/lib/day-status';
+import { isDayClosed } from '@/lib/day-status';
 
 import {
   applyAdjustmentProposal,
@@ -583,7 +583,7 @@ function buildPlanContext(plan: NonNullable<PlanForContext>) {
         weekIndex: week.weekIndex,
         dayOfWeek: day.dayOfWeek,
         dateISO: date ? new Date(date).toISOString().slice(0, 10) : null,
-        isLocked: isDayMarkedDone(day.notes) || (dayActivities.length > 0 && dayActivities.every((activity) => activity.completed)),
+        isLocked: isDayClosed(day.notes) || (dayActivities.length > 0 && dayActivities.every((activity) => activity.completed)),
         activities: dayActivities.map((activity) => ({
           activityId: activity.id,
           title: activity.title,

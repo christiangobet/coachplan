@@ -5,7 +5,7 @@ import { currentUser } from "@clerk/nextjs/server";
 import { prisma } from "@/lib/prisma";
 import { getDayDateFromWeekStart, resolveWeekBounds } from "@/lib/plan-dates";
 import { ensureUserFromAuth } from "@/lib/user-sync";
-import { isDayMarkedDone } from "@/lib/day-status";
+import { getDayMissedReason, getDayStatus, type DayStatus } from "@/lib/day-status";
 import { pickSelectedPlan, SELECTED_PLAN_COOKIE } from "@/lib/plan-selection";
 import {
   convertDistanceForDisplay,
@@ -76,7 +76,8 @@ type DayExternalLog = {
 
 type DayInfo = {
   dayId: string;
-  manualDone: boolean;
+  manualStatus: DayStatus;
+  missedReason: string | null;
 };
 
 const WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -398,7 +399,8 @@ export default async function CalendarPage({
       if (!dayInfoByDate.has(key)) {
         dayInfoByDate.set(key, {
           dayId: day.id,
-          manualDone: isDayMarkedDone(day.notes)
+          manualStatus: getDayStatus(day.notes),
+          missedReason: getDayMissedReason(day.notes)
         });
       }
 
@@ -534,8 +536,11 @@ export default async function CalendarPage({
   const selectedPlanActivities = activitiesByDate.get(selectedDateKey) || [];
   const selectedExternalLogs = externalByDate.get(selectedDateKey) || [];
   const selectedIsPastOrToday = selectedDate.getTime() <= today.getTime();
+  const selectedManualStatus = selectedDayInfo?.manualStatus || 'OPEN';
   const selectedDayAutoDone = selectedPlanActivities.length > 0 && selectedPlanActivities.every((activity) => activity.completed);
-  const selectedDayDone = Boolean(selectedDayInfo?.manualDone || selectedDayAutoDone);
+  const selectedDayStatus: DayStatus = selectedDayAutoDone ? 'DONE' : selectedManualStatus;
+  const selectedDayDone = selectedDayStatus === 'DONE';
+  const selectedDayMissed = selectedDayStatus === 'MISSED';
 
   const monthWorkoutCount = dayCells
     .filter((date) => date.getMonth() === monthStart.getMonth() && date.getFullYear() === monthStart.getFullYear())
@@ -629,8 +634,11 @@ export default async function CalendarPage({
                 const isSelected = key === selectedDateKey;
                 const isOutMonth = date.getMonth() !== monthStart.getMonth();
                 const inPlan = planDateKeys.has(key);
+                const dayManualStatus = dayInfo?.manualStatus || 'OPEN';
                 const dayAutoDone = dayActivities.length > 0 && dayActivities.every((activity) => activity.completed);
-                const dayDone = Boolean(dayInfo?.manualDone || dayAutoDone);
+                const dayStatus: DayStatus = dayAutoDone ? 'DONE' : dayManualStatus;
+                const dayDone = dayStatus === 'DONE';
+                const dayMissed = dayStatus === 'MISSED';
                 const stravaLogs = dayLogs.filter((log) => log.provider === "STRAVA");
                 const stravaMarkerLogs = stravaLogs.slice(0, 3);
                 const stravaOverflow = Math.max(0, stravaLogs.length - stravaMarkerLogs.length);
@@ -645,6 +653,7 @@ export default async function CalendarPage({
                       isToday ? "today" : "",
                       isSelected ? "selected" : "",
                       dayDone ? "day-done" : "",
+                      dayMissed ? "day-missed" : "",
                       inPlan ? "in-plan" : ""
                     ].join(" ").trim()}
                   >
@@ -653,6 +662,7 @@ export default async function CalendarPage({
                       <span className="cal-day-number">{date.getDate()}</span>
                       <div className="cal-day-head-badges">
                         {dayDone && <span className="cal-day-check" title="Day completed">✓</span>}
+                        {dayMissed && <span className="cal-day-check missed" title="Day closed as missed">○</span>}
                         {inPlan && <span className="cal-plan-dot" title="In plan window" />}
                       </div>
                     </div>
@@ -740,15 +750,22 @@ export default async function CalendarPage({
               <div className="cal-day-detail-header-badges">
                 {selectedDateKey === dateKey(today) && <span>TODAY</span>}
                 {selectedDayDone && <span className="done">DONE</span>}
+                {selectedDayMissed && <span className="missed">MISSED</span>}
               </div>
             </div>
 
             {selectedDayInfo && (
               <DayCompletionButton
                 dayId={selectedDayInfo.dayId}
-                completed={selectedDayDone}
+                status={selectedDayStatus}
+                missedReason={selectedDayInfo.missedReason}
                 successRedirectHref={dashboardReturnHref}
               />
+            )}
+            {selectedDayMissed && selectedDayInfo?.missedReason && (
+              <p className="cal-day-missed-note">
+                Missed reason: {selectedDayInfo.missedReason}
+              </p>
             )}
 
             <div className="cal-day-detail-section">
@@ -861,7 +878,8 @@ export default async function CalendarPage({
               <div className="cal-mobile-day-done">
                 <DayCompletionButton
                   dayId={selectedDayInfo.dayId}
-                  completed={selectedDayDone}
+                  status={selectedDayStatus}
+                  missedReason={selectedDayInfo.missedReason}
                   successRedirectHref={dashboardReturnHref}
                 />
               </div>

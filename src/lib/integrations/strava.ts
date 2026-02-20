@@ -2,7 +2,7 @@ import { ActivityType, ExternalAccount, Units } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { getDayDateFromWeekStart, resolveWeekBounds } from '@/lib/plan-dates';
 import { createIntegrationStateToken } from '@/lib/integrations/state';
-import { isDayMarkedDone } from '@/lib/day-status';
+import { isDayClosed } from '@/lib/day-status';
 import { pickSelectedPlan } from '@/lib/plan-selection';
 
 const STRAVA_AUTH_URL = 'https://www.strava.com/oauth/authorize';
@@ -137,7 +137,7 @@ function isLockedPlanDay(
   notes: string | null | undefined,
   activities: Array<{ completed: boolean }>
 ) {
-  return isDayMarkedDone(notes) || (activities.length > 0 && activities.every((activity) => activity.completed));
+  return isDayClosed(notes) || (activities.length > 0 && activities.every((activity) => activity.completed));
 }
 
 function buildStravaRedirectUri(origin: string) {
