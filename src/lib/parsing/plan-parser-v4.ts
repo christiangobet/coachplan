@@ -158,7 +158,7 @@ export async function runParserV4(fullText: string): Promise<ParserV4Result> {
         model,
         validated: false,
         data: null,
-        rawJson: { _truncated: true, rawText: err.rawText.slice(0, 10000) },
+        rawJson: { _truncated: true, rawText: err.rawText.slice(0, 20000) },
         validationError: 'Response was not valid JSON — raw text saved as artifact',
         truncated: true
       };

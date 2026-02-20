@@ -285,6 +285,9 @@ No explanations.
 No markdown.
 No commentary.
 
-Keep ALL text values concise — under 80 characters each.
-Use null instead of empty strings or empty arrays where data is absent.
-assumptions and program_notes: maximum 3 items, one sentence each.`;
+COMPACT OUTPUT — MANDATORY (token budget is tight):
+- Omit any key whose value would be null. Do NOT write "key": null.
+- Omit any key whose value would be []. Do NOT write "key": [].
+- raw_text: maximum 40 characters. Copy only the core workout description.
+- All other text values: maximum 60 characters each.
+- assumptions and program_notes: maximum 3 items, one sentence each.`;

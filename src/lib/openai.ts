@@ -172,7 +172,7 @@ async function requestJsonSchema<T>(
   try {
     return JSON.parse(stripJsonFences(text)) as T;
   } catch {
-    console.error("[openai] JSON parse failed. Raw response preview:", text.slice(0, 500));
+    console.error("[openai] JSON parse failed. Response length:", text.length, "chars. Preview:", text.slice(0, 500));
     throw new JsonParseError(text);
   }
 }
