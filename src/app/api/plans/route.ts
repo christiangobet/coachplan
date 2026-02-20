@@ -2035,8 +2035,9 @@ export async function POST(req: Request) {
       const pdfPath = path.join(uploadDir, `${plan.id}.pdf`);
       await fs.writeFile(pdfPath, buffer);
 
-      // Parser V4: run in parallel, fire-and-forget, never affects legacy output.
-      void maybeRunParserV4(buffer, plan.id);
+      // Parser V4: awaited so it completes before the serverless function exits.
+      // Errors are caught inside maybeRunParserV4 — legacy output is never affected.
+      await maybeRunParserV4(buffer, plan.id);
 
       const parsed = await withTimeout(
         parsePdfToJson(plan.id, pdfPath, name),

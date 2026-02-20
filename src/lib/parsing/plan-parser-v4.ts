@@ -1,6 +1,6 @@
 // Server-side only — calls AI APIs and DB.
 import { openaiJsonSchema, getDefaultAiModel } from '@/lib/openai';
-import { loadPrompt } from '@/lib/prompts/loader';
+import { V4_MASTER_PROMPT } from '@/lib/prompts/plan-parser/v4_master';
 import { ProgramJsonV1Schema, type ProgramJsonV1 } from '@/lib/schemas/program-json-v1';
 
 const PARSER_VERSION = 'v4';
@@ -130,10 +130,9 @@ export type ParserV4Result = {
  */
 export async function runParserV4(fullText: string): Promise<ParserV4Result> {
   const model = getDefaultAiModel();
-  const promptTemplate = await loadPrompt('plan-parser/v4_master.txt');
 
   const input = [
-    promptTemplate,
+    V4_MASTER_PROMPT,
     '',
     'Raw plan text:',
     fullText.slice(0, 50000) // guard against enormous PDFs
