@@ -743,6 +743,28 @@
   grid-area: type;
 }
 
+.review-col-type-highlight {
+  padding: 8px;
+  border: 1px solid #c7d7f2;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #f5f9ff 0%, #edf4ff 100%);
+}
+
+.review-col-type-highlight > span {
+  font-size: 11px;
+  font-weight: 700;
+  color: #3a5278;
+  letter-spacing: 0.02em;
+}
+
+.review-col-type-highlight select {
+  min-height: 34px;
+  font-size: 13px;
+  font-weight: 700;
+  border-color: #b7cbe9;
+  background: #ffffff;
+}
+
 .review-col-distance {
   grid-area: distance;
 }

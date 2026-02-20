@@ -418,7 +418,7 @@ export default function PlanReviewPage() {
     for (const week of nextPlan.weeks || []) {
       for (const day of week.days || []) {
         nextDayDrafts[day.id] = day.rawText || '';
-        nextExpandedDayNotes[day.id] = true;
+        nextExpandedDayNotes[day.id] = false;
         for (const activity of day.activities || []) {
           nextActivityDrafts[activity.id] = toActivityDraft(activity, fallbackUnit);
         }
@@ -1777,7 +1777,7 @@ export default function PlanReviewPage() {
               {days.length === 0 && <p className="review-muted">No days parsed for this week.</p>}
 
               {days.map((day) => {
-                const notesOpen = expandedDayNotes[day.id] ?? true;
+                const notesOpen = expandedDayNotes[day.id] ?? false;
                 return (
                   <div key={day.id} className="review-day-block">
                     <div className="review-day-head">
@@ -1918,8 +1918,8 @@ export default function PlanReviewPage() {
                                 />
                               </label>
 
-                              <label className="review-field review-field-compact review-col-type">
-                                <span>Type</span>
+                              <label className="review-field review-col-type review-col-type-highlight">
+                                <span>Workout Type</span>
                                 <select
                                   value={draft.type}
                                   onChange={(event) =>
