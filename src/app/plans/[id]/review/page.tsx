@@ -367,6 +367,7 @@ export default function PlanReviewPage() {
   const [queuedDayIds, setQueuedDayIds] = useState<Record<string, boolean>>({});
 
   const [activityDrafts, setActivityDrafts] = useState<Record<string, ActivityDraft>>({});
+  const [expandedActivityDetails, setExpandedActivityDetails] = useState<Record<string, boolean>>({});
   const [savingActivityIds, setSavingActivityIds] = useState<Record<string, boolean>>({});
   const [queuedActivityIds, setQueuedActivityIds] = useState<Record<string, boolean>>({});
   const [creatingDayId, setCreatingDayId] = useState<string | null>(null);
@@ -414,6 +415,7 @@ export default function PlanReviewPage() {
     const nextDayDrafts: Record<string, string> = {};
     const nextExpandedDayNotes: Record<string, boolean> = {};
     const nextActivityDrafts: Record<string, ActivityDraft> = {};
+    const nextExpandedActivityDetails: Record<string, boolean> = {};
 
     for (const week of nextPlan.weeks || []) {
       for (const day of week.days || []) {
@@ -421,6 +423,7 @@ export default function PlanReviewPage() {
         nextExpandedDayNotes[day.id] = false;
         for (const activity of day.activities || []) {
           nextActivityDrafts[activity.id] = toActivityDraft(activity, fallbackUnit);
+          nextExpandedActivityDetails[activity.id] = false;
         }
       }
     }
@@ -428,6 +431,7 @@ export default function PlanReviewPage() {
     setDayDrafts(nextDayDrafts);
     setExpandedDayNotes(nextExpandedDayNotes);
     setActivityDrafts(nextActivityDrafts);
+    setExpandedActivityDetails(nextExpandedActivityDetails);
   }, []);
 
   const loadPlan = useCallback(async () => {
@@ -998,6 +1002,7 @@ export default function PlanReviewPage() {
         const createdActivity = data?.activity as ReviewActivity;
         setPlan((prev) => (prev ? appendActivityToDayPlan(prev, dayId, createdActivity) : prev));
         setActivityDrafts((prev) => ({ ...prev, [createdActivity.id]: toActivityDraft(createdActivity, viewerUnits) }));
+        setExpandedActivityDetails((prev) => ({ ...prev, [createdActivity.id]: true }));
         setNotice('Activity added');
       } catch {
         setError('Failed to add activity');
@@ -1032,6 +1037,11 @@ export default function PlanReviewPage() {
         }
         setPlan((prev) => (prev ? removeActivityFromPlan(prev, activityId) : prev));
         setActivityDrafts((prev) => {
+          const next = { ...prev };
+          delete next[activityId];
+          return next;
+        });
+        setExpandedActivityDetails((prev) => {
           const next = { ...prev };
           delete next[activityId];
           return next;
@@ -1821,13 +1831,31 @@ export default function PlanReviewPage() {
                         const draft = activityDrafts[activity.id] || toActivityDraft(activity, viewerUnits);
                         const paceUnitLabel = (draft.distanceUnit || viewerUnits) === 'KM' ? 'km' : 'mi';
                         const hasDistance = draft.distance.trim() !== '';
+                        const isRunActivity = draft.type === 'RUN';
+                        const hasPaceTarget = draft.paceTarget.trim() !== '';
+                        const showPaceField = isRunActivity || hasPaceTarget;
+                        const detailsOpen = expandedActivityDetails[activity.id] ?? false;
                         const activitySaving = Boolean(savingActivityIds[activity.id] || queuedActivityIds[activity.id]);
+                        const activityDisplayType = draft.type.replace(/_/g, ' ');
+                        const activityTitle = draft.title.trim() || activityDisplayType;
                         return (
                           <div key={activity.id} className="review-activity-item review-activity-item-compact">
                             <div className="review-activity-top">
-                              <strong>{activity.type.replace(/_/g, ' ')}</strong>
+                              <div className="review-activity-summary">
+                                <strong>{activityTitle}</strong>
+                                <span>{activityDisplayType}</span>
+                              </div>
                               <div className="review-activity-actions">
                                 {activitySaving && <span className="review-inline-status">Saving…</span>}
+                                <button
+                                  className="review-save-btn secondary review-details-toggle"
+                                  type="button"
+                                  onClick={() =>
+                                    setExpandedActivityDetails((prev) => ({ ...prev, [activity.id]: !detailsOpen }))
+                                  }
+                                >
+                                  {detailsOpen ? 'Hide Details' : 'Edit Details'}
+                                </button>
                                 <button
                                   className="review-delete-btn text"
                                   type="button"
@@ -1839,7 +1867,7 @@ export default function PlanReviewPage() {
                               </div>
                             </div>
 
-                            <div className="review-activity-grid">
+                            <div className="review-activity-quick-grid">
                               <label className="review-field review-col-activity">
                                 <span>Activity</span>
                                 <input
@@ -1852,23 +1880,7 @@ export default function PlanReviewPage() {
                               </label>
 
                               <label className="review-field review-col-distance">
-                                <div className="review-field-label-row">
-                                  <span>Distance</span>
-                                  <span className="review-help-wrap">
-                                    <button
-                                      type="button"
-                                      className="review-help-dot"
-                                      aria-label="Distance unit help"
-                                    >
-                                      ?
-                                    </button>
-                                    <span className="review-help-popover" role="tooltip">
-                                      {hasDistance
-                                        ? 'Unit is auto-set by parser/profile. Change only if needed.'
-                                        : `Unit will default to ${viewerUnits === 'KM' ? 'km' : 'mi'} once distance is entered.`}
-                                    </span>
-                                  </span>
-                                </div>
+                                <span>Distance</span>
                                 <div className={`review-distance-input-row${hasDistance ? '' : ' single'}`}>
                                   <input
                                     type="number"
@@ -1907,17 +1919,6 @@ export default function PlanReviewPage() {
                                 />
                               </label>
 
-                              <label className="review-field review-col-instructions">
-                                <span>Instructions</span>
-                                <textarea
-                                  value={draft.rawText}
-                                  onChange={(event) =>
-                                    setActivityDraftField(activity.id, 'rawText', event.target.value)
-                                  }
-                                  rows={2}
-                                />
-                              </label>
-
                               <label className="review-field review-col-type review-col-type-highlight">
                                 <span>Workout Type</span>
                                 <select
@@ -1935,58 +1936,73 @@ export default function PlanReviewPage() {
                                   ))}
                                 </select>
                               </label>
-
-                              <label className="review-field review-field-compact review-col-pace">
-                                <span>Pace</span>
-                                {draft.type === 'RUN' ? (
-                                  <div className="review-pace-categories" role="radiogroup" aria-label="Run pace category">
-                                    {PACE_BUCKET_OPTIONS.map((option) => {
-                                      const selected = draft.paceTargetBucket === option.value;
-                                      return (
-                                        <button
-                                          key={`${activity.id}-${option.value}`}
-                                          type="button"
-                                          className={`review-pace-chip${selected ? ' active' : ''}`}
-                                          aria-label={option.label}
-                                          aria-pressed={selected}
-                                          onClick={() => applyPaceBucket(activity.id, option.value)}
-                                          title={`${option.label}${profilePaces[option.value] ? ` · ${profilePaces[option.value]}` : ''}`}
-                                        >
-                                          {option.short}
-                                        </button>
-                                      );
-                                    })}
-                                  </div>
-                                ) : (
-                                  <span className="review-field-hint">No pace category for this activity type.</span>
-                                )}
-                                <input
-                                  type="text"
-                                  value={draft.paceTarget}
-                                  onChange={(event) =>
-                                    setActivityDraftField(activity.id, 'paceTarget', event.target.value)
-                                  }
-                                  placeholder={`4:45 /${paceUnitLabel}`}
-                                />
-                                {draft.type === 'RUN' && draft.paceTargetBucket && !profilePaces[draft.paceTargetBucket] && (
-                                  <span className="review-field-hint">
-                                    Set {PACE_BUCKET_OPTIONS.find((option) => option.value === draft.paceTargetBucket)?.label || 'this'} pace in Profile for auto-fill.
-                                  </span>
-                                )}
-                              </label>
-
-                              <label className="review-field review-field-compact review-col-effort">
-                                <span>Effort</span>
-                                <input
-                                  type="text"
-                                  value={draft.effortTarget}
-                                  onChange={(event) =>
-                                    setActivityDraftField(activity.id, 'effortTarget', event.target.value)
-                                  }
-                                  placeholder="RPE 6 or Z2"
-                                />
-                              </label>
                             </div>
+
+                            {detailsOpen && (
+                              <div className={`review-activity-details${showPaceField ? '' : ' no-pace'}`}>
+                                <label className="review-field review-col-instructions">
+                                  <span>Instructions</span>
+                                  <textarea
+                                    value={draft.rawText}
+                                    onChange={(event) =>
+                                      setActivityDraftField(activity.id, 'rawText', event.target.value)
+                                    }
+                                    rows={2}
+                                  />
+                                </label>
+
+                                {showPaceField && (
+                                  <label className="review-field review-field-compact review-col-pace">
+                                    <span>Pace</span>
+                                    {isRunActivity && (
+                                      <div className="review-pace-categories" role="radiogroup" aria-label="Run pace category">
+                                        {PACE_BUCKET_OPTIONS.map((option) => {
+                                          const selected = draft.paceTargetBucket === option.value;
+                                          return (
+                                            <button
+                                              key={`${activity.id}-${option.value}`}
+                                              type="button"
+                                              className={`review-pace-chip${selected ? ' active' : ''}`}
+                                              aria-label={option.label}
+                                              aria-pressed={selected}
+                                              onClick={() => applyPaceBucket(activity.id, option.value)}
+                                              title={`${option.label}${profilePaces[option.value] ? ` · ${profilePaces[option.value]}` : ''}`}
+                                            >
+                                              {option.short}
+                                            </button>
+                                          );
+                                        })}
+                                      </div>
+                                    )}
+                                    <input
+                                      type="text"
+                                      value={draft.paceTarget}
+                                      onChange={(event) =>
+                                        setActivityDraftField(activity.id, 'paceTarget', event.target.value)
+                                      }
+                                      placeholder={`4:45 /${paceUnitLabel}`}
+                                    />
+                                    {isRunActivity && draft.paceTargetBucket && !profilePaces[draft.paceTargetBucket] && (
+                                      <span className="review-field-hint">
+                                        Set {PACE_BUCKET_OPTIONS.find((option) => option.value === draft.paceTargetBucket)?.label || 'this'} pace in Profile for auto-fill.
+                                      </span>
+                                    )}
+                                  </label>
+                                )}
+
+                                <label className="review-field review-field-compact review-col-effort">
+                                  <span>Effort</span>
+                                  <input
+                                    type="text"
+                                    value={draft.effortTarget}
+                                    onChange={(event) =>
+                                      setActivityDraftField(activity.id, 'effortTarget', event.target.value)
+                                    }
+                                    placeholder="RPE 6 or Z2"
+                                  />
+                                </label>
+                              </div>
+                            )}
                           </div>
                         );
                       })}

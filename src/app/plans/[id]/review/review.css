@@ -640,20 +640,20 @@
 
 .review-activity-list {
   display: grid;
-  gap: 6px;
+  gap: 12px;
 }
 
 .review-activity-item {
-  border: 1px solid #d5e1f4;
-  border-radius: 12px;
-  background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
-  padding: 9px;
+  border: 1px solid #dee7f5;
+  border-radius: 14px;
+  background: #ffffff;
+  padding: 12px;
   display: grid;
-  gap: 7px;
+  gap: 10px;
 }
 
 .review-activity-item-compact {
-  border-color: #d2dff3;
+  border-color: #d9e4f4;
 }
 
 .review-activity-top {
@@ -669,22 +669,43 @@
   gap: 8px;
 }
 
-.review-activity-top strong {
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: #4f607d;
+.review-activity-top {
+  border-bottom: 1px solid #edf2fb;
+  padding-bottom: 8px;
 }
 
-.review-activity-top {
-  border-bottom: 1px solid #e7eef9;
-  padding-bottom: 6px;
+.review-activity-summary {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.review-activity-summary strong {
+  font-size: 14px;
+  font-weight: 700;
+  color: #2a3f61;
+  letter-spacing: -0.01em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.review-activity-summary span {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #7a8aa4;
+  font-weight: 700;
 }
 
 .review-inline-status {
   font-size: 11px;
   color: #4f617f;
   font-weight: 700;
+}
+
+.review-details-toggle {
+  height: 30px;
 }
 
 .review-delete-btn {
@@ -725,14 +746,29 @@
   background: transparent;
 }
 
-.review-activity-grid {
+.review-activity-quick-grid {
   display: grid;
-  grid-template-columns: minmax(220px, 2.8fr) minmax(150px, 1.4fr) minmax(120px, 1fr);
+  grid-template-columns: minmax(220px, 2.3fr) minmax(180px, 1.2fr) minmax(170px, 1.1fr) minmax(130px, 1fr);
   grid-template-areas:
-    "activity distance duration"
-    "instructions instructions instructions"
-    "type pace effort";
-  gap: 8px;
+    "activity type distance duration";
+  gap: 12px;
+}
+
+.review-activity-details {
+  display: grid;
+  grid-template-columns: minmax(220px, 2fr) minmax(160px, 1fr);
+  grid-template-areas:
+    "instructions instructions"
+    "pace effort";
+  gap: 12px;
+  border-top: 1px solid #edf2fb;
+  padding-top: 10px;
+}
+
+.review-activity-details.no-pace {
+  grid-template-areas:
+    "instructions instructions"
+    "effort effort";
 }
 
 .review-col-activity {
@@ -745,9 +781,9 @@
 
 .review-col-type-highlight {
   padding: 8px;
-  border: 1px solid #c7d7f2;
+  border: 1px solid #d5e1f3;
   border-radius: 10px;
-  background: linear-gradient(180deg, #f5f9ff 0%, #edf4ff 100%);
+  background: #f7faff;
 }
 
 .review-col-type-highlight > span {
@@ -761,7 +797,7 @@
   min-height: 34px;
   font-size: 13px;
   font-weight: 700;
-  border-color: #b7cbe9;
+  border-color: #cad8ee;
   background: #ffffff;
 }
 
@@ -790,7 +826,7 @@
 }
 
 .review-col-instructions textarea {
-  min-height: 54px;
+  min-height: 64px;
 }
 
 .review-field-compact {
@@ -808,8 +844,18 @@
   min-height: 30px;
   font-size: 12px;
   padding: 5px 8px;
-  border-color: #d5dff2;
-  background: #f8fbff;
+  border-color: #d1dcef;
+  background: #ffffff;
+}
+
+.review-activity-quick-grid .review-field > span,
+.review-activity-details .review-field > span,
+.review-activity-quick-grid .review-field-label-row > span:first-child,
+.review-activity-details .review-field-label-row > span:first-child {
+  text-transform: none;
+  font-size: 10px;
+  letter-spacing: 0.015em;
+  color: #73839d;
 }
 
 .review-pace-categories {
@@ -1039,13 +1085,24 @@
     padding-right: 0;
   }
 
-  .review-activity-grid {
+  .review-activity-quick-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     grid-template-areas:
       "activity activity"
-      "distance duration"
+      "type distance"
+      "duration duration";
+  }
+
+  .review-activity-details {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-areas:
       "instructions instructions"
-      "type pace"
+      "pace effort";
+  }
+
+  .review-activity-details.no-pace {
+    grid-template-areas:
+      "instructions instructions"
       "effort effort";
   }
 
@@ -1074,15 +1131,26 @@
     grid-template-columns: 1fr;
   }
 
-  .review-activity-grid {
+  .review-activity-quick-grid {
     grid-template-columns: 1fr;
     grid-template-areas:
       "activity"
-      "distance"
-      "duration"
-      "instructions"
       "type"
+      "distance"
+      "duration";
+  }
+
+  .review-activity-details {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "instructions"
       "pace"
+      "effort";
+  }
+
+  .review-activity-details.no-pace {
+    grid-template-areas:
+      "instructions"
       "effort";
   }
 
