@@ -53,80 +53,87 @@ export interface WorkoutDetailCardProps {
   footer?: React.ReactNode;
 }
 
-// ── Config tables ───────────────────────────────────────────────────────────
+// ── Design tokens (matching globals.css) ────────────────────────────────────
 
-const PRIORITY = {
-  KEY:      { color: "#fc4c02", label: "KEY",      bg: "rgba(252,76,2,0.14)",    border: "rgba(252,76,2,0.25)"    },
-  MEDIUM:   { color: "#0984e3", label: "MEDIUM",   bg: "rgba(9,132,227,0.12)",   border: "rgba(9,132,227,0.25)"   },
-  OPTIONAL: { color: "#6b6b76", label: "OPTIONAL", bg: "rgba(107,107,118,0.12)", border: "rgba(107,107,118,0.22)" },
-} as const;
+const INK     = "#242428";
+const MUTED   = "#6b6b76";
+const ACCENT  = "#fc4c02";
+const ACCENT_STRONG = "#e54400";
+const PANEL   = "#f3f3f3";
+const BORDER  = "#e5e5e5";
+const GREEN   = "#2ecc71";
+const AMBER   = "#f39c12";
+const RED     = "#e74c3c";
+const BLUE    = "#0984e3";
 
-const TYPE = {
-  RUN:         { color: "#fc4c02", label: "Run"         },
-  STRENGTH:    { color: "#7c5ce7", label: "Strength"    },
-  CROSS_TRAIN: { color: "#0984e3", label: "Cross-Train" },
-  REST:        { color: "#95a5a6", label: "Rest Day"    },
-  MOBILITY:    { color: "#00b894", label: "Mobility"    },
-  YOGA:        { color: "#fd79a8", label: "Yoga"        },
-  HIKE:        { color: "#00cec9", label: "Hike"        },
-  OTHER:       { color: "#b2bec3", label: "Workout"     },
-} as const;
+const TYPE_COLOR: Record<ActivityType, string> = {
+  RUN:         ACCENT,
+  STRENGTH:    "#6c5ce7",
+  CROSS_TRAIN: BLUE,
+  REST:        "#95a5a6",
+  MOBILITY:    "#00b894",
+  YOGA:        "#fd79a8",
+  HIKE:        "#00cec9",
+  OTHER:       MUTED,
+};
 
-// ── Helpers ─────────────────────────────────────────────────────────────────
+const TYPE_LABEL: Record<ActivityType, string> = {
+  RUN:         "Run",
+  STRENGTH:    "Strength",
+  CROSS_TRAIN: "Cross-Train",
+  REST:        "Rest Day",
+  MOBILITY:    "Mobility",
+  YOGA:        "Yoga",
+  HIKE:        "Hike",
+  OTHER:       "Workout",
+};
+
+const PRIORITY_COLOR: Record<ActivityPriority, string> = {
+  KEY:      ACCENT,
+  MEDIUM:   BLUE,
+  OPTIONAL: MUTED,
+};
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
 
 function fmtDuration(min: number) {
   const h = Math.floor(min / 60);
   const m = min % 60;
-  if (h === 0) return [{ n: String(m), u: "min" }];
-  if (m === 0) return [{ n: String(h), u: "h" }];
-  return [{ n: String(h), u: "h" }, { n: String(m), u: "m" }];
+  if (h === 0) return `${m}min`;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m}m`;
 }
 
 function fmtDist(d: number, unit: Units) {
   return `${d % 1 === 0 ? d : d.toFixed(1)} ${unit === "MILES" ? "mi" : "km"}`;
 }
 
-// ── Sub-components ───────────────────────────────────────────────────────────
+// ── Progress bar ──────────────────────────────────────────────────────────────
 
 function CompletionBar({ planned, actual }: { planned: number; actual: number }) {
   const pct = Math.min((actual / planned) * 100, 105);
-  const barColor = pct >= 95 ? "#2ecc71" : pct >= 75 ? "#f39c12" : "#e74c3c";
+  const color = pct >= 95 ? GREEN : pct >= 75 ? AMBER : RED;
   return (
-    <div style={{ marginTop: 9 }}>
-      <div
-        style={{
-          height: 3,
-          background: "#ebebeb",
-          borderRadius: 2,
-          overflow: "hidden",
-        }}
-      >
+    <div style={{ marginTop: 6 }}>
+      <div style={{ height: 4, background: BORDER, borderRadius: 2, overflow: "hidden" }}>
         <div
           style={{
             height: "100%",
             width: `${Math.min(pct, 100)}%`,
-            background: barColor,
+            background: color,
             borderRadius: 2,
-            transition: "width 0.9s cubic-bezier(0.22, 1, 0.36, 1)",
+            transition: "width 0.8s cubic-bezier(0.22, 1, 0.36, 1)",
           }}
         />
       </div>
-      <div
-        style={{
-          fontSize: 10,
-          color: barColor,
-          fontWeight: 700,
-          marginTop: 4,
-          letterSpacing: "0.04em",
-        }}
-      >
+      <div style={{ fontSize: 11, color, fontWeight: 700, marginTop: 3, letterSpacing: "0.02em" }}>
         {Math.round(pct)}% of target
       </div>
     </div>
   );
 }
 
-// ── Main component ───────────────────────────────────────────────────────────
+// ── Main component ─────────────────────────────────────────────────────────────
 
 export default function WorkoutDetailCard({
   title,
@@ -152,10 +159,12 @@ export default function WorkoutDetailCard({
   onEdit,
   footer,
 }: WorkoutDetailCardProps) {
-  const p = PRIORITY[priority];
-  const t = TYPE[type];
+  const typeColor = TYPE_COLOR[type];
+  const priorityColor = PRIORITY_COLOR[priority];
 
-  const hasActuals = completed && (actualDistance !== undefined || actualDuration !== undefined || actualPace);
+  const hasActuals = completed && (
+    actualDistance !== undefined || actualDuration !== undefined || actualPace
+  );
   const hasMetrics = distance !== undefined || duration !== undefined || paceTarget;
 
   const formattedDate = date
@@ -166,115 +175,100 @@ export default function WorkoutDetailCard({
       })
     : null;
 
-  const duParts = duration !== undefined ? fmtDuration(duration) : null;
-  const actualDuParts = actualDuration !== undefined ? fmtDuration(actualDuration) : null;
-
   return (
     <div
       style={{
         fontFamily: "Figtree, -apple-system, BlinkMacSystemFont, sans-serif",
         background: "#ffffff",
-        borderRadius: 14,
-        boxShadow:
-          "0 4px 20px rgba(0,0,0,0.09), 0 1px 4px rgba(0,0,0,0.06)",
+        borderRadius: 12,
+        border: `1px solid ${BORDER}`,
+        boxShadow: "0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02)",
         overflow: "hidden",
         width: "100%",
-        borderLeft: `4px solid ${p.color}`,
+        borderLeft: `3px solid ${typeColor}`,
         WebkitFontSmoothing: "antialiased",
       }}
     >
       {/* ── HEADER ── */}
-      <div
-        style={{
-          background: "linear-gradient(145deg, #1d1d23 0%, #131317 100%)",
-          padding: "22px 20px 20px",
-          position: "relative",
-          overflow: "hidden",
-        }}
-      >
-        {/* Ghost icon backdrop */}
-        <div
-          aria-hidden
-          style={{
-            position: "absolute",
-            right: -10,
-            bottom: -14,
-            width: 96,
-            height: 96,
-            opacity: 0.055,
-            color: "#ffffff",
-            pointerEvents: "none",
-          }}
-        >
-          <ActivityTypeIcon type={type} />
-        </div>
-
-        {/* Type label + Priority badge */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            marginBottom: 11,
-          }}
-        >
+      <div style={{ padding: "14px 16px 12px" }}>
+        {/* Type row */}
+        <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 8 }}>
+          {/* Icon pill */}
           <span
             style={{
-              fontSize: 11,
-              fontWeight: 700,
-              letterSpacing: "0.09em",
-              color: t.color,
-              textTransform: "uppercase",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: 28,
+              height: 28,
+              borderRadius: 6,
+              background: `${typeColor}18`,
+              color: typeColor,
+              flexShrink: 0,
             }}
           >
-            {t.label}
+            <span style={{ width: 16, height: 16, display: "flex" }}>
+              <ActivityTypeIcon type={type} />
+            </span>
+          </span>
+
+          {/* Type label */}
+          <span
+            style={{
+              fontSize: 12,
+              fontWeight: 700,
+              color: typeColor,
+              letterSpacing: "0.01em",
+            }}
+          >
+            {TYPE_LABEL[type]}
             {subtype && (
-              <span style={{ opacity: 0.65, fontWeight: 600 }}> · {subtype}</span>
+              <span style={{ color: MUTED, fontWeight: 600 }}> · {subtype}</span>
             )}
           </span>
 
+          {/* Priority badge */}
           <span
             style={{
               marginLeft: "auto",
               fontSize: 10,
               fontWeight: 800,
-              letterSpacing: "0.1em",
-              padding: "3px 9px",
-              borderRadius: 20,
-              background: p.bg,
-              color: p.color,
-              textTransform: "uppercase",
-              border: `1px solid ${p.border}`,
+              letterSpacing: "0.08em",
+              padding: "2px 8px",
+              borderRadius: 999,
+              background: `${priorityColor}14`,
+              color: priorityColor,
+              textTransform: "uppercase" as const,
+              border: `1px solid ${priorityColor}30`,
               flexShrink: 0,
             }}
           >
-            {mustDo ? "★ MUST DO" : priority === "KEY" ? "⚡ KEY" : p.label}
+            {mustDo ? "★ MUST DO" : priority === "KEY" ? "⚡ Key" : priority === "MEDIUM" ? "Medium" : "Optional"}
           </span>
         </div>
 
         {/* Title */}
-        <h2
+        <h3
           style={{
             margin: 0,
-            fontSize: 22,
+            fontSize: 16,
             fontWeight: 800,
-            color: "#ffffff",
-            lineHeight: 1.15,
-            letterSpacing: "-0.028em",
+            color: INK,
+            lineHeight: 1.2,
+            letterSpacing: "-0.015em",
           }}
         >
           {title}
-        </h2>
+        </h3>
 
         {/* Date / week */}
         {(formattedDate || weekLabel) && (
           <p
             style={{
-              margin: "7px 0 0",
+              margin: "4px 0 0",
               fontSize: 12,
-              color: "rgba(255,255,255,0.35)",
+              color: MUTED,
               fontWeight: 500,
-              letterSpacing: "0.01em",
             }}
           >
             {weekLabel && <span>{weekLabel}</span>}
@@ -284,199 +278,147 @@ export default function WorkoutDetailCard({
         )}
       </div>
 
-      {/* ── METRICS STRIP ── */}
+      {/* ── METRICS ── */}
       {hasMetrics && (
         <div
           style={{
             display: "flex",
-            borderBottom: "1px solid #efefef",
+            background: PANEL,
+            borderTop: `1px solid ${BORDER}`,
+            borderBottom: `1px solid ${BORDER}`,
           }}
         >
-          {/* Distance */}
           {distance !== undefined && (
             <div
               style={{
                 flex: 1,
-                padding: "15px 15px 13px",
-                borderRight: "1px solid #efefef",
+                padding: "11px 14px",
+                borderRight: `1px solid ${BORDER}`,
               }}
             >
               <div
                 style={{
                   fontSize: 10,
                   fontWeight: 700,
-                  letterSpacing: "0.1em",
-                  color: "#a0a0ad",
-                  textTransform: "uppercase",
-                  marginBottom: 5,
+                  color: MUTED,
+                  letterSpacing: "0.09em",
+                  textTransform: "uppercase" as const,
+                  marginBottom: 3,
                 }}
               >
                 Distance
               </div>
               <div
                 style={{
-                  fontSize: 26,
+                  fontSize: 22,
                   fontWeight: 800,
-                  color: "#18181f",
-                  letterSpacing: "-0.045em",
+                  color: INK,
+                  letterSpacing: "-0.03em",
                   lineHeight: 1,
                   display: "flex",
                   alignItems: "baseline",
-                  gap: 3,
+                  gap: 2,
                 }}
               >
                 {distance % 1 === 0 ? distance : distance.toFixed(1)}
-                <span
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 600,
-                    color: "#a0a0ad",
-                    letterSpacing: 0,
-                  }}
-                >
+                <span style={{ fontSize: 12, fontWeight: 600, color: MUTED }}>
                   {distanceUnit === "MILES" ? "mi" : "km"}
                 </span>
               </div>
-
               {hasActuals && actualDistance !== undefined && (
                 <>
                   <CompletionBar planned={distance} actual={actualDistance} />
-                  <div
-                    style={{
-                      fontSize: 11,
-                      color: "#5e5e6e",
-                      marginTop: 4,
-                      fontWeight: 500,
-                    }}
-                  >
-                    {fmtDist(actualDistance, distanceUnit)} actual
+                  <div style={{ fontSize: 11, color: MUTED, marginTop: 3 }}>
+                    {fmtDist(actualDistance, distanceUnit)} logged
                   </div>
                 </>
               )}
             </div>
           )}
 
-          {/* Duration */}
-          {duParts && (
+          {duration !== undefined && (
             <div
               style={{
                 flex: 1,
-                padding: "15px 15px 13px",
-                borderRight: paceTarget ? "1px solid #efefef" : undefined,
+                padding: "11px 14px",
+                borderRight: paceTarget ? `1px solid ${BORDER}` : undefined,
               }}
             >
               <div
                 style={{
                   fontSize: 10,
                   fontWeight: 700,
-                  letterSpacing: "0.1em",
-                  color: "#a0a0ad",
-                  textTransform: "uppercase",
-                  marginBottom: 5,
+                  color: MUTED,
+                  letterSpacing: "0.09em",
+                  textTransform: "uppercase" as const,
+                  marginBottom: 3,
                 }}
               >
-                Duration
+                Time
               </div>
               <div
                 style={{
-                  fontSize: 26,
+                  fontSize: 22,
                   fontWeight: 800,
-                  color: "#18181f",
-                  letterSpacing: "-0.045em",
+                  color: INK,
+                  letterSpacing: "-0.03em",
                   lineHeight: 1,
-                  display: "flex",
-                  alignItems: "baseline",
-                  gap: 1,
                 }}
               >
-                {duParts.map((seg, i) => (
-                  <span key={i}>
-                    {seg.n}
-                    <span
-                      style={{
-                        fontSize: 12,
-                        fontWeight: 600,
-                        color: "#a0a0ad",
-                        letterSpacing: 0,
-                      }}
-                    >
-                      {seg.u}
-                    </span>
-                    {i < duParts.length - 1 && <span>&nbsp;</span>}
-                  </span>
-                ))}
+                {fmtDuration(duration)}
               </div>
-
               {hasActuals && actualDuration !== undefined && duration !== undefined && (
                 <>
                   <CompletionBar planned={duration} actual={actualDuration} />
-                  <div
-                    style={{
-                      fontSize: 11,
-                      color: "#5e5e6e",
-                      marginTop: 4,
-                      fontWeight: 500,
-                    }}
-                  >
-                    {actualDuParts!.map((s) => `${s.n}${s.u}`).join(" ")} actual
+                  <div style={{ fontSize: 11, color: MUTED, marginTop: 3 }}>
+                    {fmtDuration(actualDuration)} logged
                   </div>
                 </>
               )}
             </div>
           )}
 
-          {/* Pace */}
           {paceTarget && (
-            <div style={{ flex: 1, padding: "15px 15px 13px" }}>
+            <div style={{ flex: 1, padding: "11px 14px" }}>
               <div
                 style={{
                   fontSize: 10,
                   fontWeight: 700,
-                  letterSpacing: "0.1em",
-                  color: "#a0a0ad",
-                  textTransform: "uppercase",
-                  marginBottom: 5,
+                  color: MUTED,
+                  letterSpacing: "0.09em",
+                  textTransform: "uppercase" as const,
+                  marginBottom: 3,
                 }}
               >
                 Pace
               </div>
               <div
                 style={{
-                  fontSize: 20,
+                  fontSize: 18,
                   fontWeight: 800,
-                  color: "#18181f",
-                  letterSpacing: "-0.03em",
-                  lineHeight: 1.1,
+                  color: INK,
+                  letterSpacing: "-0.02em",
+                  lineHeight: 1,
                 }}
               >
                 {paceTarget}
               </div>
-
               {hasActuals && actualPace && (
                 <div
                   style={{
                     fontSize: 11,
-                    color: "#2ecc71",
+                    color: GREEN,
                     fontWeight: 700,
-                    marginTop: 10,
+                    marginTop: 8,
                     display: "flex",
                     alignItems: "center",
                     gap: 3,
                   }}
                 >
-                  <svg
-                    width={10}
-                    height={10}
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth={2.5}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
+                  <svg width={9} height={9} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round">
                     <polyline points="20 6 9 17 4 12" />
                   </svg>
-                  {actualPace}
+                  {actualPace} logged
                 </div>
               )}
             </div>
@@ -488,27 +430,27 @@ export default function WorkoutDetailCard({
       {effortTarget && (
         <div
           style={{
-            padding: "11px 16px",
-            background: "#fafafa",
-            borderBottom: "1px solid #efefef",
+            padding: "9px 16px",
+            borderBottom: `1px solid ${BORDER}`,
             display: "flex",
-            alignItems: "baseline",
             gap: 10,
+            alignItems: "baseline",
           }}
         >
           <span
             style={{
               fontSize: 10,
               fontWeight: 700,
-              letterSpacing: "0.1em",
-              color: "#a0a0ad",
-              textTransform: "uppercase",
+              color: MUTED,
+              letterSpacing: "0.09em",
+              textTransform: "uppercase" as const,
               flexShrink: 0,
+              paddingTop: 1,
             }}
           >
             Effort
           </span>
-          <span style={{ fontSize: 13, color: "#3e3e4a", fontWeight: 500, lineHeight: 1.5 }}>
+          <span style={{ fontSize: 13, color: INK, fontWeight: 500, lineHeight: 1.5 }}>
             {effortTarget}
           </span>
         </div>
@@ -516,31 +458,31 @@ export default function WorkoutDetailCard({
 
       {/* ── NOTES ── */}
       {notes && (
-        <div style={{ padding: "14px 16px", borderBottom: "1px solid #efefef" }}>
-          <div
+        <div
+          style={{
+            padding: "9px 16px",
+            borderBottom: `1px solid ${BORDER}`,
+            display: "flex",
+            gap: 10,
+            alignItems: "baseline",
+          }}
+        >
+          <span
             style={{
               fontSize: 10,
               fontWeight: 700,
-              letterSpacing: "0.1em",
-              color: "#a0a0ad",
-              textTransform: "uppercase",
-              marginBottom: 7,
+              color: MUTED,
+              letterSpacing: "0.09em",
+              textTransform: "uppercase" as const,
+              flexShrink: 0,
+              paddingTop: 1,
             }}
           >
-            Coach Notes
-          </div>
-          <p
-            style={{
-              margin: 0,
-              fontSize: 13,
-              color: "#4e4e5c",
-              lineHeight: 1.65,
-              borderLeft: "2px solid #efefef",
-              paddingLeft: 10,
-            }}
-          >
+            Notes
+          </span>
+          <span style={{ fontSize: 13, color: MUTED, lineHeight: 1.55 }}>
             {notes}
-          </p>
+          </span>
         </div>
       )}
 
@@ -548,76 +490,46 @@ export default function WorkoutDetailCard({
       {completed && (
         <div
           style={{
-            padding: "11px 16px",
-            background:
-              "linear-gradient(90deg, rgba(46,204,113,0.08) 0%, transparent 70%)",
-            borderBottom: "1px solid rgba(46,204,113,0.15)",
+            padding: "9px 16px",
+            borderBottom: `1px solid ${BORDER}`,
+            background: "rgba(46,204,113,0.05)",
             display: "flex",
             alignItems: "center",
-            gap: 10,
+            gap: 8,
           }}
         >
-          {/* Check circle */}
-          <div
+          <span
             style={{
-              width: 22,
-              height: 22,
+              width: 18,
+              height: 18,
               borderRadius: "50%",
-              background: "#2ecc71",
-              display: "flex",
+              background: GREEN,
+              display: "inline-flex",
               alignItems: "center",
               justifyContent: "center",
               flexShrink: 0,
-              boxShadow: "0 0 0 3px rgba(46,204,113,0.15)",
             }}
           >
-            <svg
-              width={12}
-              height={12}
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="#fff"
-              strokeWidth={3}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
+            <svg width={10} height={10} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round">
               <polyline points="20 6 9 17 4 12" />
             </svg>
-          </div>
-
-          <div>
-            <div
-              style={{
-                fontSize: 12,
-                fontWeight: 700,
-                color: "#2ecc71",
-                letterSpacing: "0.03em",
-              }}
-            >
-              Completed
-            </div>
-            {completedAt && (
-              <div style={{ fontSize: 11, color: "#a0a0ad", marginTop: 1 }}>
-                {new Date(completedAt).toLocaleDateString("en-US", {
-                  weekday: "short",
-                  month: "short",
-                  day: "numeric",
-                })}
-              </div>
-            )}
-          </div>
-
+          </span>
+          <span style={{ fontSize: 12, fontWeight: 700, color: GREEN }}>Completed</span>
+          {completedAt && (
+            <span style={{ fontSize: 12, color: MUTED }}>
+              · {new Date(completedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+            </span>
+          )}
           {bailAllowed && (
             <span
               style={{
                 marginLeft: "auto",
                 fontSize: 10,
                 fontWeight: 700,
-                color: "#f39c12",
-                letterSpacing: "0.06em",
-                background: "rgba(243,156,18,0.1)",
-                border: "1px solid rgba(243,156,18,0.22)",
-                padding: "2px 8px",
+                color: AMBER,
+                letterSpacing: "0.05em",
+                background: `${AMBER}18`,
+                padding: "2px 7px",
                 borderRadius: 4,
               }}
             >
@@ -631,14 +543,14 @@ export default function WorkoutDetailCard({
       {footer ? (
         <div style={{ padding: "12px 14px 14px" }}>{footer}</div>
       ) : (
-        <div style={{ padding: "12px 14px", display: "flex", gap: 8 }}>
+        <div style={{ padding: "10px 12px", display: "flex", gap: 8 }}>
           {!completed && onComplete && (
             <button
               onClick={onComplete}
               style={{
                 flex: 1,
-                padding: "10px 16px",
-                background: "#fc4c02",
+                padding: "9px 16px",
+                background: ACCENT,
                 color: "#ffffff",
                 border: "none",
                 borderRadius: 8,
@@ -650,10 +562,10 @@ export default function WorkoutDetailCard({
                 transition: "background 0.15s",
               }}
               onMouseEnter={(e) =>
-                ((e.currentTarget as HTMLButtonElement).style.background = "#e54400")
+                ((e.currentTarget as HTMLButtonElement).style.background = ACCENT_STRONG)
               }
               onMouseLeave={(e) =>
-                ((e.currentTarget as HTMLButtonElement).style.background = "#fc4c02")
+                ((e.currentTarget as HTMLButtonElement).style.background = ACCENT)
               }
             >
               Log Workout
@@ -665,16 +577,15 @@ export default function WorkoutDetailCard({
               onClick={onComplete}
               style={{
                 flex: 1,
-                padding: "10px 16px",
+                padding: "9px 16px",
                 background: "transparent",
-                color: "#5e5e6e",
-                border: "1px solid #e5e5e5",
+                color: MUTED,
+                border: `1px solid ${BORDER}`,
                 borderRadius: 8,
                 fontSize: 13,
                 fontWeight: 600,
                 cursor: "pointer",
                 fontFamily: "Figtree, sans-serif",
-                transition: "border-color 0.15s",
               }}
             >
               Update Actuals
@@ -685,22 +596,21 @@ export default function WorkoutDetailCard({
             <button
               onClick={onEdit}
               style={{
-                padding: "10px 16px",
+                padding: "9px 16px",
                 background: "transparent",
-                color: "#5e5e6e",
-                border: "1px solid #e5e5e5",
+                color: MUTED,
+                border: `1px solid ${BORDER}`,
                 borderRadius: 8,
                 fontSize: 13,
                 fontWeight: 600,
                 cursor: "pointer",
                 fontFamily: "Figtree, sans-serif",
-                transition: "border-color 0.15s",
               }}
               onMouseEnter={(e) =>
-                ((e.currentTarget as HTMLButtonElement).style.borderColor = "#242428")
+                ((e.currentTarget as HTMLButtonElement).style.borderColor = INK)
               }
               onMouseLeave={(e) =>
-                ((e.currentTarget as HTMLButtonElement).style.borderColor = "#e5e5e5")
+                ((e.currentTarget as HTMLButtonElement).style.borderColor = BORDER)
               }
             >
               Edit
