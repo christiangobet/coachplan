@@ -215,21 +215,65 @@ export async function maybeRunParserV4(
   if (!FLAGS.PARSER_V4) return;
 
   let jobId: string | null = null;
-  try {
-    // 1. Extract text from PDF
-    const { fullText } = await extractPdfText(pdfBuffer);
 
-    // 2. Create a ParseJob record (if dual-write is on)
-    if (FLAGS.PARSE_DUAL_WRITE) {
+  const fail = async (err: unknown, phase: string) => {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[ParserV4] ${phase} failed (non-fatal)`, { planId, error: msg });
+    if (FLAGS.PARSE_DUAL_WRITE && jobId) {
+      try {
+        await updateParseJobStatus(jobId, 'FAILED', `[${phase}] ${msg}`);
+      } catch (dbErr) {
+        console.error('[ParserV4] Could not update job status to FAILED', {
+          jobId,
+          error: dbErr instanceof Error ? dbErr.message : String(dbErr)
+        });
+      }
+    }
+  };
+
+  // 1. Extract text
+  let fullText: string;
+  try {
+    ({ fullText } = await extractPdfText(pdfBuffer));
+    console.info('[ParserV4] Text extracted', { planId, chars: fullText.length });
+  } catch (err) {
+    await fail(err, 'extractPdfText');
+    return;
+  }
+
+  // 2. Create ParseJob
+  if (FLAGS.PARSE_DUAL_WRITE) {
+    try {
       const job = await createParseJob({ planId, parserVersion: 'v4' });
       jobId = job.id;
+      console.info('[ParserV4] ParseJob created', { jobId, planId });
+    } catch (err) {
+      console.error('[ParserV4] createParseJob failed (non-fatal)', {
+        planId,
+        error: err instanceof Error ? err.message : String(err)
+      });
+      return;
     }
+  }
 
-    // 3. Run V4 parsing
-    const result = await runParserV4(fullText);
+  // 3. Run V4 AI parsing
+  let result: Awaited<ReturnType<typeof runParserV4>>;
+  try {
+    result = await runParserV4(fullText);
+    console.info('[ParserV4] AI parse complete', {
+      planId,
+      jobId,
+      validated: result.validated,
+      weeks: (result.rawJson as { weeks?: unknown[] })?.weeks?.length ?? 0
+    });
+  } catch (err) {
+    await fail(err, 'runParserV4');
+    return;
+  }
 
-    // 4. Persist artifact
-    if (FLAGS.PARSE_DUAL_WRITE && jobId) {
+  // 4. Save artifact + update status
+  if (FLAGS.PARSE_DUAL_WRITE && jobId) {
+    try {
       await saveParseArtifact({
         parseJobId: jobId,
         artifactType: 'program_json',
@@ -237,32 +281,14 @@ export async function maybeRunParserV4(
         json: result.rawJson,
         validationOk: result.validated
       });
-      await updateParseJobStatus(jobId, result.validated ? 'SUCCESS' : 'FAILED');
-    }
-
-    if (!result.validated) {
-      console.warn('[ParserV4] Zod validation failed', {
-        planId,
-        error: result.validationError
-      });
-    } else {
-      console.info('[ParserV4] Parse succeeded', {
-        planId,
-        model: result.model,
-        weeks: result.data?.weeks?.length ?? 0
-      });
-    }
-  } catch (err) {
-    console.error('[ParserV4] Pipeline error (non-fatal)', {
-      planId,
-      error: err instanceof Error ? err.message : String(err)
-    });
-    if (FLAGS.PARSE_DUAL_WRITE && jobId) {
-      try {
-        await updateParseJobStatus(jobId, 'FAILED');
-      } catch {
-        // ignore secondary failure
-      }
+      await updateParseJobStatus(
+        jobId,
+        result.validated ? 'SUCCESS' : 'FAILED',
+        result.validated ? undefined : (result.validationError ?? undefined)
+      );
+      console.info('[ParserV4] Artifact saved', { jobId, validationOk: result.validated });
+    } catch (err) {
+      await fail(err, 'saveArtifact');
     }
   }
 }

@@ -27,9 +27,13 @@ export async function createParseJob(args: CreateParseJobArgs) {
 
 export async function updateParseJobStatus(
   id: string,
-  status: 'SUCCESS' | 'FAILED'
+  status: 'SUCCESS' | 'FAILED',
+  errorMessage?: string
 ) {
-  return prisma.parseJob.update({ where: { id }, data: { status } });
+  return prisma.parseJob.update({
+    where: { id },
+    data: { status, ...(errorMessage ? { errorMessage } : {}) }
+  });
 }
 
 export async function saveParseArtifact(args: SaveParseArtifactArgs) {

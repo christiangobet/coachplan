@@ -11,6 +11,10 @@ const PARSER_VERSION = 'v4';
  */
 const PROGRAM_JSON_V1_SCHEMA = {
   name: 'program_json_v1',
+  // strict: false because the program object contains open-ended fields
+  // (intensity_rules, training_rules, progression, etc.) that require
+  // additionalProperties: true — incompatible with OpenAI strict mode.
+  strict: false,
   schema: {
     type: 'object',
     additionalProperties: false,

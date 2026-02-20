@@ -63,6 +63,11 @@ export default async function ParseDebugPage() {
               <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>
                 {new Date(job.createdAt).toLocaleString()}
               </div>
+              {job.errorMessage && (
+                <div style={{ fontSize: 12, color: '#991b1b', marginTop: 4, fontFamily: 'monospace' }}>
+                  {job.errorMessage}
+                </div>
+              )}
             </div>
             <StatusBadge status={job.status} />
           </div>

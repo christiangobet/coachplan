@@ -258,6 +258,7 @@ model ParseJob {
   parserVersion String
   status        ParseJobStatus @default(PENDING)
   model         String?
+  errorMessage  String?
   createdAt     DateTime       @default(now())
 
   plan      TrainingPlan?  @relation(fields: [planId], references: [id])
