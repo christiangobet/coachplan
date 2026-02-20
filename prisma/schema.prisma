@@ -123,6 +123,7 @@ model TrainingPlan {
   weeks      PlanWeek[]
   days       PlanDay[]
   activities PlanActivity[]
+  parseJobs  ParseJob[]
 }
 
 model PlanWeek {
@@ -240,4 +241,42 @@ model ExternalActivity {
   @@index([userId, startTime])
   @@index([accountId, startTime])
   @@index([matchedPlanActivityId])
+}
+
+// ─── Parser V4 parallel pipeline ──────────────────────────────────────────────
+
+enum ParseJobStatus {
+  PENDING
+  RUNNING
+  SUCCESS
+  FAILED
+}
+
+model ParseJob {
+  id            String         @id @default(cuid())
+  planId        String?
+  parserVersion String
+  status        ParseJobStatus @default(PENDING)
+  model         String?
+  createdAt     DateTime       @default(now())
+
+  plan      TrainingPlan?  @relation(fields: [planId], references: [id])
+  artifacts ParseArtifact[]
+
+  @@index([planId])
+  @@index([createdAt])
+}
+
+model ParseArtifact {
+  id            String   @id @default(cuid())
+  parseJobId    String
+  artifactType  String
+  schemaVersion String
+  json          Json
+  validationOk  Boolean
+  createdAt     DateTime @default(now())
+
+  parseJob ParseJob @relation(fields: [parseJobId], references: [id])
+
+  @@index([parseJobId])
 }

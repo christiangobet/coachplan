@@ -6,7 +6,7 @@ import path from 'path';
 import os from 'os';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
-import { parseWeekWithAI } from '@/lib/ai-plan-parser';
+import { parseWeekWithAI, maybeRunParserV4 } from '@/lib/ai-plan-parser';
 import { alignWeeksToRaceDate } from '@/lib/clone-plan';
 import { canonicalizeTableLabel, extractWeekNumber, normalizePlanText } from '@/lib/plan-parser-i18n.mjs';
 import { hasConfiguredAiProvider } from '@/lib/openai';
@@ -2034,6 +2034,9 @@ export async function POST(req: Request) {
       const buffer = Buffer.from(await file.arrayBuffer());
       const pdfPath = path.join(uploadDir, `${plan.id}.pdf`);
       await fs.writeFile(pdfPath, buffer);
+
+      // Parser V4: run in parallel, fire-and-forget, never affects legacy output.
+      void maybeRunParserV4(buffer, plan.id);
 
       const parsed = await withTimeout(
         parsePdfToJson(plan.id, pdfPath, name),

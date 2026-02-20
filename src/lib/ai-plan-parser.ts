@@ -1,5 +1,13 @@
 import { getDefaultAiModel, openaiJsonSchema } from "./openai";
 import type { ProgramDocumentProfile } from "./plan-document-profile";
+import { FLAGS } from "./feature-flags";
+import { extractPdfText } from "./pdf/extract-text";
+import { runParserV4 } from "./parsing/plan-parser-v4";
+import {
+  createParseJob,
+  updateParseJobStatus,
+  saveParseArtifact
+} from "./parsing/parse-artifacts";
 
 const WEEK_SCHEMA = {
   name: "week_plan",
@@ -191,4 +199,70 @@ export async function parseWeekWithAI(args: {
     schema: WEEK_SCHEMA,
     model
   });
+}
+
+/**
+ * Bridge: run Parser V4 in parallel after the legacy parser has the PDF buffer.
+ * Always resolves — never throws. Safe to call fire-and-forget.
+ *
+ * @param pdfBuffer  Raw PDF bytes from the upload
+ * @param planId     Optional plan ID for linking the ParseJob record
+ */
+export async function maybeRunParserV4(
+  pdfBuffer: Buffer,
+  planId?: string
+): Promise<void> {
+  if (!FLAGS.PARSER_V4) return;
+
+  let jobId: string | null = null;
+  try {
+    // 1. Extract text from PDF
+    const { fullText } = await extractPdfText(pdfBuffer);
+
+    // 2. Create a ParseJob record (if dual-write is on)
+    if (FLAGS.PARSE_DUAL_WRITE) {
+      const job = await createParseJob({ planId, parserVersion: 'v4' });
+      jobId = job.id;
+    }
+
+    // 3. Run V4 parsing
+    const result = await runParserV4(fullText);
+
+    // 4. Persist artifact
+    if (FLAGS.PARSE_DUAL_WRITE && jobId) {
+      await saveParseArtifact({
+        parseJobId: jobId,
+        artifactType: 'program_json',
+        schemaVersion: 'v1',
+        json: result.rawJson,
+        validationOk: result.validated
+      });
+      await updateParseJobStatus(jobId, result.validated ? 'SUCCESS' : 'FAILED');
+    }
+
+    if (!result.validated) {
+      console.warn('[ParserV4] Zod validation failed', {
+        planId,
+        error: result.validationError
+      });
+    } else {
+      console.info('[ParserV4] Parse succeeded', {
+        planId,
+        model: result.model,
+        weeks: result.data?.weeks?.length ?? 0
+      });
+    }
+  } catch (err) {
+    console.error('[ParserV4] Pipeline error (non-fatal)', {
+      planId,
+      error: err instanceof Error ? err.message : String(err)
+    });
+    if (FLAGS.PARSE_DUAL_WRITE && jobId) {
+      try {
+        await updateParseJobStatus(jobId, 'FAILED');
+      } catch {
+        // ignore secondary failure
+      }
+    }
+  }
 }
