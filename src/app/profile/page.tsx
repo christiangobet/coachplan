@@ -282,11 +282,11 @@ export default function ProfilePage() {
               <div className="form-stack">
                 <label>
                   Easy pace
-                  <input value={paceTargets.easy || ''} onChange={(e) => setPaceTargets({ ...paceTargets, easy: e.target.value })} placeholder="e.g. 6:00 min/km" />
+                  <input value={paceTargets.easy || ''} onChange={(e) => setPaceTargets({ ...paceTargets, easy: e.target.value })} placeholder={units === 'KM' ? 'e.g. 6:00 /km' : 'e.g. 9:40 /mi'} />
                 </label>
                 <label>
                   Tempo pace
-                  <input value={paceTargets.tempo || ''} onChange={(e) => setPaceTargets({ ...paceTargets, tempo: e.target.value })} placeholder="e.g. 5:15 min/km" />
+                  <input value={paceTargets.tempo || ''} onChange={(e) => setPaceTargets({ ...paceTargets, tempo: e.target.value })} placeholder={units === 'KM' ? 'e.g. 5:15 /km' : 'e.g. 8:27 /mi'} />
                 </label>
               </div>
             </div>

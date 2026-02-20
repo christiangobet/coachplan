@@ -125,6 +125,8 @@ export default function CalendarActivityLogger({
     }
   }
 
+  const plannedDistanceHint = convertDistanceForDisplay(activity.distance, activity.distanceUnit, viewerUnit);
+
   if (!enabled) {
     return (
       <p className="cal-activity-log-disabled">
@@ -145,7 +147,7 @@ export default function CalendarActivityLogger({
                 inputMode="decimal"
                 value={actualDistance}
                 onChange={(event) => setActualDistance(event.target.value)}
-                placeholder={activity.distance ? String(activity.distance) : 'e.g. 8'}
+                placeholder={plannedDistanceHint ? String(plannedDistanceHint.value) : 'e.g. 8'}
               />
             </label>
             <label>
