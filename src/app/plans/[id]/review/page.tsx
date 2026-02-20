@@ -1827,6 +1827,15 @@ export default function PlanReviewPage() {
                     )}
 
                     <div className="review-activity-list">
+                      {(day.activities || []).length > 0 && (
+                        <div className="review-activity-head-row" aria-hidden="true">
+                          <span>Activity</span>
+                          <span>Type</span>
+                          <span>Distance</span>
+                          <span>Duration</span>
+                          <span>Actions</span>
+                        </div>
+                      )}
                       {(day.activities || []).map((activity) => {
                         const draft = activityDrafts[activity.id] || toActivityDraft(activity, viewerUnits);
                         const paceUnitLabel = (draft.distanceUnit || viewerUnits) === 'KM' ? 'km' : 'mi';
@@ -1837,55 +1846,47 @@ export default function PlanReviewPage() {
                         const detailsOpen = expandedActivityDetails[activity.id] ?? false;
                         const activitySaving = Boolean(savingActivityIds[activity.id] || queuedActivityIds[activity.id]);
                         const activityDisplayType = draft.type.replace(/_/g, ' ');
-                        const activityTitle = draft.title.trim() || activityDisplayType;
                         return (
                           <div key={activity.id} className="review-activity-item review-activity-item-compact">
-                            <div className="review-activity-top">
-                              <div className="review-activity-summary">
-                                <strong>{activityTitle}</strong>
-                                <span>{activityDisplayType}</span>
-                              </div>
-                              <div className="review-activity-actions">
-                                {activitySaving && <span className="review-inline-status">Saving…</span>}
-                                <button
-                                  className="review-save-btn secondary review-details-toggle"
-                                  type="button"
-                                  onClick={() =>
-                                    setExpandedActivityDetails((prev) => ({ ...prev, [activity.id]: !detailsOpen }))
-                                  }
-                                >
-                                  {detailsOpen ? 'Hide Details' : 'Edit Details'}
-                                </button>
-                                <button
-                                  className="review-delete-btn text"
-                                  type="button"
-                                  onClick={() => deleteActivity(activity.id)}
-                                  disabled={deletingActivityId === activity.id}
-                                >
-                                  {deletingActivityId === activity.id ? 'Deleting…' : 'Delete'}
-                                </button>
-                              </div>
-                            </div>
-
                             <div className="review-activity-quick-grid">
-                              <label className="review-field review-col-activity">
-                                <span>Activity</span>
+                              <label className="review-field review-col-activity review-field-inline">
+                                <span className="review-visually-hidden">Activity</span>
                                 <input
                                   type="text"
                                   value={draft.title}
+                                  placeholder={activityDisplayType}
                                   onChange={(event) =>
                                     setActivityDraftField(activity.id, 'title', event.target.value)
                                   }
                                 />
                               </label>
 
-                              <label className="review-field review-col-distance">
-                                <span>Distance</span>
+                              <label className="review-field review-col-type review-field-inline">
+                                <span className="review-visually-hidden">Workout type</span>
+                                <select
+                                  value={draft.type}
+                                  onChange={(event) =>
+                                    setActivityDraftField(
+                                      activity.id,
+                                      'type',
+                                      event.target.value as ActivityTypeValue
+                                    )
+                                  }
+                                >
+                                  {ACTIVITY_TYPES.map((type) => (
+                                    <option key={type} value={type}>{type.replace(/_/g, ' ')}</option>
+                                  ))}
+                                </select>
+                              </label>
+
+                              <label className="review-field review-col-distance review-field-inline">
+                                <span className="review-visually-hidden">Distance</span>
                                 <div className={`review-distance-input-row${hasDistance ? '' : ' single'}`}>
                                   <input
                                     type="number"
                                     min={0}
                                     step="0.1"
+                                    placeholder="Distance"
                                     value={draft.distance}
                                     onChange={(event) =>
                                       setActivityDraftField(activity.id, 'distance', event.target.value)
@@ -1906,12 +1907,13 @@ export default function PlanReviewPage() {
                                 </div>
                               </label>
 
-                              <label className="review-field review-col-duration">
-                                <span>Duration (min)</span>
+                              <label className="review-field review-col-duration review-field-inline">
+                                <span className="review-visually-hidden">Duration in minutes</span>
                                 <input
                                   type="number"
                                   min={0}
                                   step={1}
+                                  placeholder="Duration (min)"
                                   value={draft.duration}
                                   onChange={(event) =>
                                     setActivityDraftField(activity.id, 'duration', event.target.value)
@@ -1919,23 +1921,26 @@ export default function PlanReviewPage() {
                                 />
                               </label>
 
-                              <label className="review-field review-col-type review-col-type-highlight">
-                                <span>Workout Type</span>
-                                <select
-                                  value={draft.type}
-                                  onChange={(event) =>
-                                    setActivityDraftField(
-                                      activity.id,
-                                      'type',
-                                      event.target.value as ActivityTypeValue
-                                    )
+                              <div className="review-col-actions review-activity-actions-compact">
+                                {activitySaving && <span className="review-inline-status">Saving…</span>}
+                                <button
+                                  className="review-save-btn secondary review-details-toggle"
+                                  type="button"
+                                  onClick={() =>
+                                    setExpandedActivityDetails((prev) => ({ ...prev, [activity.id]: !detailsOpen }))
                                   }
                                 >
-                                  {ACTIVITY_TYPES.map((type) => (
-                                    <option key={type} value={type}>{type.replace(/_/g, ' ')}</option>
-                                  ))}
-                                </select>
-                              </label>
+                                  {detailsOpen ? 'Less' : 'Details'}
+                                </button>
+                                <button
+                                  className="review-delete-btn ghost"
+                                  type="button"
+                                  onClick={() => deleteActivity(activity.id)}
+                                  disabled={deletingActivityId === activity.id}
+                                >
+                                  {deletingActivityId === activity.id ? 'Deleting…' : 'Delete'}
+                                </button>
+                              </div>
                             </div>
 
                             {detailsOpen && (

@@ -638,22 +638,49 @@
   background: #fff;
 }
 
+.review-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .review-activity-list {
   display: grid;
-  gap: 12px;
+  gap: 8px;
+}
+
+.review-activity-head-row {
+  display: grid;
+  grid-template-columns: minmax(260px, 2.6fr) minmax(170px, 1.2fr) minmax(180px, 1.1fr) minmax(150px, 1fr) auto;
+  gap: 10px;
+  padding: 0 8px;
+}
+
+.review-activity-head-row span {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #7c8ba5;
 }
 
 .review-activity-item {
-  border: 1px solid #dee7f5;
-  border-radius: 14px;
+  border: 1px solid #e1e8f5;
+  border-radius: 12px;
   background: #ffffff;
-  padding: 12px;
+  padding: 8px 10px;
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .review-activity-item-compact {
-  border-color: #d9e4f4;
+  border-color: #dde6f5;
 }
 
 .review-activity-top {
@@ -702,10 +729,21 @@
   font-size: 11px;
   color: #4f617f;
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .review-details-toggle {
-  height: 30px;
+  height: 32px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.review-activity-actions-compact {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-height: 36px;
 }
 
 .review-delete-btn {
@@ -746,12 +784,30 @@
   background: transparent;
 }
 
+.review-delete-btn.ghost {
+  height: 32px;
+  border: 1px solid #d6dfef;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #60708d;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 0 10px;
+}
+
+.review-delete-btn.ghost:hover {
+  border-color: #c4d2e9;
+  color: #3f5578;
+  background: #f7faff;
+}
+
 .review-activity-quick-grid {
   display: grid;
-  grid-template-columns: minmax(220px, 2.3fr) minmax(180px, 1.2fr) minmax(170px, 1.1fr) minmax(130px, 1fr);
+  grid-template-columns: minmax(260px, 2.6fr) minmax(170px, 1.2fr) minmax(180px, 1.1fr) minmax(150px, 1fr) auto;
   grid-template-areas:
-    "activity type distance duration";
-  gap: 12px;
+    "activity type distance duration actions";
+  gap: 10px;
+  align-items: center;
 }
 
 .review-activity-details {
@@ -809,6 +865,10 @@
   grid-area: duration;
 }
 
+.review-col-actions {
+  grid-area: actions;
+}
+
 .review-col-pace {
   grid-area: pace;
 }
@@ -848,9 +908,20 @@
   background: #ffffff;
 }
 
-.review-activity-quick-grid .review-field > span,
+.review-field-inline {
+  gap: 0;
+}
+
+.review-field-inline input,
+.review-field-inline select {
+  min-height: 36px;
+  font-size: 13px;
+  padding: 7px 10px;
+  border-color: #d2ddf0;
+  background: #ffffff;
+}
+
 .review-activity-details .review-field > span,
-.review-activity-quick-grid .review-field-label-row > span:first-child,
 .review-activity-details .review-field-label-row > span:first-child {
   text-transform: none;
   font-size: 10px;
@@ -1085,12 +1156,15 @@
     padding-right: 0;
   }
 
+  .review-activity-head-row {
+    display: none;
+  }
+
   .review-activity-quick-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     grid-template-areas:
-      "activity activity"
-      "type distance"
-      "duration duration";
+      "activity activity type actions"
+      "distance duration duration actions";
   }
 
   .review-activity-details {
@@ -1131,13 +1205,18 @@
     grid-template-columns: 1fr;
   }
 
+  .review-activity-head-row {
+    display: none;
+  }
+
   .review-activity-quick-grid {
     grid-template-columns: 1fr;
     grid-template-areas:
       "activity"
       "type"
       "distance"
-      "duration";
+      "duration"
+      "actions";
   }
 
   .review-activity-details {
@@ -1156,6 +1235,10 @@
 
   .review-col-effort {
     max-width: none;
+  }
+
+  .review-col-actions {
+    justify-content: flex-start;
   }
 
   .review-distance-input-row {
