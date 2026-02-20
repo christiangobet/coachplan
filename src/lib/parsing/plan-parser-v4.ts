@@ -136,11 +136,21 @@ export type ParserV4Result = {
 export async function runParserV4(fullText: string): Promise<ParserV4Result> {
   const model = getDefaultAiModel();
 
+  const TEXT_LIMIT = 40000;
+  const textTruncated = fullText.length > TEXT_LIMIT;
+  console.info('[ParserV4] Input text', {
+    totalChars: fullText.length,
+    sentChars: Math.min(fullText.length, TEXT_LIMIT),
+    truncated: textTruncated
+  });
+
   const input = [
     V4_MASTER_PROMPT,
     '',
-    'Raw plan text (truncated to first 25000 characters if longer):',
-    fullText.slice(0, 25000)
+    textTruncated
+      ? `Raw plan text (first ${TEXT_LIMIT} of ${fullText.length} characters):`
+      : 'Raw plan text:',
+    fullText.slice(0, TEXT_LIMIT)
   ].join('\n');
 
   let rawJson: unknown;

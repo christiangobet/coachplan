@@ -152,7 +152,11 @@ STEP 4 — SPECIAL PARSING MODES
 A) CALENDAR GRID
 - rows = weeks
 - columns = weekdays
-- split cells by "+" into multiple sessions
+- split cells by "+" into multiple sessions — each session is independent
+- for each sub-session after splitting, extract its OWN distance and duration
+  Example: "6 trail miles (fast finish) + LRL"
+    → session 1: raw_text="6 trail miles (fast finish)", distance_miles=6
+    → session 2: raw_text="LRL", activity_type="Run" (glossary: Long Run)
 - parse "or" as optional alternatives
 
 B) SYMBOLIC PLANS
@@ -179,8 +183,16 @@ Infer rest_days_per_week but DO NOT assign calendar days.
 STEP 5 — DISTANCE & TIME NORMALIZATION
 --------------------------------------------------
 
-Parse:
+DISTANCES — always extract a numeric value when present:
+- "6 miles" / "6 trail miles" / "6 mi" → distance_miles=6
+- "10K" / "10 km" / "10 kilometers" → distance_km=10
+- "13.1 miles" → distance_miles=13.1
+- "5K" → distance_km=5
+- Store in BOTH fields when you can convert: 6 miles → distance_miles=6, distance_km=9.66
+- Distance MUST be a number. Never leave it null if the text contains a distance.
+- Phrases like "trail miles", "road miles", "easy miles" still contain a distance — extract it.
 
+DURATIONS:
 "40 mins" → duration_minutes=40
 
 "H.MM" format:
@@ -191,9 +203,6 @@ Ranges:
 60–75 minutes →
 duration_min_minutes=60
 duration_max_minutes=75
-
-Distances:
-store both km and miles when available.
 
 --------------------------------------------------
 STEP 6 — MULTI-STEP WORKOUTS
@@ -288,6 +297,8 @@ No commentary.
 COMPACT OUTPUT — MANDATORY (token budget is tight):
 - Omit any key whose value would be null. Do NOT write "key": null.
 - Omit any key whose value would be []. Do NOT write "key": [].
-- raw_text: maximum 40 characters. Copy only the core workout description.
+- NEVER omit distance_miles or distance_km when you can extract a number — these are required data.
+- NEVER omit duration_minutes when a duration is present.
+- raw_text: maximum 50 characters. Copy the core workout description including distance/duration.
 - All other text values: maximum 60 characters each.
 - assumptions and program_notes: maximum 3 items, one sentence each.`;
