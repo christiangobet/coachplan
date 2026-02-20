@@ -1658,70 +1658,73 @@
   border-radius: 999px;
   overflow: hidden;
   flex-shrink: 0;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+  background: linear-gradient(135deg, #ff8c00 0%, #fc4c02 100%);
+  border: 1px solid rgba(252, 76, 2, 0.35);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.16);
 }
 
 .ext-sport-icon-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+  width: 74%;
+  height: 74%;
+  object-fit: contain;
   display: block;
+  filter: brightness(0) invert(1);
 }
 
 .ext-sport-run {
-  background: #fff;
+  background: linear-gradient(135deg, #ff8c00 0%, #fc4c02 100%);
 }
 
 .ext-sport-trail-run {
-  background: #fff;
+  background: linear-gradient(135deg, #ff8c00 0%, #fc4c02 100%);
 }
 
 .ext-sport-walk {
-  background: #fff;
+  background: linear-gradient(135deg, #ff8c00 0%, #fc4c02 100%);
 }
 
 .ext-sport-strength {
-  background: #fff;
+  background: linear-gradient(135deg, #ff8c00 0%, #fc4c02 100%);
 }
 
 .ext-sport-cross-train {
-  background: #fff;
+  background: linear-gradient(135deg, #ff8c00 0%, #fc4c02 100%);
 }
 
 .ext-sport-rest {
-  background: #fff;
+  background: linear-gradient(135deg, #ff8c00 0%, #fc4c02 100%);
 }
 
 .ext-sport-bike {
-  background: #fff;
+  background: linear-gradient(135deg, #ff8c00 0%, #fc4c02 100%);
 }
 
 .ext-sport-swim {
-  background: #fff;
+  background: linear-gradient(135deg, #ff8c00 0%, #fc4c02 100%);
 }
 
 .ext-sport-hike {
-  background: #fff;
+  background: linear-gradient(135deg, #ff8c00 0%, #fc4c02 100%);
 }
 
 .ext-sport-treadmill-run {
-  background: #fff;
+  background: linear-gradient(135deg, #ff8c00 0%, #fc4c02 100%);
 }
 
 .ext-sport-yoga-mobility {
-  background: #fff;
+  background: linear-gradient(135deg, #ff8c00 0%, #fc4c02 100%);
 }
 
 .ext-sport-virtual-ride {
-  background: #fff;
+  background: linear-gradient(135deg, #ff8c00 0%, #fc4c02 100%);
 }
 
 .ext-sport-ski {
-  background: #fff;
+  background: linear-gradient(135deg, #ff8c00 0%, #fc4c02 100%);
 }
 
 .ext-sport-other {
-  background: #fff;
+  background: linear-gradient(135deg, #ff8c00 0%, #fc4c02 100%);
 }
 
 .dash-day-match-note {
