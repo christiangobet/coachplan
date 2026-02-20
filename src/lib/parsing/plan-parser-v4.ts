@@ -138,8 +138,8 @@ export async function runParserV4(fullText: string): Promise<ParserV4Result> {
   const input = [
     V4_MASTER_PROMPT,
     '',
-    'Raw plan text:',
-    fullText.slice(0, 50000) // guard against enormous PDFs
+    'Raw plan text (truncated to first 25000 characters if longer):',
+    fullText.slice(0, 25000)
   ].join('\n');
 
   const rawJson = await openaiJsonSchema<unknown>({

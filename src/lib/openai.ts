@@ -134,8 +134,16 @@ function buildResponseFormat(schema: JsonSchemaFormat, style: "openai" | "cloudf
 }
 
 function stripJsonFences(text: string): string {
-  const match = text.match(/^```(?:json)?\s*\n?([\s\S]*?)\n?```\s*$/);
-  return match ? match[1].trim() : text;
+  // Remove ```json ... ``` or ``` ... ``` fences (anywhere in the string)
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fenced) return fenced[1].trim();
+
+  // Fallback: extract the outermost { ... } block
+  const first = text.indexOf('{');
+  const last = text.lastIndexOf('}');
+  if (first !== -1 && last > first) return text.slice(first, last + 1);
+
+  return text;
 }
 
 async function requestJsonSchema<T>(
@@ -163,6 +171,8 @@ async function requestJsonSchema<T>(
   try {
     return JSON.parse(stripJsonFences(text)) as T;
   } catch {
+    // Log the first 500 chars of the raw response to help diagnose future issues
+    console.error("[openai] JSON parse failed. Raw response preview:", text.slice(0, 500));
     throw new Error("AI response was not valid JSON.");
   }
 }
