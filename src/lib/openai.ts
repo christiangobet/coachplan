@@ -133,6 +133,11 @@ function buildResponseFormat(schema: JsonSchemaFormat, style: "openai" | "cloudf
   };
 }
 
+function stripJsonFences(text: string): string {
+  const match = text.match(/^```(?:json)?\s*\n?([\s\S]*?)\n?```\s*$/);
+  return match ? match[1].trim() : text;
+}
+
 async function requestJsonSchema<T>(
   endpoint: string,
   payload: Record<string, unknown>,
@@ -156,7 +161,7 @@ async function requestJsonSchema<T>(
   if (!text) throw new Error("AI response missing output text.");
 
   try {
-    return JSON.parse(text) as T;
+    return JSON.parse(stripJsonFences(text)) as T;
   } catch {
     throw new Error("AI response was not valid JSON.");
   }
