@@ -7,7 +7,10 @@ import {
   classifyRunPaceBucket,
   derivePaceProfileFromRaceTarget
 } from '@/lib/pace-personalization';
-import { inferSymbolicPaceBucketFromText } from '@/lib/intensity-targets';
+import {
+  deriveStructuredIntensityTargets,
+  inferSymbolicPaceBucketFromText
+} from '@/lib/intensity-targets';
 import {
   PaceEvidence,
   estimateGoalTimeFromEvidence,
@@ -326,7 +329,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     unit
   });
 
-  const updates: Array<{ id: string; paceTarget: string }> = [];
+  const updates: Array<{
+    id: string;
+    paceTarget: string;
+    paceTargetMode: 'SYMBOLIC' | 'NUMERIC' | 'RANGE' | 'HYBRID' | 'UNKNOWN' | null;
+    paceTargetBucket: 'RECOVERY' | 'EASY' | 'LONG' | 'RACE' | 'TEMPO' | 'THRESHOLD' | 'INTERVAL' | null;
+    paceTargetMinSec: number | null;
+    paceTargetMaxSec: number | null;
+    paceTargetUnit: 'KM' | 'MILES' | null;
+  }> = [];
   let skippedExisting = 0;
   let runCount = 0;
 
@@ -346,7 +357,20 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const paceTarget = buildPaceTargetText(bucket, profile);
     if (!paceTarget) continue;
     if (existingPaceTarget === paceTarget) continue;
-    updates.push({ id: activity.id, paceTarget });
+    const structured = deriveStructuredIntensityTargets({
+      paceTarget,
+      effortTarget: null,
+      fallbackUnit: unit
+    });
+    updates.push({
+      id: activity.id,
+      paceTarget,
+      paceTargetMode: structured.paceTargetMode,
+      paceTargetBucket: structured.paceTargetBucket,
+      paceTargetMinSec: structured.paceTargetMinSec,
+      paceTargetMaxSec: structured.paceTargetMaxSec,
+      paceTargetUnit: structured.paceTargetUnit
+    });
   }
 
   if (updates.length > 0) {
@@ -354,7 +378,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       updates.map((update) =>
         prisma.planActivity.update({
           where: { id: update.id },
-          data: { paceTarget: update.paceTarget }
+          data: {
+            paceTarget: update.paceTarget,
+            paceTargetMode: update.paceTargetMode,
+            paceTargetBucket: update.paceTargetBucket,
+            paceTargetMinSec: update.paceTargetMinSec,
+            paceTargetMaxSec: update.paceTargetMaxSec,
+            paceTargetUnit: update.paceTargetUnit
+          }
         })
       )
     );

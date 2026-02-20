@@ -7,6 +7,11 @@
 import { prisma } from '@/lib/prisma';
 import { ActivityType, Units } from '@prisma/client';
 import type { ProgramJsonV1 } from '@/lib/schemas/program-json-v1';
+import {
+  deriveStructuredIntensityTargets,
+  extractEffortTargetFromText,
+  extractPaceTargetFromText
+} from '@/lib/intensity-targets';
 
 const DOW_MAP: Record<string, number> = {
   Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 7
@@ -109,6 +114,15 @@ export async function populatePlanFromV4(
           const activityType = ACTIVITY_TYPE_MAP[session.activity_type] || ActivityType.OTHER;
           const title = deriveTitle(session);
           const duration = session.duration_minutes ?? null;
+          const paceTarget = extractPaceTargetFromText(session.intensity || session.raw_text || null);
+          const effortTarget = session.intensity
+            ? (extractEffortTargetFromText(session.intensity) || session.intensity || null)
+            : extractEffortTargetFromText(session.raw_text || null);
+          const structuredTargets = deriveStructuredIntensityTargets({
+            paceTarget,
+            effortTarget,
+            fallbackUnit: distanceUnit
+          });
 
           return {
             planId,
@@ -120,8 +134,9 @@ export async function populatePlanFromV4(
             distance,
             distanceUnit,
             duration,
-            paceTarget: null,
-            effortTarget: session.intensity || null,
+            paceTarget,
+            effortTarget,
+            ...structuredTargets,
             mustDo: session.priority === true,
             bailAllowed: session.optional === true
           };

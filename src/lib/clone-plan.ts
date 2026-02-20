@@ -21,6 +21,17 @@ type PlanWithRelations = {
         duration: number | null;
         paceTarget: string | null;
         effortTarget: string | null;
+        paceTargetMode: 'SYMBOLIC' | 'NUMERIC' | 'RANGE' | 'HYBRID' | 'UNKNOWN' | null;
+        paceTargetBucket: 'RECOVERY' | 'EASY' | 'LONG' | 'RACE' | 'TEMPO' | 'THRESHOLD' | 'INTERVAL' | null;
+        paceTargetMinSec: number | null;
+        paceTargetMaxSec: number | null;
+        paceTargetUnit: string | null;
+        effortTargetType: 'RPE' | 'HR_ZONE' | 'HR_BPM' | 'TEXT' | null;
+        effortTargetMin: number | null;
+        effortTargetMax: number | null;
+        effortTargetZone: number | null;
+        effortTargetBpmMin: number | null;
+        effortTargetBpmMax: number | null;
         structure: any;
         tags: any;
         priority: string | null;
@@ -82,6 +93,17 @@ export async function clonePlanStructure(
         duration: a.duration || null,
         paceTarget: a.paceTarget || null,
         effortTarget: a.effortTarget || null,
+        paceTargetMode: a.paceTargetMode ?? null,
+        paceTargetBucket: a.paceTargetBucket ?? null,
+        paceTargetMinSec: a.paceTargetMinSec ?? null,
+        paceTargetMaxSec: a.paceTargetMaxSec ?? null,
+        paceTargetUnit: a.paceTargetUnit as any ?? null,
+        effortTargetType: a.effortTargetType ?? null,
+        effortTargetMin: a.effortTargetMin ?? null,
+        effortTargetMax: a.effortTargetMax ?? null,
+        effortTargetZone: a.effortTargetZone ?? null,
+        effortTargetBpmMin: a.effortTargetBpmMin ?? null,
+        effortTargetBpmMax: a.effortTargetBpmMax ?? null,
         structure: a.structure || undefined,
         tags: a.tags || undefined,
         priority: a.priority as any || null,

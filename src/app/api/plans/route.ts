@@ -15,6 +15,7 @@ import { canonicalizeTableLabel, extractWeekNumber, normalizePlanText } from '@/
 import { hasConfiguredAiProvider } from '@/lib/openai';
 import { buildProgramDocumentProfile, type ProgramDocumentProfile } from '@/lib/plan-document-profile';
 import {
+  deriveStructuredIntensityTargets,
   extractEffortTargetFromText,
   extractPaceTargetFromText,
   hasConcretePaceValue,
@@ -833,6 +834,17 @@ type ActivityDraft = {
   duration: number | null;
   paceTarget?: string | null;
   effortTarget?: string | null;
+  paceTargetMode?: 'SYMBOLIC' | 'NUMERIC' | 'RANGE' | 'HYBRID' | 'UNKNOWN' | null;
+  paceTargetBucket?: PaceBucket | null;
+  paceTargetMinSec?: number | null;
+  paceTargetMaxSec?: number | null;
+  paceTargetUnit?: 'MILES' | 'KM' | null;
+  effortTargetType?: 'RPE' | 'HR_ZONE' | 'HR_BPM' | 'TEXT' | null;
+  effortTargetMin?: number | null;
+  effortTargetMax?: number | null;
+  effortTargetZone?: number | null;
+  effortTargetBpmMin?: number | null;
+  effortTargetBpmMax?: number | null;
   structure?: any;
   tags?: any;
   priority: string | null;
@@ -842,9 +854,21 @@ type ActivityDraft = {
 
 function ensureDistanceConsistency(activity: ActivityDraft): ActivityDraft {
   if (activity.distance === null || activity.distanceUnit === null) {
-    return { ...activity, distance: null, distanceUnit: null };
+    return { ...activity, distance: null, distanceUnit: null, paceTargetUnit: null };
   }
   return activity;
+}
+
+function withStructuredIntensityTargets(activity: ActivityDraft): ActivityDraft {
+  const structured = deriveStructuredIntensityTargets({
+    paceTarget: activity.paceTarget ?? null,
+    effortTarget: activity.effortTarget ?? null,
+    fallbackUnit: activity.distanceUnit
+  });
+  return {
+    ...activity,
+    ...structured
+  };
 }
 
 function normalizeMatchText(text: string | null | undefined) {
@@ -2228,7 +2252,7 @@ export async function POST(req: Request) {
           const mergedActivities = aiDrafts.length
             ? mergeDayActivitiesWithAI(deterministicActivities, aiDrafts)
             : deterministicActivities;
-          activities.push(...mergedActivities);
+          activities.push(...mergedActivities.map((activity) => withStructuredIntensityTargets(activity)));
         }
       }
 

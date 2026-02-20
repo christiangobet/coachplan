@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { currentUser } from '@clerk/nextjs/server';
 import { ActivityType, Units } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { deriveStructuredIntensityTargets } from '@/lib/intensity-targets';
 import { normalizePaceForStorage } from '@/lib/unit-display';
 
 const ACTIVITY_TYPES: ActivityType[] = [
@@ -119,6 +120,16 @@ export async function POST(
   const storedDistanceUnit: Units | null = distance === undefined || distance === null
     ? null
     : (distanceUnit ?? preferredUnits);
+  const normalizedPaceTarget = normalizePaceForStorage(
+    normalizeOptionalText(payload.paceTarget) ?? null,
+    storedDistanceUnit ?? preferredUnits
+  );
+  const normalizedEffortTarget = normalizeOptionalText(payload.effortTarget) ?? null;
+  const structuredTargets = deriveStructuredIntensityTargets({
+    paceTarget: normalizedPaceTarget,
+    effortTarget: normalizedEffortTarget,
+    fallbackUnit: storedDistanceUnit ?? preferredUnits
+  });
 
   const activity = await prisma.planActivity.create({
     data: {
@@ -129,11 +140,9 @@ export async function POST(
       distance: distance === undefined ? null : distance,
       distanceUnit: storedDistanceUnit,
       duration: duration === undefined ? null : duration,
-      paceTarget: normalizePaceForStorage(
-        normalizeOptionalText(payload.paceTarget) ?? null,
-        storedDistanceUnit ?? preferredUnits
-      ),
-      effortTarget: normalizeOptionalText(payload.effortTarget) ?? null,
+      paceTarget: normalizedPaceTarget,
+      effortTarget: normalizedEffortTarget,
+      ...structuredTargets,
       rawText: normalizeOptionalText(payload.rawText) ?? null
     }
   });

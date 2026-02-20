@@ -2,6 +2,7 @@ import { ActivityType, Units } from '@prisma/client';
 import { NextResponse } from 'next/server';
 import { currentUser } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
+import { deriveStructuredIntensityTargets } from '@/lib/intensity-targets';
 import {
   normalizePaceForStorage,
   resolveDistanceUnitFromActivity
@@ -76,7 +77,7 @@ export async function PATCH(
 
   const activity = await prisma.planActivity.findFirst({
     where: { id: activityId, planId },
-    select: { id: true, distance: true, distanceUnit: true, paceTarget: true }
+    select: { id: true, distance: true, distanceUnit: true, paceTarget: true, effortTarget: true }
   });
   if (!activity) return NextResponse.json({ error: 'Activity not found' }, { status: 404 });
 
@@ -103,6 +104,17 @@ export async function PATCH(
     distanceUnit?: Units | null;
     paceTarget?: string | null;
     effortTarget?: string | null;
+    paceTargetMode?: 'SYMBOLIC' | 'NUMERIC' | 'RANGE' | 'HYBRID' | 'UNKNOWN' | null;
+    paceTargetBucket?: 'RECOVERY' | 'EASY' | 'LONG' | 'RACE' | 'TEMPO' | 'THRESHOLD' | 'INTERVAL' | null;
+    paceTargetMinSec?: number | null;
+    paceTargetMaxSec?: number | null;
+    paceTargetUnit?: Units | null;
+    effortTargetType?: 'RPE' | 'HR_ZONE' | 'HR_BPM' | 'TEXT' | null;
+    effortTargetMin?: number | null;
+    effortTargetMax?: number | null;
+    effortTargetZone?: number | null;
+    effortTargetBpmMin?: number | null;
+    effortTargetBpmMax?: number | null;
     notes?: string | null;
   } = {};
 
@@ -190,6 +202,14 @@ export async function PATCH(
   if (updates.paceTarget !== undefined && updates.paceTarget !== null) {
     updates.paceTarget = normalizePaceForStorage(updates.paceTarget, effectiveDistanceUnit);
   }
+  const finalPaceTarget = updates.paceTarget !== undefined ? updates.paceTarget : activity.paceTarget;
+  const finalEffortTarget = updates.effortTarget !== undefined ? updates.effortTarget : activity.effortTarget;
+  const structuredTargets = deriveStructuredIntensityTargets({
+    paceTarget: finalPaceTarget,
+    effortTarget: finalEffortTarget,
+    fallbackUnit: effectiveDistanceUnit
+  });
+  Object.assign(updates, structuredTargets);
 
   const updated = await prisma.planActivity.update({
     where: { id: activityId },

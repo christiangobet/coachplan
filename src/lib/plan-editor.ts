@@ -3,6 +3,7 @@ import { ActivityPriority, ActivityType, Units } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { resolveWeekBounds } from '@/lib/plan-dates';
 import { isDayMarkedDone } from '@/lib/day-status';
+import { deriveStructuredIntensityTargets } from '@/lib/intensity-targets';
 import {
     convertDistanceValue,
     normalizePaceForStorage,
@@ -582,6 +583,7 @@ export async function applyAdjustmentProposal(planId: string, proposal: PlanAdju
                         distance: true,
                         distanceUnit: true,
                         paceTarget: true,
+                        effortTarget: true,
                         actualPace: true
                     }
                 });
@@ -637,6 +639,18 @@ export async function applyAdjustmentProposal(planId: string, proposal: PlanAdju
                     data.paceTarget = normalizePaceForStorage(change.paceTarget, resolvedDistanceUnit);
                 }
                 if (change.effortTarget !== undefined) data.effortTarget = change.effortTarget;
+                const finalPaceTarget = data.paceTarget !== undefined ? data.paceTarget : existingActivity.paceTarget;
+                const finalEffortTarget = change.effortTarget !== undefined
+                    ? change.effortTarget
+                    : existingActivity.effortTarget;
+                Object.assign(
+                    data,
+                    deriveStructuredIntensityTargets({
+                        paceTarget: finalPaceTarget,
+                        effortTarget: finalEffortTarget,
+                        fallbackUnit: resolvedDistanceUnit
+                    })
+                );
                 if (change.notes !== undefined) data.notes = change.notes;
                 if (change.mustDo !== undefined) data.mustDo = change.mustDo;
                 if (change.bailAllowed !== undefined) data.bailAllowed = change.bailAllowed;
@@ -667,6 +681,13 @@ export async function applyAdjustmentProposal(planId: string, proposal: PlanAdju
                     change.distance === null || change.distance === undefined
                         ? null
                         : (change.distanceUnit ?? resolvedDistanceUnit);
+                const normalizedPaceTarget = normalizePaceForStorage(change.paceTarget ?? null, storedDistanceUnit ?? resolvedDistanceUnit);
+                const normalizedEffortTarget = change.effortTarget ?? null;
+                const structuredTargets = deriveStructuredIntensityTargets({
+                    paceTarget: normalizedPaceTarget,
+                    effortTarget: normalizedEffortTarget,
+                    fallbackUnit: storedDistanceUnit ?? resolvedDistanceUnit
+                });
 
                 await tx.planActivity.create({
                     data: {
@@ -677,8 +698,9 @@ export async function applyAdjustmentProposal(planId: string, proposal: PlanAdju
                         duration: change.duration ?? null,
                         distance: change.distance ?? null,
                         distanceUnit: storedDistanceUnit,
-                        paceTarget: normalizePaceForStorage(change.paceTarget ?? null, storedDistanceUnit ?? resolvedDistanceUnit),
-                        effortTarget: change.effortTarget ?? null,
+                        paceTarget: normalizedPaceTarget,
+                        effortTarget: normalizedEffortTarget,
+                        ...structuredTargets,
                         notes: change.notes ?? null,
                         mustDo: change.mustDo ?? false,
                         bailAllowed: change.bailAllowed ?? false,

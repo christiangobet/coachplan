@@ -35,6 +35,31 @@ enum ActivityPriority {
   OPTIONAL
 }
 
+enum PaceTargetMode {
+  SYMBOLIC
+  NUMERIC
+  RANGE
+  HYBRID
+  UNKNOWN
+}
+
+enum PaceTargetBucket {
+  RECOVERY
+  EASY
+  LONG
+  RACE
+  TEMPO
+  THRESHOLD
+  INTERVAL
+}
+
+enum EffortTargetType {
+  RPE
+  HR_ZONE
+  HR_BPM
+  TEXT
+}
+
 model User {
   id           String   @id
   email        String   @unique
@@ -184,6 +209,17 @@ model PlanActivity {
   duration  Int?
   paceTarget String?
   effortTarget String?
+  paceTargetMode PaceTargetMode?
+  paceTargetBucket PaceTargetBucket?
+  paceTargetMinSec Float?
+  paceTargetMaxSec Float?
+  paceTargetUnit Units?
+  effortTargetType EffortTargetType?
+  effortTargetMin Float?
+  effortTargetMax Float?
+  effortTargetZone Int?
+  effortTargetBpmMin Int?
+  effortTargetBpmMax Int?
   structure Json?
   tags      Json?
   priority  ActivityPriority?
