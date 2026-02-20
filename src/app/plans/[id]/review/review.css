@@ -790,6 +790,44 @@
   background: #f8fbff;
 }
 
+.review-pace-categories {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.review-pace-chip {
+  min-width: 36px;
+  min-height: 36px;
+  border-radius: 999px;
+  border: 1px solid #d0d8e7;
+  background: #f4f7fb;
+  color: #74829a;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 120ms ease, background-color 120ms ease, color 120ms ease;
+}
+
+.review-pace-chip:hover {
+  border-color: #bcc8df;
+  color: #5d6c86;
+}
+
+.review-pace-chip:focus-visible {
+  outline: none;
+  border-color: #fc4c02;
+  box-shadow: 0 0 0 3px rgba(252, 76, 2, 0.12);
+}
+
+.review-pace-chip.active {
+  border-color: rgba(252, 76, 2, 0.5);
+  background: rgba(252, 76, 2, 0.14);
+  color: #fc4c02;
+}
+
 .review-autosave {
   margin: 0;
   font-size: 12px;

@@ -10,7 +10,8 @@ import {
   parseTimePartsToSeconds,
   type PaceEvidence
 } from '@/lib/pace-estimation';
-import { resolveDistanceUnitFromActivity } from '@/lib/unit-display';
+import { inferPaceBucketFromText } from '@/lib/intensity-targets';
+import { normalizePaceForStorage, resolveDistanceUnitFromActivity } from '@/lib/unit-display';
 import PlanSourcePdfPane from '@/components/PlanSourcePdfPane';
 
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -30,10 +31,20 @@ const PACE_MULTIPLIERS = {
   TEMPO: 0.96,
   INTERVAL: 0.87
 } as const;
+const PACE_BUCKET_OPTIONS = [
+  { value: 'RECOVERY', short: 'RE', label: 'Recovery', profileKey: 'recovery' },
+  { value: 'EASY', short: 'EZ', label: 'Easy', profileKey: 'easy' },
+  { value: 'LONG', short: 'LR', label: 'Long run', profileKey: 'long' },
+  { value: 'RACE', short: 'RP', label: 'Race pace', profileKey: 'race' },
+  { value: 'TEMPO', short: 'TP', label: 'Tempo', profileKey: 'tempo' },
+  { value: 'THRESHOLD', short: 'TH', label: 'Threshold', profileKey: 'threshold' },
+  { value: 'INTERVAL', short: 'IN', label: 'Interval', profileKey: 'interval' }
+] as const;
 
 type ActivityTypeValue = (typeof ACTIVITY_TYPES)[number];
 type DistanceUnitValue = (typeof DISTANCE_UNITS)[number];
 type PaceSourceMode = 'TARGET_TIME' | 'PAST_RESULT' | 'STRAVA';
+type PaceBucketValue = (typeof PACE_BUCKET_OPTIONS)[number]['value'];
 
 type StravaPaceCandidate = {
   id: string;
@@ -62,6 +73,7 @@ type ReviewActivity = {
   distanceUnit: DistanceUnitValue | null;
   duration: number | null;
   paceTarget: string | null;
+  paceTargetBucket: PaceBucketValue | null;
   effortTarget: string | null;
   rawText: string | null;
   notes: string | null;
@@ -146,10 +158,34 @@ type ActivityDraft = {
   distance: string;
   distanceUnit: DistanceUnitValue | '';
   duration: string;
+  paceTargetBucket: PaceBucketValue | '';
   paceTarget: string;
   effortTarget: string;
   rawText: string;
 };
+
+type ProfilePaceMap = Partial<Record<PaceBucketValue, string>>;
+
+function isPaceBucketValue(value: unknown): value is PaceBucketValue {
+  return PACE_BUCKET_OPTIONS.some((option) => option.value === value);
+}
+
+function normalizeProfilePace(value: unknown, unit: DistanceUnitValue) {
+  if (typeof value !== 'string') return null;
+  const normalized = normalizePaceForStorage(value, unit);
+  return normalized || null;
+}
+
+function toProfilePaceMap(rawTargets: unknown, unit: DistanceUnitValue): ProfilePaceMap {
+  if (!rawTargets || typeof rawTargets !== 'object') return {};
+  const source = rawTargets as Record<string, unknown>;
+  const result: ProfilePaceMap = {};
+  for (const option of PACE_BUCKET_OPTIONS) {
+    const normalized = normalizeProfilePace(source[option.profileKey], unit);
+    if (normalized) result[option.value] = normalized;
+  }
+  return result;
+}
 
 function toActivityDraft(activity: ReviewActivity, fallbackUnit: DistanceUnitValue): ActivityDraft {
   const resolvedDistanceUnit = resolveDistanceUnitFromActivity({
@@ -157,12 +193,20 @@ function toActivityDraft(activity: ReviewActivity, fallbackUnit: DistanceUnitVal
     paceTarget: activity.paceTarget,
     fallbackUnit
   }) as DistanceUnitValue | null;
+  const inferredPaceBucket = activity.type === 'RUN'
+    ? (
+        isPaceBucketValue(activity.paceTargetBucket)
+          ? activity.paceTargetBucket
+          : (inferPaceBucketFromText(activity.paceTarget || activity.rawText || activity.title) as PaceBucketValue | null)
+      )
+    : null;
   return {
     title: activity.title || '',
     type: activity.type || 'OTHER',
     distance: activity.distance === null || activity.distance === undefined ? '' : String(activity.distance),
     distanceUnit: resolvedDistanceUnit || fallbackUnit,
     duration: activity.duration === null || activity.duration === undefined ? '' : String(activity.duration),
+    paceTargetBucket: inferredPaceBucket || '',
     paceTarget: activity.paceTarget || '',
     effortTarget: activity.effortTarget || '',
     rawText: activity.rawText || ''
@@ -328,6 +372,7 @@ export default function PlanReviewPage() {
   const [creatingDayId, setCreatingDayId] = useState<string | null>(null);
   const [deletingActivityId, setDeletingActivityId] = useState<string | null>(null);
   const [viewerUnits, setViewerUnits] = useState<DistanceUnitValue>('MILES');
+  const [profilePaces, setProfilePaces] = useState<ProfilePaceMap>({});
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
   const [paceFormOpen, setPaceFormOpen] = useState(false);
   const [paceStep, setPaceStep] = useState<1 | 2>(1);
@@ -418,9 +463,24 @@ export default function PlanReviewPage() {
     }
   }, [planId, initializeDrafts]);
 
+  const loadProfilePaces = useCallback(async () => {
+    try {
+      const res = await fetch('/api/me');
+      const data = await res.json().catch(() => null);
+      if (!res.ok) return;
+      setProfilePaces(toProfilePaceMap(data?.paceTargets, viewerUnits));
+    } catch {
+      // Keep parsing review usable even if profile fetch fails.
+    }
+  }, [viewerUnits]);
+
   useEffect(() => {
     loadPlan();
   }, [loadPlan]);
+
+  useEffect(() => {
+    void loadProfilePaces();
+  }, [loadProfilePaces]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -815,6 +875,7 @@ export default function PlanReviewPage() {
             distance: parsedDistance,
             distanceUnit: parsedDistance === null ? null : resolvedDistanceUnit,
             duration: parsedDuration,
+            paceTargetBucket: draft.paceTargetBucket || null,
             paceTarget: draft.paceTarget.trim() || null,
             effortTarget: draft.effortTarget.trim() || null,
             rawText: draft.rawText.trim() || null
@@ -858,7 +919,10 @@ export default function PlanReviewPage() {
       setActivityDrafts((prev) => {
         const current = prev[activityId];
         if (!current) return prev;
-        const nextDraft = { ...current, [field]: value };
+        const nextDraft = { ...current, [field]: value } as ActivityDraft;
+        if (field === 'type' && value !== 'RUN') {
+          nextDraft.paceTargetBucket = '';
+        }
         queueActivityAutosave(activityId, nextDraft);
         return {
           ...prev,
@@ -868,6 +932,50 @@ export default function PlanReviewPage() {
     },
     [queueActivityAutosave]
   );
+
+  const applyPaceBucket = useCallback(
+    (activityId: string, bucket: PaceBucketValue) => {
+      setActivityDrafts((prev) => {
+        const current = prev[activityId];
+        if (!current) return prev;
+
+        const nextBucket = current.paceTargetBucket === bucket ? '' : bucket;
+        const profilePace = nextBucket ? profilePaces[nextBucket] : null;
+        const nextDraft: ActivityDraft = {
+          ...current,
+          paceTargetBucket: nextBucket,
+          paceTarget: profilePace || current.paceTarget
+        };
+
+        queueActivityAutosave(activityId, nextDraft);
+        return {
+          ...prev,
+          [activityId]: nextDraft
+        };
+      });
+    },
+    [profilePaces, queueActivityAutosave]
+  );
+
+  useEffect(() => {
+    if (Object.keys(profilePaces).length === 0) return;
+    setActivityDrafts((prev) => {
+      let changed = false;
+      const next: Record<string, ActivityDraft> = { ...prev };
+      for (const [activityId, draft] of Object.entries(prev)) {
+        if (draft.type !== 'RUN') continue;
+        if (draft.paceTarget.trim()) continue;
+        if (!draft.paceTargetBucket) continue;
+        const profilePace = profilePaces[draft.paceTargetBucket];
+        if (!profilePace) continue;
+        const updatedDraft: ActivityDraft = { ...draft, paceTarget: profilePace };
+        next[activityId] = updatedDraft;
+        queueActivityAutosave(activityId, updatedDraft);
+        changed = true;
+      }
+      return changed ? next : prev;
+    });
+  }, [profilePaces, queueActivityAutosave]);
 
   const addActivity = useCallback(
     async (dayId: string) => {
@@ -1830,6 +1938,28 @@ export default function PlanReviewPage() {
 
                               <label className="review-field review-field-compact review-col-pace">
                                 <span>Pace</span>
+                                {draft.type === 'RUN' ? (
+                                  <div className="review-pace-categories" role="radiogroup" aria-label="Run pace category">
+                                    {PACE_BUCKET_OPTIONS.map((option) => {
+                                      const selected = draft.paceTargetBucket === option.value;
+                                      return (
+                                        <button
+                                          key={`${activity.id}-${option.value}`}
+                                          type="button"
+                                          className={`review-pace-chip${selected ? ' active' : ''}`}
+                                          aria-label={option.label}
+                                          aria-pressed={selected}
+                                          onClick={() => applyPaceBucket(activity.id, option.value)}
+                                          title={`${option.label}${profilePaces[option.value] ? ` · ${profilePaces[option.value]}` : ''}`}
+                                        >
+                                          {option.short}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                ) : (
+                                  <span className="review-field-hint">No pace category for this activity type.</span>
+                                )}
                                 <input
                                   type="text"
                                   value={draft.paceTarget}
@@ -1838,6 +1968,11 @@ export default function PlanReviewPage() {
                                   }
                                   placeholder={`4:45 /${paceUnitLabel}`}
                                 />
+                                {draft.type === 'RUN' && draft.paceTargetBucket && !profilePaces[draft.paceTargetBucket] && (
+                                  <span className="review-field-hint">
+                                    Set {PACE_BUCKET_OPTIONS.find((option) => option.value === draft.paceTargetBucket)?.label || 'this'} pace in Profile for auto-fill.
+                                  </span>
+                                )}
                               </label>
 
                               <label className="review-field review-field-compact review-col-effort">

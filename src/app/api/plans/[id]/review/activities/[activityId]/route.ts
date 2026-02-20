@@ -20,6 +20,7 @@ const ACTIVITY_TYPES: ActivityType[] = [
 ];
 
 const DISTANCE_UNITS: Units[] = ['MILES', 'KM'];
+const PACE_BUCKETS = ['RECOVERY', 'EASY', 'LONG', 'RACE', 'TEMPO', 'THRESHOLD', 'INTERVAL'] as const;
 
 function convertDistanceValue(value: number, from: Units, to: Units) {
   if (from === to) return value;
@@ -77,7 +78,15 @@ export async function PATCH(
 
   const activity = await prisma.planActivity.findFirst({
     where: { id: activityId, planId },
-    select: { id: true, distance: true, distanceUnit: true, paceTarget: true, effortTarget: true }
+    select: {
+      id: true,
+      distance: true,
+      distanceUnit: true,
+      paceTarget: true,
+      paceTargetMode: true,
+      paceTargetBucket: true,
+      effortTarget: true
+    }
   });
   if (!activity) return NextResponse.json({ error: 'Activity not found' }, { status: 404 });
 
@@ -89,6 +98,7 @@ export async function PATCH(
     distance?: unknown;
     duration?: unknown;
     distanceUnit?: unknown;
+    paceTargetBucket?: unknown;
     paceTarget?: unknown;
     effortTarget?: unknown;
     notes?: unknown;
@@ -170,13 +180,37 @@ export async function PATCH(
   const paceTarget = normalizeOptionalText(raw.paceTarget);
   if (paceTarget !== undefined) updates.paceTarget = paceTarget;
 
+  const paceTargetBucketProvided = raw.paceTargetBucket !== undefined;
+  let paceTargetBucketOverride:
+    | 'RECOVERY'
+    | 'EASY'
+    | 'LONG'
+    | 'RACE'
+    | 'TEMPO'
+    | 'THRESHOLD'
+    | 'INTERVAL'
+    | null
+    | undefined = undefined;
+  if (paceTargetBucketProvided) {
+    if (raw.paceTargetBucket === null || raw.paceTargetBucket === '') {
+      paceTargetBucketOverride = null;
+    } else if (
+      typeof raw.paceTargetBucket === 'string'
+      && PACE_BUCKETS.includes(raw.paceTargetBucket as (typeof PACE_BUCKETS)[number])
+    ) {
+      paceTargetBucketOverride = raw.paceTargetBucket as (typeof PACE_BUCKETS)[number];
+    } else {
+      return NextResponse.json({ error: 'Invalid pace target bucket' }, { status: 400 });
+    }
+  }
+
   const effortTarget = normalizeOptionalText(raw.effortTarget);
   if (effortTarget !== undefined) updates.effortTarget = effortTarget;
 
   const notes = normalizeOptionalText(raw.notes);
   if (notes !== undefined) updates.notes = notes;
 
-  if (Object.keys(updates).length === 0) {
+  if (Object.keys(updates).length === 0 && !paceTargetBucketProvided) {
     return NextResponse.json({ error: 'No editable fields provided' }, { status: 400 });
   }
 
@@ -210,6 +244,17 @@ export async function PATCH(
     fallbackUnit: effectiveDistanceUnit
   });
   Object.assign(updates, structuredTargets);
+  if (paceTargetBucketProvided) {
+    updates.paceTargetBucket = paceTargetBucketOverride ?? null;
+    if (!finalPaceTarget && paceTargetBucketOverride) {
+      updates.paceTargetMode = 'SYMBOLIC';
+    } else if (!finalPaceTarget && !paceTargetBucketOverride) {
+      updates.paceTargetMode = null;
+    }
+  } else if (!finalPaceTarget && activity.paceTargetMode === 'SYMBOLIC' && activity.paceTargetBucket) {
+    updates.paceTargetMode = 'SYMBOLIC';
+    updates.paceTargetBucket = activity.paceTargetBucket;
+  }
 
   const updated = await prisma.planActivity.update({
     where: { id: activityId },
@@ -246,6 +291,17 @@ export async function DELETE(
   });
   if (!activity) return NextResponse.json({ error: 'Activity not found' }, { status: 404 });
 
-  await prisma.planActivity.delete({ where: { id: activityId } });
-  return NextResponse.json({ deleted: true, activityId });
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.externalActivity.updateMany({
+        where: { matchedPlanActivityId: activityId },
+        data: { matchedPlanActivityId: null }
+      });
+      await tx.planActivity.delete({ where: { id: activityId } });
+    });
+    return NextResponse.json({ deleted: true, activityId, detachedLogs: true });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to delete activity';
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 }
