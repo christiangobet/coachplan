@@ -1,6 +1,6 @@
 # CoachPlan — Developer Onboarding & Project Plan
 
-> **Last updated:** 2026-02-14
+> **Last updated:** 2026-02-20
 > **Audience:** New developers joining CoachPlan
 > **Goal:** This document is the single-source onboarding guide for architecture, environments, workflows, and operations.
 
@@ -282,7 +282,7 @@ Important relationship note:
 
 ## 11) UI Design Language (Current)
 
-- Modern SaaS minimal styling, generous whitespace
+- Strava-inspired aesthetic: Figtree font, orange accent (`#fc4c02`), light gray (`#f3f3f3`) panels, white cards, 1px border + subtle shadow
 - 8px spacing refactor applied in dashboard
 - Plan/Calendar shared toggle implemented
 - Activity type icons are now standardized via:
@@ -290,6 +290,20 @@ Important relationship note:
 
 Canonical activity icons:
 - `RUN`, `STRENGTH`, `CROSS_TRAIN`, `REST`, `MOBILITY`, `YOGA`, `HIKE`, `OTHER`
+
+### WorkoutDetailCard (`src/components/WorkoutDetailCard.tsx`)
+
+Reusable card component for displaying a single `PlanActivity`. Features:
+- Left border accent in activity type color
+- Icon pill + type label + priority badge header
+- Metrics strip (distance, time, pace) on gray panel background
+- Planned vs. actual comparison bars (green/amber/red by % of target)
+- Effort target and coach notes sections
+- Green completion banner with date
+- `footer?: React.ReactNode` slot — used in calendar to inject `CalendarActivityLogger`
+- `onComplete` / `onEdit` callbacks for standalone contexts (e.g. demo, future modal)
+
+The card is integrated into the calendar day-details sidebar via `.cal-workout-cards` wrapper. All distances and paces are unit-converted server-side before being passed as props.
 
 ---
 
@@ -362,6 +376,7 @@ Canonical activity icons:
 4. Strava conflict-resolution UX for same-day multi-match
 5. Admin moderation/audit trail depth
 6. Mobile polish across dashboard/calendar/detail
+7. Click-through from calendar day cell to workout detail modal (currently day click → sidebar only)
 
 ---
 
