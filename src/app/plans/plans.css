@@ -1313,6 +1313,28 @@
   font-weight: 600;
 }
 
+.pcal-activity-targets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.pcal-activity-target-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(164, 174, 192, 0.55);
+  background: rgba(243, 247, 252, 0.9);
+  padding: 0 6px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: #55637a;
+  line-height: 1.2;
+}
+
 .pcal-activity-notes {
   font-size: 10px;
   color: var(--muted);
@@ -1577,6 +1599,11 @@
   margin-bottom: 16px;
 }
 
+.pcal-modal-section-tight {
+  margin-top: -6px;
+  margin-bottom: 14px;
+}
+
 .pcal-modal-section-title {
   font-size: 12px;
   font-weight: 700;
@@ -1595,6 +1622,26 @@
 
 .pcal-modal-section-head .pcal-modal-section-title {
   margin-bottom: 0;
+}
+
+.pcal-modal-targets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pcal-modal-target-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  border-radius: 999px;
+  border: 1px solid rgba(170, 178, 194, 0.58);
+  background: #f8fafc;
+  color: #4f6078;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 0 9px;
+  letter-spacing: 0.015em;
 }
 
 .pcal-modal-strava-sync {

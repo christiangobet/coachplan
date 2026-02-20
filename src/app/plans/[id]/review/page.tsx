@@ -1732,8 +1732,8 @@ export default function PlanReviewPage() {
                             </div>
 
                             <div className="review-activity-grid">
-                              <label className="review-field review-col-title">
-                                <span>Title</span>
+                              <label className="review-field review-col-activity">
+                                <span>Activity</span>
                                 <input
                                   type="text"
                                   value={draft.title}
@@ -1743,115 +1743,115 @@ export default function PlanReviewPage() {
                                 />
                               </label>
 
-                            <label className="review-field review-col-type">
-                              <span>Type</span>
-                              <select
-                                value={draft.type}
-                                onChange={(event) =>
-                                  setActivityDraftField(
-                                    activity.id,
-                                    'type',
-                                    event.target.value as ActivityTypeValue
-                                  )
-                                }
-                              >
-                                {ACTIVITY_TYPES.map((type) => (
-                                  <option key={type} value={type}>{type.replace(/_/g, ' ')}</option>
-                                ))}
-                              </select>
-                            </label>
-
-                            <label className="review-field review-col-distance">
-                              <div className="review-field-label-row">
-                                <span>Distance</span>
-                                <span className="review-help-wrap">
-                                  <button
-                                    type="button"
-                                    className="review-help-dot"
-                                    aria-label="Distance unit help"
-                                  >
-                                    ?
-                                  </button>
-                                  <span className="review-help-popover" role="tooltip">
-                                    {hasDistance
-                                      ? 'Unit is auto-set by parser/profile. Change only if needed.'
-                                      : `Unit will default to ${viewerUnits === 'KM' ? 'km' : 'mi'} once distance is entered.`}
+                              <label className="review-field review-col-distance">
+                                <div className="review-field-label-row">
+                                  <span>Distance</span>
+                                  <span className="review-help-wrap">
+                                    <button
+                                      type="button"
+                                      className="review-help-dot"
+                                      aria-label="Distance unit help"
+                                    >
+                                      ?
+                                    </button>
+                                    <span className="review-help-popover" role="tooltip">
+                                      {hasDistance
+                                        ? 'Unit is auto-set by parser/profile. Change only if needed.'
+                                        : `Unit will default to ${viewerUnits === 'KM' ? 'km' : 'mi'} once distance is entered.`}
+                                    </span>
                                   </span>
-                                </span>
-                              </div>
-                              <div className={`review-distance-input-row${hasDistance ? '' : ' single'}`}>
+                                </div>
+                                <div className={`review-distance-input-row${hasDistance ? '' : ' single'}`}>
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    step="0.1"
+                                    value={draft.distance}
+                                    onChange={(event) =>
+                                      setActivityDraftField(activity.id, 'distance', event.target.value)
+                                    }
+                                  />
+                                  {hasDistance && (
+                                    <select
+                                      value={draft.distanceUnit || viewerUnits}
+                                      onChange={(event) =>
+                                        setActivityDraftField(activity.id, 'distanceUnit', event.target.value)
+                                      }
+                                    >
+                                      {DISTANCE_UNITS.map((unit) => (
+                                        <option key={unit} value={unit}>{unit === 'KM' ? 'km' : 'mi'}</option>
+                                      ))}
+                                    </select>
+                                  )}
+                                </div>
+                              </label>
+
+                              <label className="review-field review-col-duration">
+                                <span>Duration (min)</span>
                                 <input
                                   type="number"
                                   min={0}
-                                  step="0.1"
-                                  value={draft.distance}
+                                  step={1}
+                                  value={draft.duration}
                                   onChange={(event) =>
-                                    setActivityDraftField(activity.id, 'distance', event.target.value)
+                                    setActivityDraftField(activity.id, 'duration', event.target.value)
                                   }
                                 />
-                                {hasDistance && (
-                                  <select
-                                    value={draft.distanceUnit || viewerUnits}
-                                    onChange={(event) =>
-                                      setActivityDraftField(activity.id, 'distanceUnit', event.target.value)
-                                    }
-                                  >
-                                    {DISTANCE_UNITS.map((unit) => (
-                                      <option key={unit} value={unit}>{unit === 'KM' ? 'km' : 'mi'}</option>
-                                    ))}
-                                  </select>
-                                )}
-                              </div>
-                            </label>
+                              </label>
 
-                            <label className="review-field review-col-duration">
-                              <span>Duration (min)</span>
-                              <input
-                                type="number"
-                                min={0}
-                                step={1}
-                                value={draft.duration}
-                                onChange={(event) =>
-                                  setActivityDraftField(activity.id, 'duration', event.target.value)
-                                }
-                              />
-                            </label>
+                              <label className="review-field review-col-instructions">
+                                <span>Instructions</span>
+                                <textarea
+                                  value={draft.rawText}
+                                  onChange={(event) =>
+                                    setActivityDraftField(activity.id, 'rawText', event.target.value)
+                                  }
+                                  rows={2}
+                                />
+                              </label>
 
-                            <label className="review-field review-col-pace">
-                              <span>Pace target</span>
-                              <input
-                                type="text"
-                                value={draft.paceTarget}
-                                onChange={(event) =>
-                                  setActivityDraftField(activity.id, 'paceTarget', event.target.value)
-                                }
-                                placeholder={`e.g. ${paceUnitLabel === 'km' ? '4:45' : '7:30'} /${paceUnitLabel}`}
-                              />
-                            </label>
+                              <label className="review-field review-field-compact review-col-type">
+                                <span>Type</span>
+                                <select
+                                  value={draft.type}
+                                  onChange={(event) =>
+                                    setActivityDraftField(
+                                      activity.id,
+                                      'type',
+                                      event.target.value as ActivityTypeValue
+                                    )
+                                  }
+                                >
+                                  {ACTIVITY_TYPES.map((type) => (
+                                    <option key={type} value={type}>{type.replace(/_/g, ' ')}</option>
+                                  ))}
+                                </select>
+                              </label>
 
-                            <label className="review-field review-col-effort">
-                              <span>Effort target</span>
-                              <input
-                                type="text"
-                                value={draft.effortTarget}
-                                onChange={(event) =>
-                                  setActivityDraftField(activity.id, 'effortTarget', event.target.value)
-                                }
-                                placeholder="e.g. Z2"
-                              />
-                            </label>
-                          </div>
+                              <label className="review-field review-field-compact review-col-pace">
+                                <span>Pace</span>
+                                <input
+                                  type="text"
+                                  value={draft.paceTarget}
+                                  onChange={(event) =>
+                                    setActivityDraftField(activity.id, 'paceTarget', event.target.value)
+                                  }
+                                  placeholder={`4:45 /${paceUnitLabel}`}
+                                />
+                              </label>
 
-                            <label className="review-field review-col-instructions">
-                              <span>Instructions</span>
-                              <textarea
-                                value={draft.rawText}
-                                onChange={(event) =>
-                                  setActivityDraftField(activity.id, 'rawText', event.target.value)
-                                }
-                                rows={2}
-                              />
-                            </label>
+                              <label className="review-field review-field-compact review-col-effort">
+                                <span>Effort</span>
+                                <input
+                                  type="text"
+                                  value={draft.effortTarget}
+                                  onChange={(event) =>
+                                    setActivityDraftField(activity.id, 'effortTarget', event.target.value)
+                                  }
+                                  placeholder="RPE 6 or Z2"
+                                />
+                              </label>
+                            </div>
                           </div>
                         );
                       })}

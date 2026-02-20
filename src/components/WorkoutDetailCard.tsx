@@ -166,7 +166,12 @@ export default function WorkoutDetailCard({
   const hasActuals = completed && (
     actualDistance !== undefined || actualDuration !== undefined || actualPace
   );
-  const hasMetrics = distance !== undefined || duration !== undefined || paceTarget;
+  const hasMetrics = distance !== undefined || duration !== undefined;
+  const targetChips = [
+    paceTarget ? { id: "pace", text: `Pace ${paceTarget}`, tone: "default" as const } : null,
+    effortTarget ? { id: "effort", text: `Effort ${effortTarget}`, tone: "default" as const } : null,
+    hasActuals && actualPace ? { id: "actual-pace", text: `Actual pace ${actualPace}`, tone: "success" as const } : null,
+  ].filter((chip): chip is { id: string; text: string; tone: "default" | "success" } => Boolean(chip));
 
   const formattedDate = date
     ? new Date(date).toLocaleDateString("en-US", {
@@ -294,7 +299,7 @@ export default function WorkoutDetailCard({
               style={{
                 flex: 1,
                 padding: "11px 14px",
-                borderRight: `1px solid ${BORDER}`,
+                borderRight: duration !== undefined ? `1px solid ${BORDER}` : undefined,
               }}
             >
               <div
@@ -342,7 +347,6 @@ export default function WorkoutDetailCard({
               style={{
                 flex: 1,
                 padding: "11px 14px",
-                borderRight: paceTarget ? `1px solid ${BORDER}` : undefined,
               }}
             >
               <div
@@ -378,57 +382,11 @@ export default function WorkoutDetailCard({
               )}
             </div>
           )}
-
-          {paceTarget && (
-            <div style={{ flex: 1, padding: "11px 14px" }}>
-              <div
-                style={{
-                  fontSize: 10,
-                  fontWeight: 700,
-                  color: MUTED,
-                  letterSpacing: "0.09em",
-                  textTransform: "uppercase" as const,
-                  marginBottom: 3,
-                }}
-              >
-                Pace
-              </div>
-              <div
-                style={{
-                  fontSize: 18,
-                  fontWeight: 800,
-                  color: INK,
-                  letterSpacing: "-0.02em",
-                  lineHeight: 1,
-                }}
-              >
-                {paceTarget}
-              </div>
-              {hasActuals && actualPace && (
-                <div
-                  style={{
-                    fontSize: 11,
-                    color: GREEN,
-                    fontWeight: 700,
-                    marginTop: 8,
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 3,
-                  }}
-                >
-                  <svg width={9} height={9} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="20 6 9 17 4 12" />
-                  </svg>
-                  {actualPace} logged
-                </div>
-              )}
-            </div>
-          )}
         </div>
       )}
 
-      {/* ── EFFORT TARGET ── */}
-      {effortTarget && (
+      {/* ── TARGETS ── */}
+      {targetChips.length > 0 && (
         <div
           style={{
             padding: "9px 16px",
@@ -436,6 +394,7 @@ export default function WorkoutDetailCard({
             display: "flex",
             gap: 10,
             alignItems: "baseline",
+            borderTop: hasMetrics ? undefined : `1px solid ${BORDER}`,
           }}
         >
           <span
@@ -449,11 +408,30 @@ export default function WorkoutDetailCard({
               paddingTop: 1,
             }}
           >
-            Effort
+            Targets
           </span>
-          <span style={{ fontSize: 13, color: INK, fontWeight: 500, lineHeight: 1.5 }}>
-            {effortTarget}
-          </span>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {targetChips.map((chip) => (
+              <span
+                key={chip.id}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  minHeight: 20,
+                  borderRadius: 999,
+                  border: chip.tone === "success" ? `1px solid ${GREEN}55` : `1px solid ${BORDER}`,
+                  background: chip.tone === "success" ? `${GREEN}12` : "#f8fafc",
+                  color: chip.tone === "success" ? "#1e8451" : "#4c5d75",
+                  fontSize: 11,
+                  fontWeight: 700,
+                  lineHeight: 1.2,
+                  padding: "0 8px",
+                }}
+              >
+                {chip.text}
+              </span>
+            ))}
+          </div>
         </div>
       )}
 

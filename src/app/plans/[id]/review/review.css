@@ -727,42 +727,40 @@
 
 .review-activity-grid {
   display: grid;
-  grid-template-columns:
-    minmax(180px, 2.2fr)
-    minmax(120px, 1.2fr)
-    minmax(150px, 1.5fr)
-    minmax(110px, 1fr)
-    minmax(130px, 1.3fr)
-    minmax(130px, 1.3fr);
+  grid-template-columns: minmax(220px, 2.8fr) minmax(150px, 1.4fr) minmax(120px, 1fr);
+  grid-template-areas:
+    "activity distance duration"
+    "instructions instructions instructions"
+    "type pace effort";
   gap: 8px;
 }
 
-.review-col-title {
-  grid-column: 1;
+.review-col-activity {
+  grid-area: activity;
 }
 
 .review-col-type {
-  grid-column: 2;
+  grid-area: type;
 }
 
 .review-col-distance {
-  grid-column: 3;
+  grid-area: distance;
 }
 
 .review-col-duration {
-  grid-column: 4;
+  grid-area: duration;
 }
 
 .review-col-pace {
-  grid-column: 5;
+  grid-area: pace;
 }
 
 .review-col-effort {
-  grid-column: 6;
+  grid-area: effort;
 }
 
 .review-col-instructions {
-  grid-column: 1 / -1;
+  grid-area: instructions;
 }
 
 .review-day-notes textarea {
@@ -771,6 +769,25 @@
 
 .review-col-instructions textarea {
   min-height: 54px;
+}
+
+.review-field-compact {
+  gap: 3px;
+}
+
+.review-field.review-field-compact span {
+  font-size: 10px;
+  color: #7a879b;
+  letter-spacing: 0.03em;
+}
+
+.review-field.review-field-compact input,
+.review-field.review-field-compact select {
+  min-height: 30px;
+  font-size: 12px;
+  padding: 5px 8px;
+  border-color: #d5dff2;
+  background: #f8fbff;
 }
 
 .review-autosave {
@@ -963,20 +980,16 @@
   }
 
   .review-activity-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-areas:
+      "activity activity"
+      "distance duration"
+      "instructions instructions"
+      "type pace"
+      "effort effort";
   }
 
-  .review-col-title {
-    grid-column: span 2;
-  }
-
-  .review-col-type,
-  .review-col-distance,
-  .review-col-duration,
-  .review-col-pace,
-  .review-col-effort {
-    grid-column: span 1;
-  }
+  .review-col-effort { max-width: 280px; }
 }
 
 @media (max-width: 780px) {
@@ -1003,15 +1016,18 @@
 
   .review-activity-grid {
     grid-template-columns: 1fr;
+    grid-template-areas:
+      "activity"
+      "distance"
+      "duration"
+      "instructions"
+      "type"
+      "pace"
+      "effort";
   }
 
-  .review-col-title,
-  .review-col-type,
-  .review-col-distance,
-  .review-col-duration,
-  .review-col-pace,
   .review-col-effort {
-    grid-column: span 1;
+    max-width: none;
   }
 
   .review-distance-input-row {

@@ -72,6 +72,16 @@ function typeAbbr(type: string | null | undefined) {
   return ACTIVITY_TYPE_ABBR[String(type || 'OTHER').toUpperCase()] || 'OTH';
 }
 
+function createTargetBadges(args: {
+  paceTarget?: string | null;
+  effortTarget?: string | null;
+}) {
+  const chips: string[] = [];
+  if (args.paceTarget) chips.push(`Pace ${args.paceTarget}`);
+  if (args.effortTarget) chips.push(`Effort ${args.effortTarget}`);
+  return chips;
+}
+
 function resolveActivityDistanceSourceUnit(
   activity: {
     distanceUnit?: string | null;
@@ -986,6 +996,10 @@ export default function PlanDetailPage() {
   const selectedPaceDisplay = selectedActivity
     ? formatDisplayPace(selectedActivity.paceTarget, selectedPlannedSourceUnit)
     : null;
+  const selectedTargetBadges = createTargetBadges({
+    paceTarget: selectedPaceDisplay,
+    effortTarget: selectedActivity?.effortTarget
+  });
   const selectedActivityDateLabel = selectedActivity
     ? formatLocalDateKey(selectedActivity.dayDateISO)
     : null;
@@ -1150,8 +1164,10 @@ export default function PlanDetailPage() {
                             if (plannedDistanceLabel) details.push(plannedDistanceLabel);
                             if (a.duration) details.push(`${a.duration}m`);
                             const displayPaceTarget = formatDisplayPace(a.paceTarget, plannedSourceUnit);
-                            if (displayPaceTarget) details.push(displayPaceTarget);
-                            if (a.effortTarget) details.push(a.effortTarget);
+                            const targetBadges = createTargetBadges({
+                              paceTarget: displayPaceTarget,
+                              effortTarget: a.effortTarget
+                            });
                             if (a.completed) {
                               const actuals: string[] = [];
                               const actualDistanceLabel = formatDisplayDistance(a.actualDistance, actualSourceUnit);
@@ -1194,6 +1210,15 @@ export default function PlanDetailPage() {
                                   {details.length > 0 && (
                                     <span className="pcal-activity-details">
                                       {details.join(' · ')}
+                                    </span>
+                                  )}
+                                  {targetBadges.length > 0 && (
+                                    <span className="pcal-activity-targets">
+                                      {targetBadges.map((badge, index) => (
+                                        <span key={`${a.id}-target-${index}`} className="pcal-activity-target-chip">
+                                          {badge}
+                                        </span>
+                                      ))}
                                     </span>
                                   )}
                                 </div>
@@ -1485,23 +1510,20 @@ export default function PlanDetailPage() {
                     <span className="pcal-modal-stat-label">min</span>
                   </div>
                 )}
-                {selectedActivity.paceTarget && (
-                  <div className="pcal-modal-stat">
-                    <span className="pcal-modal-stat-value">
-                      {selectedPaceDisplay}
-                    </span>
-                    <span className="pcal-modal-stat-label">pace</span>
-                  </div>
-                )}
-                {selectedActivity.effortTarget && (
-                  <div className="pcal-modal-stat">
-                    <span className="pcal-modal-stat-value">
-                      {selectedActivity.effortTarget}
-                    </span>
-                    <span className="pcal-modal-stat-label">effort</span>
-                  </div>
-                )}
               </div>
+
+              {selectedTargetBadges.length > 0 && (
+                <div className="pcal-modal-section pcal-modal-section-tight">
+                  <h3 className="pcal-modal-section-title">Targets</h3>
+                  <div className="pcal-modal-targets">
+                    {selectedTargetBadges.map((badge, index) => (
+                      <span key={`selected-target-${index}`} className="pcal-modal-target-chip">
+                        {badge}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Instructions / Strava sync */}
               <div className="pcal-modal-section">

@@ -43,6 +43,7 @@ export default function ActivityForm({ isOpen, onClose, onSubmit, onDelete, init
     });
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [showAdvancedTargets, setShowAdvancedTargets] = useState(false);
 
     useEffect(() => {
         if (isOpen) {
@@ -58,6 +59,7 @@ export default function ActivityForm({ isOpen, onClose, onSubmit, onDelete, init
                 priority: initialData?.priority || 'MEDIUM',
                 mustDo: initialData?.mustDo || false
             });
+            setShowAdvancedTargets(Boolean(initialData?.paceTarget || initialData?.effortTarget));
             setError(null);
         }
     }, [isOpen, initialData]);
@@ -152,17 +154,42 @@ export default function ActivityForm({ isOpen, onClose, onSubmit, onDelete, init
                     )}
                 </div>
 
-                {isRun && (
-                    <label>
-                        Pace Target
-                        <input
-                            type="text"
-                            value={formData.paceTarget || ''}
-                            onChange={(e) => setFormData({ ...formData, paceTarget: e.target.value || undefined })}
-                            placeholder={`e.g. ${formData.distanceUnit === 'MILES' ? '7:50-8:10 /mi' : '5:00-5:15 /km'}`}
-                        />
-                    </label>
-                )}
+                <div style={{ display: 'grid', gap: '8px' }}>
+                    <button
+                        type="button"
+                        className="btn-ghost"
+                        style={{ justifySelf: 'start', minHeight: '32px', padding: '4px 10px', fontSize: '12px' }}
+                        onClick={() => setShowAdvancedTargets((value) => !value)}
+                    >
+                        {showAdvancedTargets ? 'Hide advanced targets' : 'Advanced targets'}
+                    </button>
+
+                    {showAdvancedTargets && (
+                        <div className="grid-2" style={{ gridTemplateColumns: isRun ? undefined : '1fr' }}>
+                            {isRun && (
+                                <label>
+                                    Pace Target
+                                    <input
+                                        type="text"
+                                        value={formData.paceTarget || ''}
+                                        onChange={(e) => setFormData({ ...formData, paceTarget: e.target.value || undefined })}
+                                        placeholder={`e.g. ${formData.distanceUnit === 'MILES' ? '7:50-8:10 /mi' : '5:00-5:15 /km'}`}
+                                    />
+                                </label>
+                            )}
+
+                            <label>
+                                Effort Target
+                                <input
+                                    type="text"
+                                    value={formData.effortTarget || ''}
+                                    onChange={(e) => setFormData({ ...formData, effortTarget: e.target.value || undefined })}
+                                    placeholder="e.g. RPE 6 or Z2"
+                                />
+                            </label>
+                        </div>
+                    )}
+                </div>
 
                 <label>
                     Notes
