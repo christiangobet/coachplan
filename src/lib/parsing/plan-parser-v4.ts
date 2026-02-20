@@ -145,7 +145,8 @@ export async function runParserV4(fullText: string): Promise<ParserV4Result> {
   const rawJson = await openaiJsonSchema<unknown>({
     input,
     schema: PROGRAM_JSON_V1_SCHEMA,
-    model
+    model,
+    maxOutputTokens: 16384
   });
 
   const parseResult = ProgramJsonV1Schema.safeParse(rawJson);

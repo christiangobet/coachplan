@@ -283,4 +283,8 @@ FINAL RULE
 Return ONLY the JSON object.
 No explanations.
 No markdown.
-No commentary.`;
+No commentary.
+
+Keep ALL text values concise — under 80 characters each.
+Use null instead of empty strings or empty arrays where data is absent.
+assumptions and program_notes: maximum 3 items, one sentence each.`;

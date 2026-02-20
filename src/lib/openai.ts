@@ -110,6 +110,7 @@ type JsonSchemaRequest = {
   input: string;
   schema: JsonSchemaFormat;
   model: string;
+  maxOutputTokens?: number;
 };
 
 function buildResponseFormat(schema: JsonSchemaFormat, style: "openai" | "cloudflare_nested") {
@@ -188,7 +189,8 @@ async function openAIJsonSchema<T>(opts: JsonSchemaRequest) {
     {
       model: opts.model,
       input: opts.input,
-      response_format: buildResponseFormat(opts.schema, "openai")
+      response_format: buildResponseFormat(opts.schema, "openai"),
+      ...(opts.maxOutputTokens ? { max_output_tokens: opts.maxOutputTokens } : {})
     },
     {
       Authorization: `Bearer ${apiKey}`
@@ -307,6 +309,7 @@ export async function openaiJsonSchema<T>(opts: {
   input: string;
   schema: JsonSchemaFormat;
   model?: string;
+  maxOutputTokens?: number;
 }) {
   const provider = resolveAIProvider();
   const model = opts.model || getDefaultAiModel(provider);

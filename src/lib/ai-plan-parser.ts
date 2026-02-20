@@ -257,7 +257,8 @@ export async function maybeRunParserV4(
   }
 
   // 3. Run V4 AI parsing
-  let result: Awaited<ReturnType<typeof runParserV4>>;
+  let result: Awaited<ReturnType<typeof runParserV4>> | null = null;
+  let rawParseError: string | null = null;
   try {
     result = await runParserV4(fullText);
     console.info('[ParserV4] AI parse complete', {
@@ -267,26 +268,29 @@ export async function maybeRunParserV4(
       weeks: (result.rawJson as { weeks?: unknown[] })?.weeks?.length ?? 0
     });
   } catch (err) {
-    await fail(err, 'runParserV4');
-    return;
+    rawParseError = err instanceof Error ? err.message : String(err);
+    console.error('[ParserV4] runParserV4 failed (non-fatal)', { planId, error: rawParseError });
   }
 
   // 4. Save artifact + update status
+  // Always save something — even on parse failure — so the truncated/raw
+  // response is visible in /admin/parse-debug.
   if (FLAGS.PARSE_DUAL_WRITE && jobId) {
     try {
+      const artifactJson = result?.rawJson ?? { error: rawParseError };
       await saveParseArtifact({
         parseJobId: jobId,
         artifactType: 'program_json',
         schemaVersion: 'v1',
-        json: result.rawJson,
-        validationOk: result.validated
+        json: artifactJson,
+        validationOk: result?.validated ?? false
       });
       await updateParseJobStatus(
         jobId,
-        result.validated ? 'SUCCESS' : 'FAILED',
-        result.validated ? undefined : (result.validationError ?? undefined)
+        result?.validated ? 'SUCCESS' : 'FAILED',
+        result?.validated ? undefined : (result?.validationError ?? rawParseError ?? undefined)
       );
-      console.info('[ParserV4] Artifact saved', { jobId, validationOk: result.validated });
+      console.info('[ParserV4] Artifact saved', { jobId, validationOk: result?.validated ?? false });
     } catch (err) {
       await fail(err, 'saveArtifact');
     }
