@@ -889,6 +889,20 @@
   overflow-wrap: anywhere;
 }
 
+/* ── Workout detail cards in day sidebar ── */
+.cal-workout-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Remove the top separator from the logger when it's inside a WorkoutDetailCard footer */
+.cal-workout-cards .cal-activity-log {
+  border-top: none;
+  padding-top: 0;
+  margin-top: 0;
+}
+
 .cal-activity-log {
   display: grid;
   gap: 8px;

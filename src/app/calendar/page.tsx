@@ -17,6 +17,7 @@ import {
 import AthleteSidebar from "@/components/AthleteSidebar";
 import CalendarActivityLogger from "@/components/CalendarActivityLogger";
 import DayCompletionButton from "@/components/DayCompletionButton";
+import WorkoutDetailCard from "@/components/WorkoutDetailCard";
 import ExternalSportIcon from "@/components/ExternalSportIcon";
 import RaceDetailsEditor from "@/components/RaceDetailsEditor";
 import SelectedPlanCookie from "@/components/SelectedPlanCookie";
@@ -44,10 +45,15 @@ type DatedActivity = {
   id: string;
   title: string;
   type: ActivityType;
+  subtype: string | null;
   completed: boolean;
+  completedAt: Date | null;
   distance: number | null;
   duration: number | null;
   distanceUnit: "MILES" | "KM" | null;
+  paceTarget: string | null;
+  effortTarget: string | null;
+  priority: "KEY" | "MEDIUM" | "OPTIONAL" | null;
   actualDistance: number | null;
   actualDuration: number | null;
   actualPace: string | null;
@@ -401,10 +407,15 @@ export default async function CalendarPage({
           id: activity.id,
           title: activity.title || formatType(activity.type),
           type: (activity.type as ActivityType) || "OTHER",
+          subtype: activity.subtype ?? null,
           completed: !!activity.completed,
+          completedAt: activity.completedAt ?? null,
           distance: activity.distance ?? null,
           duration: activity.duration ?? null,
           distanceUnit: activity.distanceUnit ?? null,
+          paceTarget: activity.paceTarget ?? null,
+          effortTarget: activity.effortTarget ?? null,
+          priority: (activity.priority as "KEY" | "MEDIUM" | "OPTIONAL" | null) ?? null,
           actualDistance: activity.actualDistance ?? null,
           actualDuration: activity.actualDuration ?? null,
           actualPace: activity.actualPace ?? null,
@@ -745,57 +756,75 @@ export default async function CalendarPage({
               {selectedPlanActivities.length === 0 && (
                 <p className="cal-day-empty">No planned activities on this day.</p>
               )}
-              {selectedPlanActivities.map((activity) => (
-                <div key={activity.id} className={`cal-day-detail-item${activity.completed ? " done" : ""}`}>
-                  {(() => {
-                    const syncedSourceDate = parseSyncedSourceDate(activity.notes);
-                    const hasSyncedDateMismatch = Boolean(
-                      syncedSourceDate && syncedSourceDate !== selectedDateKey
-                    );
-                    const manualNotes = stripSyncTagLine(activity.notes);
-                    return (
-                      <>
-                        <div className="cal-day-detail-title">
-                          <span className="cal-day-detail-main">
-                            <span
-                              className={`cal-day-detail-type-pill type-${activity.type.toLowerCase()}`}
-                              title={formatType(activity.type)}
-                            >
-                              {getTypeAbbr(activity.type)}
-                            </span>
-                            <strong>{activity.title}</strong>
-                          </span>
-                        </div>
-                        <div className="cal-day-detail-meta">
-                          <span>
-                            Planned: {formatDistance(activity.distance, activity.distanceUnit, viewerUnits)} · {formatDurationMinutes(activity.duration)}
-                          </span>
-                          <span>Status: {activity.completed ? "Done" : "Planned"}</span>
-                          {!hasSyncedDateMismatch && (activity.actualDistance || activity.actualDuration || activity.actualPace) && (
-                            <span>
-                              Logged: {formatDistance(activity.actualDistance, activity.distanceUnit, viewerUnits)} · {formatDurationMinutes(activity.actualDuration)}
-                              {activity.actualPace ? ` · ${formatPace(activity.actualPace, viewerUnits, activity.distanceUnit)}` : ""}
-                            </span>
-                          )}
-                          {hasSyncedDateMismatch && syncedSourceDate && (
-                            <span className="cal-day-detail-warning">
-                              Synced activity date {syncedSourceDate} does not match this card day.
-                            </span>
-                          )}
-                          {!hasSyncedDateMismatch && activity.notes && <span>Notes: {activity.notes}</span>}
-                          {hasSyncedDateMismatch && manualNotes && <span>Notes: {manualNotes}</span>}
-                        </div>
-                      </>
-                    );
-                  })()}
-                  <CalendarActivityLogger
-                    activity={activity}
-                    viewerUnit={viewerUnits}
-                    enabled={selectedIsPastOrToday}
-                    successRedirectHref={dashboardReturnHref}
-                  />
-                </div>
-              ))}
+              <div className="cal-workout-cards">
+                {selectedPlanActivities.map((activity) => {
+                  const syncedSourceDate = parseSyncedSourceDate(activity.notes);
+                  const hasSyncedDateMismatch = Boolean(
+                    syncedSourceDate && syncedSourceDate !== selectedDateKey
+                  );
+                  const displayNotes = hasSyncedDateMismatch
+                    ? stripSyncTagLine(activity.notes)
+                    : activity.notes;
+
+                  const displayDistance = convertDistanceForDisplay(
+                    activity.distance,
+                    activity.distanceUnit,
+                    viewerUnits
+                  );
+                  const displayActualDistance = convertDistanceForDisplay(
+                    activity.actualDistance,
+                    activity.distanceUnit,
+                    viewerUnits
+                  );
+                  const displayPaceTarget = convertPaceForDisplay(
+                    activity.paceTarget,
+                    viewerUnits,
+                    activity.distanceUnit || viewerUnits
+                  ) || undefined;
+                  const displayActualPace = convertPaceForDisplay(
+                    activity.actualPace,
+                    viewerUnits,
+                    activity.distanceUnit || viewerUnits
+                  ) || undefined;
+
+                  return (
+                    <div key={activity.id}>
+                      <WorkoutDetailCard
+                        title={activity.title}
+                        type={activity.type}
+                        subtype={activity.subtype ?? undefined}
+                        distance={displayDistance?.value ?? undefined}
+                        distanceUnit={viewerUnits}
+                        duration={activity.duration ?? undefined}
+                        paceTarget={displayPaceTarget}
+                        effortTarget={activity.effortTarget ?? undefined}
+                        notes={displayNotes ?? undefined}
+                        priority={activity.priority ?? "MEDIUM"}
+                        completed={activity.completed}
+                        completedAt={activity.completedAt ?? undefined}
+                        actualDistance={displayActualDistance?.value ?? undefined}
+                        actualDuration={activity.actualDuration ?? undefined}
+                        actualPace={displayActualPace}
+                        footer={
+                          <>
+                            {hasSyncedDateMismatch && syncedSourceDate && (
+                              <p className="cal-day-detail-warning" style={{ marginBottom: 8 }}>
+                                Synced activity date {syncedSourceDate} does not match this card day.
+                              </p>
+                            )}
+                            <CalendarActivityLogger
+                              activity={activity}
+                              viewerUnit={viewerUnits}
+                              enabled={selectedIsPastOrToday}
+                              successRedirectHref={dashboardReturnHref}
+                            />
+                          </>
+                        }
+                      />
+                    </div>
+                  );
+                })}
+              </div>
             </div>
 
             <div className="cal-day-detail-section">
