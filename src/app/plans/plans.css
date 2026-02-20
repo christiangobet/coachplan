@@ -378,13 +378,9 @@
 
 .pcal-layout {
   display: grid;
-  grid-template-columns: 220px minmax(0, 1fr) 360px;
+  grid-template-columns: 240px minmax(0, 1fr) 360px;
   gap: 20px;
   align-items: start;
-}
-
-.pcal-layout.pcal-layout-sidebar-collapsed {
-  grid-template-columns: 88px minmax(0, 1fr) 360px;
 }
 
 .pcal-main {
@@ -403,115 +399,113 @@
   top: 88px;
   background: var(--background);
   border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow);
-  padding: 12px;
+  border-radius: 16px;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+  padding: 14px;
   display: grid;
-  gap: 10px;
+  gap: 12px;
 }
 
 .pcal-side-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  display: grid;
+  gap: 6px;
 }
 
-.pcal-side-title {
+.pcal-side-title-wrap {
+  display: grid;
+  gap: 2px;
+}
+
+.pcal-side-eyebrow {
   font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
   color: var(--muted);
-  padding: 2px 4px;
 }
 
-.pcal-side-toggle {
-  width: 28px;
-  height: 28px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--background);
-  color: var(--muted);
-  font-family: inherit;
-  font-size: 12px;
+.pcal-side-title {
+  margin: 0;
+  font-size: 16px;
   font-weight: 700;
-  cursor: pointer;
-}
-
-.pcal-side-toggle:hover {
-  border-color: var(--accent);
-  color: var(--accent);
+  letter-spacing: -0.01em;
+  color: var(--ink);
 }
 
 .pcal-side-nav {
   display: grid;
-  gap: 4px;
+  gap: 6px;
 }
 
 .pcal-side-link {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  min-height: 34px;
-  border-radius: var(--radius);
-  padding: 0 10px;
-  font-size: 13px;
-  font-weight: 600;
+  gap: 10px;
+  min-height: 48px;
+  border-radius: 12px;
+  padding: 8px 10px;
   color: var(--muted);
   text-decoration: none;
-  border: 1px solid transparent;
-}
-
-.pcal-side-link-short {
-  display: none;
+  border: 1px solid var(--border);
+  background: rgba(248, 250, 252, 0.7);
 }
 
 .pcal-side-link-label {
-  display: inline;
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--ink);
+}
+
+.pcal-side-link-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.pcal-side-link-meta {
+  display: block;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
+  line-height: 1.2;
+}
+
+.pcal-side-link-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #c8ccd6;
+  flex-shrink: 0;
+  transition: background-color 0.15s ease;
 }
 
 .pcal-side-link:hover {
-  background: var(--panel);
-  color: var(--ink);
+  border-color: rgba(252, 76, 2, 0.3);
+  background: rgba(252, 76, 2, 0.06);
 }
 
 .pcal-side-link.active {
-  color: var(--ink);
-  background: var(--panel);
-  border-color: var(--border);
+  background: rgba(252, 76, 2, 0.1);
+  border-color: rgba(252, 76, 2, 0.35);
+}
+
+.pcal-side-link.active .pcal-side-link-label {
+  color: var(--accent);
+}
+
+.pcal-side-link.active .pcal-side-link-dot {
+  background: var(--accent);
 }
 
 .pcal-side-footer {
   border-top: 1px solid var(--border);
-  padding-top: 10px;
+  padding-top: 12px;
 }
 
 .pcal-side-link.back {
   width: 100%;
-}
-
-.pcal-side.is-collapsed {
-  padding: 10px 8px;
-}
-
-.pcal-side.is-collapsed .pcal-side-title {
-  padding: 2px 0;
-}
-
-.pcal-side.is-collapsed .pcal-side-link {
-  justify-content: center;
-  padding: 0 6px;
-}
-
-.pcal-side.is-collapsed .pcal-side-link-short {
-  display: inline;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-}
-
-.pcal-side.is-collapsed .pcal-side-link-label {
-  display: none;
 }
 
 .pcal-header {
@@ -1782,10 +1776,12 @@
   }
 
   .pcal-side-link {
-    justify-content: center;
-    text-align: center;
-    min-height: 36px;
-    padding: 0 8px;
+    min-height: 42px;
+    padding: 8px;
+  }
+
+  .pcal-side-link-meta {
+    display: none;
   }
 
   .pcal-race-grid {
@@ -1837,7 +1833,7 @@
 
 @media (max-width: 1450px) and (min-width: 901px) {
   .pcal-layout {
-    grid-template-columns: minmax(88px, 220px) minmax(0, 1fr) 332px;
+    grid-template-columns: 212px minmax(0, 1fr) 332px;
   }
 }
 
@@ -1925,9 +1921,22 @@
 
   .pcal-side-link {
     white-space: nowrap;
-    min-height: 36px;
-    padding: 0 12px;
+    min-height: 40px;
+    padding: 8px 12px;
     flex-shrink: 0;
+  }
+
+  .pcal-side-link-copy {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .pcal-side-link-label {
+    font-size: 12px;
+  }
+
+  .pcal-side-link-meta {
+    display: none;
   }
 
   .pcal-header h1 {

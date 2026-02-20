@@ -6,41 +6,30 @@ type PlanSidebarItem = 'overview' | 'calendar' | 'ai' | 'strava' | 'progress';
 const ITEMS: Array<{
   id: PlanSidebarItem;
   label: string;
-  shortLabel: string;
+  description: string;
   href: (planId: string) => string;
 }> = [
-  { id: 'overview', label: 'Overview', shortLabel: 'OV', href: (planId) => `/plans/${planId}#plan-overview` },
-  { id: 'calendar', label: 'Training Log', shortLabel: 'LOG', href: (planId) => `/calendar?plan=${planId}` },
-  { id: 'ai', label: 'AI Trainer', shortLabel: 'AI', href: (planId) => `/plans/${planId}#ai-trainer` },
-  { id: 'strava', label: 'Import Strava', shortLabel: 'IMP', href: (planId) => appendPlanQueryToHref('/strava', planId) },
-  { id: 'progress', label: 'Progress', shortLabel: 'PRG', href: (planId) => `/progress?plan=${planId}` }
+  { id: 'overview', label: 'Overview', description: 'Plan summary and weekly structure', href: (planId) => `/plans/${planId}#plan-overview` },
+  { id: 'calendar', label: 'Training Log', description: 'Calendar and day-level logging', href: (planId) => `/calendar?plan=${planId}` },
+  { id: 'ai', label: 'AI Trainer', description: 'Adjustment recommendations', href: (planId) => `/plans/${planId}#ai-trainer` },
+  { id: 'strava', label: 'Import Strava', description: 'Sync external activities', href: (planId) => appendPlanQueryToHref('/strava', planId) },
+  { id: 'progress', label: 'Progress', description: 'Completion and performance trends', href: (planId) => `/progress?plan=${planId}` }
 ];
 
 export default function PlanSidebar({
   planId,
-  active,
-  collapsed = false,
-  onToggleCollapse
+  active
 }: {
   planId: string;
   active: PlanSidebarItem;
-  collapsed?: boolean;
-  onToggleCollapse?: () => void;
 }) {
   return (
-    <aside className={`pcal-side${collapsed ? ' is-collapsed' : ''}`}>
+    <aside className="pcal-side">
       <div className="pcal-side-head">
-        <div className="pcal-side-title">{collapsed ? 'Menu' : 'Plan Menu'}</div>
-        {onToggleCollapse && (
-          <button
-            className="pcal-side-toggle"
-            type="button"
-            aria-label={collapsed ? 'Expand plan menu' : 'Collapse plan menu'}
-            onClick={onToggleCollapse}
-          >
-            {collapsed ? '>' : '<'}
-          </button>
-        )}
+        <div className="pcal-side-title-wrap">
+          <span className="pcal-side-eyebrow">Navigation</span>
+          <h2 className="pcal-side-title">Plan Sections</h2>
+        </div>
       </div>
       <nav className="pcal-side-nav" aria-label="Plan navigation">
         {ITEMS.map((item) => (
@@ -50,15 +39,21 @@ export default function PlanSidebar({
             href={item.href(planId)}
             title={item.label}
           >
-            <span className="pcal-side-link-short">{item.shortLabel}</span>
-            <span className="pcal-side-link-label">{item.label}</span>
+            <span className="pcal-side-link-dot" aria-hidden />
+            <span className="pcal-side-link-copy">
+              <span className="pcal-side-link-label">{item.label}</span>
+              <span className="pcal-side-link-meta">{item.description}</span>
+            </span>
           </Link>
         ))}
       </nav>
       <div className="pcal-side-footer">
         <Link className="pcal-side-link back" href="/plans" title="Back to Plans Management">
-          <span className="pcal-side-link-short">BK</span>
-          <span className="pcal-side-link-label">Back to Plans Management</span>
+          <span className="pcal-side-link-dot" aria-hidden />
+          <span className="pcal-side-link-copy">
+            <span className="pcal-side-link-label">Plans Management</span>
+            <span className="pcal-side-link-meta">Back to all plans</span>
+          </span>
         </Link>
       </div>
     </aside>
