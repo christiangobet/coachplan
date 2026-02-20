@@ -395,21 +395,25 @@
 
 .cal-day.day-done {
   border-color: rgba(15, 138, 71, 0.36);
+  background: rgba(15, 138, 71, 0.08);
   box-shadow: inset 0 0 0 1px rgba(15, 138, 71, 0.12);
 }
 
 .cal-day.today.day-done {
   border-color: var(--d-orange);
+  background: linear-gradient(180deg, rgba(15, 138, 71, 0.14), #fff 38%);
   box-shadow: 0 0 0 2px rgba(252, 76, 2, 0.26), inset 0 0 0 1px rgba(15, 138, 71, 0.16);
 }
 
 .cal-day.day-missed {
   border-color: rgba(217, 119, 6, 0.42);
+  background: rgba(245, 158, 11, 0.1);
   box-shadow: inset 0 0 0 1px rgba(217, 119, 6, 0.12);
 }
 
 .cal-day.today.day-missed {
   border-color: var(--d-orange);
+  background: linear-gradient(180deg, rgba(245, 158, 11, 0.16), #fff 38%);
   box-shadow: 0 0 0 2px rgba(252, 76, 2, 0.24), inset 0 0 0 1px rgba(217, 119, 6, 0.18);
 }
 
