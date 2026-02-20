@@ -105,10 +105,11 @@ export default function PlanSourcePdfPane({
           throw new Error('Unable to load source PDF.');
         }
         const bytes = new Uint8Array(await response.arrayBuffer());
-        const loadingTask = pdfjs.getDocument({
-          data: bytes,
-          disableWorker: true
-        } as any);
+        const workerSrc = '/api/pdfjs/worker';
+        if (pdfjs.GlobalWorkerOptions?.workerSrc !== workerSrc) {
+          pdfjs.GlobalWorkerOptions.workerSrc = workerSrc;
+        }
+        const loadingTask = pdfjs.getDocument({ data: bytes } as any);
         const pdf = await loadingTask.promise;
         if (cancelled) {
           try {
