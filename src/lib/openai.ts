@@ -172,9 +172,15 @@ async function requestJsonSchema<T>(
   try {
     return JSON.parse(stripJsonFences(text)) as T;
   } catch {
-    // Log the first 500 chars of the raw response to help diagnose future issues
     console.error("[openai] JSON parse failed. Raw response preview:", text.slice(0, 500));
-    throw new Error("AI response was not valid JSON.");
+    throw new JsonParseError(text);
+  }
+}
+
+export class JsonParseError extends Error {
+  constructor(public readonly rawText: string) {
+    super("AI response was not valid JSON.");
+    this.name = "JsonParseError";
   }
 }
 

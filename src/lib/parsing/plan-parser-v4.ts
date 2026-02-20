@@ -1,5 +1,5 @@
 // Server-side only — calls AI APIs and DB.
-import { openaiJsonSchema, getDefaultAiModel } from '@/lib/openai';
+import { openaiJsonSchema, getDefaultAiModel, JsonParseError } from '@/lib/openai';
 import { V4_MASTER_PROMPT } from '@/lib/prompts/plan-parser/v4_master';
 import { ProgramJsonV1Schema, type ProgramJsonV1 } from '@/lib/schemas/program-json-v1';
 
@@ -126,6 +126,7 @@ export type ParserV4Result = {
   data: ProgramJsonV1 | null;
   rawJson: unknown;
   validationError: string | null;
+  truncated?: boolean;
 };
 
 /**
@@ -142,12 +143,28 @@ export async function runParserV4(fullText: string): Promise<ParserV4Result> {
     fullText.slice(0, 25000)
   ].join('\n');
 
-  const rawJson = await openaiJsonSchema<unknown>({
-    input,
-    schema: PROGRAM_JSON_V1_SCHEMA,
-    model,
-    maxOutputTokens: 16384
-  });
+  let rawJson: unknown;
+  try {
+    rawJson = await openaiJsonSchema<unknown>({
+      input,
+      schema: PROGRAM_JSON_V1_SCHEMA,
+      model,
+      maxOutputTokens: 16384
+    });
+  } catch (err) {
+    if (err instanceof JsonParseError) {
+      return {
+        parserVersion: PARSER_VERSION,
+        model,
+        validated: false,
+        data: null,
+        rawJson: { _truncated: true, rawText: err.rawText.slice(0, 10000) },
+        validationError: 'Response was not valid JSON — raw text saved as artifact',
+        truncated: true
+      };
+    }
+    throw err;
+  }
 
   const parseResult = ProgramJsonV1Schema.safeParse(rawJson);
 
