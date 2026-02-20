@@ -112,6 +112,15 @@ type ReviewProgramProfile = {
   } | null;
 };
 
+type SourceDocumentMeta = {
+  loading: boolean;
+  available: boolean;
+  fileUrl: string | null;
+  fileName: string | null;
+  pageCount: number | null;
+  error: string | null;
+};
+
 function toFiniteNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
@@ -340,9 +349,20 @@ export default function PlanReviewPage() {
   const [overrideExistingPaces, setOverrideExistingPaces] = useState(false);
   const [savePaceProfile, setSavePaceProfile] = useState(true);
   const [paceModalError, setPaceModalError] = useState<string | null>(null);
+  const [isWideScreen, setIsWideScreen] = useState(false);
+  const [showSourcePdf, setShowSourcePdf] = useState(false);
+  const [sourceDocument, setSourceDocument] = useState<SourceDocumentMeta>({
+    loading: false,
+    available: false,
+    fileUrl: null,
+    fileName: null,
+    pageCount: null,
+    error: null
+  });
 
   const daySaveTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const activitySaveTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const sourceToggleStorageKey = planId ? `review-source-pane:${planId}` : null;
 
   const initializeDrafts = useCallback((nextPlan: ReviewPlan, fallbackUnit: DistanceUnitValue) => {
     const nextDayDrafts: Record<string, string> = {};
@@ -400,6 +420,89 @@ export default function PlanReviewPage() {
   useEffect(() => {
     loadPlan();
   }, [loadPlan]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const media = window.matchMedia('(min-width: 1100px)');
+    const handleChange = () => setIsWideScreen(media.matches);
+    handleChange();
+    media.addEventListener('change', handleChange);
+    return () => media.removeEventListener('change', handleChange);
+  }, []);
+
+  useEffect(() => {
+    if (!sourceToggleStorageKey || typeof window === 'undefined') return;
+    const saved = window.localStorage.getItem(sourceToggleStorageKey);
+    setShowSourcePdf(saved === '1');
+  }, [sourceToggleStorageKey]);
+
+  useEffect(() => {
+    if (!sourceToggleStorageKey || typeof window === 'undefined') return;
+    window.localStorage.setItem(sourceToggleStorageKey, showSourcePdf ? '1' : '0');
+  }, [showSourcePdf, sourceToggleStorageKey]);
+
+  const loadSourceDocument = useCallback(async () => {
+    if (!planId) return;
+
+    setSourceDocument((prev) => ({
+      ...prev,
+      loading: true,
+      error: null
+    }));
+
+    try {
+      const res = await fetch(`/api/plans/${planId}/source-document`, {
+        cache: 'no-store'
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        setSourceDocument({
+          loading: false,
+          available: false,
+          fileUrl: null,
+          fileName: null,
+          pageCount: null,
+          error: data?.error || 'Failed to load source PDF metadata.'
+        });
+        return;
+      }
+
+      if (!data?.available) {
+        setSourceDocument({
+          loading: false,
+          available: false,
+          fileUrl: null,
+          fileName: null,
+          pageCount: null,
+          error: null
+        });
+        return;
+      }
+
+      setSourceDocument({
+        loading: false,
+        available: true,
+        fileUrl: typeof data.fileUrl === 'string' ? data.fileUrl : `/api/plans/${planId}/source-document/file`,
+        fileName: typeof data.fileName === 'string' ? data.fileName : 'Uploaded plan.pdf',
+        pageCount: typeof data.pageCount === 'number' ? data.pageCount : null,
+        error: null
+      });
+    } catch {
+      setSourceDocument({
+        loading: false,
+        available: false,
+        fileUrl: null,
+        fileName: null,
+        pageCount: null,
+        error: 'Failed to load source PDF metadata.'
+      });
+    }
+  }, [planId]);
+
+  useEffect(() => {
+    if (!planId || plan?.status === 'ACTIVE') return;
+    void loadSourceDocument();
+  }, [loadSourceDocument, plan?.status, planId]);
 
   useEffect(() => {
     return () => {
@@ -1001,6 +1104,9 @@ export default function PlanReviewPage() {
     goToDashboard
   ]);
 
+  const sourcePaneAvailable = !isActivated && isWideScreen && sourceDocument.available;
+  const showDesktopSourcePane = sourcePaneAvailable && showSourcePdf;
+
   if (loading) {
     return (
       <main className="review-page-shell">
@@ -1022,7 +1128,7 @@ export default function PlanReviewPage() {
   }
 
   return (
-    <main className="review-page-shell">
+    <main className={`review-page-shell${showDesktopSourcePane ? ' with-source-pane' : ''}`}>
       <section className={`review-page-card review-hero${isActivated ? ' review-hero-live' : ''}`}>
         <div className="review-hero-head">
           <div>
@@ -1072,6 +1178,23 @@ export default function PlanReviewPage() {
                   {publishing ? (arrivedFromUpload ? 'Activating…' : 'Publishing…') : (arrivedFromUpload ? 'Activate Plan' : 'Publish Plan')}
                 </button>
                 <Link className="cta secondary" href={`/plans/${plan.id}`}>View Plan</Link>
+                {isWideScreen && (
+                  <button
+                    className="cta secondary"
+                    type="button"
+                    onClick={() => {
+                      if (!sourceDocument.available) return;
+                      setShowSourcePdf((prev) => !prev);
+                    }}
+                    disabled={sourceDocument.loading || !sourceDocument.available}
+                  >
+                    {sourceDocument.loading
+                      ? 'Loading Source PDF…'
+                      : sourceDocument.available
+                        ? (showSourcePdf ? 'Hide Source PDF' : 'Show Source PDF')
+                        : 'Source PDF Unavailable'}
+                  </button>
+                )}
               </>
             )}
           </div>
@@ -1175,6 +1298,12 @@ export default function PlanReviewPage() {
             </div>
           </div>
         )}
+        {!isActivated && isWideScreen && !sourceDocument.loading && !sourceDocument.available && !sourceDocument.error && (
+          <p className="review-muted">
+            Source PDF is unavailable for this plan (older upload or text-only creation).
+          </p>
+        )}
+        {!isActivated && sourceDocument.error && <p className="review-error">{sourceDocument.error}</p>}
         {error && <p className="review-error">{error}</p>}
       </section>
 
@@ -1492,6 +1621,38 @@ export default function PlanReviewPage() {
         </section>
       )}
 
+      {showDesktopSourcePane && (
+        <aside className="review-page-card review-source-pane">
+          <div className="review-source-pane-head">
+            <div>
+              <h3>Source PDF</h3>
+              <p>
+                {sourceDocument.fileName || 'Uploaded training plan PDF'}
+                {sourceDocument.pageCount ? ` · ${sourceDocument.pageCount} pages` : ''}
+              </p>
+            </div>
+            <button
+              className="review-save-btn secondary"
+              type="button"
+              onClick={() => setShowSourcePdf(false)}
+            >
+              Close
+            </button>
+          </div>
+          <div className="review-source-pane-body">
+            {sourceDocument.fileUrl ? (
+              <iframe
+                title="Source training plan PDF"
+                src={sourceDocument.fileUrl}
+                className="review-source-pane-frame"
+              />
+            ) : (
+              <p className="review-muted">Source PDF is unavailable.</p>
+            )}
+          </div>
+        </aside>
+      )}
+
       {!isActivated && (
         <section className="review-week-grid" id="review-week-grid">
           {weeks.map((week) => {
@@ -1704,7 +1865,7 @@ export default function PlanReviewPage() {
       )}
 
       {!isActivated && unassigned.length > 0 && (
-        <section className="review-page-card">
+        <section className="review-page-card review-unassigned-section">
           <h3>Unassigned Days</h3>
           <div className="review-unassigned-list">
             {unassigned.map((day) => (

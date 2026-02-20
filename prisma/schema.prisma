@@ -124,6 +124,23 @@ model TrainingPlan {
   days       PlanDay[]
   activities PlanActivity[]
   parseJobs  ParseJob[]
+  sourceDocument PlanSourceDocument?
+}
+
+model PlanSourceDocument {
+  id           String   @id @default(cuid())
+  planId       String   @unique
+  fileName     String?
+  mimeType     String   @default("application/pdf")
+  fileSize     Int
+  checksumSha256 String?
+  pageCount    Int?
+  content      Bytes
+  createdAt    DateTime @default(now())
+
+  plan TrainingPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@index([createdAt])
 }
 
 model PlanWeek {

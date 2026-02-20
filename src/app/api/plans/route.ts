@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { promises as fs } from 'fs';
 import path from 'path';
 import os from 'os';
+import { createHash } from 'crypto';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { parseWeekWithAI, maybeRunParserV4 } from '@/lib/ai-plan-parser';
@@ -2041,6 +2042,25 @@ export async function POST(req: Request) {
     try {
       await fs.mkdir(uploadDir, { recursive: true });
       const buffer = Buffer.from(await file.arrayBuffer());
+      const checksumSha256 = createHash('sha256').update(buffer).digest('hex');
+      await prisma.planSourceDocument.upsert({
+        where: { planId: plan.id },
+        create: {
+          planId: plan.id,
+          fileName: file.name || `${name}.pdf`,
+          mimeType: file.type || 'application/pdf',
+          fileSize: buffer.byteLength,
+          checksumSha256,
+          content: buffer
+        },
+        update: {
+          fileName: file.name || `${name}.pdf`,
+          mimeType: file.type || 'application/pdf',
+          fileSize: buffer.byteLength,
+          checksumSha256,
+          content: buffer
+        }
+      });
       const pdfPath = path.join(uploadDir, `${plan.id}.pdf`);
       await fs.writeFile(pdfPath, buffer);
 
