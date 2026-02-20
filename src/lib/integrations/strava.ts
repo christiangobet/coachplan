@@ -1,5 +1,6 @@
 import { ActivityType, ExternalAccount, Units } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { buildPlanActivityActualsUpdate } from '@/lib/activity-actuals';
 import { getDayDateFromWeekStart, resolveWeekBounds } from '@/lib/plan-dates';
 import { createIntegrationStateToken } from '@/lib/integrations/state';
 import { isDayClosed } from '@/lib/day-status';
@@ -509,17 +510,16 @@ async function applyMatchedExternalToWorkout(args: {
 
   await prisma.planActivity.update({
     where: { id: workout.id },
-    data: {
-      completed: true,
+    data: buildPlanActivityActualsUpdate({
+      markCompleted: true,
       completedAt: args.startTime,
-      ...(storageUnit && !workout.distanceUnit && distanceInStorageUnits !== null
-        ? { distanceUnit: storageUnit }
-        : {}),
+      inferredDistanceUnit: storageUnit,
+      existingDistanceUnit: workout.distanceUnit,
       actualDistance: distanceInStorageUnits ?? workout.actualDistance ?? undefined,
       actualDuration: durationMinutes ?? workout.actualDuration ?? undefined,
       actualPace: paceInStorageUnits ?? workout.actualPace ?? undefined,
       notes: nextNotes
-    }
+    })
   });
 
   return true;

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { currentUser } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
+import { buildPlanActivityActualsUpdate } from '@/lib/activity-actuals';
 import {
   convertDistanceValue,
   derivePaceFromDistanceDuration,
@@ -42,6 +43,18 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const { id } = await params;
   const bodyRaw = await req.json().catch(() => ({}));
   const body = bodyRaw && typeof bodyRaw === 'object' ? (bodyRaw as Record<string, unknown>) : {};
+  if (
+    hasField(body, 'distance')
+    || hasField(body, 'duration')
+    || hasField(body, 'distanceUnit')
+    || hasField(body, 'paceTarget')
+    || hasField(body, 'effortTarget')
+  ) {
+    return NextResponse.json(
+      { error: 'Planned fields are immutable here. Use actualDistance/actualDuration/actualPace.' },
+      { status: 400 }
+    );
+  }
   const activity = await prisma.planActivity.findUnique({
     where: { id },
     include: { plan: true }
@@ -150,17 +163,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   const updated = await prisma.planActivity.update({
     where: { id: activity.id },
-    data: {
-      completed: true,
+    data: buildPlanActivityActualsUpdate({
+      markCompleted: true,
       completedAt: new Date(),
-      ...(storageUnit && !activity.distanceUnit && resolvedActualDistance !== undefined && resolvedActualDistance !== null
-        ? { distanceUnit: storageUnit }
-        : {}),
+      inferredDistanceUnit: storageUnit,
+      existingDistanceUnit: activity.distanceUnit,
       actualDistance: resolvedActualDistance,
       actualDuration: actualDuration.provided ? actualDuration.value : undefined,
       actualPace: finalActualPace,
       notes
-    }
+    })
   });
 
   return NextResponse.json({ activity: updated });
