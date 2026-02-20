@@ -11,6 +11,7 @@ import {
   type PaceEvidence
 } from '@/lib/pace-estimation';
 import { resolveDistanceUnitFromActivity } from '@/lib/unit-display';
+import PlanSourcePdfPane from '@/components/PlanSourcePdfPane';
 
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const ACTIVITY_TYPES = ['RUN', 'STRENGTH', 'CROSS_TRAIN', 'REST', 'MOBILITY', 'YOGA', 'HIKE', 'OTHER'] as const;
@@ -1641,10 +1642,9 @@ export default function PlanReviewPage() {
           </div>
           <div className="review-source-pane-body">
             {sourceDocument.fileUrl ? (
-              <iframe
-                title="Source training plan PDF"
-                src={sourceDocument.fileUrl}
-                className="review-source-pane-frame"
+              <PlanSourcePdfPane
+                fileUrl={sourceDocument.fileUrl}
+                initialPageCount={sourceDocument.pageCount}
               />
             ) : (
               <p className="review-muted">Source PDF is unavailable.</p>
@@ -1653,6 +1653,7 @@ export default function PlanReviewPage() {
         </aside>
       )}
 
+      <div className={showDesktopSourcePane ? 'review-main-column' : undefined}>
       {!isActivated && (
         <section className="review-week-grid" id="review-week-grid">
           {weeks.map((week) => {
@@ -1877,6 +1878,7 @@ export default function PlanReviewPage() {
           </div>
         </section>
       )}
+      </div>
     </main>
   );
 }
