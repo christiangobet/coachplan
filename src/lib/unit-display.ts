@@ -79,6 +79,43 @@ function parsePaceUnitToken(token: string): DistanceUnit | null {
   return null;
 }
 
+export function inferDistanceUnitFromPaceText(rawPace: string | null | undefined): DistanceUnit | null {
+  if (!rawPace || typeof rawPace !== 'string') return null;
+  const text = rawPace.trim();
+  if (!text) return null;
+  const match = /(?:\/|per)\s*(mi|mile|miles|km|k)\b/i.exec(text);
+  if (!match) return null;
+  return parsePaceUnitToken(match[1]);
+}
+
+type ResolveDistanceUnitOptions = {
+  distanceUnit?: string | null;
+  paceTarget?: string | null;
+  actualPace?: string | null;
+  fallbackUnit?: string | null;
+  preferActualPace?: boolean;
+};
+
+export function resolveDistanceUnitFromActivity({
+  distanceUnit,
+  paceTarget,
+  actualPace,
+  fallbackUnit,
+  preferActualPace = false
+}: ResolveDistanceUnitOptions): DistanceUnit | null {
+  const normalizedDistanceUnit = normalizeDistanceUnit(distanceUnit);
+  if (normalizedDistanceUnit) return normalizedDistanceUnit;
+
+  const firstPace = preferActualPace ? actualPace : paceTarget;
+  const secondPace = preferActualPace ? paceTarget : actualPace;
+  return (
+    inferDistanceUnitFromPaceText(firstPace)
+    || inferDistanceUnitFromPaceText(secondPace)
+    || normalizeDistanceUnit(fallbackUnit)
+    || null
+  );
+}
+
 function formatPaceFromSeconds(secPerUnit: number, unit: DistanceUnit) {
   const safe = Math.max(0, Math.round(secPerUnit));
   const minutes = Math.floor(safe / 60);
@@ -125,6 +162,50 @@ export function convertPaceForDisplay(
   const start = withUnit.index;
   const end = start + withUnit[0].length;
   return `${text.slice(0, start)}${replacement}${text.slice(end)}`.trim();
+}
+
+function normalizePaceSpacing(value: string) {
+  return value
+    .replace(/\s+/g, ' ')
+    .replace(/\s*\/\s*/g, ' /')
+    .replace(/\s*-\s*/g, '-')
+    .trim();
+}
+
+function hasPlainPaceValueWithoutUnit(value: string) {
+  const match = value.match(
+    /^(\d{1,2})\s*:\s*(\d{2})(?:\s*(?:-|–|—|to)\s*(\d{1,2})\s*:\s*(\d{2}))?$/
+  );
+  if (!match) return false;
+  const firstSeconds = Number(match[2]);
+  const secondSeconds = match[4] ? Number(match[4]) : null;
+  if (firstSeconds > 59) return false;
+  if (secondSeconds !== null && secondSeconds > 59) return false;
+  return true;
+}
+
+export function normalizePaceForStorage(
+  rawPace: string | null | undefined,
+  targetUnitHint?: string | null,
+  sourceUnitHint?: string | null
+) {
+  if (!rawPace || typeof rawPace !== 'string') return rawPace || null;
+  const trimmed = rawPace.trim();
+  if (!trimmed) return null;
+
+  const targetUnit = normalizeDistanceUnit(targetUnitHint);
+  const sourceUnit = normalizeDistanceUnit(sourceUnitHint) || targetUnit;
+  let normalized = targetUnit
+    ? (convertPaceForDisplay(trimmed, targetUnit, sourceUnit || targetUnit) || trimmed)
+    : trimmed;
+
+  normalized = normalizePaceSpacing(normalized);
+  if (inferDistanceUnitFromPaceText(normalized)) return normalized;
+
+  if (targetUnit && hasPlainPaceValueWithoutUnit(normalized)) {
+    return `${normalized} /${distanceUnitLabel(targetUnit)}`;
+  }
+  return normalized;
 }
 
 export function derivePaceFromDistanceDuration(

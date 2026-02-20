@@ -2,6 +2,7 @@
 
 import React from "react";
 import ActivityTypeIcon from "@/components/ActivityTypeIcon";
+import { formatDistanceNumber } from "@/lib/unit-display";
 
 type ActivityType =
   | "RUN"
@@ -105,7 +106,7 @@ function fmtDuration(min: number) {
 }
 
 function fmtDist(d: number, unit: Units) {
-  return `${d % 1 === 0 ? d : d.toFixed(1)} ${unit === "MILES" ? "mi" : "km"}`;
+  return `${formatDistanceNumber(d)} ${unit === "MILES" ? "mi" : "km"}`;
 }
 
 // ── Progress bar ──────────────────────────────────────────────────────────────
@@ -320,7 +321,7 @@ export default function WorkoutDetailCard({
                   gap: 2,
                 }}
               >
-                {distance % 1 === 0 ? distance : distance.toFixed(1)}
+                {formatDistanceNumber(distance)}
                 <span style={{ fontSize: 12, fontWeight: 600, color: MUTED }}>
                   {distanceUnit === "MILES" ? "mi" : "km"}
                 </span>

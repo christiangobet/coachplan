@@ -6,6 +6,8 @@ import {
   convertDistanceForDisplay,
   convertPaceForDisplay,
   distanceUnitLabel,
+  resolveDistanceUnitFromActivity,
+  formatDistanceNumber,
   type DistanceUnit
 } from '@/lib/unit-display';
 
@@ -20,6 +22,7 @@ type CalendarActivityLoggerProps = {
     actualDistance: number | null;
     actualDuration: number | null;
     actualPace: string | null;
+    paceTarget: string | null;
   };
   viewerUnit: DistanceUnit;
   enabled: boolean;
@@ -54,16 +57,34 @@ export default function CalendarActivityLogger({
   const [status, setStatus] = useState<string | null>(null);
   const isRestDay = activity.type === 'REST';
 
+  const plannedSourceUnit =
+    resolveDistanceUnitFromActivity({
+      distanceUnit: activity.distanceUnit,
+      paceTarget: activity.paceTarget,
+      actualPace: activity.actualPace,
+      fallbackUnit: viewerUnit
+    })
+    || viewerUnit;
+  const actualSourceUnit =
+    resolveDistanceUnitFromActivity({
+      distanceUnit: activity.distanceUnit,
+      paceTarget: activity.paceTarget,
+      actualPace: activity.actualPace,
+      fallbackUnit: plannedSourceUnit,
+      preferActualPace: true
+    })
+    || plannedSourceUnit;
+
   useEffect(() => {
     const convertedDistance = convertDistanceForDisplay(
       activity.actualDistance,
-      activity.distanceUnit,
+      actualSourceUnit,
       viewerUnit
     );
     setActualDistance(toFieldValue(convertedDistance?.value ?? null));
     setActualDuration(toFieldValue(activity.actualDuration));
     setActualPace(
-      convertPaceForDisplay(activity.actualPace, viewerUnit, activity.distanceUnit || viewerUnit) || ''
+      convertPaceForDisplay(activity.actualPace, viewerUnit, actualSourceUnit) || ''
     );
     setError(null);
     setStatus(null);
@@ -73,6 +94,8 @@ export default function CalendarActivityLogger({
     activity.actualDuration,
     activity.actualPace,
     activity.distanceUnit,
+    activity.paceTarget,
+    actualSourceUnit,
     viewerUnit
   ]);
 
@@ -125,7 +148,7 @@ export default function CalendarActivityLogger({
     }
   }
 
-  const plannedDistanceHint = convertDistanceForDisplay(activity.distance, activity.distanceUnit, viewerUnit);
+  const plannedDistanceHint = convertDistanceForDisplay(activity.distance, plannedSourceUnit, viewerUnit);
 
   if (!enabled) {
     return (
@@ -147,7 +170,7 @@ export default function CalendarActivityLogger({
                 inputMode="decimal"
                 value={actualDistance}
                 onChange={(event) => setActualDistance(event.target.value)}
-                placeholder={plannedDistanceHint ? String(plannedDistanceHint.value) : 'e.g. 8'}
+                placeholder={plannedDistanceHint ? formatDistanceNumber(plannedDistanceHint.value) : 'e.g. 8'}
               />
             </label>
             <label>

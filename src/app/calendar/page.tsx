@@ -12,6 +12,7 @@ import {
   convertPaceForDisplay,
   distanceUnitLabel,
   formatDistanceNumber,
+  resolveDistanceUnitFromActivity,
   type DistanceUnit
 } from "@/lib/unit-display";
 import AthleteSidebar from "@/components/AthleteSidebar";
@@ -555,7 +556,13 @@ export default async function CalendarPage({
     .filter((date) => date.getMonth() === monthStart.getMonth() && date.getFullYear() === monthStart.getFullYear())
     .flatMap((date) => activitiesByDate.get(dateKey(date)) || []);
   const monthDistanceTotal = monthActivities.reduce((sum, activity) => {
-    const converted = convertDistanceForDisplay(activity.distance, activity.distanceUnit, viewerUnits);
+    const sourceUnit = resolveDistanceUnitFromActivity({
+      distanceUnit: activity.distanceUnit,
+      paceTarget: activity.paceTarget,
+      actualPace: activity.actualPace,
+      fallbackUnit: viewerUnits
+    });
+    const converted = convertDistanceForDisplay(activity.distance, sourceUnit, viewerUnits);
     return sum + (converted?.value || 0);
   }, 0);
   const monthDurationTotal = monthActivities.reduce((sum, activity) => sum + (activity.duration || 0), 0);
@@ -775,6 +782,19 @@ export default async function CalendarPage({
               )}
               <div className="cal-workout-cards">
                 {selectedPlanActivities.map((activity) => {
+                  const plannedDistanceSource = resolveDistanceUnitFromActivity({
+                    distanceUnit: activity.distanceUnit,
+                    paceTarget: activity.paceTarget,
+                    actualPace: activity.actualPace,
+                    fallbackUnit: viewerUnits
+                  });
+                  const actualDistanceSource = resolveDistanceUnitFromActivity({
+                    distanceUnit: activity.distanceUnit,
+                    paceTarget: activity.paceTarget,
+                    actualPace: activity.actualPace,
+                    fallbackUnit: plannedDistanceSource ?? viewerUnits,
+                    preferActualPace: true
+                  });
                   const syncedSourceDate = parseSyncedSourceDate(activity.notes);
                   const hasSyncedDateMismatch = Boolean(
                     syncedSourceDate && syncedSourceDate !== selectedDateKey
@@ -785,23 +805,23 @@ export default async function CalendarPage({
 
                   const displayDistance = convertDistanceForDisplay(
                     activity.distance,
-                    activity.distanceUnit,
+                    plannedDistanceSource,
                     viewerUnits
                   );
                   const displayActualDistance = convertDistanceForDisplay(
                     activity.actualDistance,
-                    activity.distanceUnit,
+                    actualDistanceSource,
                     viewerUnits
                   );
                   const displayPaceTarget = convertPaceForDisplay(
                     activity.paceTarget,
                     viewerUnits,
-                    activity.distanceUnit || viewerUnits
+                    plannedDistanceSource
                   ) || undefined;
                   const displayActualPace = convertPaceForDisplay(
                     activity.actualPace,
                     viewerUnits,
-                    activity.distanceUnit || viewerUnits
+                    actualDistanceSource
                   ) || undefined;
 
                   return (

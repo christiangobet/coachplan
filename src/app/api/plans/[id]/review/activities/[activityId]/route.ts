@@ -2,6 +2,10 @@ import { ActivityType, Units } from '@prisma/client';
 import { NextResponse } from 'next/server';
 import { currentUser } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
+import {
+  normalizePaceForStorage,
+  resolveDistanceUnitFromActivity
+} from '@/lib/unit-display';
 
 const ACTIVITY_TYPES: ActivityType[] = [
   'RUN',
@@ -72,7 +76,7 @@ export async function PATCH(
 
   const activity = await prisma.planActivity.findFirst({
     where: { id: activityId, planId },
-    select: { id: true, distance: true, distanceUnit: true }
+    select: { id: true, distance: true, distanceUnit: true, paceTarget: true }
   });
   if (!activity) return NextResponse.json({ error: 'Activity not found' }, { status: 404 });
 
@@ -176,6 +180,15 @@ export async function PATCH(
     } else if (activity.distance !== null && activity.distanceUnit && activity.distanceUnit !== updates.distanceUnit) {
       updates.distance = Number(convertDistanceValue(activity.distance, activity.distanceUnit, updates.distanceUnit).toFixed(2));
     }
+  }
+
+  const effectiveDistanceUnit = resolveDistanceUnitFromActivity({
+    distanceUnit: updates.distanceUnit !== undefined ? updates.distanceUnit : activity.distanceUnit,
+    paceTarget: updates.paceTarget !== undefined ? updates.paceTarget : activity.paceTarget,
+    fallbackUnit: preferredUnits
+  }) || preferredUnits;
+  if (updates.paceTarget !== undefined && updates.paceTarget !== null) {
+    updates.paceTarget = normalizePaceForStorage(updates.paceTarget, effectiveDistanceUnit);
   }
 
   const updated = await prisma.planActivity.update({

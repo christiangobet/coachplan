@@ -3,6 +3,11 @@ import { ActivityPriority, ActivityType, Units } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { resolveWeekBounds } from '@/lib/plan-dates';
 import { isDayMarkedDone } from '@/lib/day-status';
+import {
+    convertDistanceValue,
+    normalizePaceForStorage,
+    resolveDistanceUnitFromActivity
+} from '@/lib/unit-display';
 
 export type MoveActivityChange = {
     op: 'move_activity';
@@ -294,11 +299,20 @@ function activityMatchesSubtype(
 export async function applyAdjustmentProposal(planId: string, proposal: PlanAdjustmentProposal) {
     const planMeta = await prisma.trainingPlan.findUnique({
         where: { id: planId },
-        select: { raceDate: true, weekCount: true }
+        select: {
+            raceDate: true,
+            weekCount: true,
+            athlete: { select: { units: true } },
+            owner: { select: { units: true } }
+        }
     });
     if (!planMeta) {
         throw new Error('Plan not found while applying adjustments');
     }
+    const planDefaultUnit: Units =
+        planMeta.athlete?.units === 'KM' || planMeta.owner?.units === 'KM'
+            ? 'KM'
+            : 'MILES';
 
     const lockState = await loadLockStateForPlan(planId);
     const dayIdSet = lockState.dayIdSet;
@@ -562,13 +576,66 @@ export async function applyAdjustmentProposal(planId: string, proposal: PlanAdju
                     throw new Error('Cannot edit activities in completed days.');
                 }
 
+                const existingActivity = await tx.planActivity.findUnique({
+                    where: { id: change.activityId },
+                    select: {
+                        distance: true,
+                        distanceUnit: true,
+                        paceTarget: true,
+                        actualPace: true
+                    }
+                });
+                if (!existingActivity) {
+                    throw new Error(`Activity not found in plan: ${change.activityId}`);
+                }
+                const resolvedDistanceUnit = resolveDistanceUnitFromActivity({
+                    distanceUnit: change.distanceUnit !== undefined
+                        ? change.distanceUnit
+                        : existingActivity.distanceUnit,
+                    paceTarget: change.paceTarget !== undefined
+                        ? change.paceTarget
+                        : existingActivity.paceTarget,
+                    actualPace: existingActivity.actualPace,
+                    fallbackUnit: planDefaultUnit
+                }) || planDefaultUnit;
+
                 const data: any = {};
                 if (change.type !== undefined) data.type = change.type;
                 if (change.title !== undefined) data.title = change.title;
                 if (change.duration !== undefined) data.duration = change.duration;
-                if (change.distance !== undefined) data.distance = change.distance;
-                if (change.distanceUnit !== undefined) data.distanceUnit = change.distanceUnit;
-                if (change.paceTarget !== undefined) data.paceTarget = change.paceTarget;
+                if (change.distance !== undefined) {
+                    data.distance = change.distance;
+                    if (change.distance === null) {
+                        data.distanceUnit = null;
+                    } else {
+                        data.distanceUnit = change.distanceUnit ?? resolvedDistanceUnit;
+                    }
+                } else if (change.distanceUnit !== undefined) {
+                    if (change.distanceUnit === null) {
+                        data.distance = null;
+                        data.distanceUnit = null;
+                    } else {
+                        data.distanceUnit = change.distanceUnit;
+                        if (
+                            existingActivity.distance !== null
+                            && existingActivity.distanceUnit
+                            && existingActivity.distanceUnit !== change.distanceUnit
+                        ) {
+                            data.distance = Number(
+                                convertDistanceValue(
+                                    existingActivity.distance,
+                                    existingActivity.distanceUnit,
+                                    change.distanceUnit
+                                ).toFixed(2)
+                            );
+                        }
+                    }
+                } else if (existingActivity.distance !== null && !existingActivity.distanceUnit) {
+                    data.distanceUnit = resolvedDistanceUnit;
+                }
+                if (change.paceTarget !== undefined) {
+                    data.paceTarget = normalizePaceForStorage(change.paceTarget, resolvedDistanceUnit);
+                }
                 if (change.effortTarget !== undefined) data.effortTarget = change.effortTarget;
                 if (change.notes !== undefined) data.notes = change.notes;
                 if (change.mustDo !== undefined) data.mustDo = change.mustDo;
@@ -591,6 +658,16 @@ export async function applyAdjustmentProposal(planId: string, proposal: PlanAdju
                     throw new Error('Cannot add activities to completed days.');
                 }
 
+                const resolvedDistanceUnit = resolveDistanceUnitFromActivity({
+                    distanceUnit: change.distanceUnit,
+                    paceTarget: change.paceTarget,
+                    fallbackUnit: planDefaultUnit
+                }) || planDefaultUnit;
+                const storedDistanceUnit =
+                    change.distance === null || change.distance === undefined
+                        ? null
+                        : (change.distanceUnit ?? resolvedDistanceUnit);
+
                 await tx.planActivity.create({
                     data: {
                         planId: planId,
@@ -599,8 +676,8 @@ export async function applyAdjustmentProposal(planId: string, proposal: PlanAdju
                         title: change.title,
                         duration: change.duration ?? null,
                         distance: change.distance ?? null,
-                        distanceUnit: change.distanceUnit ?? null,
-                        paceTarget: change.paceTarget ?? null,
+                        distanceUnit: storedDistanceUnit,
+                        paceTarget: normalizePaceForStorage(change.paceTarget ?? null, storedDistanceUnit ?? resolvedDistanceUnit),
                         effortTarget: change.effortTarget ?? null,
                         notes: change.notes ?? null,
                         mustDo: change.mustDo ?? false,

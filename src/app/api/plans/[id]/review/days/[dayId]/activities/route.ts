@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { currentUser } from '@clerk/nextjs/server';
 import { ActivityType, Units } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { normalizePaceForStorage } from '@/lib/unit-display';
 
 const ACTIVITY_TYPES: ActivityType[] = [
   'RUN',
@@ -115,6 +116,10 @@ export async function POST(
     return NextResponse.json({ error: 'duration must be a non-negative integer' }, { status: 400 });
   }
 
+  const storedDistanceUnit: Units | null = distance === undefined || distance === null
+    ? null
+    : (distanceUnit ?? preferredUnits);
+
   const activity = await prisma.planActivity.create({
     data: {
       planId,
@@ -122,11 +127,12 @@ export async function POST(
       title,
       type,
       distance: distance === undefined ? null : distance,
-      distanceUnit: distance === undefined || distance === null
-        ? null
-        : (distanceUnit ?? preferredUnits),
+      distanceUnit: storedDistanceUnit,
       duration: duration === undefined ? null : duration,
-      paceTarget: normalizeOptionalText(payload.paceTarget) ?? null,
+      paceTarget: normalizePaceForStorage(
+        normalizeOptionalText(payload.paceTarget) ?? null,
+        storedDistanceUnit ?? preferredUnits
+      ),
       effortTarget: normalizeOptionalText(payload.effortTarget) ?? null,
       rawText: normalizeOptionalText(payload.rawText) ?? null
     }

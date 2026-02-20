@@ -3,9 +3,10 @@ import { currentUser } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
 import {
   convertDistanceValue,
-  convertPaceForDisplay,
   derivePaceFromDistanceDuration,
+  normalizePaceForStorage,
   normalizeDistanceUnit,
+  resolveDistanceUnitFromActivity,
   type DistanceUnit
 } from '@/lib/unit-display';
 
@@ -107,7 +108,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     }
   }
 
-  const storageUnit = normalizeDistanceUnit(activity.distanceUnit);
+  const storageUnit = resolveDistanceUnitFromActivity({
+    distanceUnit: activity.distanceUnit,
+    paceTarget: activity.paceTarget,
+    actualPace: activity.actualPace,
+    fallbackUnit: providedUnit ?? null
+  });
   let resolvedActualDistance = actualDistance.provided ? actualDistance.value : undefined;
   if (
     resolvedActualDistance !== undefined
@@ -122,9 +128,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   }
 
   let finalActualPace = actualPace;
-  if (typeof finalActualPace === 'string' && finalActualPace && storageUnit) {
-    const sourceUnit = providedUnit || storageUnit;
-    finalActualPace = convertPaceForDisplay(finalActualPace, storageUnit, sourceUnit) || finalActualPace;
+  if (typeof finalActualPace === 'string' && finalActualPace) {
+    const sourceUnit = providedUnit || storageUnit || null;
+    finalActualPace = normalizePaceForStorage(finalActualPace, storageUnit || sourceUnit, sourceUnit) || finalActualPace;
   }
 
   const nextActualDistance =
@@ -147,6 +153,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     data: {
       completed: true,
       completedAt: new Date(),
+      ...(storageUnit && !activity.distanceUnit && resolvedActualDistance !== undefined && resolvedActualDistance !== null
+        ? { distanceUnit: storageUnit }
+        : {}),
       actualDistance: resolvedActualDistance,
       actualDuration: actualDuration.provided ? actualDuration.value : undefined,
       actualPace: finalActualPace,

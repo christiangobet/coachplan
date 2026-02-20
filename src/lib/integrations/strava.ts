@@ -4,6 +4,7 @@ import { getDayDateFromWeekStart, resolveWeekBounds } from '@/lib/plan-dates';
 import { createIntegrationStateToken } from '@/lib/integrations/state';
 import { isDayClosed } from '@/lib/day-status';
 import { pickSelectedPlan } from '@/lib/plan-selection';
+import { resolveDistanceUnitFromActivity } from '@/lib/unit-display';
 
 const STRAVA_AUTH_URL = 'https://www.strava.com/oauth/authorize';
 const STRAVA_TOKEN_URL = 'https://www.strava.com/oauth/token';
@@ -325,7 +326,8 @@ async function ensureFreshStravaAccount(account: ExternalAccount) {
 
 async function buildPlanActivityCandidates(
   userId: string,
-  preferredPlanId?: string | null
+  preferredPlanId?: string | null,
+  fallbackUnits?: Units | null
 ): Promise<PlanActivityCandidates> {
   const plans = await prisma.trainingPlan.findMany({
     where: { athleteId: userId, isTemplate: false },
@@ -368,8 +370,14 @@ async function buildPlanActivityCandidates(
       const row = map.get(key) || [];
 
       for (const activity of day.activities) {
-        const distanceM = activity.distance
-          ? activity.distance * (activity.distanceUnit === 'KM' ? 1000 : 1609.344)
+        const activityDistanceUnit = resolveDistanceUnitFromActivity({
+          distanceUnit: activity.distanceUnit,
+          paceTarget: activity.paceTarget,
+          actualPace: activity.actualPace,
+          fallbackUnit: fallbackUnits ?? null
+        });
+        const distanceM = activity.distance && activityDistanceUnit
+          ? activity.distance * (activityDistanceUnit === 'KM' ? 1000 : 1609.344)
           : null;
         const durationSec = activity.duration ? activity.duration * 60 : null;
         row.push({
@@ -463,9 +471,16 @@ async function applyMatchedExternalToWorkout(args: {
   const workout = await prisma.planActivity.findUnique({ where: { id: args.planActivityId } });
   if (!workout) return false;
 
-  const storageUnit: Units = workout.distanceUnit === 'KM' ? 'KM' : 'MILES';
-  const distanceInStorageUnits = args.distanceM ? convertMetersToUserUnits(args.distanceM, storageUnit) : null;
-  const paceInStorageUnits = formatPace(args.durationSec, args.distanceM, storageUnit);
+  const storageUnit = resolveDistanceUnitFromActivity({
+    distanceUnit: workout.distanceUnit,
+    paceTarget: workout.paceTarget,
+    actualPace: workout.actualPace,
+    fallbackUnit: args.userUnits ?? null
+  });
+  const distanceInStorageUnits =
+    args.distanceM && storageUnit ? convertMetersToUserUnits(args.distanceM, storageUnit) : null;
+  const paceInStorageUnits =
+    storageUnit ? formatPace(args.durationSec, args.distanceM, storageUnit) : null;
 
   const distanceInUnits = args.distanceM ? convertMetersToUserUnits(args.distanceM, args.userUnits) : null;
   const durationMinutes = args.durationSec ? Math.max(1, Math.round(args.durationSec / 60)) : null;
@@ -497,6 +512,9 @@ async function applyMatchedExternalToWorkout(args: {
     data: {
       completed: true,
       completedAt: args.startTime,
+      ...(storageUnit && !workout.distanceUnit && distanceInStorageUnits !== null
+        ? { distanceUnit: storageUnit }
+        : {}),
       actualDistance: distanceInStorageUnits ?? workout.actualDistance ?? undefined,
       actualDuration: durationMinutes ?? workout.actualDuration ?? undefined,
       actualPace: paceInStorageUnits ?? workout.actualPace ?? undefined,
@@ -686,7 +704,7 @@ export async function syncStravaActivitiesForUser(args: {
       },
       select: { matchedPlanActivityId: true }
     }),
-    buildPlanActivityCandidates(args.userId, args.preferredPlanId)
+    buildPlanActivityCandidates(args.userId, args.preferredPlanId, user?.units ?? null)
   ]);
   const activities = fetchedActivities.activities;
 
@@ -981,7 +999,7 @@ export async function importStravaDayForUser(args: {
     select: { units: true }
   });
 
-  const plannedCandidates = await buildPlanActivityCandidates(args.userId, args.preferredPlanId);
+  const plannedCandidates = await buildPlanActivityCandidates(args.userId, args.preferredPlanId, user?.units ?? null);
   if (plannedCandidates.lockedDateSet.has(date)) {
     throw new Error('This day is marked completed and locked from Strava import.');
   }

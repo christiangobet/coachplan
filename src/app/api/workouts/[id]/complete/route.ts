@@ -1,7 +1,14 @@
 import { NextResponse } from 'next/server';
 import { currentUser } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
-import { derivePaceFromDistanceDuration, normalizeDistanceUnit } from '@/lib/unit-display';
+import {
+  convertDistanceValue,
+  derivePaceFromDistanceDuration,
+  normalizeDistanceUnit,
+  normalizePaceForStorage,
+  resolveDistanceUnitFromActivity,
+  type DistanceUnit
+} from '@/lib/unit-display';
 
 function hasField(obj: Record<string, unknown>, key: string) {
   return Object.prototype.hasOwnProperty.call(obj, key);
@@ -50,6 +57,22 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const actualDuration = parseOptionalPositiveNumber(body, 'actualDuration', 2000);
   if (actualDuration.error) return NextResponse.json({ error: actualDuration.error }, { status: 400 });
 
+  let providedUnit: DistanceUnit | null | undefined = undefined;
+  if (hasField(body, 'actualDistanceUnit')) {
+    const rawUnit = body.actualDistanceUnit;
+    if (rawUnit === null || rawUnit === '') {
+      providedUnit = null;
+    } else if (typeof rawUnit === 'string') {
+      const parsed = normalizeDistanceUnit(rawUnit);
+      if (!parsed) {
+        return NextResponse.json({ error: 'actualDistanceUnit must be KM or MILES' }, { status: 400 });
+      }
+      providedUnit = parsed;
+    } else {
+      return NextResponse.json({ error: 'actualDistanceUnit must be text' }, { status: 400 });
+    }
+  }
+
   let actualPace: string | null | undefined;
   if (hasField(body, 'actualPace')) {
     const rawPace = body.actualPace;
@@ -86,9 +109,30 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   }
 
   let finalActualPace = actualPace;
-  const storageUnit = normalizeDistanceUnit(activity.distanceUnit);
-  const nextActualDistance = actualDistance.provided ? (actualDistance.value ?? null) : activity.actualDistance;
+  const storageUnit = resolveDistanceUnitFromActivity({
+    distanceUnit: activity.distanceUnit,
+    paceTarget: activity.paceTarget,
+    actualPace: activity.actualPace,
+    fallbackUnit: providedUnit ?? null
+  });
+  let resolvedActualDistance = actualDistance.provided ? actualDistance.value : undefined;
+  if (
+    resolvedActualDistance !== undefined
+    && resolvedActualDistance !== null
+    && storageUnit
+    && providedUnit
+    && providedUnit !== storageUnit
+  ) {
+    resolvedActualDistance = Number(
+      convertDistanceValue(resolvedActualDistance, providedUnit, storageUnit).toFixed(2)
+    );
+  }
+  const nextActualDistance = resolvedActualDistance !== undefined ? (resolvedActualDistance ?? null) : activity.actualDistance;
   const nextActualDuration = actualDuration.provided ? (actualDuration.value ?? null) : activity.actualDuration;
+  if (typeof finalActualPace === 'string' && finalActualPace) {
+    const sourceUnit = providedUnit || storageUnit || null;
+    finalActualPace = normalizePaceForStorage(finalActualPace, storageUnit || sourceUnit, sourceUnit) || finalActualPace;
+  }
   const derivedPace = storageUnit
     ? derivePaceFromDistanceDuration(nextActualDistance, nextActualDuration, storageUnit)
     : null;
@@ -101,7 +145,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     data: {
       completed: true,
       completedAt: new Date(),
-      actualDistance: actualDistance.provided ? actualDistance.value : undefined,
+      ...(storageUnit && !activity.distanceUnit && resolvedActualDistance !== undefined && resolvedActualDistance !== null
+        ? { distanceUnit: storageUnit }
+        : {}),
+      actualDistance: resolvedActualDistance,
       actualDuration: actualDuration.provided ? actualDuration.value : undefined,
       actualPace: finalActualPace,
       notes

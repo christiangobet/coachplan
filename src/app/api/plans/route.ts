@@ -21,6 +21,7 @@ import {
   paceBucketLabel,
   type PaceBucket
 } from '@/lib/intensity-targets';
+import { normalizePaceForStorage } from '@/lib/unit-display';
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { pathToFileURL } from 'url';
 
@@ -1129,7 +1130,10 @@ function buildDeterministicActivities(args: {
         distance: storageDistance.distance,
         distanceUnit: storageDistance.distanceUnit,
         duration,
-        paceTarget: intensityTargets.paceTarget,
+        paceTarget: normalizePaceForStorage(
+          intensityTargets.paceTarget,
+          storageDistance.distanceUnit ?? storageDistanceUnit
+        ),
         effortTarget: intensityTargets.effortTarget,
         structure: structure || null,
         priority: mustDo ? 'KEY' : bailAllowed ? 'OPTIONAL' : null,
@@ -1211,7 +1215,10 @@ function buildAiActivities(args: {
       distance: storageDistance.distance,
       distanceUnit: storageDistance.distanceUnit,
       duration: aiDuration,
-      paceTarget: choosePaceTarget(a.metrics?.pace_target ?? paceFromTarget, textPaceTarget),
+      paceTarget: normalizePaceForStorage(
+        choosePaceTarget(a.metrics?.pace_target ?? paceFromTarget, textPaceTarget),
+        storageDistance.distanceUnit ?? storageDistanceUnit
+      ),
       effortTarget: chooseEffortTarget(a.metrics?.effort_target ?? effortFromTarget, textEffortTarget),
       structure: a.structure || null,
       tags: [...existingTags, ...warmupCooldownTag],
