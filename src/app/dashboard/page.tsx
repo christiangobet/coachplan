@@ -12,6 +12,7 @@ import {
   convertPaceForDisplay,
   distanceUnitLabel,
   formatDistanceNumber,
+  resolveDistanceUnitFromActivity,
   type DistanceUnit
 } from "@/lib/unit-display";
 import CompleteWorkoutButton from "@/components/CompleteWorkoutButton";
@@ -87,11 +88,29 @@ function buildAiAdjustHref(planId: string, prompt: string) {
   return `/plans/${planId}?${params.toString()}#ai-trainer`;
 }
 
+function resolveActivityDistanceSourceUnit(
+  activity: any,
+  viewerUnits: DistanceUnit,
+  preferActualPace = false
+) {
+  return (
+    resolveDistanceUnitFromActivity({
+      distanceUnit: activity?.distanceUnit,
+      paceTarget: activity?.paceTarget,
+      actualPace: activity?.actualPace,
+      fallbackUnit: viewerUnits,
+      preferActualPace
+    })
+    || viewerUnits
+  );
+}
+
 function buildPlannedMetricParts(activity: any, viewerUnits: DistanceUnit) {
   if (!activity) return [];
 
   const parts: string[] = [];
-  const plannedDistance = convertDistanceForDisplay(activity.distance, activity.distanceUnit, viewerUnits);
+  const plannedSourceUnit = resolveActivityDistanceSourceUnit(activity, viewerUnits);
+  const plannedDistance = convertDistanceForDisplay(activity.distance, plannedSourceUnit, viewerUnits);
   if (plannedDistance) {
     parts.push(`${formatDistanceNumber(plannedDistance.value)} ${distanceUnitLabel(plannedDistance.unit)}`);
   }
@@ -101,7 +120,7 @@ function buildPlannedMetricParts(activity: any, viewerUnits: DistanceUnit) {
   const paceConverted = convertPaceForDisplay(
     activity.paceTarget,
     viewerUnits,
-    activity.distanceUnit || viewerUnits
+    plannedSourceUnit
   );
   const paceText = paceConverted
     || (typeof activity.paceTarget === "string" ? activity.paceTarget.trim() : "");
@@ -508,14 +527,20 @@ export default async function DashboardPage({
   const completionPct = totalActivities > 0 ? Math.round((completedActivities / totalActivities) * 100) : 0;
 
   const isRestDay = !todayActivity || todayActivity.type === "REST";
+  const todayPlannedSourceUnit = todayActivity
+    ? resolveActivityDistanceSourceUnit(todayActivity, viewerUnits)
+    : viewerUnits;
+  const todayActualSourceUnit = todayActivity
+    ? resolveActivityDistanceSourceUnit(todayActivity, viewerUnits, true)
+    : todayPlannedSourceUnit;
   const todayDisplayDistance = todayActivity
-    ? convertDistanceForDisplay(todayActivity.distance, todayActivity.distanceUnit, viewerUnits)
+    ? convertDistanceForDisplay(todayActivity.distance, todayPlannedSourceUnit, viewerUnits)
     : null;
   const todayDisplayActualDistance = todayActivity
-    ? convertDistanceForDisplay(todayActivity.actualDistance, todayActivity.distanceUnit, viewerUnits)
+    ? convertDistanceForDisplay(todayActivity.actualDistance, todayActualSourceUnit, viewerUnits)
     : null;
   const todayDisplayActualPace = todayActivity
-    ? convertPaceForDisplay(todayActivity.actualPace, viewerUnits, todayActivity.distanceUnit || viewerUnits)
+    ? convertPaceForDisplay(todayActivity.actualPace, viewerUnits, todayActualSourceUnit)
     : null;
   const todayDateKey = toDateKey(today);
   const todayLogHref = buildCalendarDayDetailsHref(activePlan.id, today);

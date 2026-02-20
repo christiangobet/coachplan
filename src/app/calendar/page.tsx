@@ -225,11 +225,6 @@ function formatClockFromIsoText(value: string | null | undefined) {
   return `${hour12}:${minute} ${suffix}`;
 }
 
-function formatDurationMinutes(value: number | null | undefined) {
-  if (!value || value <= 0) return "—";
-  return `${value} min`;
-}
-
 function formatDurationSeconds(value: number | null | undefined) {
   if (!value || value <= 0) return "—";
   return `${Math.round(value / 60)} min`;
@@ -244,25 +239,11 @@ function formatMinutesTotal(value: number) {
   return `${mins}m`;
 }
 
-function formatDistance(
-  value: number | null | undefined,
-  unit: string | null | undefined,
-  viewerUnit: DistanceUnit
-) {
-  const converted = convertDistanceForDisplay(value, unit, viewerUnit);
-  if (!converted) return "—";
-  return `${formatDistanceNumber(converted.value)} ${distanceUnitLabel(converted.unit)}`;
-}
-
 function formatDistanceMeters(value: number | null | undefined, viewerUnit: DistanceUnit) {
   if (!value || value <= 0) return "—";
   const converted = convertDistanceForDisplay(value / 1000, "KM", viewerUnit);
   if (!converted) return "—";
   return `${formatDistanceNumber(converted.value)} ${distanceUnitLabel(converted.unit)}`;
-}
-
-function formatPace(value: string | null | undefined, viewerUnit: DistanceUnit, sourceUnit?: string | null) {
-  return convertPaceForDisplay(value, viewerUnit, sourceUnit || viewerUnit) || "—";
 }
 
 function parseExternalRawDateKey(raw: unknown) {

@@ -12,6 +12,7 @@ import {
   convertPaceForDisplay,
   distanceUnitLabel,
   formatDistanceNumber,
+  resolveDistanceUnitFromActivity,
   type DistanceUnit
 } from '@/lib/unit-display';
 import ActivityForm, { ActivityFormData } from '@/components/PlanEditor/ActivityForm';
@@ -69,6 +70,28 @@ function typeColor(type: string): string {
 
 function typeAbbr(type: string | null | undefined) {
   return ACTIVITY_TYPE_ABBR[String(type || 'OTHER').toUpperCase()] || 'OTH';
+}
+
+function resolveActivityDistanceSourceUnit(
+  activity: {
+    distanceUnit?: string | null;
+    paceTarget?: string | null;
+    actualPace?: string | null;
+  } | null | undefined,
+  viewerUnits: DistanceUnit,
+  preferActualPace = false,
+  fallbackUnit?: string | null
+) {
+  return (
+    resolveDistanceUnitFromActivity({
+      distanceUnit: activity?.distanceUnit,
+      paceTarget: activity?.paceTarget,
+      actualPace: activity?.actualPace,
+      fallbackUnit: fallbackUnit ?? viewerUnits,
+      preferActualPace
+    })
+    || viewerUnits
+  );
 }
 
 function toLocalDateKey(date: Date) {
@@ -841,13 +864,20 @@ export default function PlanDetailPage() {
 
   useEffect(() => {
     if (!selectedActivity) return;
+    const plannedSourceUnit = resolveActivityDistanceSourceUnit(selectedActivity, viewerUnits);
+    const actualSourceUnit = resolveActivityDistanceSourceUnit(
+      selectedActivity,
+      viewerUnits,
+      true,
+      plannedSourceUnit
+    );
     setActualDistance(
       selectedActivity.actualDistance === null || selectedActivity.actualDistance === undefined
         ? ''
         : String(
           convertDistanceForDisplay(
             selectedActivity.actualDistance,
-            selectedActivity.distanceUnit,
+            actualSourceUnit,
             viewerUnits
           )?.value ?? selectedActivity.actualDistance
         )
@@ -861,7 +891,7 @@ export default function PlanDetailPage() {
       convertPaceForDisplay(
         selectedActivity.actualPace,
         viewerUnits,
-        selectedActivity.distanceUnit || viewerUnits
+        actualSourceUnit
       ) || ''
     );
     setActualsError(null);
@@ -938,20 +968,23 @@ export default function PlanDetailPage() {
   const totalMinutes = allActivities.reduce((acc: number, a: any) => acc + (a.duration || 0), 0);
   const completionPct = totalActivities > 0 ? Math.round((completedActivities / totalActivities) * 100) : 0;
   const viewerUnitLabel = distanceUnitLabel(viewerUnits);
-  const toDisplayDistance = (value: number | null | undefined, unit: string | null | undefined) =>
-    convertDistanceForDisplay(value, unit, viewerUnits);
-  const formatDisplayDistance = (value: number | null | undefined, unit: string | null | undefined) => {
-    const converted = toDisplayDistance(value, unit);
+  const toDisplayDistance = (value: number | null | undefined, sourceUnit: string | null | undefined) =>
+    convertDistanceForDisplay(value, sourceUnit, viewerUnits);
+  const formatDisplayDistance = (value: number | null | undefined, sourceUnit: string | null | undefined) => {
+    const converted = toDisplayDistance(value, sourceUnit);
     if (!converted) return null;
     return `${formatDistanceNumber(converted.value)}${distanceUnitLabel(converted.unit)}`;
   };
-  const formatDisplayPace = (pace: string | null | undefined, unit: string | null | undefined) =>
-    convertPaceForDisplay(pace, viewerUnits, unit || viewerUnits);
+  const formatDisplayPace = (pace: string | null | undefined, sourceUnit: string | null | undefined) =>
+    convertPaceForDisplay(pace, viewerUnits, sourceUnit || viewerUnits);
+  const selectedPlannedSourceUnit = selectedActivity
+    ? resolveActivityDistanceSourceUnit(selectedActivity, viewerUnits)
+    : viewerUnits;
   const selectedDistanceDisplay = selectedActivity
-    ? toDisplayDistance(selectedActivity.distance, selectedActivity.distanceUnit)
+    ? toDisplayDistance(selectedActivity.distance, selectedPlannedSourceUnit)
     : null;
   const selectedPaceDisplay = selectedActivity
-    ? formatDisplayPace(selectedActivity.paceTarget, selectedActivity.distanceUnit)
+    ? formatDisplayPace(selectedActivity.paceTarget, selectedPlannedSourceUnit)
     : null;
   const selectedActivityDateLabel = selectedActivity
     ? formatLocalDateKey(selectedActivity.dayDateISO)
@@ -1106,18 +1139,25 @@ export default function PlanDetailPage() {
                           )}
                           {activities.map((a: any) => {
                             const details: string[] = [];
-                            const plannedDistanceLabel = formatDisplayDistance(a.distance, a.distanceUnit);
+                            const plannedSourceUnit = resolveActivityDistanceSourceUnit(a, viewerUnits);
+                            const actualSourceUnit = resolveActivityDistanceSourceUnit(
+                              a,
+                              viewerUnits,
+                              true,
+                              plannedSourceUnit
+                            );
+                            const plannedDistanceLabel = formatDisplayDistance(a.distance, plannedSourceUnit);
                             if (plannedDistanceLabel) details.push(plannedDistanceLabel);
                             if (a.duration) details.push(`${a.duration}m`);
-                            const displayPaceTarget = formatDisplayPace(a.paceTarget, a.distanceUnit);
+                            const displayPaceTarget = formatDisplayPace(a.paceTarget, plannedSourceUnit);
                             if (displayPaceTarget) details.push(displayPaceTarget);
                             if (a.effortTarget) details.push(a.effortTarget);
                             if (a.completed) {
                               const actuals: string[] = [];
-                              const actualDistanceLabel = formatDisplayDistance(a.actualDistance, a.distanceUnit);
+                              const actualDistanceLabel = formatDisplayDistance(a.actualDistance, actualSourceUnit);
                               if (actualDistanceLabel) actuals.push(actualDistanceLabel);
                               if (a.actualDuration) actuals.push(`${a.actualDuration}m`);
-                              const displayActualPace = formatDisplayPace(a.actualPace, a.distanceUnit);
+                              const displayActualPace = formatDisplayPace(a.actualPace, actualSourceUnit);
                               if (displayActualPace) actuals.push(displayActualPace);
                               if (actuals.length > 0) details.push(`Actual ${actuals.join(' · ')}`);
                             }

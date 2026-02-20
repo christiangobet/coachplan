@@ -9,6 +9,7 @@ import {
   convertDistanceForDisplay,
   distanceUnitLabel,
   formatDistanceNumber,
+  resolveDistanceUnitFromActivity,
   type DistanceUnit
 } from '@/lib/unit-display';
 import { SELECTED_PLAN_COOKIE } from '@/lib/plan-selection';
@@ -70,7 +71,11 @@ function formatPlanActivity(activity: PlanActivityRow, viewerUnits: DistanceUnit
   const bits: string[] = [];
   if (activity.duration) bits.push(`${activity.duration} min`);
   if (activity.distance) {
-    const converted = convertDistanceForDisplay(activity.distance, activity.distanceUnit, viewerUnits);
+    const sourceUnit = resolveDistanceUnitFromActivity({
+      distanceUnit: activity.distanceUnit,
+      fallbackUnit: viewerUnits
+    }) || viewerUnits;
+    const converted = convertDistanceForDisplay(activity.distance, sourceUnit, viewerUnits);
     if (converted) bits.push(`${formatDistanceNumber(converted.value)} ${distanceUnitLabel(converted.unit)}`);
   }
   if (activity.completed) bits.push('Done');

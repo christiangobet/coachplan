@@ -12,6 +12,7 @@ import {
   convertDistanceForDisplay,
   distanceUnitLabel,
   formatDistanceNumber,
+  resolveDistanceUnitFromActivity,
   type DistanceUnit
 } from "@/lib/unit-display";
 import AthleteSidebar from "@/components/AthleteSidebar";
@@ -129,6 +130,27 @@ function buildWindowRange(today: Date, planStart: Date | null, key: WindowKey) {
   }
   start.setDate(start.getDate() - 27);
   return start;
+}
+
+function resolveActivityDistanceSourceUnit(
+  activity: {
+    distanceUnit?: string | null;
+    paceTarget?: string | null;
+    actualPace?: string | null;
+  },
+  viewerUnits: DistanceUnit,
+  preferActualPace = false
+) {
+  return (
+    resolveDistanceUnitFromActivity({
+      distanceUnit: activity.distanceUnit,
+      paceTarget: activity.paceTarget,
+      actualPace: activity.actualPace,
+      fallbackUnit: viewerUnits,
+      preferActualPace
+    })
+    || viewerUnits
+  );
 }
 
 export default async function ProgressPage({
@@ -269,14 +291,16 @@ export default async function ProgressPage({
     if (activity.duration && activity.duration > 0) plannedMinutes += activity.duration;
     if (activity.actualDuration && activity.actualDuration > 0) actualMinutes += activity.actualDuration;
 
+    const plannedSourceUnit = resolveActivityDistanceSourceUnit(activity, viewerUnits);
+    const actualSourceUnit = resolveActivityDistanceSourceUnit(activity, viewerUnits, true);
     const plannedDist = convertDistanceForDisplay(
       activity.distance ?? null,
-      activity.distanceUnit ?? null,
+      plannedSourceUnit,
       viewerUnits
     )?.value || 0;
     const actualDist = convertDistanceForDisplay(
       activity.actualDistance ?? null,
-      activity.distanceUnit ?? null,
+      actualSourceUnit,
       viewerUnits
     )?.value || 0;
     plannedDistance += plannedDist;
@@ -310,14 +334,16 @@ export default async function ProgressPage({
     let weekPlannedDistance = 0;
     let weekActualDistance = 0;
     for (const activity of activities) {
+      const plannedSourceUnit = resolveActivityDistanceSourceUnit(activity, viewerUnits);
+      const actualSourceUnit = resolveActivityDistanceSourceUnit(activity, viewerUnits, true);
       weekPlannedDistance += convertDistanceForDisplay(
         activity.distance ?? null,
-        activity.distanceUnit ?? null,
+        plannedSourceUnit,
         viewerUnits
       )?.value || 0;
       weekActualDistance += convertDistanceForDisplay(
         activity.actualDistance ?? null,
-        activity.distanceUnit ?? null,
+        actualSourceUnit,
         viewerUnits
       )?.value || 0;
     }

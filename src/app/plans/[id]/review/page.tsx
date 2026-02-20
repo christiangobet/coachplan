@@ -10,6 +10,7 @@ import {
   parseTimePartsToSeconds,
   type PaceEvidence
 } from '@/lib/pace-estimation';
+import { resolveDistanceUnitFromActivity } from '@/lib/unit-display';
 
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const ACTIVITY_TYPES = ['RUN', 'STRENGTH', 'CROSS_TRAIN', 'REST', 'MOBILITY', 'YOGA', 'HIKE', 'OTHER'] as const;
@@ -141,11 +142,16 @@ type ActivityDraft = {
 };
 
 function toActivityDraft(activity: ReviewActivity, fallbackUnit: DistanceUnitValue): ActivityDraft {
+  const resolvedDistanceUnit = resolveDistanceUnitFromActivity({
+    distanceUnit: activity.distanceUnit,
+    paceTarget: activity.paceTarget,
+    fallbackUnit
+  }) as DistanceUnitValue | null;
   return {
     title: activity.title || '',
     type: activity.type || 'OTHER',
     distance: activity.distance === null || activity.distance === undefined ? '' : String(activity.distance),
-    distanceUnit: activity.distanceUnit || fallbackUnit,
+    distanceUnit: resolvedDistanceUnit || fallbackUnit,
     duration: activity.duration === null || activity.duration === undefined ? '' : String(activity.duration),
     paceTarget: activity.paceTarget || '',
     effortTarget: activity.effortTarget || '',

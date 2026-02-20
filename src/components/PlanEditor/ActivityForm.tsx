@@ -159,7 +159,7 @@ export default function ActivityForm({ isOpen, onClose, onSubmit, onDelete, init
                             type="text"
                             value={formData.paceTarget || ''}
                             onChange={(e) => setFormData({ ...formData, paceTarget: e.target.value || undefined })}
-                            placeholder="e.g. 5:00-5:15"
+                            placeholder={`e.g. ${formData.distanceUnit === 'MILES' ? '7:50-8:10 /mi' : '5:00-5:15 /km'}`}
                         />
                     </label>
                 )}
