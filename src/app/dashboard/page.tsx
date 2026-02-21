@@ -5,7 +5,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { getDayDateFromWeekStart, resolveWeekBounds } from "@/lib/plan-dates";
 import { ensureUserFromAuth } from "@/lib/user-sync";
-import { getDayStatus } from "@/lib/day-status";
+import { getDayMissedReason, getDayStatus, type DayStatus } from "@/lib/day-status";
 import { pickSelectedPlan, SELECTED_PLAN_COOKIE } from "@/lib/plan-selection";
 import {
   convertDistanceForDisplay,
@@ -15,11 +15,10 @@ import {
   resolveDistanceUnitFromActivity,
   type DistanceUnit
 } from "@/lib/unit-display";
-import CompleteWorkoutButton from "@/components/CompleteWorkoutButton";
 import AthleteSidebar from "@/components/AthleteSidebar";
 import StravaSyncPanel from "@/components/StravaSyncPanel";
 import SelectedPlanCookie from "@/components/SelectedPlanCookie";
-import StravaDaySyncButton from "@/components/StravaDaySyncButton";
+import DashboardActivityLogCard from "@/components/DashboardActivityLogCard";
 import "./dashboard.css";
 
 const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -285,6 +284,10 @@ export default async function DashboardPage({
     sourcePlanName = sourcePlan?.name || null;
   }
   const planDisplayName = sourcePlanName || activePlan.name;
+  const stravaAccount = await prisma.externalAccount.findFirst({
+    where: { userId: user.id, provider: "STRAVA" },
+    select: { id: true }
+  });
 
   const now = new Date();
   const today = new Date(now);
@@ -512,13 +515,52 @@ export default async function DashboardPage({
   const completionPct = totalActivities > 0 ? Math.round((completedActivities / totalActivities) * 100) : 0;
 
   const isRestDay = !todayActivity || todayActivity.type === "REST";
-  const todayDateKey = toDateKey(today);
+  const todayLogDateISO = toDateKey(today);
   const todayLogHref = DASH_ACTIVITY_LOG_ANCHOR;
-  const todayLogActivities = [...todayActivities].sort((a, b) => {
-    const aRest = a.type === "REST" ? 1 : 0;
-    const bRest = b.type === "REST" ? 1 : 0;
-    return aRest - bRest;
-  });
+  const todayDay = isTodayInsideCurrentWeek
+    ? (weekDays.find((day) => day.dayOfWeek === isoDay) || null)
+    : null;
+  const todayDayStatus: DayStatus = todayDay ? getDayStatus(todayDay.notes) : 'OPEN';
+  const todayDayMissedReason = todayDay ? getDayMissedReason(todayDay.notes) : null;
+  const heroStatusText = todayDayStatus === 'DONE'
+    ? 'Day logged'
+    : todayDayStatus === 'MISSED'
+      ? 'Day closed as missed'
+      : 'Ready to log';
+  const logDayCtaLabel = todayDayStatus === 'OPEN' ? 'Log Day' : 'Review Day Log';
+  const todayLogActivities = [...todayActivities]
+    .sort((a, b) => {
+      const aRest = a.type === "REST" ? 1 : 0;
+      const bRest = b.type === "REST" ? 1 : 0;
+      return aRest - bRest;
+    })
+    .map((activity) => {
+      const plannedSourceUnit = resolveActivityDistanceSourceUnit(activity, viewerUnits);
+      const actualSourceUnit = resolveActivityDistanceSourceUnit(activity, viewerUnits, true);
+      const displayPlannedDistance = convertDistanceForDisplay(activity.distance, plannedSourceUnit, viewerUnits);
+      const displayActualDistance = convertDistanceForDisplay(activity.actualDistance, actualSourceUnit, viewerUnits);
+      const displayActualPace = convertPaceForDisplay(activity.actualPace, viewerUnits, actualSourceUnit);
+      const paceCategory = typeof activity.paceTargetBucket === 'string' && activity.paceTargetBucket.trim()
+        ? formatType(activity.paceTargetBucket)
+        : null;
+      const plannedNotes = typeof activity.rawText === 'string' && activity.rawText.trim()
+        ? activity.rawText.trim()
+        : null;
+      return {
+        id: activity.id,
+        title: activity.title || null,
+        type: activity.type || 'OTHER',
+        completed: Boolean(activity.completed),
+        plannedDetails: buildPlannedMetricParts(activity, viewerUnits),
+        plannedNotes,
+        paceCategory,
+        plannedDistance: displayPlannedDistance?.value ?? null,
+        plannedDuration: activity.duration ?? null,
+        actualDistance: displayActualDistance?.value ?? null,
+        actualDuration: activity.actualDuration ?? null,
+        actualPace: displayActualPace || null
+      };
+    });
   const todayPlannedMetricParts = todayActivity
     ? buildPlannedMetricParts(todayActivity, viewerUnits)
     : [];
@@ -593,7 +635,7 @@ export default async function DashboardPage({
           <div className={`dash-hero${isRestDay ? " dash-hero-rest" : ""}`}>
             <div className="dash-hero-top">
               <span className="dash-hero-chip">Up Next</span>
-              <Link className="dash-hero-top-link" href={todayLogHref}>Log Day</Link>
+              <span className="dash-hero-top-status">{heroStatusText}</span>
             </div>
             <div className="dash-hero-label">TODAY · {dateStr}</div>
             {todayActivity && (
@@ -617,10 +659,9 @@ export default async function DashboardPage({
               <div className="dash-hero-detail">{todayActivity.rawText}</div>
             )}
             <div className="dash-hero-actions">
-              <Link className="dash-btn-secondary" href={todayLogHref}>
-                Log Day
+              <Link className="dash-btn-primary" href={todayLogHref}>
+                {logDayCtaLabel}
               </Link>
-              <StravaDaySyncButton dateISO={todayDateKey} className="dash-btn-secondary" />
               <a className="dash-btn-secondary" href={`/plans/${activePlan.id}`}>
                 View Plan
               </a>
@@ -642,58 +683,18 @@ export default async function DashboardPage({
             </div>
           </div>
 
-          <div id="dash-activity-log-card" className="dash-card dash-activity-log-card">
-            <div className="dash-card-header">
-              <span className="dash-card-title">Activity Log</span>
-              <span className="dash-activity-log-date">Today · {dateStr}</span>
-            </div>
-            {todayLogActivities.length === 0 ? (
-              <p className="dash-activity-log-empty">
-                No workout scheduled for today. You can still sync with Strava and keep your dashboard current.
-              </p>
-            ) : (
-              <div className="dash-activity-log-list">
-                {todayLogActivities.map((activity) => {
-                  const plannedSourceUnit = resolveActivityDistanceSourceUnit(activity, viewerUnits);
-                  const actualSourceUnit = resolveActivityDistanceSourceUnit(activity, viewerUnits, true);
-                  const displayPlannedDistance = convertDistanceForDisplay(activity.distance, plannedSourceUnit, viewerUnits);
-                  const displayActualDistance = convertDistanceForDisplay(activity.actualDistance, actualSourceUnit, viewerUnits);
-                  const displayActualPace = convertPaceForDisplay(activity.actualPace, viewerUnits, actualSourceUnit);
-                  const metricParts = buildPlannedMetricParts(activity, viewerUnits);
-
-                  return (
-                    <article key={`log-${activity.id}`} className="dash-activity-log-item">
-                      <div className="dash-activity-log-item-top">
-                        <div className="dash-activity-log-item-copy">
-                          <h4>{activity.title || formatType(activity.type)}</h4>
-                          <p>{metricParts.length > 0 ? metricParts.join(" · ") : "No planned metrics"}</p>
-                        </div>
-                        <span
-                          className={`dash-type-pill type-${String(activity.type || "OTHER").toLowerCase()}`}
-                          title={formatType(activity.type || "OTHER")}
-                        >
-                          {typeAbbr(activity.type)}
-                        </span>
-                      </div>
-                      <div className="dash-activity-log-item-actions">
-                        <CompleteWorkoutButton
-                          activityId={activity.id}
-                          completed={activity.completed}
-                          actualDistance={displayActualDistance?.value ?? null}
-                          actualDuration={activity.actualDuration}
-                          actualPace={displayActualPace}
-                          plannedDistance={displayPlannedDistance?.value ?? null}
-                          plannedDuration={activity.duration}
-                          distanceUnit={viewerUnits}
-                        />
-                        {activity.completed && <span className="dash-activity-log-status">Completed</span>}
-                      </div>
-                    </article>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+          <DashboardActivityLogCard
+            anchorId="dash-activity-log-card"
+            dateLabel={`Today · ${dateStr}`}
+            dateISO={todayLogDateISO}
+            planId={activePlan.id}
+            dayId={todayDay?.id || null}
+            viewerUnits={viewerUnits}
+            activities={todayLogActivities}
+            initialDayStatus={todayDayStatus}
+            initialMissedReason={todayDayMissedReason}
+            stravaConnected={Boolean(stravaAccount)}
+          />
 
           {/* Upcoming workouts */}
           <div className="dash-card">
@@ -842,7 +843,7 @@ export default async function DashboardPage({
                   <Link className="dash-status-item dash-status-item-link" href={s.href} key={i}>
                     <span className={`dash-status-dot ${s.alert ? "warn" : "ok"}`} />
                     <span>{s.text}</span>
-                    <span className="dash-status-cta">Log now</span>
+                    <span className="dash-status-cta">Open log card</span>
                   </Link>
                 ) : (
                   <div className="dash-status-item" key={i}>
