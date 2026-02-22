@@ -458,6 +458,7 @@ export default async function CalendarPage({
   }
 
   const parsedRequestedDate = parseDateParam(requestedDate);
+  const hasSelectedDate = !!parsedRequestedDate;
   const defaultSelectedDate =
     parsedRequestedDate
     || (
@@ -726,7 +727,7 @@ export default async function CalendarPage({
         </section>
 
         <aside className="dash-right">
-          <div id="day-details-card" className="dash-card cal-info-card cal-day-details-card">
+          {hasSelectedDate && <div id="day-details-card" className="dash-card cal-info-card cal-day-details-card">
 
             {/* Header: date + status */}
             <div className="cal-detail-header">
@@ -853,7 +854,7 @@ export default async function CalendarPage({
                 <p className="cal-day-empty">Future day. Logs will appear after the activity date.</p>
               </div>
             )}
-          </div>
+          </div>}
 
           <div className="dash-card cal-info-card">
             <div className="dash-card-header">
