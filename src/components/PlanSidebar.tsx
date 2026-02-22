@@ -10,7 +10,7 @@ const ITEMS: Array<{
   href: (planId: string) => string;
 }> = [
   { id: 'overview', label: 'Overview', description: 'Plan summary and weekly structure', href: (planId) => `/plans/${planId}#plan-overview` },
-  { id: 'calendar', label: 'Training Log', description: 'Calendar and day-level logging', href: (planId) => `/calendar?plan=${planId}` },
+  { id: 'calendar', label: 'Training Calendar', description: 'Calendar and day-level logging', href: (planId) => `/calendar?plan=${planId}` },
   { id: 'ai', label: 'AI Trainer', description: 'Adjustment recommendations', href: (planId) => `/plans/${planId}#ai-trainer` },
   { id: 'strava', label: 'Import Strava', description: 'Sync external activities', href: (planId) => appendPlanQueryToHref('/strava', planId) },
   { id: 'progress', label: 'Progress', description: 'Completion and performance trends', href: (planId) => `/progress?plan=${planId}` }

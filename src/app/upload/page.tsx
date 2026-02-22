@@ -147,7 +147,7 @@ export default function UploadPage() {
   return (
     <main className="dash athlete-page-shell">
       <div className="dash-grid">
-        <AthleteSidebar active="upload" name={sidebarName} />
+        <AthleteSidebar active="plans" name={sidebarName} />
 
         <section className="dash-center">
           <section className="dash-card athlete-page-header upload-header">

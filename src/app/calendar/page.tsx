@@ -352,6 +352,12 @@ export default async function CalendarPage({
       })
     )?.name || null
     : null;
+  const planDisplayName = sourcePlanName || selectedPlan.name;
+  const raceName = (selectedPlan.raceName || "").trim()
+    || (selectedPlan.raceType ? formatType(selectedPlan.raceType) : "Not set");
+  const raceDateStr = selectedPlan.raceDate
+    ? new Date(selectedPlan.raceDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+    : "Not set";
 
   const weeks = [...selectedPlan.weeks].sort((a, b) => a.weekIndex - b.weekIndex);
   const allWeekIndexes = weeks.map((week) => week.weekIndex);
@@ -540,21 +546,12 @@ export default async function CalendarPage({
   const monthCompletionPct = monthWorkoutCount > 0
     ? Math.round((monthCompletedCount / monthWorkoutCount) * 100)
     : 0;
-  const monthActivities = dayCells
-    .filter((date) => date.getMonth() === monthStart.getMonth() && date.getFullYear() === monthStart.getFullYear())
-    .flatMap((date) => activitiesByDate.get(dateKey(date)) || []);
-  const monthDistanceTotal = monthActivities.reduce((sum, activity) => {
-    const sourceUnit = resolveDistanceUnitFromActivity({
-      distanceUnit: activity.distanceUnit,
-      paceTarget: activity.paceTarget,
-      actualPace: activity.actualPace,
-      fallbackUnit: viewerUnits
-    });
-    const converted = convertDistanceForDisplay(activity.distance, sourceUnit, viewerUnits);
-    return sum + (converted?.value || 0);
-  }, 0);
-  const monthDurationTotal = monthActivities.reduce((sum, activity) => sum + (activity.duration || 0), 0);
-
+  const selectedDayLabel = selectedDate.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+  const todayHref = `/dashboard?plan=${encodeURIComponent(selectedPlan.id)}`;
+  const adjustThisWeekHref = buildAdjustHref(
+    selectedPlan.id,
+    "Adjust this week around my schedule, recovery, and available training time."
+  );
   return (
     <main className="dash cal-page">
       <SelectedPlanCookie planId={selectedPlan.id} />
@@ -562,37 +559,36 @@ export default async function CalendarPage({
         <AthleteSidebar active="calendar" name={name} selectedPlanId={selectedPlan.id} />
 
         <section className="dash-center">
-          <div className="dash-card cal-header">
-            <div className="cal-header-title">
-              <h1>Training Log</h1>
+          <div className="cal-header">
+            <div className="dash-page-heading">
+              <h1>Training Calendar</h1>
               <p>Month-by-month execution aligned to your active plan.</p>
-            </div>
-            <div className="cal-header-metrics">
-              <div>
-                <span>Monthly Distance</span>
-                <strong>{formatDistanceNumber(monthDistanceTotal)} {distanceUnitLabel(viewerUnits)}</strong>
-              </div>
-              <div>
-                <span>Monthly Time</span>
-                <strong>{formatMinutesTotal(monthDurationTotal)}</strong>
-              </div>
             </div>
             <div className="cal-header-actions">
               <div className="cal-view-toggle" aria-label="Plan views">
                 <Link className="cal-view-pill" href={`/plans/${selectedPlan.id}`}>Plan</Link>
-                <span className="cal-view-pill active">Training Log</span>
+                <span className="cal-view-pill active">Training Calendar</span>
                 <Link className="cal-view-pill" href="/strava">Import Strava</Link>
               </div>
-              <div className="cal-month-nav">
-                <Link className="cal-month-btn" href={prevMonthHref} aria-label="Previous month">
-                  &larr; Prev
-                </Link>
-                <strong>{formatMonthLabel(monthStart)}</strong>
-                <Link className="cal-month-btn" href={nextMonthHref} aria-label="Next month">
-                  Next &rarr;
-                </Link>
+            </div>
+          </div>
+
+          <div className="dash-card dash-plan-summary">
+            <div className="dash-greeting-meta">
+              <div className="dash-greeting-meta-item">
+                <span className="dash-greeting-meta-label">Plan</span>
+                <span className="dash-greeting-meta-value">{planDisplayName}</span>
+              </div>
+              <div className="dash-greeting-meta-item">
+                <span className="dash-greeting-meta-label">Race Name</span>
+                <span className="dash-greeting-meta-value">{raceName}</span>
+              </div>
+              <div className="dash-greeting-meta-item">
+                <span className="dash-greeting-meta-label">Race Date</span>
+                <span className="dash-greeting-meta-value">{raceDateStr}</span>
               </div>
             </div>
+            <a className="dash-greeting-edit-link" href={`/plans/${selectedPlan.id}`}>View Plan</a>
           </div>
 
           {plans.length > 1 && (
@@ -613,6 +609,17 @@ export default async function CalendarPage({
           )}
 
           <div className="dash-card cal-month-card">
+            <div className="cal-month-nav-row">
+              <div className="cal-month-nav">
+                <Link className="cal-month-btn" href={prevMonthHref} aria-label="Previous month">
+                  &larr; Prev
+                </Link>
+                <strong>{formatMonthLabel(monthStart)}</strong>
+                <Link className="cal-month-btn" href={nextMonthHref} aria-label="Next month">
+                  Next &rarr;
+                </Link>
+              </div>
+            </div>
             <div className="cal-weekdays">
               {WEEKDAY_LABELS.map((label) => (
                 <div key={label} className="cal-weekday">{label}</div>
@@ -859,31 +866,71 @@ export default async function CalendarPage({
 
           <div className="dash-card cal-info-card">
             <div className="dash-card-header">
+              <span className="dash-card-title">Quick Actions</span>
+            </div>
+            {hasSelectedDate && (
+              <p className="cal-quick-context">Selected day: {selectedDayLabel}</p>
+            )}
+            <div className="cal-links">
+              <Link href={todayHref}>Go to Today</Link>
+              {hasSelectedDate ? (
+                <>
+                  {selectedIsPastOrToday ? (
+                    stravaAccount ? (
+                      <StravaDaySyncButton dateISO={selectedDateKey} className="cal-strava-sync-btn" />
+                    ) : (
+                      <Link href="/strava">Connect Strava to Sync Selected Day</Link>
+                    )
+                  ) : (
+                    <span className="cal-quick-disabled">Sync Selected Day is available on or after that date.</span>
+                  )}
+                </>
+              ) : (
+                <span className="cal-quick-disabled">Select a day on the calendar to sync logs.</span>
+              )}
+              <Link href={adjustThisWeekHref}>Adjust This Week</Link>
+            </div>
+          </div>
+
+          <div className="dash-card cal-info-card">
+            <div className="dash-card-header">
               <span className="dash-card-title">Selected Plan</span>
             </div>
-            <div className="cal-info-list">
-              <div>
-                <strong>Plan name</strong>
-                <span>{sourcePlanName || selectedPlan.name}</span>
-              </div>
-              <div>
-                <strong>Race</strong>
-                <span>{selectedPlan.raceName || "Not set"}</span>
-              </div>
-              <div>
-                <strong>Race date</strong>
-                <span>{formatDateLabel(selectedPlan.raceDate)}</span>
-              </div>
-              <div>
-                <strong>Training window</strong>
-                <span>{`${formatDateLabel(planStartDate)} - ${formatDateLabel(planEndDate)}`}</span>
-              </div>
+            <div className="cal-selected-plan-summary">
+              <strong>{sourcePlanName || selectedPlan.name}</strong>
+              <span>{selectedPlan.raceName || "Race not set"} · {formatDateLabel(selectedPlan.raceDate)}</span>
             </div>
-            <RaceDetailsEditor
-              planId={selectedPlan.id}
-              initialRaceName={selectedPlan.raceName || ""}
-              initialRaceDate={toDateInputValue(selectedPlan.raceDate)}
-            />
+            <details className="cal-selected-plan-details">
+              <summary className="cal-selected-plan-toggle">
+                <span className="cal-toggle-label-closed">View details</span>
+                <span className="cal-toggle-label-open">Hide details</span>
+              </summary>
+              <div className="cal-selected-plan-details-body">
+                <div className="cal-info-list">
+                  <div>
+                    <strong>Plan name</strong>
+                    <span>{sourcePlanName || selectedPlan.name}</span>
+                  </div>
+                  <div>
+                    <strong>Race</strong>
+                    <span>{selectedPlan.raceName || "Not set"}</span>
+                  </div>
+                  <div>
+                    <strong>Race date</strong>
+                    <span>{formatDateLabel(selectedPlan.raceDate)}</span>
+                  </div>
+                  <div>
+                    <strong>Training window</strong>
+                    <span>{`${formatDateLabel(planStartDate)} - ${formatDateLabel(planEndDate)}`}</span>
+                  </div>
+                </div>
+                <RaceDetailsEditor
+                  planId={selectedPlan.id}
+                  initialRaceName={selectedPlan.raceName || ""}
+                  initialRaceDate={toDateInputValue(selectedPlan.raceDate)}
+                />
+              </div>
+            </details>
           </div>
 
           <div className="dash-card cal-info-card">
@@ -916,29 +963,6 @@ export default async function CalendarPage({
             </div>
           </div>
 
-          <div className="dash-card cal-info-card">
-            <div className="dash-card-header">
-              <span className="dash-card-title">Quick Actions</span>
-            </div>
-            <div className="cal-links">
-              <Link href={`/plans/${selectedPlan.id}`}>Open plan detail</Link>
-              <Link href="/dashboard">Go to Today</Link>
-              <Link href="/strava">Open Import Strava</Link>
-              <Link href="/progress">View Progress</Link>
-              <Link href={buildAdjustHref(selectedPlan.id, "I missed this workout. Rebalance this week safely.")}>
-                Adjust: I missed this
-              </Link>
-              <Link href={buildAdjustHref(selectedPlan.id, "I am unusually tired this week. Suggest a lower-load adjustment.")}>
-                Adjust: Low energy
-              </Link>
-              <Link href={buildAdjustHref(selectedPlan.id, "I'm traveling and time-constrained this week. Adjust the plan.")}>
-                Adjust: Traveling
-              </Link>
-              <Link href={buildAdjustHref(selectedPlan.id, "Replace today's workout with an equivalent session.")}>
-                Adjust: Swap workout
-              </Link>
-            </div>
-          </div>
         </aside>
       </div>
     </main>

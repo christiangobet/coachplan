@@ -9,42 +9,11 @@
   align-items: flex-start;
 }
 
-.cal-header-title {
-  display: grid;
-  gap: 4px;
-}
-
 .cal-header-actions {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
   gap: 8px;
-}
-
-.cal-header-metrics {
-  display: flex;
-  align-items: flex-start;
-  gap: 24px;
-}
-
-.cal-header-metrics div {
-  display: grid;
-  gap: 4px;
-}
-
-.cal-header-metrics span {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--d-muted);
-}
-
-.cal-header-metrics strong {
-  font-size: 24px;
-  font-weight: 300;
-  color: var(--d-text);
-  line-height: 1;
 }
 
 .cal-view-toggle {
@@ -78,19 +47,6 @@
 
 .cal-view-pill:hover {
   color: var(--d-orange);
-}
-
-.cal-header h1 {
-  margin: 0;
-  font-size: 34px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-}
-
-.cal-header p {
-  margin: 6px 0 0;
-  font-size: 14px;
-  color: var(--d-text-mid);
 }
 
 .cal-month-nav {
@@ -131,16 +87,6 @@
 @media (max-width: 900px) {
   .cal-header {
     flex-direction: column;
-  }
-
-  .cal-header-metrics {
-    width: 100%;
-    justify-content: space-between;
-    gap: 12px;
-  }
-
-  .cal-header-metrics strong {
-    font-size: 20px;
   }
 
   .cal-header-actions {
@@ -264,6 +210,11 @@
 .cal-month-card {
   display: grid;
   gap: 10px;
+}
+
+.cal-month-nav-row {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .cal-weekdays {
@@ -847,6 +798,76 @@
   gap: 10px;
 }
 
+.cal-selected-plan-summary {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 8px;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid var(--d-border-light);
+  background: #fff;
+}
+
+.cal-selected-plan-summary strong {
+  font-size: 14px;
+  color: var(--d-text);
+  line-height: 1.35;
+}
+
+.cal-selected-plan-summary span {
+  font-size: 12px;
+  color: var(--d-text-mid);
+}
+
+.cal-selected-plan-details {
+  display: grid;
+  gap: 10px;
+}
+
+.cal-selected-plan-toggle {
+  list-style: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  min-height: 32px;
+  border-radius: 999px;
+  border: 1px solid var(--d-border);
+  padding: 0 12px;
+  background: #fff;
+  color: var(--d-text-mid);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  user-select: none;
+}
+
+.cal-selected-plan-toggle::-webkit-details-marker {
+  display: none;
+}
+
+.cal-selected-plan-toggle:hover {
+  border-color: var(--d-orange);
+  color: var(--d-orange);
+}
+
+.cal-toggle-label-open {
+  display: none;
+}
+
+.cal-selected-plan-details[open] .cal-toggle-label-open {
+  display: inline;
+}
+
+.cal-selected-plan-details[open] .cal-toggle-label-closed {
+  display: none;
+}
+
+.cal-selected-plan-details-body {
+  display: grid;
+  gap: 10px;
+}
+
 .cal-info-list div {
   display: grid;
   gap: 2px;
@@ -869,17 +890,49 @@
 
 .cal-links {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
-.cal-links a {
+.cal-quick-context {
+  margin: 0;
+  font-size: 12px;
   color: var(--d-text-mid);
-  font-size: 14px;
-  font-weight: 600;
 }
 
-.cal-links a:hover {
+.cal-links a,
+.cal-links .cal-strava-sync-btn,
+.cal-links .cal-quick-disabled {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  border-radius: 9px;
+  border: 1px solid var(--d-border);
+  background: #fff;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--d-text-mid);
+  text-decoration: none;
+}
+
+.cal-links .cal-strava-sync-btn {
+  width: 100%;
+  font-size: 12px;
+  padding: 0 10px;
+}
+
+.cal-links .cal-quick-disabled {
+  color: var(--d-muted);
+  background: #fafafa;
+  border-color: var(--d-border-light);
+  text-align: center;
+}
+
+.cal-links a:hover,
+.cal-links .cal-strava-sync-btn:hover {
   color: var(--d-orange);
+  border-color: var(--d-orange);
 }
 
 .cal-race-editor {

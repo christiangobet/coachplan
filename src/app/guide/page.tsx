@@ -12,15 +12,15 @@ const playbooks = [
     description: "Open Today, complete the workout, and log actual distance, duration, and pace.",
     actions: [
       { label: "Go to Today", href: "/dashboard" },
-      { label: "View Training Log", href: "/calendar" }
+      { label: "View Training Calendar", href: "/calendar" }
     ]
   },
   {
     title: "Plan Setup",
-    description: "Upload your plan, review parsing output, and align week timing to race day.",
+    description: "Open Plans Management to upload your plan, review parsing output, and align week timing to race day.",
     actions: [
-      { label: "Upload Plan", href: "/upload" },
-      { label: "Plans Management", href: "/plans" }
+      { label: "Open Plans Management", href: "/plans" },
+      { label: "Review Plans", href: "/plans" }
     ]
   },
   {
@@ -86,11 +86,10 @@ export default async function GuidePage() {
               <span className="dash-card-title">Quick Links</span>
             </div>
             <div className="guide-links">
-              <Link href="/dashboard">Today dashboard</Link>
-              <Link href="/calendar">Workout training log</Link>
+              <Link href="/dashboard">Today</Link>
+              <Link href="/calendar">Training Calendar</Link>
               <Link href="/progress">Progress metrics</Link>
               <Link href="/plans">Plans Management</Link>
-              <Link href="/upload">Upload new PDF</Link>
             </div>
           </div>
         </aside>

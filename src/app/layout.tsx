@@ -26,12 +26,11 @@ function navItemsForRole(role: UserRole): TopNavItem[] {
   }
 
   return [
-    { href: "/dashboard", label: "Dashboard" },
-    { href: "/calendar", label: "Training Log" },
+    { href: "/dashboard", label: "Today" },
+    { href: "/calendar", label: "Training Calendar" },
     { href: "/strava", label: "Import Strava" },
     { href: "/progress", label: "Progress" },
     { href: "/plans", label: "Plans Management" },
-    { href: "/upload", label: "Upload" },
     { href: "/profile", label: "Profile" }
   ];
 }

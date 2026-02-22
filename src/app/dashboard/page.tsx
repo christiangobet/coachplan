@@ -206,9 +206,9 @@ export default async function DashboardPage({
             <div className="dash-empty-step">
               <span className="dash-empty-num">01</span>
               <h3>Get a plan in</h3>
-              <p>Upload a PDF or start from a template.</p>
+              <p>Open Plans Management to upload a PDF or start from a template.</p>
               <div className="dash-empty-actions">
-                <Link className="dash-empty-cta" href="/upload">Upload PDF</Link>
+                <Link className="dash-empty-cta" href="/plans">Open Plans Management</Link>
                 <Link className="dash-empty-cta-outline" href="/plans">Templates</Link>
               </div>
             </div>
@@ -272,10 +272,10 @@ export default async function DashboardPage({
             <div className="dash-empty-step">
               <span className="dash-empty-num">02</span>
               <h3>Activate and launch</h3>
-              <p>Publish one plan. Dashboard and Training Log unlock once a plan is active.</p>
+              <p>Publish one plan. Today and Training Calendar unlock once a plan is active.</p>
               <div className="dash-empty-actions">
-                <Link className="dash-empty-cta-outline" href="/dashboard">Refresh Dashboard</Link>
-                <Link className="dash-empty-cta-outline" href="/upload">Upload Another PDF</Link>
+                <Link className="dash-empty-cta-outline" href="/dashboard">Refresh Today</Link>
+                <Link className="dash-empty-cta-outline" href="/plans">Go to Plans Management</Link>
               </div>
             </div>
           </div>
@@ -611,7 +611,7 @@ export default async function DashboardPage({
         {/* ── Center ── */}
         <section className="dash-center">
           <div className="dash-page-heading">
-            <h1>Activity Feed</h1>
+            <h1>Today</h1>
             <p>{greeting}, {name} · {dateStr}</p>
           </div>
 
@@ -823,7 +823,7 @@ export default async function DashboardPage({
           {/* Status feed */}
           <div className="dash-card">
             <div className="dash-card-header">
-              <span className="dash-card-title">Training Log Status</span>
+              <span className="dash-card-title">Training Calendar Status</span>
             </div>
             <DashboardTrainingLogStatus items={statusFeedItems} />
           </div>

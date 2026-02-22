@@ -10,7 +10,6 @@ type AthleteNavItem =
   | "calendar"
   | "strava"
   | "plans"
-  | "upload"
   | "progress"
   | "coach"
   | "admin"
@@ -18,11 +17,10 @@ type AthleteNavItem =
   | "guide";
 
 const NAV_ITEMS: Array<{ id: AthleteNavItem; href: string; label: string }> = [
-  { id: "dashboard", href: "/dashboard", label: "Dashboard" },
-  { id: "calendar", href: "/calendar", label: "Training Log" },
+  { id: "dashboard", href: "/dashboard", label: "Today" },
+  { id: "calendar", href: "/calendar", label: "Training Calendar" },
   { id: "strava", href: "/strava", label: "Import Strava" },
   { id: "plans", href: "/plans", label: "Plans Management" },
-  { id: "upload", href: "/upload", label: "Upload" },
   { id: "progress", href: "/progress", label: "Progress" },
   { id: "coach", href: "/coach", label: "Coach" },
   { id: "admin", href: "/admin", label: "Admin" },
@@ -85,7 +83,6 @@ export default function AthleteSidebar({
 
           <div className="dash-connect">
             <span>Quick Actions</span>
-            <Link className="dash-connect-btn" href={appendPlanQueryToHref("/upload", contextualPlanId)}>Upload Plan</Link>
             <Link className="dash-connect-btn" href={appendPlanQueryToHref("/plans", contextualPlanId)}>Plans Management</Link>
             <Link className="dash-connect-btn" href={appendPlanQueryToHref("/profile", contextualPlanId)}>Profile Settings</Link>
           </div>

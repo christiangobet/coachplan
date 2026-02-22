@@ -443,7 +443,7 @@ export default function ProfilePage() {
             <div className="athlete-link-list">
               <Link href="/dashboard">Go to today dashboard</Link>
               <Link href="/plans">Open Plans Management</Link>
-              <Link href="/upload">Upload a new plan</Link>
+              <Link href="/plans">Manage plans and uploads</Link>
             </div>
           </div>
         </aside>

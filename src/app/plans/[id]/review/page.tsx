@@ -1262,7 +1262,7 @@ export default function PlanReviewPage() {
             </p>
             {!isActivated && arrivedFromUpload && (
               <p className="review-publish-copy">
-                You are one step away. Confirm this parsed plan, then activate it to unlock Today and Training Log.
+                You are one step away. Confirm this parsed plan, then activate it to unlock Today and Training Calendar.
               </p>
             )}
             {isActivated && (
@@ -1877,6 +1877,30 @@ export default function PlanReviewPage() {
                                     <option key={type} value={type}>{type.replace(/_/g, ' ')}</option>
                                   ))}
                                 </select>
+                                {isRunActivity && (
+                                  <div
+                                    className="review-pace-categories review-pace-categories-inline"
+                                    role="radiogroup"
+                                    aria-label="Run pace category"
+                                  >
+                                    {PACE_BUCKET_OPTIONS.map((option) => {
+                                      const selected = draft.paceTargetBucket === option.value;
+                                      return (
+                                        <button
+                                          key={`${activity.id}-inline-${option.value}`}
+                                          type="button"
+                                          className={`review-pace-chip${selected ? ' active' : ''}`}
+                                          aria-label={option.label}
+                                          aria-pressed={selected}
+                                          onClick={() => applyPaceBucket(activity.id, option.value)}
+                                          title={`${option.label}${profilePaces[option.value] ? ` · ${profilePaces[option.value]}` : ''}`}
+                                        >
+                                          {option.short}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                )}
                               </label>
 
                               <label className="review-field review-col-distance review-field-inline">
@@ -1959,26 +1983,6 @@ export default function PlanReviewPage() {
                                 {showPaceField && (
                                   <label className="review-field review-field-compact review-col-pace">
                                     <span>Pace</span>
-                                    {isRunActivity && (
-                                      <div className="review-pace-categories" role="radiogroup" aria-label="Run pace category">
-                                        {PACE_BUCKET_OPTIONS.map((option) => {
-                                          const selected = draft.paceTargetBucket === option.value;
-                                          return (
-                                            <button
-                                              key={`${activity.id}-${option.value}`}
-                                              type="button"
-                                              className={`review-pace-chip${selected ? ' active' : ''}`}
-                                              aria-label={option.label}
-                                              aria-pressed={selected}
-                                              onClick={() => applyPaceBucket(activity.id, option.value)}
-                                              title={`${option.label}${profilePaces[option.value] ? ` · ${profilePaces[option.value]}` : ''}`}
-                                            >
-                                              {option.short}
-                                            </button>
-                                          );
-                                        })}
-                                      </div>
-                                    )}
                                     <input
                                       type="text"
                                       value={draft.paceTarget}

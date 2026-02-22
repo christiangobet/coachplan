@@ -935,6 +935,18 @@
   gap: 6px;
 }
 
+.review-pace-categories-inline {
+  margin-top: 6px;
+  gap: 4px;
+}
+
+.review-pace-categories-inline .review-pace-chip {
+  min-width: 26px;
+  min-height: 26px;
+  font-size: 10px;
+  padding: 0 4px;
+}
+
 .review-pace-chip {
   min-width: 36px;
   min-height: 36px;

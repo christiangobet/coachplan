@@ -3,11 +3,14 @@
 Purpose:
 This file defines the UX/UI standards and decision process for CoachPlan.
 Codex must follow this process before making UI changes. When in doubt, ask clarifying questions.
+`CONVENTIONS.md` is the authoritative source for concrete visual system rules, tokens, component patterns, and file-level implementation conventions.
+Use this file for decision process and UX review; use `CONVENTIONS.md` for exact execution details.
 
 Non-negotiables:
 - Do NOT change or “simplify” the plan parsing system prompts (e.g., v4_master / V4 parsing prompts) unless explicitly asked.
 - Do NOT refactor UI purely for aesthetics if it increases cognitive load or breaks flows.
 - Prefer small, reversible changes behind feature flags where feasible.
+- When this file and `CONVENTIONS.md` overlap, follow `CONVENTIONS.md` for design-system specifics and component behavior.
 
 ## 1) Operating Mode (IMPORTANT)
 When I give UI/UX feedback, do NOT immediately implement.
@@ -50,7 +53,9 @@ Only after steps 1–5, proceed to implementation.
 - Accessibility: keyboard navigation, focus rings, color contrast, aria labels, form errors tied to inputs.
 
 ## 3) Layout & Design System Rules (Practical)
-- Use consistent spacing scale (e.g., 4/8/12/16/24/32).
+- Follow typography, spacing, token, and breakpoint definitions in `CONVENTIONS.md` and the shared styles in `src/app/dashboard/dashboard.css`.
+- Preserve existing visual language (Strava-inspired athletic UI, Figtree typography, tokenized colors, shared `dash-*` patterns).
+- Do not introduce one-off colors, spacing scales, or component variants when an existing convention covers the use case.
 - Use consistent typography scale:
   - Page title, section title, body, caption.
 - Buttons:
@@ -103,4 +108,5 @@ Also propose 1 success metric (conversion, completion rate, time-to-task, error 
 - Prefer local, component-level changes.
 - Avoid sweeping redesign PRs.
 - Keep diff readable; explain intent in PR description.
-- Add screenshots (before/after) for UI PRs.
+- Screenshot every visual change before finalizing.
+- Validate mobile behavior at 390px (iPhone 13 baseline) after layout or spacing changes.
