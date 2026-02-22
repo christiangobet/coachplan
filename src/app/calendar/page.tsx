@@ -671,8 +671,8 @@ export default async function CalendarPage({
                             <span className={`cal-activity-code type-${activity.type.toLowerCase()}`}>
                               {getTypeAbbr(activity.type)}
                             </span>
+                            {activity.completed && <span className="cal-activity-done-dot" />}
                           </span>
-                          {activity.completed && <em>Done</em>}
                         </div>
                       ))}
                       {moreCount > 0 && (
