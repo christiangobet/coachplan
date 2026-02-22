@@ -396,8 +396,12 @@ export default function PlanReviewPage() {
   const [overrideExistingPaces, setOverrideExistingPaces] = useState(false);
   const [savePaceProfile, setSavePaceProfile] = useState(true);
   const [paceModalError, setPaceModalError] = useState<string | null>(null);
-  const [isWideScreen, setIsWideScreen] = useState(false);
+  const [isWideScreen, setIsWideScreen] = useState(
+    () => (typeof window === 'undefined' ? true : window.matchMedia('(min-width: 1100px)').matches)
+  );
   const [showSourcePdf, setShowSourcePdf] = useState(false);
+  const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
+  const [sourceDocumentChecked, setSourceDocumentChecked] = useState(false);
   const [sourceDocument, setSourceDocument] = useState<SourceDocumentMeta>({
     loading: false,
     available: false,
@@ -509,6 +513,7 @@ export default function PlanReviewPage() {
   const loadSourceDocument = useCallback(async () => {
     if (!planId) return;
 
+    setSourceDocumentChecked(false);
     setSourceDocument((prev) => ({
       ...prev,
       loading: true,
@@ -521,6 +526,7 @@ export default function PlanReviewPage() {
       });
       const data = await res.json().catch(() => null);
       if (!res.ok) {
+        setSourceDocumentChecked(true);
         setSourceDocument({
           loading: false,
           available: false,
@@ -533,6 +539,7 @@ export default function PlanReviewPage() {
       }
 
       if (!data?.available) {
+        setSourceDocumentChecked(true);
         setSourceDocument({
           loading: false,
           available: false,
@@ -544,6 +551,7 @@ export default function PlanReviewPage() {
         return;
       }
 
+      setSourceDocumentChecked(true);
       setSourceDocument({
         loading: false,
         available: true,
@@ -553,6 +561,7 @@ export default function PlanReviewPage() {
         error: null
       });
     } catch {
+      setSourceDocumentChecked(true);
       setSourceDocument({
         loading: false,
         available: false,
@@ -565,9 +574,9 @@ export default function PlanReviewPage() {
   }, [planId]);
 
   useEffect(() => {
-    if (!planId || plan?.status === 'ACTIVE') return;
+    if (!planId || plan?.status === 'ACTIVE' || !isWideScreen) return;
     void loadSourceDocument();
-  }, [loadSourceDocument, plan?.status, planId]);
+  }, [isWideScreen, loadSourceDocument, plan?.status, planId]);
 
   useEffect(() => {
     return () => {
@@ -595,6 +604,12 @@ export default function PlanReviewPage() {
       setNotice(null);
     }
   }, [arrivedFromUpload, hasParseWarning, parseWarningMsg, plan?.status]);
+
+  useEffect(() => {
+    if (hasParseWarning || sourceDocument.error) {
+      setDiagnosticsOpen(true);
+    }
+  }, [hasParseWarning, sourceDocument.error]);
 
   const goToDashboard = useCallback(() => {
     if (!planId) {
@@ -1225,6 +1240,20 @@ export default function PlanReviewPage() {
 
   const sourcePaneAvailable = !isActivated && isWideScreen && sourceDocument.available;
   const showDesktopSourcePane = sourcePaneAvailable && showSourcePdf;
+  const hasSourceUnavailableNote = (
+    !isActivated
+    && isWideScreen
+    && sourceDocumentChecked
+    && !sourceDocument.loading
+    && !sourceDocument.available
+    && !sourceDocument.error
+  );
+  const hasDiagnostics = !isActivated && (
+    hasParseWarning
+    || Boolean(parseProfile)
+    || Boolean(sourceDocument.error)
+    || hasSourceUnavailableNote
+  );
 
   if (loading) {
     return (
@@ -1246,10 +1275,38 @@ export default function PlanReviewPage() {
     );
   }
 
+  if (!isWideScreen) {
+    return (
+      <main className="review-page-shell review-mobile-guard-shell">
+        <section className="review-page-card review-mobile-guard-card">
+          <h1>Desktop Required</h1>
+          <p>
+            Parsing review is optimized for desktop screens (1100px and wider). Open this page on desktop to
+            validate and edit activities safely.
+          </p>
+          <div className="review-mobile-guard-actions">
+            {isActivated ? (
+              <button className="cta" type="button" onClick={goToDashboard}>
+                Go to Today
+              </button>
+            ) : (
+              <Link className="cta" href="/plans">
+                Back to Plans
+              </Link>
+            )}
+            <Link className="cta secondary" href={`/plans/${plan.id}`}>
+              View Plan
+            </Link>
+          </div>
+        </section>
+      </main>
+    );
+  }
+
   return (
     <main className={`review-page-shell${showDesktopSourcePane ? ' with-source-pane' : ''}`}>
       <section className={`review-page-card review-hero${isActivated ? ' review-hero-live' : ''}`}>
-        <div className="review-hero-head">
+        <div className="review-hero-head review-action-bar">
           <div>
             <h1>
               {isActivated
@@ -1277,19 +1334,7 @@ export default function PlanReviewPage() {
                 <button className="cta" type="button" onClick={goToDashboard}>
                   Go to Today
                 </button>
-                {showPaceCta && (
-                  <button
-                    className="cta secondary"
-                    type="button"
-                    onClick={() => {
-                      setPaceFormOpen((prev) => !prev);
-                      setPaceStep(1);
-                      setPaceModalError(null);
-                    }}
-                  >
-                    {paceFormOpen ? 'Hide Pace Setup' : 'Personalize Paces (Optional)'}
-                  </button>
-                )}
+                <Link className="cta secondary" href={`/plans/${plan.id}`}>View Plan</Link>
               </>
             ) : (
               <>
@@ -1297,23 +1342,21 @@ export default function PlanReviewPage() {
                   {publishing ? (arrivedFromUpload ? 'Activating…' : 'Publishing…') : (arrivedFromUpload ? 'Activate Plan' : 'Publish Plan')}
                 </button>
                 <Link className="cta secondary" href={`/plans/${plan.id}`}>View Plan</Link>
-                {isWideScreen && (
-                  <button
-                    className="cta secondary"
-                    type="button"
-                    onClick={() => {
-                      if (!sourceDocument.available) return;
-                      setShowSourcePdf((prev) => !prev);
-                    }}
-                    disabled={sourceDocument.loading || !sourceDocument.available}
-                  >
-                    {sourceDocument.loading
-                      ? 'Loading Source PDF…'
-                      : sourceDocument.available
-                        ? (showSourcePdf ? 'Hide Source PDF' : 'Show Source PDF')
-                        : 'Source PDF Unavailable'}
-                  </button>
-                )}
+                <button
+                  className="cta secondary"
+                  type="button"
+                  onClick={() => {
+                    if (!sourceDocument.available) return;
+                    setShowSourcePdf((prev) => !prev);
+                  }}
+                  disabled={sourceDocument.loading || !sourceDocument.available}
+                >
+                  {sourceDocument.loading
+                    ? 'Loading Source PDF…'
+                    : sourceDocument.available
+                      ? (showSourcePdf ? 'Hide Source PDF' : 'Show Source PDF')
+                      : 'Source PDF Unavailable'}
+                </button>
               </>
             )}
           </div>
@@ -1397,34 +1440,116 @@ export default function PlanReviewPage() {
         )}
 
         {notice && <p className="review-notice">{notice}</p>}
-        {!isActivated && hasParseWarning && (
-          <div className="review-fallback-panel">
-            <div className="review-fallback-copy">
-              <h3>Parse needs manual confirmation</h3>
-              <p>
-                We created a safe draft so you can keep moving. Choose one recovery path below, then activate once the plan looks right.
-              </p>
-              {parseWarningMsg && (
-                <p className="review-fallback-detail">
-                  Parser warning: {parseWarningMsg}
-                </p>
-              )}
-            </div>
-            <div className="review-fallback-actions">
-              <Link className="cta secondary" href="/upload">Re-upload PDF</Link>
-              <a className="cta secondary" href="#review-week-grid">Continue Manual Review</a>
-              <Link className="cta secondary" href="/plans">Use Template Instead</Link>
-            </div>
-          </div>
-        )}
-        {!isActivated && isWideScreen && !sourceDocument.loading && !sourceDocument.available && !sourceDocument.error && (
-          <p className="review-muted">
-            Source PDF is unavailable for this plan (older upload or text-only creation).
-          </p>
-        )}
-        {!isActivated && sourceDocument.error && <p className="review-error">{sourceDocument.error}</p>}
         {error && <p className="review-error">{error}</p>}
       </section>
+
+      {!isActivated && hasDiagnostics && (
+        <section className="review-page-card review-diagnostics-panel">
+          <div className="review-diagnostics-head">
+            <div>
+              <h3>Parser diagnostics</h3>
+              <p>Details from parsing and source detection. Keep collapsed unless you are troubleshooting.</p>
+            </div>
+            <button
+              className="review-save-btn secondary"
+              type="button"
+              onClick={() => setDiagnosticsOpen((prev) => !prev)}
+            >
+              {diagnosticsOpen ? 'Hide diagnostics' : 'Show diagnostics'}
+            </button>
+          </div>
+
+          {diagnosticsOpen && (
+            <div className="review-diagnostics-body">
+              {hasParseWarning && (
+                <div className="review-fallback-panel">
+                  <div className="review-fallback-copy">
+                    <h3>Parse needs manual confirmation</h3>
+                    <p>
+                      We created a safe draft so you can keep moving. Choose one recovery path below, then activate once the plan looks right.
+                    </p>
+                    {parseWarningMsg && (
+                      <p className="review-fallback-detail">
+                        Parser warning: {parseWarningMsg}
+                      </p>
+                    )}
+                  </div>
+                  <div className="review-fallback-actions">
+                    <Link className="cta secondary" href="/upload">Re-upload PDF</Link>
+                    <a className="cta secondary" href="#review-week-grid">Continue Manual Review</a>
+                    <Link className="cta secondary" href="/plans">Use Template Instead</Link>
+                  </div>
+                </div>
+              )}
+
+              {parseProfile && (
+                <div className="review-profile-panel">
+                  <div className="review-profile-head">
+                    <h3>Detected Plan Profile</h3>
+                    <p>Auto-inferred document context used to guide structured parsing.</p>
+                  </div>
+                  <div className="review-profile-grid">
+                    <div>
+                      <strong>{parseProfile.plan_length_weeks ?? summary.totalWeeks}</strong>
+                      <span>Plan length (weeks)</span>
+                    </div>
+                    <div>
+                      <strong>{parseProfile.days_per_week ?? '—'}</strong>
+                      <span>Days per week</span>
+                    </div>
+                    <div>
+                      <strong>{humanizeToken(parseProfile.distance_type)}</strong>
+                      <span>Distance type</span>
+                    </div>
+                    <div>
+                      <strong>{humanizeToken(parseProfile.intensity_model)}</strong>
+                      <span>Intensity model</span>
+                    </div>
+                    <div>
+                      <strong>{humanizeToken(parseProfile.units)}</strong>
+                      <span>Units</span>
+                    </div>
+                    <div>
+                      <strong>{humanizeToken(parseProfile.language_hint)}</strong>
+                      <span>Language hint</span>
+                    </div>
+                    <div>
+                      <strong>{parseProfile.peak_week_km !== null ? `${parseProfile.peak_week_km.toFixed(1)} km` : '—'}</strong>
+                      <span>Peak week</span>
+                    </div>
+                    <div>
+                      <strong>{parseProfile.peak_long_run_km !== null ? `${parseProfile.peak_long_run_km.toFixed(1)} km` : '—'}</strong>
+                      <span>Peak long run</span>
+                    </div>
+                    <div>
+                      <strong>{parseProfile.taper_weeks ?? '—'}</strong>
+                      <span>Taper weeks</span>
+                    </div>
+                  </div>
+
+                  {(qualityFlags.length > 0 || parseProfile.structure_tags.length > 0) && (
+                    <div className="review-profile-tags">
+                      {qualityFlags.map((label) => (
+                        <span key={`quality-${label}`} className="review-profile-tag">{label}</span>
+                      ))}
+                      {parseProfile.structure_tags.map((tag) => (
+                        <span key={`tag-${tag}`} className="review-profile-tag alt">{humanizeToken(tag)}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {hasSourceUnavailableNote && (
+                <p className="review-muted">
+                  Source PDF is unavailable for this plan (older upload or text-only creation).
+                </p>
+              )}
+              {sourceDocument.error && <p className="review-error">{sourceDocument.error}</p>}
+            </div>
+          )}
+        </section>
+      )}
 
       {isActivated && showPaceCta && (
         <section className="review-page-card review-publish-panel">

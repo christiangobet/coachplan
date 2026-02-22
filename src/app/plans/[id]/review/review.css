@@ -26,6 +26,9 @@
   grid-column: 1 / -1;
   display: grid;
   gap: 10px;
+  position: sticky;
+  top: 70px;
+  z-index: 6;
 }
 
 .review-source-pane {
@@ -37,24 +40,18 @@
 .review-page-shell.with-source-pane .review-source-pane {
   grid-column: 1;
   position: sticky;
-  top: 14px;
-  height: calc(100vh - 28px);
-  max-height: calc(100vh - 28px);
+  top: 70px;
+  height: calc(100vh - 84px);
+  max-height: calc(100vh - 84px);
   overflow: hidden;
 }
 
 .review-page-shell.with-source-pane .review-main-column {
   grid-column: 2;
-  position: sticky;
-  top: 14px;
-  height: calc(100vh - 28px);
-  max-height: calc(100vh - 28px);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  padding-right: 4px;
   display: grid;
   gap: 14px;
   align-content: start;
+  min-width: 0;
 }
 
 .review-source-pane-head {
@@ -206,6 +203,12 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
+}
+
+.review-action-bar {
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e1e8f5;
+  background: inherit;
 }
 
 .review-hero-head h1 {
@@ -988,6 +991,65 @@
 
 .review-autosave.busy {
   color: #fc4c02;
+}
+
+.review-diagnostics-panel {
+  display: grid;
+  gap: 10px;
+}
+
+.review-diagnostics-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.review-diagnostics-head h3 {
+  margin: 0;
+  font-size: 14px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #2c4467;
+}
+
+.review-diagnostics-head p {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #60708d;
+}
+
+.review-diagnostics-body {
+  display: grid;
+  gap: 10px;
+}
+
+.review-mobile-guard-shell {
+  max-width: 760px;
+}
+
+.review-mobile-guard-card {
+  display: grid;
+  gap: 10px;
+}
+
+.review-mobile-guard-card h1 {
+  margin: 0;
+  font-size: 28px;
+  line-height: 1.1;
+  color: #1f2f4a;
+}
+
+.review-mobile-guard-card p {
+  margin: 0;
+  color: #4f617f;
+  font-size: 14px;
+}
+
+.review-mobile-guard-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .review-publish-panel {
