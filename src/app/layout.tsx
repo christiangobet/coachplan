@@ -6,7 +6,7 @@ import Header from "@/components/Header";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Training Plan",
+  title: "CoachPlan",
   description: "Upload training plans, align to race day, and track progress.",
 };
 

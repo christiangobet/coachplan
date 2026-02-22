@@ -46,7 +46,7 @@ export default async function Home() {
           </p>
           <div className={styles.ctas}>
             <Link className={styles.ctaPrimary} href="/sign-in">Sign in</Link>
-            <Link className={styles.ctaSecondary} href="/plans">Open Plans Management</Link>
+            <Link className={styles.ctaSecondary} href="/sign-up">Create account</Link>
           </div>
           <div className={styles.metrics}>
             <div className={styles.metric}>
@@ -70,7 +70,6 @@ export default async function Home() {
             className={styles.heroImage}
             fill
             sizes="(max-width: 1080px) 100vw, 460px"
-            unoptimized
             priority
           />
           <div className={styles.heroBadge}>
