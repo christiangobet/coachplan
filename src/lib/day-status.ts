@@ -1,6 +1,7 @@
 const DAY_DONE_TAG = '[DAY_DONE]';
 const DAY_MISSED_TAG = '[DAY_MISSED]';
 const DAY_MISSED_REASON_PREFIX = '[DAY_MISSED_REASON]';
+const DAY_OPEN_TAG = '[DAY_OPEN]'; // explicit reopen — overrides auto-done
 
 export type DayStatus = 'OPEN' | 'DONE' | 'MISSED';
 
@@ -16,6 +17,7 @@ function stripStatusLines(notes: string | null | undefined) {
     .filter((line) =>
       line !== DAY_DONE_TAG
       && line !== DAY_MISSED_TAG
+      && line !== DAY_OPEN_TAG
       && !line.startsWith(DAY_MISSED_REASON_PREFIX)
     )
     .join('\n')
@@ -25,9 +27,16 @@ function stripStatusLines(notes: string | null | undefined) {
 
 export function getDayStatus(notes: string | null | undefined): DayStatus {
   const lines = splitNoteLines(notes);
+  // Explicit open tag takes priority (user clicked "Reopen Day")
+  if (lines.includes(DAY_OPEN_TAG)) return 'OPEN';
   if (lines.includes(DAY_DONE_TAG)) return 'DONE';
   if (lines.includes(DAY_MISSED_TAG)) return 'MISSED';
   return 'OPEN';
+}
+
+/** True only when the day was explicitly reopened by the user (overrides auto-done). */
+export function isDayExplicitlyOpen(notes: string | null | undefined) {
+  return splitNoteLines(notes).includes(DAY_OPEN_TAG);
 }
 
 export function isDayMarkedDone(notes: string | null | undefined) {
@@ -57,10 +66,14 @@ export function setDayStatus(
 ) {
   const base = stripStatusLines(notes);
 
-  if (status === 'OPEN') return base;
-
   const entries: string[] = [];
   if (base) entries.push(base);
+
+  if (status === 'OPEN') {
+    // Explicit open tag so auto-done cannot override this choice
+    entries.push(DAY_OPEN_TAG);
+    return entries.join('\n').trim();
+  }
 
   if (status === 'DONE') {
     entries.push(DAY_DONE_TAG);

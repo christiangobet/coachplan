@@ -41,7 +41,7 @@ export default function DayCompletionButton({
         setError(data?.error || 'Failed to update day status');
         return;
       }
-      if (successRedirectHref) {
+      if (successRedirectHref && nextStatus !== 'OPEN') {
         router.replace(successRedirectHref);
         return;
       }
@@ -66,22 +66,26 @@ export default function DayCompletionButton({
         />
       )}
       <div className="dash-log-actions cal-day-toggle-actions">
-        <button
-          type="button"
-          className="dash-btn-primary"
-          onClick={() => save('DONE')}
-          disabled={busy || status === 'DONE'}
-        >
-          {busy && status !== 'DONE' ? 'Saving…' : status === 'DONE' ? '✓ Day Done' : '✓ Mark Day Done'}
-        </button>
-        <button
-          type="button"
-          className="dash-btn-ghost dash-btn-missed"
-          onClick={() => save('MISSED')}
-          disabled={busy}
-        >
-          {busy && status !== 'MISSED' ? 'Saving…' : status === 'MISSED' ? 'Update Missed Day' : 'Mark as Missed'}
-        </button>
+        {status !== 'DONE' && (
+          <button
+            type="button"
+            className="dash-btn-primary"
+            onClick={() => save('DONE')}
+            disabled={busy}
+          >
+            {busy ? 'Saving…' : '✓ Mark Day Done'}
+          </button>
+        )}
+        {status !== 'DONE' && (
+          <button
+            type="button"
+            className="dash-btn-ghost dash-btn-missed"
+            onClick={() => save('MISSED')}
+            disabled={busy}
+          >
+            {busy && status !== 'MISSED' ? 'Saving…' : status === 'MISSED' ? 'Update Missed Day' : 'Mark as Missed'}
+          </button>
+        )}
         {status !== 'OPEN' && (
           <button
             type="button"

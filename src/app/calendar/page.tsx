@@ -5,7 +5,7 @@ import { currentUser } from "@clerk/nextjs/server";
 import { prisma } from "@/lib/prisma";
 import { getDayDateFromWeekStart, resolveWeekBounds } from "@/lib/plan-dates";
 import { ensureUserFromAuth } from "@/lib/user-sync";
-import { getDayMissedReason, getDayStatus, type DayStatus } from "@/lib/day-status";
+import { getDayMissedReason, getDayStatus, isDayExplicitlyOpen, type DayStatus } from "@/lib/day-status";
 import { pickSelectedPlan, SELECTED_PLAN_COOKIE } from "@/lib/plan-selection";
 import {
   convertDistanceForDisplay,
@@ -16,12 +16,13 @@ import {
   type DistanceUnit
 } from "@/lib/unit-display";
 import AthleteSidebar from "@/components/AthleteSidebar";
-import CalendarActivityLogger from "@/components/CalendarActivityLogger";
-import DayCompletionButton from "@/components/DayCompletionButton";
+import DayLogCard from "@/components/DayLogCard";
+import { buildLogActivities } from "@/lib/log-activity";
 import ExternalSportIcon from "@/components/ExternalSportIcon";
 import RaceDetailsEditor from "@/components/RaceDetailsEditor";
 import SelectedPlanCookie from "@/components/SelectedPlanCookie";
 import StravaDaySyncButton from "@/components/StravaDaySyncButton";
+import StravaIcon from "@/components/StravaIcon";
 import "../dashboard/dashboard.css";
 import "./calendar.css";
 
@@ -78,6 +79,7 @@ type DayExternalLog = {
 type DayInfo = {
   dayId: string;
   manualStatus: DayStatus;
+  explicitlyOpen: boolean;
   missedReason: string | null;
 };
 
@@ -393,6 +395,7 @@ export default async function CalendarPage({
         dayInfoByDate.set(key, {
           dayId: day.id,
           manualStatus: getDayStatus(day.notes),
+          explicitlyOpen: isDayExplicitlyOpen(day.notes),
           missedReason: getDayMissedReason(day.notes)
         });
       }
@@ -533,7 +536,8 @@ export default async function CalendarPage({
   const selectedIsPastOrToday = selectedDate.getTime() <= today.getTime();
   const selectedManualStatus = selectedDayInfo?.manualStatus || 'OPEN';
   const selectedDayAutoDone = selectedPlanActivities.length > 0 && selectedPlanActivities.every((activity) => activity.completed);
-  const selectedDayStatus: DayStatus = selectedDayAutoDone ? 'DONE' : selectedManualStatus;
+  const selectedDayExplicitlyOpen = selectedDayInfo?.explicitlyOpen ?? false;
+  const selectedDayStatus: DayStatus = selectedDayExplicitlyOpen ? 'OPEN' : selectedDayAutoDone ? 'DONE' : selectedManualStatus;
   const selectedDayDone = selectedDayStatus === 'DONE';
   const selectedDayMissed = selectedDayStatus === 'MISSED';
 
@@ -691,7 +695,7 @@ export default async function CalendarPage({
                       )}
                       {stravaLogs.length > 0 ? (
                         <span className="cal-strava-pill">
-                          <span className="cal-strava-pill-label">Strava:</span>
+                          <StravaIcon size={12} className="cal-strava-pill-logo" />
                           <span className="cal-strava-pill-icons">
                             {stravaMarkerLogs.map((log) => (
                               <ExternalSportIcon
@@ -750,55 +754,24 @@ export default async function CalendarPage({
             </div>
 
 
-            {/* Planned activities — workout row + log form together, per activity */}
+            {/* Planned activities + day log (unified DayLogCard) */}
             {selectedPlanActivities.length === 0 && (
               <p className="cal-day-empty">No planned activities on this day.</p>
             )}
-            {selectedPlanActivities.map((activity) => {
-              const plannedDistanceSource = resolveDistanceUnitFromActivity({
-                distanceUnit: activity.distanceUnit,
-                paceTarget: activity.paceTarget,
-                actualPace: activity.actualPace,
-                fallbackUnit: viewerUnits
-              });
-              const syncedSourceDate = parseSyncedSourceDate(activity.notes);
-              const hasSyncedDateMismatch = Boolean(syncedSourceDate && syncedSourceDate !== selectedDateKey);
-              const displayDistance = convertDistanceForDisplay(activity.distance, plannedDistanceSource, viewerUnits);
-              const displayPaceTarget = convertPaceForDisplay(activity.paceTarget, viewerUnits, plannedDistanceSource) || null;
-              const metricParts: string[] = [];
-              if (displayDistance) metricParts.push(`${formatDistanceNumber(displayDistance.value)} ${distanceUnitLabel(viewerUnits)}`);
-              if (activity.duration) metricParts.push(`${activity.duration} min`);
-              if (displayPaceTarget) metricParts.push(`Pace ${displayPaceTarget}`);
-              return (
-                <div key={activity.id} className="cal-activity-section">
-                  <div className="cal-activity-workout-row">
-                    <span className={`dash-type-badge dash-type-${activity.type}`}>
-                      {ACTIVITY_TYPE_ABBR[activity.type] ?? "OTH"}
-                    </span>
-                    <div className="cal-activity-workout-info">
-                      <span className="cal-activity-title">
-                        {activity.title || activity.type}
-                        {activity.completed && <span className="cal-activity-done-chip">✓</span>}
-                      </span>
-                      {metricParts.length > 0 && (
-                        <span className="cal-activity-metrics">{metricParts.join(" · ")}</span>
-                      )}
-                    </div>
-                  </div>
-                  {hasSyncedDateMismatch && syncedSourceDate && (
-                    <p className="cal-day-detail-warning">
-                      Synced activity date {syncedSourceDate} does not match this card day.
-                    </p>
-                  )}
-                  <CalendarActivityLogger
-                    activity={activity}
-                    viewerUnit={viewerUnits}
-                    enabled={selectedIsPastOrToday}
-                    successRedirectHref={dashboardReturnHref}
-                  />
-                </div>
-              );
-            })}
+            {selectedPlanActivities.length > 0 && (
+              <DayLogCard
+                dayId={selectedDayInfo?.dayId || null}
+                dateISO={selectedDateKey}
+                planId={selectedPlan.id}
+                activities={buildLogActivities(selectedPlanActivities, viewerUnits)}
+                viewerUnits={viewerUnits}
+                dayStatus={selectedDayStatus}
+                missedReason={selectedDayInfo?.missedReason || null}
+                stravaConnected={Boolean(stravaAccount)}
+                enabled={selectedIsPastOrToday}
+                successRedirectHref={dashboardReturnHref}
+              />
+            )}
 
             {/* Logged activities (Strava / external) */}
             {(selectedIsPastOrToday && selectedExternalLogs.length > 0) && (
@@ -818,7 +791,12 @@ export default async function CalendarPage({
                         />
                         <span>{log.name}</span>
                       </strong>
-                      <span>{formatProviderName(log.provider)} · {log.startTimeLabel || formatClock(log.startTime)}</span>
+                      <span className="cal-day-log-provider">
+                        {log.provider === 'STRAVA'
+                          ? <StravaIcon size={13} className="cal-day-log-provider-icon" />
+                          : formatProviderName(log.provider)}
+                        {' · '}{log.startTimeLabel || formatClock(log.startTime)}
+                      </span>
                     </div>
                     <div className="cal-day-detail-meta">
                       <span>{formatDistanceMeters(log.distanceM, viewerUnits)} · {formatDurationSeconds(log.durationSec)}</span>
@@ -829,21 +807,6 @@ export default async function CalendarPage({
                   </div>
                 ))}
               </div>
-            )}
-
-            {/* Day-level close actions */}
-            {selectedDayInfo && (
-              <DayCompletionButton
-                dayId={selectedDayInfo.dayId}
-                status={selectedDayStatus}
-                missedReason={selectedDayInfo.missedReason}
-                successRedirectHref={collapseCardHref}
-              />
-            )}
-            {selectedDayMissed && selectedDayInfo?.missedReason && (
-              <p className="cal-day-missed-note">
-                Missed reason: {selectedDayInfo.missedReason}
-              </p>
             )}
 
             {/* Empty state: no external logs (past/today only) */}

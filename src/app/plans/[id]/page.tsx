@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import { getDayDateFromWeekStart, resolveWeekBounds } from '@/lib/plan-dates';
-import { isDayMarkedDone } from '@/lib/day-status';
+import { isDayMarkedDone, getDayStatus, getDayMissedReason, type DayStatus } from '@/lib/day-status';
 import ActivityTypeIcon from '@/components/ActivityTypeIcon';
 import PlanSidebar from '@/components/PlanSidebar';
 import SelectedPlanCookie from '@/components/SelectedPlanCookie';
@@ -16,7 +16,10 @@ import {
   type DistanceUnit
 } from '@/lib/unit-display';
 import ActivityForm, { ActivityFormData } from '@/components/PlanEditor/ActivityForm';
+import DayLogCard from '@/components/DayLogCard';
+import { buildLogActivities, type LogActivity } from '@/lib/log-activity';
 import '../plans.css';
+import '../../dashboard/dashboard.css';
 
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const ACTIVITY_TYPE_ABBR: Record<string, string> = {
@@ -55,6 +58,16 @@ function formatWeekRange(startDate: Date | null, endDate: Date | null): string |
   return `${fmtStart(s)} - ${fmtEnd(e)}`;
 }
 
+type SelectedDayState = {
+  dayId: string | null;
+  dateISO: string;
+  dateLabel: string;
+  activities: LogActivity[];
+  dayStatus: DayStatus;
+  missedReason: string | null;
+};
+
+
 function typeColor(type: string): string {
   switch (type) {
     case 'RUN': return 'var(--accent)';
@@ -77,7 +90,7 @@ function createTargetBadges(args: {
   effortTarget?: string | null;
 }) {
   const chips: string[] = [];
-  if (args.paceTarget) chips.push(`Pace ${args.paceTarget}`);
+  if (args.paceTarget) chips.push(args.paceTarget);
   if (args.effortTarget) chips.push(`Effort ${args.effortTarget}`);
   return chips;
 }
@@ -394,6 +407,10 @@ export default function PlanDetailPage() {
   const [syncingStrava, setSyncingStrava] = useState(false);
   const [savingActuals, setSavingActuals] = useState(false);
   const [viewerUnits, setViewerUnits] = useState<DistanceUnit>('MILES');
+  const [viewMode, setViewMode] = useState<'plan' | 'log'>('plan');
+  const [cellView, setCellView] = useState<'compact' | 'detail'>('detail');
+  const [selectedDay, setSelectedDay] = useState<SelectedDayState | null>(null);
+  const [stravaConnected, setStravaConnected] = useState(false);
   const [aiTrainerInput, setAiTrainerInput] = useState('');
   const [aiChatTurns, setAiChatTurns] = useState<AiChatTurn[]>(() => [
     createAiGreetingTurn()
@@ -519,6 +536,16 @@ export default function PlanDetailPage() {
   useEffect(() => {
     loadPlan();
   }, [loadPlan]);
+
+  useEffect(() => {
+    fetch('/api/integrations/accounts')
+      .then(r => r.json())
+      .then(data => {
+        const strava = (data?.accounts || []).find((a: any) => a.provider === 'STRAVA');
+        setStravaConnected(Boolean(strava?.connected && strava?.isActive));
+      })
+      .catch(() => {});
+  }, []);
 
   const applyActivityUpdate = useCallback((activityId: string, updater: (activity: any) => any) => {
     setPlan((prev: any) => {
@@ -1016,40 +1043,22 @@ export default function PlanDetailPage() {
         <section className="pcal-main">
           {/* Header */}
           <div className="pcal-header" id="plan-overview">
-            <div>
+            <div className="pcal-header-top">
               <h1>{plan.name}</h1>
-              <div className="pcal-header-meta">
-                <span className={`plan-detail-status ${statusClass}`}>{plan.status}</span>
-                <button
-                  type="button"
-                  className={`btn-light ${isEditMode ? 'active' : ''}`}
-                  onClick={() => setIsEditMode(!isEditMode)}
-                  style={{ marginLeft: '12px', padding: '4px 12px', fontSize: '12px' }}
-                >
-                  {isEditMode ? 'Done Editing' : 'Edit Plan'}
-                </button>
-                {plan.weekCount && (
-                  <>
-                    <span className="plan-detail-meta-dot" />
-                    <span>{plan.weekCount} weeks</span>
-                  </>
-                )}
-                {plan.raceName && (
-                  <>
-                    <span className="plan-detail-meta-dot" />
-                    <span>Race: {plan.raceName}</span>
-                  </>
-                )}
-                {plan.raceDate && (
-                  <>
-                    <span className="plan-detail-meta-dot" />
-                    <span>Date: {new Date(plan.raceDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-                  </>
-                )}
-              </div>
-              {plan.sourcePlanName && (
-                <div className="pcal-plan-source">Plan source: {plan.sourcePlanName}</div>
-              )}
+              <button
+                type="button"
+                className={`dash-btn-ghost pcal-edit-btn${isEditMode ? ' active' : ''}`}
+                onClick={() => setIsEditMode(!isEditMode)}
+              >
+                {isEditMode ? 'Done Editing' : 'Edit Plan'}
+              </button>
+            </div>
+            <div className="pcal-header-meta">
+              <span className={`plan-detail-status ${statusClass}`}>{plan.status}</span>
+              {plan.weekCount && <span className="pcal-header-meta-item">{plan.weekCount} weeks</span>}
+              {plan.raceName && <span className="pcal-header-meta-item">{plan.raceName}</span>}
+              {plan.raceDate && <span className="pcal-header-meta-item">{new Date(plan.raceDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>}
+              {plan.sourcePlanName && <span className="pcal-header-meta-item">Source: {plan.sourcePlanName}</span>}
             </div>
           </div>
 
@@ -1067,18 +1076,52 @@ export default function PlanDetailPage() {
               <span className="pcal-stat-value">{Math.floor(totalMinutes / 60)}h{totalMinutes % 60 > 0 ? ` ${totalMinutes % 60}m` : ''}</span>
               <span className="pcal-stat-label">Total Time</span>
             </div>
-            <div className="pcal-stat">
-              <div className="pcal-stat-bar">
-                <div className="pcal-stat-bar-fill" style={{ width: `${completionPct}%` }} />
-              </div>
-            </div>
+          </div>
+          <div className="pcal-stat-bar">
+            <div className="pcal-stat-bar-fill" style={{ width: `${completionPct}%` }} />
           </div>
 
-          {/* Calendar column headers */}
-          <div className="pcal-col-headers">
-            {DAY_LABELS.map((d) => (
-              <span key={d}>{d}</span>
-            ))}
+          {/* View toggle + column headers */}
+          <div className="pcal-calendar-header">
+            <div className="pcal-calendar-header-top">
+              <div className="pcal-view-toggle">
+                <button
+                  type="button"
+                  className={`pcal-view-pill${viewMode === 'plan' ? ' active' : ''}`}
+                  onClick={() => setViewMode('plan')}
+                >
+                  Plan
+                </button>
+                <button
+                  type="button"
+                  className={`pcal-view-pill${viewMode === 'log' ? ' active' : ''}`}
+                  onClick={() => setViewMode('log')}
+                >
+                  Log
+                </button>
+              </div>
+              <div className="pcal-view-toggle">
+                <button
+                  type="button"
+                  className={`pcal-view-pill${cellView === 'compact' ? ' active' : ''}`}
+                  onClick={() => setCellView('compact')}
+                >
+                  Compact
+                </button>
+                <button
+                  type="button"
+                  className={`pcal-view-pill${cellView === 'detail' ? ' active' : ''}`}
+                  onClick={() => setCellView('detail')}
+                >
+                  Detail
+                </button>
+              </div>
+            </div>
+            <div className="pcal-col-headers">
+              {DAY_LABELS.map((d) => (
+                <span key={d}>{d}</span>
+              ))}
+            </div>
           </div>
 
           {/* Week rows */}
@@ -1122,10 +1165,25 @@ export default function PlanDetailPage() {
                       const isPast = dayDate && dayDate.getTime() < today.getTime();
                       const showMonthInDate = !!dayDate && (dow === 1 || dayDate.getDate() === 1);
 
+                      const openDayLog = () => {
+                        if (!dayDate) return;
+                        const dayStatus = day ? getDayStatus(day.notes) : 'OPEN';
+                        const missedReason = day ? (getDayMissedReason(day.notes) || null) : null;
+                        setSelectedDay({
+                          dayId: day?.id || null,
+                          dateISO: toLocalDateKey(dayDate),
+                          dateLabel: dayDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
+                          activities: buildLogActivities(activities, viewerUnits),
+                          dayStatus,
+                          missedReason,
+                        });
+                      };
+
                       return (
                         <div
-                          className={`pcal-cell${isToday ? ' pcal-cell-today' : ''}${isPast ? ' pcal-cell-past' : ''}${dayDone ? ' pcal-cell-day-done' : ''}`}
+                          className={`pcal-cell${isToday ? ' pcal-cell-today' : ''}${isPast ? ' pcal-cell-past' : ''}${dayDone ? ' pcal-cell-day-done' : ''}${!isEditMode && dayDate ? ' pcal-cell-clickable' : ''}`}
                           key={dow}
+                          onClick={!isEditMode && dayDate ? openDayLog : undefined}
                         >
                           {dayDate && (
                             <span className="pcal-cell-date">
@@ -1152,7 +1210,6 @@ export default function PlanDetailPage() {
                             </button>
                           )}
                           {activities.map((a: any) => {
-                            const details: string[] = [];
                             const plannedSourceUnit = resolveActivityDistanceSourceUnit(a, viewerUnits);
                             const actualSourceUnit = resolveActivityDistanceSourceUnit(
                               a,
@@ -1160,38 +1217,45 @@ export default function PlanDetailPage() {
                               true,
                               plannedSourceUnit
                             );
-                            const plannedDistanceLabel = formatDisplayDistance(a.distance, plannedSourceUnit);
-                            if (plannedDistanceLabel) details.push(plannedDistanceLabel);
-                            if (a.duration) details.push(`${a.duration}m`);
-                            const displayPaceTarget = formatDisplayPace(a.paceTarget, plannedSourceUnit);
-                            const targetBadges = createTargetBadges({
-                              paceTarget: displayPaceTarget,
-                              effortTarget: a.effortTarget
-                            });
-                            if (a.completed) {
-                              const actuals: string[] = [];
-                              const actualDistanceLabel = formatDisplayDistance(a.actualDistance, actualSourceUnit);
-                              if (actualDistanceLabel) actuals.push(actualDistanceLabel);
-                              if (a.actualDuration) actuals.push(`${a.actualDuration}m`);
-                              const displayActualPace = formatDisplayPace(a.actualPace, actualSourceUnit);
-                              if (displayActualPace) actuals.push(displayActualPace);
-                              if (actuals.length > 0) details.push(`Actual ${actuals.join(' · ')}`);
+                            const details: string[] = [];
+                            let targetBadges: string[] = [];
+
+                            if (viewMode === 'plan') {
+                              const plannedDistanceLabel = formatDisplayDistance(a.distance, plannedSourceUnit);
+                              if (plannedDistanceLabel) details.push(plannedDistanceLabel);
+                              if (a.duration) details.push(`${a.duration}m`);
+                              const displayPaceTarget = formatDisplayPace(a.paceTarget, plannedSourceUnit);
+                              targetBadges = createTargetBadges({
+                                paceTarget: displayPaceTarget,
+                                effortTarget: a.effortTarget
+                              });
+                            } else {
+                              // Log view: actuals for completed, planned for upcoming
+                              if (a.completed) {
+                                const actualDistanceLabel = formatDisplayDistance(a.actualDistance, actualSourceUnit);
+                                if (actualDistanceLabel) details.push(actualDistanceLabel);
+                                if (a.actualDuration) details.push(`${a.actualDuration}m`);
+                                const displayActualPace = formatDisplayPace(a.actualPace, actualSourceUnit);
+                                if (displayActualPace) details.push(displayActualPace);
+                              } else {
+                                const plannedDistanceLabel = formatDisplayDistance(a.distance, plannedSourceUnit);
+                                if (plannedDistanceLabel) details.push(plannedDistanceLabel);
+                                if (a.duration) details.push(`${a.duration}m`);
+                              }
                             }
 
+                            const activityTypeAbbr = ACTIVITY_TYPE_ABBR[String(a.type || 'OTHER')] ?? 'OTH';
                             return (
                               <div
-                                className={`pcal-activity pcal-activity-clickable${a.completed ? ' pcal-activity-done' : ''}${a.mustDo || a.priority === 'KEY' ? ' pcal-activity-key' : ''}`}
+                                className={`pcal-activity pcal-activity-clickable${a.completed ? ' pcal-activity-done' : ''}${a.mustDo || a.priority === 'KEY' ? ' pcal-activity-key' : ''}${cellView === 'compact' ? ' pcal-activity-compact' : ''}`}
                                 key={a.id}
+                                title={cellView === 'compact' ? a.title : undefined}
                                 onClick={(e) => {
                                   if (isEditMode) {
                                     e.stopPropagation();
                                     setEditingActivity(a);
-                                  } else {
-                                    setSelectedActivity({
-                                      ...a,
-                                      dayDateISO: dayDate ? toLocalDateKey(dayDate) : null
-                                    });
                                   }
+                                  // non-edit: let click bubble up to cell → opens day log
                                 }}
                               >
                                 <span
@@ -1199,29 +1263,35 @@ export default function PlanDetailPage() {
                                   aria-hidden="true"
                                   title={a.completed ? 'Completed' : 'Planned'}
                                 />
-                                <div className="pcal-activity-content">
-                                  <span className="pcal-activity-title">
-                                    <ActivityTypeIcon
-                                      type={a.type}
-                                      className={`pcal-activity-icon type-${String(a.type || 'OTHER').toLowerCase()}`}
-                                    />
-                                    <span className="pcal-activity-title-text">{a.title}</span>
+                                {cellView === 'compact' ? (
+                                  <span className={`pcal-activity-abbr type-${String(a.type || 'OTHER').toLowerCase()}`}>
+                                    {activityTypeAbbr}
                                   </span>
-                                  {details.length > 0 && (
-                                    <span className="pcal-activity-details">
-                                      {details.join(' · ')}
+                                ) : (
+                                  <div className="pcal-activity-content">
+                                    <span className="pcal-activity-title">
+                                      <ActivityTypeIcon
+                                        type={a.type}
+                                        className={`pcal-activity-icon type-${String(a.type || 'OTHER').toLowerCase()}`}
+                                      />
+                                      <span className="pcal-activity-title-text">{a.title}</span>
                                     </span>
-                                  )}
-                                  {targetBadges.length > 0 && (
-                                    <span className="pcal-activity-targets">
-                                      {targetBadges.map((badge, index) => (
-                                        <span key={`${a.id}-target-${index}`} className="pcal-activity-target-chip">
-                                          {badge}
-                                        </span>
-                                      ))}
-                                    </span>
-                                  )}
-                                </div>
+                                    {details.length > 0 && (
+                                      <span className="pcal-activity-details">
+                                        {details.join(' · ')}
+                                      </span>
+                                    )}
+                                    {targetBadges.length > 0 && (
+                                      <span className="pcal-activity-targets">
+                                        {targetBadges.map((badge, index) => (
+                                          <span key={`${a.id}-target-${index}`} className="pcal-activity-target-chip">
+                                            {badge}
+                                          </span>
+                                        ))}
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
                               </div>
                             );
                           })}
@@ -1244,7 +1314,7 @@ export default function PlanDetailPage() {
               </div>
               <div className="pcal-ai-trainer-head-actions">
                 <button
-                  className="cta secondary"
+                  className="dash-btn-ghost"
                   type="button"
                   onClick={clearAiChat}
                   disabled={aiTrainerLoading || aiTrainerApplying}
@@ -1282,7 +1352,7 @@ export default function PlanDetailPage() {
                   )}
                   {turn.proposal && turn.proposalState !== 'active' && turn.proposalState !== 'applied' && (
                     <button
-                      className="cta secondary pcal-ai-turn-use"
+                      className="dash-btn-ghost pcal-ai-turn-use"
                       type="button"
                       onClick={() => activateProposalTurn(turn.id)}
                     >
@@ -1302,7 +1372,7 @@ export default function PlanDetailPage() {
               />
               <div className="pcal-ai-trainer-actions">
                 <button
-                  className="cta"
+                  className="dash-btn-primary"
                   type="button"
                   onClick={generateAiAdjustment}
                   disabled={aiTrainerLoading || aiTrainerApplying}
@@ -1401,7 +1471,7 @@ export default function PlanDetailPage() {
                         <span className="pcal-ai-trainer-op">{change.op.replace(/_/g, ' ')}</span>
                         <strong>{describeAiChange(change, aiChangeLookup)}</strong>
                         <button
-                          className="cta secondary pcal-ai-trainer-apply-one"
+                          className="dash-btn-ghost pcal-ai-trainer-apply-one"
                           type="button"
                           onClick={() => applyAiAdjustment(idx)}
                           disabled={
@@ -1424,7 +1494,7 @@ export default function PlanDetailPage() {
                 </ul>
                 <div className="pcal-ai-trainer-apply-all">
                   <button
-                    className="cta"
+                    className="dash-btn-primary"
                     type="button"
                     onClick={() => applyAiAdjustment()}
                     disabled={
@@ -1663,6 +1733,61 @@ export default function PlanDetailPage() {
         title={editingActivity ? 'Edit Activity' : 'Add Activity'}
         dayId={addingToDayId || undefined}
       />
+
+      {/* Day log modal */}
+      {selectedDay && (
+        <div
+          className="pcal-day-overlay"
+          onClick={() => { setSelectedDay(null); loadPlan(); }}
+        >
+          <div className="pcal-day-modal" onClick={(e) => e.stopPropagation()}>
+            {/* Header */}
+            <div className="pcal-day-modal-head">
+              <div className="pcal-day-modal-head-left">
+                <span className="pcal-day-modal-date">{selectedDay.dateLabel}</span>
+                {selectedDay.activities.length === 0 && (
+                  <h3 className="pcal-day-modal-title">Rest Day</h3>
+                )}
+                {selectedDay.activities.map((a) => (
+                  <div key={a.id} className="pcal-day-modal-activity">
+                    <span className={`pcal-activity-abbr type-${String(a.type || 'OTHER').toLowerCase()}`}>
+                      {typeAbbr(a.type)}
+                    </span>
+                    <div className="pcal-day-modal-activity-copy">
+                      <span className="pcal-day-modal-title">{a.title || formatType(a.type)}</span>
+                      {a.plannedDetails.length > 0 && (
+                        <span className="pcal-day-modal-metrics">{a.plannedDetails.join(' · ')}</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <button
+                type="button"
+                className="pcal-day-modal-close"
+                onClick={() => { setSelectedDay(null); loadPlan(); }}
+                aria-label="Close"
+              >
+                ✕
+              </button>
+            </div>
+            {/* Day log card */}
+            <DayLogCard
+              key={selectedDay.dateISO}
+              dayId={selectedDay.dayId}
+              dateISO={selectedDay.dateISO}
+              planId={planId}
+              activities={selectedDay.activities}
+              viewerUnits={viewerUnits}
+              dayStatus={selectedDay.dayStatus}
+              missedReason={selectedDay.missedReason}
+              stravaConnected={stravaConnected}
+              enabled
+              onClose={() => { setSelectedDay(null); loadPlan(); }}
+            />
+          </div>
+        </div>
+      )}
 
     </main>
   );

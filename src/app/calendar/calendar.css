@@ -549,8 +549,21 @@
   background: rgba(252, 76, 2, 0.12);
 }
 
-.cal-strava-pill-label {
-  line-height: 1;
+.cal-strava-pill-logo {
+  display: block;
+  flex-shrink: 0;
+}
+
+.cal-day-log-provider {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.cal-day-log-provider-icon {
+  display: block;
+  flex-shrink: 0;
+  vertical-align: middle;
 }
 
 .cal-strava-pill-icons {
@@ -1260,6 +1273,12 @@
   outline: none;
   border-color: var(--d-orange);
   box-shadow: 0 0 0 2px rgba(252, 76, 2, 0.12);
+}
+
+.cal-activity-log input.is-prefilled {
+  font-weight: 700;
+  color: var(--d-text);
+  border-color: var(--d-border-strong, var(--d-border));
 }
 
 .cal-activity-log input[type="number"]::-webkit-outer-spin-button,

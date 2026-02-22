@@ -25,12 +25,6 @@ export default function PlanSidebar({
 }) {
   return (
     <aside className="pcal-side">
-      <div className="pcal-side-head">
-        <div className="pcal-side-title-wrap">
-          <span className="pcal-side-eyebrow">Navigation</span>
-          <h2 className="pcal-side-title">Plan Sections</h2>
-        </div>
-      </div>
       <nav className="pcal-side-nav" aria-label="Plan navigation">
         {ITEMS.map((item) => (
           <Link
@@ -48,10 +42,10 @@ export default function PlanSidebar({
         ))}
       </nav>
       <div className="pcal-side-footer">
-        <Link className="pcal-side-link back" href="/plans" title="Back to Plans Management">
+        <Link className="pcal-side-link back" href="/plans" title="Back to Plans">
           <span className="pcal-side-link-dot" aria-hidden />
           <span className="pcal-side-link-copy">
-            <span className="pcal-side-link-label">Plans Management</span>
+            <span className="pcal-side-link-label">← Plans</span>
             <span className="pcal-side-link-meta">Back to all plans</span>
           </span>
         </Link>

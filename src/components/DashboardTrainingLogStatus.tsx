@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import DashboardActivityLogCard, { type LogActivity } from './DashboardActivityLogCard';
+import DayLogCard from './DayLogCard';
+import type { LogActivity } from '@/lib/log-activity';
 import type { DayStatus } from '@/lib/day-status';
 
 const TYPE_ABBR: Record<string, string> = {
@@ -71,18 +72,17 @@ export default function DashboardTrainingLogStatus({ items }: { items: StatusFee
                     </div>
                   </div>
                 )}
-                <DashboardActivityLogCard
-                  anchorId={`past-log-${item.logDay.dayId}`}
-                  dateLabel={item.logDay.dateLabel}
+                <DayLogCard
+                  dayId={item.logDay.dayId}
                   dateISO={item.logDay.dateISO}
                   planId={item.logDay.planId}
-                  dayId={item.logDay.dayId}
-                  viewerUnits={item.logDay.viewerUnits}
                   activities={item.logDay.activities}
-                  initialDayStatus={item.logDay.initialDayStatus}
-                  initialMissedReason={item.logDay.initialMissedReason}
+                  viewerUnits={item.logDay.viewerUnits}
+                  dayStatus={item.logDay.initialDayStatus}
+                  missedReason={item.logDay.initialMissedReason}
                   stravaConnected={item.logDay.stravaConnected}
-                  embedded
+                  enabled
+                  onClose={() => setOpenDayId(null)}
                 />
               </div>
             );

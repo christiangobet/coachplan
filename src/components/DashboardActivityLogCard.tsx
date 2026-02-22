@@ -4,21 +4,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import CompleteWorkoutButton from '@/components/CompleteWorkoutButton';
 import type { DayStatus } from '@/lib/day-status';
+import type { LogActivity } from '@/lib/log-activity';
 
-export type LogActivity = {
-  id: string;
-  title: string | null;
-  type: string;
-  completed: boolean;
-  plannedDetails: string[];
-  plannedNotes: string | null;
-  paceCategory: string | null;
-  plannedDistance: number | null;
-  plannedDuration: number | null;
-  actualDistance: number | null;
-  actualDuration: number | null;
-  actualPace: string | null;
-};
+export type { LogActivity } from '@/lib/log-activity';
 
 type StravaImportSummary = {
   date: string;
@@ -72,7 +60,7 @@ export default function DashboardActivityLogCard({
   initialDayStatus,
   initialMissedReason,
   stravaConnected,
-  embedded = false,
+  initialOpen = false,
 }: {
   anchorId?: string;
   dateLabel: string;
@@ -84,12 +72,12 @@ export default function DashboardActivityLogCard({
   initialDayStatus: DayStatus;
   initialMissedReason?: string | null;
   stravaConnected: boolean;
-  embedded?: boolean;
+  initialOpen?: boolean;
 }) {
   const router = useRouter();
   const hashTarget = `#${anchorId}`;
 
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(initialOpen);
   const [syncBusy, setSyncBusy] = useState(false);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [syncTone, setSyncTone] = useState<SyncTone>('info');
@@ -102,14 +90,6 @@ export default function DashboardActivityLogCard({
   );
   const [expandedNotes, setExpandedNotes] = useState<Record<string, boolean>>({});
 
-  // Embedded mode state
-  const [embDistance, setEmbDistance] = useState('');
-  const [embDuration, setEmbDuration] = useState('');
-  const [embPace, setEmbPace] = useState('');
-  const [embBusy, setEmbBusy] = useState(false);
-  const [embError, setEmbError] = useState<string | null>(null);
-  const [showAdapt, setShowAdapt] = useState(false);
-  const [adaptContext, setAdaptContext] = useState<'missed' | 'below_plan'>('missed');
 
   const hasActivities = activities.length > 0;
   const completedCount = useMemo(() => activities.filter((activity) => activity.completed).length, [activities]);
@@ -139,85 +119,6 @@ export default function DashboardActivityLogCard({
     return () => window.removeEventListener('hashchange', openFromHash);
   }, [hashTarget]);
 
-  // Auto-fill embedded fields from actuals (e.g. after Strava sync)
-  const primaryActivity = activities.find(a => a.type !== 'REST') ?? activities[0] ?? null;
-  useEffect(() => {
-    if (!embedded) return;
-    if (primaryActivity?.actualDistance != null) setEmbDistance(String(primaryActivity.actualDistance));
-    if (primaryActivity?.actualDuration != null) setEmbDuration(String(primaryActivity.actualDuration));
-    if (primaryActivity?.actualPace) setEmbPace(primaryActivity.actualPace);
-  }, [embedded, primaryActivity?.actualDistance, primaryActivity?.actualDuration, primaryActivity?.actualPace]);
-
-  const handleEmbMarkDone = async () => {
-    if (embBusy) return;
-    setEmbBusy(true);
-    setEmbError(null);
-    try {
-      if (primaryActivity) {
-        const res = await fetch(`/api/activities/${primaryActivity.id}/complete`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            actualDistance: embDistance || null,
-            actualDuration: embDuration || null,
-            actualPace: embPace || null,
-            actualDistanceUnit: viewerUnits,
-          }),
-        });
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({}));
-          setEmbError(body?.error || 'Failed to save actuals');
-          return;
-        }
-      }
-      if (dayId) {
-        const res = await fetch(`/api/plan-days/${dayId}/complete`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status: 'DONE', reason: null }),
-        });
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({}));
-          setEmbError(body?.error || 'Failed to close day');
-          return;
-        }
-        setDayStatus('DONE');
-      }
-      const distNum = parseFloat(embDistance);
-      const planned = primaryActivity?.plannedDistance;
-      if (planned && distNum && distNum < planned * 0.7) {
-        setAdaptContext('below_plan');
-        setShowAdapt(true);
-      }
-      router.refresh();
-    } finally {
-      setEmbBusy(false);
-    }
-  };
-
-  const handleEmbMarkMissed = async () => {
-    if (embBusy || !dayId) return;
-    setEmbBusy(true);
-    setEmbError(null);
-    try {
-      const res = await fetch(`/api/plan-days/${dayId}/complete`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'MISSED', reason: null }),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        setEmbError(body?.error || 'Failed to mark missed');
-        return;
-      }
-      setDayStatus('MISSED');
-      setAdaptContext('missed');
-      setShowAdapt(true);
-      router.refresh();
-    } finally {
-      setEmbBusy(false);
-    }
-  };
 
   const closeCard = () => {
     setOpen(false);
@@ -300,110 +201,6 @@ export default function DashboardActivityLogCard({
       setDayBusy(false);
     }
   };
-
-  if (embedded) {
-    const distUnit = viewerUnits === 'KM' ? 'km' : 'mi';
-    const adaptPrompt = adaptContext === 'missed'
-      ? "I missed today's workout. Help me rebalance the upcoming week."
-      : `My ${primaryActivity?.title ?? 'workout'} was ${embDistance}${distUnit} vs planned ${primaryActivity?.plannedDistance ?? '?'}${distUnit}. Suggest adjustments.`;
-
-    return (
-      <div id={anchorId} className="dash-log-section">
-        {showAdapt ? (
-          <div className="dash-adapt-prompt">
-            <p className="dash-adapt-message">
-              {adaptContext === 'missed'
-                ? "You missed today's workout. Want to rebalance the upcoming week?"
-                : `You logged ${embDistance}${distUnit} vs ${primaryActivity?.plannedDistance ?? '?'}${distUnit} planned. Want to adjust?`}
-            </p>
-            <div className="dash-adapt-actions">
-              <a
-                className="dash-btn-primary"
-                href={`/plans/${planId}?aiPrompt=${encodeURIComponent(adaptPrompt)}&aiSource=dashboard#ai-trainer`}
-              >
-                Adapt upcoming week →
-              </a>
-              <button type="button" className="dash-btn-ghost" onClick={() => setShowAdapt(false)}>
-                All good
-              </button>
-            </div>
-          </div>
-        ) : dayStatus !== 'OPEN' ? (
-          <div className="dash-log-done">
-            <span className={`dash-log-done-badge status-${dayStatus.toLowerCase()}`}>
-              {dayStatus === 'DONE' ? '✓ Day logged' : '✗ Day missed'}
-            </span>
-            <button type="button" className="dash-btn-ghost" onClick={() => { setDayStatus('OPEN'); router.refresh(); }}>
-              Reopen
-            </button>
-          </div>
-        ) : (
-          <>
-            <div className="dash-log-header">
-              <span className="dash-log-label">Log today</span>
-              {stravaConnected && (
-                <button
-                  type="button"
-                  className="dash-log-strava-btn"
-                  onClick={syncFromStrava}
-                  disabled={syncBusy}
-                >
-                  {syncBusy ? 'Syncing…' : '↻ Sync from Strava'}
-                </button>
-              )}
-            </div>
-            {syncMessage && (
-              <p className={`dash-log-sync-note ${syncTone}`}>{syncMessage}</p>
-            )}
-            <div className="dash-log-fields">
-              <label className="dash-log-field">
-                <span>Distance ({distUnit})</span>
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  min="0"
-                  step="0.01"
-                  value={embDistance}
-                  onChange={e => setEmbDistance(e.target.value)}
-                  placeholder={primaryActivity?.plannedDistance != null ? String(primaryActivity.plannedDistance) : '0'}
-                />
-              </label>
-              <label className="dash-log-field">
-                <span>Duration (min)</span>
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  min="0"
-                  step="1"
-                  value={embDuration}
-                  onChange={e => setEmbDuration(e.target.value)}
-                  placeholder={primaryActivity?.plannedDuration != null ? String(primaryActivity.plannedDuration) : '0'}
-                />
-              </label>
-              <label className="dash-log-field">
-                <span>Pace</span>
-                <input
-                  type="text"
-                  value={embPace}
-                  onChange={e => setEmbPace(e.target.value)}
-                  placeholder={`e.g. 5:30 /${distUnit}`}
-                />
-              </label>
-            </div>
-            {embError && <p className="dash-log-error">{embError}</p>}
-            <div className="dash-log-actions">
-              <button type="button" className="dash-btn-primary" onClick={handleEmbMarkDone} disabled={embBusy || !dayId}>
-                {embBusy ? 'Saving…' : '✓ Mark Day Done'}
-              </button>
-              <button type="button" className="dash-btn-ghost dash-btn-missed" onClick={handleEmbMarkMissed} disabled={embBusy || !dayId}>
-                Mark as Missed
-              </button>
-            </div>
-          </>
-        )}
-      </div>
-    );
-  }
 
   return (
     <section id={anchorId} className={`dash-card dash-activity-log-card${open ? '' : ' is-closed'}`}>

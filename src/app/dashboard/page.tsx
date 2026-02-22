@@ -18,7 +18,8 @@ import {
 import AthleteSidebar from "@/components/AthleteSidebar";
 import StravaSyncPanel from "@/components/StravaSyncPanel";
 import SelectedPlanCookie from "@/components/SelectedPlanCookie";
-import DashboardActivityLogCard, { type LogActivity } from "@/components/DashboardActivityLogCard";
+import DashboardDayLogShell from "@/components/DashboardDayLogShell";
+import { buildLogActivities, buildPlannedMetricParts, type LogActivity } from "@/lib/log-activity";
 import DashboardTrainingLogStatus, { type StatusFeedItem } from "@/components/DashboardTrainingLogStatus";
 import "./dashboard.css";
 
@@ -74,74 +75,7 @@ function buildAiAdjustHref(planId: string, prompt: string) {
   return `/plans/${planId}?${params.toString()}#ai-trainer`;
 }
 
-function resolveActivityDistanceSourceUnit(
-  activity: any,
-  viewerUnits: DistanceUnit,
-  preferActualPace = false
-) {
-  return (
-    resolveDistanceUnitFromActivity({
-      distanceUnit: activity?.distanceUnit,
-      paceTarget: activity?.paceTarget,
-      actualPace: activity?.actualPace,
-      fallbackUnit: viewerUnits,
-      preferActualPace
-    })
-    || viewerUnits
-  );
-}
 
-function buildPlannedMetricParts(activity: any, viewerUnits: DistanceUnit) {
-  if (!activity) return [];
-
-  const parts: string[] = [];
-  const plannedSourceUnit = resolveActivityDistanceSourceUnit(activity, viewerUnits);
-  const plannedDistance = convertDistanceForDisplay(activity.distance, plannedSourceUnit, viewerUnits);
-  if (plannedDistance) {
-    parts.push(`${formatDistanceNumber(plannedDistance.value)} ${distanceUnitLabel(plannedDistance.unit)}`);
-  }
-  if (activity.duration) {
-    parts.push(`${activity.duration} min`);
-  }
-  const paceConverted = convertPaceForDisplay(
-    activity.paceTarget,
-    viewerUnits,
-    plannedSourceUnit
-  );
-  const paceText = paceConverted
-    || (typeof activity.paceTarget === "string" ? activity.paceTarget.trim() : "");
-  if (paceText) {
-    parts.push(`Pace ${paceText}`);
-  }
-
-  return parts;
-}
-
-function buildLogActivities(rawActivities: any[], viewerUnits: DistanceUnit): LogActivity[] {
-  return [...rawActivities]
-    .sort((a, b) => (a.type === "REST" ? 1 : 0) - (b.type === "REST" ? 1 : 0))
-    .map((activity) => {
-      const plannedSourceUnit = resolveActivityDistanceSourceUnit(activity, viewerUnits);
-      const actualSourceUnit = resolveActivityDistanceSourceUnit(activity, viewerUnits, true);
-      const displayPlannedDistance = convertDistanceForDisplay(activity.distance, plannedSourceUnit, viewerUnits);
-      const displayActualDistance = convertDistanceForDisplay(activity.actualDistance, actualSourceUnit, viewerUnits);
-      const displayActualPace = convertPaceForDisplay(activity.actualPace, viewerUnits, actualSourceUnit);
-      return {
-        id: activity.id,
-        title: activity.title || null,
-        type: activity.type || "OTHER",
-        completed: Boolean(activity.completed),
-        plannedDetails: buildPlannedMetricParts(activity, viewerUnits),
-        plannedNotes: typeof activity.rawText === "string" && activity.rawText.trim() ? activity.rawText.trim() : null,
-        paceCategory: typeof activity.paceTargetBucket === "string" && activity.paceTargetBucket.trim() ? formatType(activity.paceTargetBucket) : null,
-        plannedDistance: displayPlannedDistance?.value ?? null,
-        plannedDuration: activity.duration ?? null,
-        actualDistance: displayActualDistance?.value ?? null,
-        actualDuration: activity.actualDuration ?? null,
-        actualPace: displayActualPace || null,
-      };
-    });
-}
 
 export default async function DashboardPage({
   searchParams
@@ -669,18 +603,15 @@ export default async function DashboardPage({
             </div>
 
             {/* Inline log section */}
-            <DashboardActivityLogCard
-              anchorId="dash-activity-log-card"
-              dateLabel={`Today · ${dateStr}`}
+            <DashboardDayLogShell
+              dayId={todayDay?.id || null}
               dateISO={todayLogDateISO}
               planId={activePlan.id}
-              dayId={todayDay?.id || null}
               viewerUnits={viewerUnits}
               activities={todayLogActivities}
-              initialDayStatus={todayDayStatus}
-              initialMissedReason={todayDayMissedReason}
+              dayStatus={todayDayStatus}
+              missedReason={todayDayMissedReason}
               stravaConnected={Boolean(stravaAccount)}
-              embedded
             />
           </div>
 
