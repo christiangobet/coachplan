@@ -13,7 +13,7 @@ Training plan management app for endurance athletes and coaches. Upload PDF trai
 
 ## Commands
 
-- `npm run dev` — Start dev server (http://localhost:3000)
+- `npm run dev` — Start dev server (http://localhost:3001)
 - `npm run build` — Production build
 - `npm run lint` — ESLint
 - `npx prisma migrate dev` — Run database migrations
@@ -36,6 +36,7 @@ Training plan management app for endurance athletes and coaches. Upload PDF trai
 - Two user roles: ATHLETE and COACH
 - Plans have statuses: DRAFT → ACTIVE → ARCHIVED
 - UI follows Strava-inspired aesthetic: Figtree font, orange accent (#fc4c02), light gray background, white cards
+- See `CONVENTIONS.md` for full UI patterns, component conventions, and page-specific decisions
 
 ## Project Plan
 
