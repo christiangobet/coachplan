@@ -471,6 +471,7 @@ export default async function CalendarPage({
   const prevMonthHref = buildCalendarHref(addMonths(monthStart, -1), selectedPlan.id, selectedDateKey, returnToParam);
   const nextMonthHref = buildCalendarHref(addMonths(monthStart, 1), selectedPlan.id, selectedDateKey, returnToParam);
   const dashboardReturnHref = returnToDashboard ? `/dashboard?plan=${encodeURIComponent(selectedPlan.id)}` : null;
+  const collapseCardHref = dashboardReturnHref ?? buildCalendarHref(monthStart, selectedPlan.id, null, returnToParam);
 
   const externalRangeStart = normalizeDate(new Date(gridStart));
   const externalRangeEnd = normalizeDate(new Date(gridEnd));
@@ -829,7 +830,7 @@ export default async function CalendarPage({
                 dayId={selectedDayInfo.dayId}
                 status={selectedDayStatus}
                 missedReason={selectedDayInfo.missedReason}
-                successRedirectHref={dashboardReturnHref}
+                successRedirectHref={collapseCardHref}
               />
             )}
             {selectedDayMissed && selectedDayInfo?.missedReason && (
