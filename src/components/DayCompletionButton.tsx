@@ -65,27 +65,27 @@ export default function DayCompletionButton({
           disabled={busy}
         />
       )}
-      <div className="cal-day-toggle-actions">
+      <div className="dash-log-actions cal-day-toggle-actions">
         <button
           type="button"
-          className={`dash-sync-btn ${status === 'DONE' ? 'is-done' : ''}`}
+          className="dash-btn-primary"
           onClick={() => save('DONE')}
           disabled={busy || status === 'DONE'}
         >
-          {busy && status !== 'DONE' ? 'Saving...' : status === 'DONE' ? 'Day Done' : 'Mark Day Done'}
+          {busy && status !== 'DONE' ? 'Saving…' : status === 'DONE' ? '✓ Day Done' : '✓ Mark Day Done'}
         </button>
         <button
           type="button"
-          className={`dash-sync-btn is-warning ${status === 'MISSED' ? 'is-missed' : ''}`}
+          className="dash-btn-ghost dash-btn-missed"
           onClick={() => save('MISSED')}
           disabled={busy}
         >
-          {busy && status !== 'MISSED' ? 'Saving...' : status === 'MISSED' ? 'Update Missed Day' : 'Close as Missed'}
+          {busy && status !== 'MISSED' ? 'Saving…' : status === 'MISSED' ? 'Update Missed Day' : 'Mark as Missed'}
         </button>
         {status !== 'OPEN' && (
           <button
             type="button"
-            className="dash-sync-btn is-neutral"
+            className="dash-btn-ghost"
             onClick={() => save('OPEN')}
             disabled={busy}
           >
@@ -93,7 +93,7 @@ export default function DayCompletionButton({
           </button>
         )}
       </div>
-      {error && <span className="cal-day-toggle-error">{error}</span>}
+      {error && <p className="dash-log-error">{error}</p>}
     </div>
   );
 }

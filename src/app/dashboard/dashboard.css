@@ -381,103 +381,278 @@
 /* ══════════════════════════
    Today Hero Card
    ══════════════════════════ */
+/* ══════════════════════════
+   Today's workout hero card
+   ══════════════════════════ */
 .dash-hero {
   background: var(--d-surface);
   border-radius: var(--d-radius-lg);
-  padding: 24px;
+  padding: 20px 24px 24px;
   box-shadow: var(--d-shadow);
   border-left: 4px solid var(--d-orange);
-}
-
-.dash-hero-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 8px;
-}
-
-.dash-hero-chip {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 22px;
-  border-radius: 999px;
-  padding: 0 10px;
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: #fff;
-  background: var(--d-orange);
-}
-
-.dash-hero-top-link {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--d-orange) !important;
-}
-
-.dash-hero-top-status {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--d-text-mid);
 }
 
 .dash-hero-rest {
   border-left-color: var(--d-green);
 }
 
-.dash-hero-label {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--d-orange);
-  margin-bottom: var(--d-space-1);
+/* Header row: date + view plan */
+.dash-hero-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
 }
 
-.dash-hero-rest .dash-hero-label {
+.dash-hero-date {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  color: var(--d-muted);
+}
+
+.dash-hero-rest .dash-hero-date {
   color: var(--d-green);
 }
 
+.dash-hero-view-plan {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--d-text-mid);
+  transition: color 0.12s;
+}
+
+.dash-hero-view-plan:hover {
+  color: var(--d-orange);
+}
+
+/* Workout info row: badge + details */
+.dash-hero-workout {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.dash-hero-workout .dash-type-badge {
+  margin-top: 4px;
+  flex-shrink: 0;
+}
+
+.dash-hero-workout-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
 .dash-hero-title {
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 800;
-  line-height: 1.2;
-  margin-bottom: var(--d-space-1);
+  line-height: 1.15;
   letter-spacing: -0.02em;
+  color: var(--d-text);
+  margin: 0;
 }
 
-.dash-hero-meta {
-  display: flex;
-  gap: var(--d-space-2);
-  align-items: center;
-  color: var(--d-text-mid);
+.dash-hero-metrics {
   font-size: 14px;
-  margin-bottom: var(--d-space-1);
-}
-
-.dash-hero-sep {
-  width: 3px;
-  height: 3px;
-  border-radius: 50%;
-  background: var(--d-muted);
-}
-
-.dash-hero-detail {
-  margin-top: var(--d-space-2);
-  padding: var(--d-space-2);
-  border-radius: var(--d-radius-sm);
-  background: var(--d-raised);
-  font-size: 13px;
   color: var(--d-text-mid);
-  line-height: 1.6;
+  margin: 0;
 }
 
-.dash-hero-actions {
+.dash-hero-desc {
+  font-size: 13px;
+  color: var(--d-muted);
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* Log section */
+.dash-log-section {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--d-border);
+}
+
+.dash-log-header {
   display: flex;
-  gap: var(--d-space-1);
-  margin-top: var(--d-space-2);
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.dash-log-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--d-muted);
+}
+
+.dash-log-strava-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: var(--d-radius-sm);
+  border: 1px solid var(--d-border);
+  background: var(--d-surface);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--d-text);
+  cursor: pointer;
+  transition: all 0.12s;
+}
+
+.dash-log-strava-btn:hover:not(:disabled) {
+  border-color: var(--d-text-mid);
+  background: var(--d-raised);
+}
+
+.dash-log-strava-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.dash-log-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.dash-log-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dash-log-field span {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--d-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.dash-log-field input {
+  padding: 8px 10px;
+  border-radius: var(--d-radius-sm);
+  border: 1px solid var(--d-border);
+  background: var(--d-raised);
+  font-family: inherit;
+  font-size: 14px;
+  color: var(--d-text);
+  width: 100%;
+  transition: border-color 0.12s;
+}
+
+.dash-log-field input:focus {
+  outline: none;
+  border-color: var(--d-orange);
+  background: var(--d-surface);
+}
+
+.dash-log-field input::placeholder {
+  color: var(--d-muted);
+}
+
+.dash-log-sync-note {
+  font-size: 12px;
+  margin-bottom: 12px;
+  padding: 8px 10px;
+  border-radius: var(--d-radius-sm);
+  border: 1px solid var(--d-border);
+}
+
+.dash-log-sync-note.success { color: #0f8a47; background: rgba(15,138,71,0.06); border-color: rgba(15,138,71,0.2); }
+.dash-log-sync-note.error   { color: var(--d-red); background: var(--d-red-soft); border-color: rgba(231,76,60,0.2); }
+.dash-log-sync-note.warning { color: var(--d-amber); background: rgba(243,156,18,0.06); border-color: rgba(243,156,18,0.2); }
+.dash-log-sync-note.info    { color: var(--d-text-mid); background: var(--d-raised); }
+
+.dash-log-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.dash-log-error {
+  font-size: 12px;
+  color: var(--d-red);
+  margin-bottom: 10px;
+}
+
+/* Ghost button (used for secondary/destructive) */
+.dash-btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 14px;
+  border-radius: var(--d-radius-sm);
+  background: transparent;
+  border: none;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--d-text-mid);
+  cursor: pointer;
+  transition: color 0.12s;
+}
+
+.dash-btn-ghost:hover {
+  color: var(--d-text);
+}
+
+.dash-btn-ghost.dash-btn-missed {
+  color: var(--d-red);
+}
+
+.dash-btn-ghost.dash-btn-missed:hover {
+  color: #c0392b;
+}
+
+/* Done / logged state */
+.dash-log-done {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.dash-log-done-badge {
+  font-size: 13px;
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: 999px;
+}
+
+.dash-log-done-badge.status-done {
+  background: var(--d-green-soft);
+  color: var(--d-green);
+}
+
+.dash-log-done-badge.status-missed {
+  background: var(--d-red-soft);
+  color: var(--d-red);
+}
+
+/* Adapt prompt */
+.dash-adapt-prompt {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dash-adapt-message {
+  font-size: 14px;
+  color: var(--d-text-mid);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.dash-adapt-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 /* Buttons — also overrides CompleteWorkoutButton .btn-light */
@@ -554,7 +729,9 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  margin-top: 10px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--d-border);
 }
 
 .dash-adjust-label {
@@ -580,6 +757,22 @@
   background: rgba(29, 78, 216, 0.14);
 }
 
+/* Embedded log inside hero card */
+.dash-hero-log-embedded {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--d-border);
+}
+
+.dash-hero-log-toggle {
+  display: flex;
+  gap: 8px;
+}
+
+.dash-hero-log-embedded .dash-activity-log-sections {
+  margin-top: 16px;
+}
+
 /* Activity log card on dashboard */
 .dash-activity-log-card {
   scroll-margin-top: 90px;
@@ -594,14 +787,7 @@
 }
 
 .dash-activity-log-collapsed {
-  display: grid;
-  gap: 10px;
-}
-
-.dash-activity-log-collapsed p {
-  margin: 0;
-  font-size: 13px;
-  color: var(--d-text-mid);
+  display: flex;
 }
 
 .dash-activity-log-date {
@@ -2208,9 +2394,99 @@
 
 .dash-status-cta {
   margin-left: auto;
+  flex-shrink: 0;
   font-size: 12px;
   font-weight: 700;
   color: var(--d-primary);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  font-family: inherit;
+}
+
+.dash-status-cta:hover {
+  text-decoration: underline;
+}
+
+.dash-status-group {
+  border-bottom: 1px solid var(--d-border-light);
+}
+
+.dash-status-group:last-child {
+  border-bottom: none;
+}
+
+.dash-status-group .dash-status-item {
+  border-bottom: none;
+  padding-bottom: var(--d-space-1);
+}
+
+/* Expanded past-day panel in sidebar */
+.dash-status-log-panel {
+  margin: 4px 0 12px;
+  padding: 12px;
+  background: var(--d-raised);
+  border-radius: var(--d-radius-sm);
+  border: 1px solid var(--d-border);
+}
+
+.dash-status-workout-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--d-border-light);
+}
+
+.dash-status-workout-row .dash-type-badge {
+  flex-shrink: 0;
+  font-size: 10px;
+  padding: 2px 6px;
+}
+
+.dash-status-workout-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dash-status-workout-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--d-text);
+  line-height: 1.3;
+}
+
+.dash-status-workout-metrics {
+  font-size: 12px;
+  color: var(--d-muted);
+}
+
+/* Compact log form inside sidebar past-day panel */
+.dash-status-log-panel .dash-log-section {
+  margin: 0;
+  padding: 0;
+  background: none;
+  border: none;
+}
+
+.dash-status-log-panel .dash-log-fields {
+  grid-template-columns: 1fr;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.dash-status-log-panel .dash-log-actions {
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dash-status-log-panel .dash-btn-primary,
+.dash-status-log-panel .dash-btn-ghost {
+  width: 100%;
+  justify-content: center;
 }
 
 /* ══════════════════════════

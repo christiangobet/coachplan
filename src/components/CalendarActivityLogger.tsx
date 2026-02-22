@@ -158,34 +158,34 @@ export default function CalendarActivityLogger({
     );
   }
 
+  const distUnit = distanceUnitLabel(viewerUnit);
+
   return (
-    <div className="cal-activity-log">
+    <div className="dash-log-section cal-activity-log">
       {!isRestDay && (
-        <>
-          <div className="cal-activity-log-grid">
-            <label>
-              Distance ({distanceUnitLabel(viewerUnit)})
-              <input
-                type="text"
-                inputMode="decimal"
-                value={actualDistance}
-                onChange={(event) => setActualDistance(event.target.value)}
-                placeholder={plannedDistanceHint ? formatDistanceNumber(plannedDistanceHint.value) : 'e.g. 8'}
-              />
-            </label>
-            <label>
-              Duration (min)
-              <input
-                type="text"
-                inputMode="numeric"
-                value={actualDuration}
-                onChange={(event) => setActualDuration(event.target.value)}
-                placeholder={activity.duration ? String(activity.duration) : 'e.g. 45'}
-              />
-            </label>
-          </div>
-          <label className="cal-activity-log-pace">
-            Pace
+        <div className="dash-log-fields">
+          <label className="dash-log-field">
+            <span>Distance ({distUnit})</span>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={actualDistance}
+              onChange={(event) => setActualDistance(event.target.value)}
+              placeholder={plannedDistanceHint ? formatDistanceNumber(plannedDistanceHint.value) : 'e.g. 8'}
+            />
+          </label>
+          <label className="dash-log-field">
+            <span>Duration (min)</span>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={actualDuration}
+              onChange={(event) => setActualDuration(event.target.value)}
+              placeholder={activity.duration ? String(activity.duration) : 'e.g. 45'}
+            />
+          </label>
+          <label className="dash-log-field">
+            <span>Pace</span>
             <input
               type="text"
               value={actualPace}
@@ -193,31 +193,27 @@ export default function CalendarActivityLogger({
               placeholder={viewerUnit === 'KM' ? 'e.g. 4:40 /km' : 'e.g. 7:30 /mi'}
             />
           </label>
-        </>
+        </div>
       )}
       {isRestDay && (
-        <p className="cal-activity-log-hint">
-          Rest day: only completion status is needed.
-        </p>
+        <p className="cal-activity-log-hint">Rest day · only completion status is needed.</p>
       )}
-      <div className="cal-activity-log-actions">
+      {error && <p className="dash-log-error">{error}</p>}
+      {status && <p className="dash-log-sync-note success">{status}</p>}
+      <div className="dash-log-actions">
         <button
           type="button"
-          className="dash-sync-btn"
+          className="dash-btn-primary"
           onClick={submit}
           disabled={busy}
         >
-          {
-            busy
-              ? 'Saving...'
-              : activity.completed
-                ? (isRestDay ? 'Update status' : 'Save actuals')
-                : (isRestDay ? 'Mark rest day done' : 'Complete + Save')
-          }
+          {busy
+            ? 'Saving…'
+            : activity.completed
+              ? (isRestDay ? 'Update status' : 'Save actuals')
+              : (isRestDay ? 'Mark rest day done' : '✓ Complete + Save')}
         </button>
-        {status && <span className="cal-activity-log-status">{status}</span>}
       </div>
-      {error && <span className="cal-day-toggle-error">{error}</span>}
     </div>
   );
 }

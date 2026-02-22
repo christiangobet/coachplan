@@ -18,10 +18,10 @@ import {
 import AthleteSidebar from "@/components/AthleteSidebar";
 import CalendarActivityLogger from "@/components/CalendarActivityLogger";
 import DayCompletionButton from "@/components/DayCompletionButton";
-import WorkoutDetailCard from "@/components/WorkoutDetailCard";
 import ExternalSportIcon from "@/components/ExternalSportIcon";
 import RaceDetailsEditor from "@/components/RaceDetailsEditor";
 import SelectedPlanCookie from "@/components/SelectedPlanCookie";
+import StravaDaySyncButton from "@/components/StravaDaySyncButton";
 import "../dashboard/dashboard.css";
 import "./calendar.css";
 
@@ -306,6 +306,11 @@ export default async function CalendarPage({
     defaultCurrentRole: "ATHLETE"
   });
   const viewerUnits: DistanceUnit = syncedUser.units === "KM" ? "KM" : "MILES";
+
+  const stravaAccount = await prisma.externalAccount.findFirst({
+    where: { userId: user.id, provider: "STRAVA" },
+    select: { id: true }
+  });
 
   const params = (await searchParams) || {};
   const requestedPlanId = typeof params.plan === "string" ? params.plan : "";
@@ -722,26 +727,102 @@ export default async function CalendarPage({
 
         <aside className="dash-right">
           <div id="day-details-card" className="dash-card cal-info-card cal-day-details-card">
-            <div className="dash-card-header">
-              <span className="dash-card-title">Day Details</span>
-            </div>
-            <p className="cal-day-detail-hint">Click any day card in the training log to update this panel.</p>
-            <div className="cal-day-detail-header">
-              <strong>
-                {selectedDate.toLocaleDateString("en-US", {
-                  weekday: "long",
-                  month: "short",
-                  day: "numeric",
-                  year: "numeric"
-                })}
-              </strong>
-              <div className="cal-day-detail-header-badges">
-                {selectedDateKey === dateKey(today) && <span>TODAY</span>}
-                {selectedDayDone && <span className="done">DONE</span>}
-                {selectedDayMissed && <span className="missed">MISSED</span>}
+
+            {/* Header: date + status */}
+            <div className="cal-detail-header">
+              <span className="cal-detail-date">
+                {selectedDateKey === dateKey(today) ? "TODAY · " : ""}
+                {selectedDate.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }).toUpperCase()}
+              </span>
+              <div className="cal-detail-badges">
+                {selectedDayDone && <span className="cal-detail-badge status-done">✓ Done</span>}
+                {selectedDayMissed && <span className="cal-detail-badge status-missed">✗ Missed</span>}
               </div>
             </div>
 
+
+            {/* Planned activities — workout row + log form together, per activity */}
+            {selectedPlanActivities.length === 0 && (
+              <p className="cal-day-empty">No planned activities on this day.</p>
+            )}
+            {selectedPlanActivities.map((activity) => {
+              const plannedDistanceSource = resolveDistanceUnitFromActivity({
+                distanceUnit: activity.distanceUnit,
+                paceTarget: activity.paceTarget,
+                actualPace: activity.actualPace,
+                fallbackUnit: viewerUnits
+              });
+              const syncedSourceDate = parseSyncedSourceDate(activity.notes);
+              const hasSyncedDateMismatch = Boolean(syncedSourceDate && syncedSourceDate !== selectedDateKey);
+              const displayDistance = convertDistanceForDisplay(activity.distance, plannedDistanceSource, viewerUnits);
+              const displayPaceTarget = convertPaceForDisplay(activity.paceTarget, viewerUnits, plannedDistanceSource) || null;
+              const metricParts: string[] = [];
+              if (displayDistance) metricParts.push(`${formatDistanceNumber(displayDistance.value)} ${distanceUnitLabel(viewerUnits)}`);
+              if (activity.duration) metricParts.push(`${activity.duration} min`);
+              if (displayPaceTarget) metricParts.push(`Pace ${displayPaceTarget}`);
+              return (
+                <div key={activity.id} className="cal-activity-section">
+                  <div className="cal-activity-workout-row">
+                    <span className={`dash-type-badge dash-type-${activity.type}`}>
+                      {ACTIVITY_TYPE_ABBR[activity.type] ?? "OTH"}
+                    </span>
+                    <div className="cal-activity-workout-info">
+                      <span className="cal-activity-title">
+                        {activity.title || activity.type}
+                        {activity.completed && <span className="cal-activity-done-chip">✓</span>}
+                      </span>
+                      {metricParts.length > 0 && (
+                        <span className="cal-activity-metrics">{metricParts.join(" · ")}</span>
+                      )}
+                    </div>
+                  </div>
+                  {hasSyncedDateMismatch && syncedSourceDate && (
+                    <p className="cal-day-detail-warning">
+                      Synced activity date {syncedSourceDate} does not match this card day.
+                    </p>
+                  )}
+                  <CalendarActivityLogger
+                    activity={activity}
+                    viewerUnit={viewerUnits}
+                    enabled={selectedIsPastOrToday}
+                    successRedirectHref={dashboardReturnHref}
+                  />
+                </div>
+              );
+            })}
+
+            {/* Logged activities (Strava / external) */}
+            {(selectedIsPastOrToday && selectedExternalLogs.length > 0) && (
+              <div className="cal-day-detail-section">
+                <div className="cal-day-detail-section-header">
+                  <h4>Logged Activities</h4>
+                  {stravaAccount && <StravaDaySyncButton dateISO={selectedDateKey} className="cal-strava-sync-btn" />}
+                </div>
+                {selectedExternalLogs.map((log) => (
+                  <div key={log.id} className="cal-day-detail-item log">
+                    <div className="cal-day-detail-title">
+                      <strong className="cal-day-log-title">
+                        <ExternalSportIcon
+                          provider={log.provider}
+                          sportType={log.sportType}
+                          className="cal-day-log-icon"
+                        />
+                        <span>{log.name}</span>
+                      </strong>
+                      <span>{formatProviderName(log.provider)} · {log.startTimeLabel || formatClock(log.startTime)}</span>
+                    </div>
+                    <div className="cal-day-detail-meta">
+                      <span>{formatDistanceMeters(log.distanceM, viewerUnits)} · {formatDurationSeconds(log.durationSec)}</span>
+                      {log.avgHeartRate ? <span>Avg HR: {log.avgHeartRate} bpm</span> : null}
+                      {log.calories ? <span>Calories: {Math.round(log.calories)}</span> : null}
+                      <span>{log.matchedPlanActivityId ? "Matched to plan activity" : "Not matched yet"}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Day-level close actions */}
             {selectedDayInfo && (
               <DayCompletionButton
                 dayId={selectedDayInfo.dayId}
@@ -756,133 +837,20 @@ export default async function CalendarPage({
               </p>
             )}
 
-            <div className="cal-day-detail-section">
-              <h4>Training Plan</h4>
-              {selectedPlanActivities.length === 0 && (
-                <p className="cal-day-empty">No planned activities on this day.</p>
-              )}
-              <div className="cal-workout-cards">
-                {selectedPlanActivities.map((activity) => {
-                  const plannedDistanceSource = resolveDistanceUnitFromActivity({
-                    distanceUnit: activity.distanceUnit,
-                    paceTarget: activity.paceTarget,
-                    actualPace: activity.actualPace,
-                    fallbackUnit: viewerUnits
-                  });
-                  const actualDistanceSource = resolveDistanceUnitFromActivity({
-                    distanceUnit: activity.distanceUnit,
-                    paceTarget: activity.paceTarget,
-                    actualPace: activity.actualPace,
-                    fallbackUnit: plannedDistanceSource ?? viewerUnits,
-                    preferActualPace: true
-                  });
-                  const syncedSourceDate = parseSyncedSourceDate(activity.notes);
-                  const hasSyncedDateMismatch = Boolean(
-                    syncedSourceDate && syncedSourceDate !== selectedDateKey
-                  );
-                  const displayNotes = hasSyncedDateMismatch
-                    ? stripSyncTagLine(activity.notes)
-                    : activity.notes;
-
-                  const displayDistance = convertDistanceForDisplay(
-                    activity.distance,
-                    plannedDistanceSource,
-                    viewerUnits
-                  );
-                  const displayActualDistance = convertDistanceForDisplay(
-                    activity.actualDistance,
-                    actualDistanceSource,
-                    viewerUnits
-                  );
-                  const displayPaceTarget = convertPaceForDisplay(
-                    activity.paceTarget,
-                    viewerUnits,
-                    plannedDistanceSource
-                  ) || undefined;
-                  const displayActualPace = convertPaceForDisplay(
-                    activity.actualPace,
-                    viewerUnits,
-                    actualDistanceSource
-                  ) || undefined;
-
-                  return (
-                    <div key={activity.id}>
-                      <WorkoutDetailCard
-                        title={activity.title}
-                        type={activity.type}
-                        subtype={activity.subtype ?? undefined}
-                        distance={displayDistance?.value ?? undefined}
-                        distanceUnit={viewerUnits}
-                        duration={activity.duration ?? undefined}
-                        paceTarget={displayPaceTarget}
-                        effortTarget={activity.effortTarget ?? undefined}
-                        notes={displayNotes ?? undefined}
-                        priority={activity.priority ?? "MEDIUM"}
-                        completed={activity.completed}
-                        completedAt={activity.completedAt ?? undefined}
-                        actualDistance={displayActualDistance?.value ?? undefined}
-                        actualDuration={activity.actualDuration ?? undefined}
-                        actualPace={displayActualPace}
-                        footer={
-                          <>
-                            {hasSyncedDateMismatch && syncedSourceDate && (
-                              <p className="cal-day-detail-warning" style={{ marginBottom: 8 }}>
-                                Synced activity date {syncedSourceDate} does not match this card day.
-                              </p>
-                            )}
-                            <CalendarActivityLogger
-                              activity={activity}
-                              viewerUnit={viewerUnits}
-                              enabled={selectedIsPastOrToday}
-                              successRedirectHref={dashboardReturnHref}
-                            />
-                          </>
-                        }
-                      />
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="cal-day-detail-section">
-              <h4>Logged Activities</h4>
-              {!selectedIsPastOrToday && (
-                <p className="cal-day-empty">Future day. Logs will appear after the activity date.</p>
-              )}
-              {selectedIsPastOrToday && selectedExternalLogs.length === 0 && (
-                <p className="cal-day-empty">No synced external logs for this day.</p>
-              )}
-              {selectedIsPastOrToday && selectedExternalLogs.map((log) => (
-                <div key={log.id} className="cal-day-detail-item log">
-                  <div className="cal-day-detail-title">
-                    <strong className="cal-day-log-title">
-                      <ExternalSportIcon
-                        provider={log.provider}
-                        sportType={log.sportType}
-                        className="cal-day-log-icon"
-                      />
-                      <span>{log.name}</span>
-                    </strong>
-                    <span>{formatProviderName(log.provider)} · {log.startTimeLabel || formatClock(log.startTime)}</span>
-                  </div>
-                  <div className="cal-day-detail-meta">
-                    <span>{formatDistanceMeters(log.distanceM, viewerUnits)} · {formatDurationSeconds(log.durationSec)}</span>
-                    {log.avgHeartRate ? <span>Avg HR: {log.avgHeartRate} bpm</span> : null}
-                    {log.calories ? <span>Calories: {Math.round(log.calories)}</span> : null}
-                    <span>{log.matchedPlanActivityId ? "Matched to plan activity" : "Not matched yet"}</span>
-                  </div>
+            {/* Empty state: no external logs (past/today only) */}
+            {selectedIsPastOrToday && selectedExternalLogs.length === 0 && (
+              <div className="cal-day-detail-section">
+                <div className="cal-day-detail-section-header">
+                  <h4>Logged Activities</h4>
+                  {stravaAccount && <StravaDaySyncButton dateISO={selectedDateKey} className="cal-strava-sync-btn" />}
                 </div>
-              ))}
-            </div>
-            {selectedDayInfo && (
-              <div className="cal-mobile-day-done">
-                <DayCompletionButton
-                  dayId={selectedDayInfo.dayId}
-                  status={selectedDayStatus}
-                  missedReason={selectedDayInfo.missedReason}
-                  successRedirectHref={dashboardReturnHref}
-                />
+                <p className="cal-day-empty">No synced external logs for this day.</p>
+              </div>
+            )}
+            {!selectedIsPastOrToday && (
+              <div className="cal-day-detail-section">
+                <h4>Logged Activities</h4>
+                <p className="cal-day-empty">Future day. Logs will appear after the activity date.</p>
               </div>
             )}
           </div>

@@ -18,7 +18,8 @@ import {
 import AthleteSidebar from "@/components/AthleteSidebar";
 import StravaSyncPanel from "@/components/StravaSyncPanel";
 import SelectedPlanCookie from "@/components/SelectedPlanCookie";
-import DashboardActivityLogCard from "@/components/DashboardActivityLogCard";
+import DashboardActivityLogCard, { type LogActivity } from "@/components/DashboardActivityLogCard";
+import DashboardTrainingLogStatus, { type StatusFeedItem } from "@/components/DashboardTrainingLogStatus";
 import "./dashboard.css";
 
 const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -114,6 +115,32 @@ function buildPlannedMetricParts(activity: any, viewerUnits: DistanceUnit) {
   }
 
   return parts;
+}
+
+function buildLogActivities(rawActivities: any[], viewerUnits: DistanceUnit): LogActivity[] {
+  return [...rawActivities]
+    .sort((a, b) => (a.type === "REST" ? 1 : 0) - (b.type === "REST" ? 1 : 0))
+    .map((activity) => {
+      const plannedSourceUnit = resolveActivityDistanceSourceUnit(activity, viewerUnits);
+      const actualSourceUnit = resolveActivityDistanceSourceUnit(activity, viewerUnits, true);
+      const displayPlannedDistance = convertDistanceForDisplay(activity.distance, plannedSourceUnit, viewerUnits);
+      const displayActualDistance = convertDistanceForDisplay(activity.actualDistance, actualSourceUnit, viewerUnits);
+      const displayActualPace = convertPaceForDisplay(activity.actualPace, viewerUnits, actualSourceUnit);
+      return {
+        id: activity.id,
+        title: activity.title || null,
+        type: activity.type || "OTHER",
+        completed: Boolean(activity.completed),
+        plannedDetails: buildPlannedMetricParts(activity, viewerUnits),
+        plannedNotes: typeof activity.rawText === "string" && activity.rawText.trim() ? activity.rawText.trim() : null,
+        paceCategory: typeof activity.paceTargetBucket === "string" && activity.paceTargetBucket.trim() ? formatType(activity.paceTargetBucket) : null,
+        plannedDistance: displayPlannedDistance?.value ?? null,
+        plannedDuration: activity.duration ?? null,
+        actualDistance: displayActualDistance?.value ?? null,
+        actualDuration: activity.actualDuration ?? null,
+        actualPace: displayActualPace || null,
+      };
+    });
 }
 
 export default async function DashboardPage({
@@ -442,7 +469,17 @@ export default async function DashboardPage({
           return {
             alert: true,
             text: `${dayLabel} · Pending`,
-            href: DASH_ACTIVITY_LOG_ANCHOR
+            logDay: dayDate ? {
+              dayId: day.id,
+              dateISO: toDateKey(dayDate),
+              dateLabel: dayLabel,
+              planId: activePlan.id,
+              viewerUnits,
+              activities: buildLogActivities(activities, viewerUnits),
+              initialDayStatus: dayStatus,
+              initialMissedReason: getDayMissedReason(day.notes),
+              stravaConnected: Boolean(stravaAccount),
+            } : undefined,
           };
         }
         return {
@@ -454,7 +491,7 @@ export default async function DashboardPage({
     : [];
 
   /* Status items */
-  const statusItems: { alert: boolean; text: string; href?: string | null }[] = [];
+  const statusItems: StatusFeedItem[] = [];
   for (const day of weekDays) {
     const dayStatus = getDayStatus(day.notes);
     if (dayStatus === 'DONE') {
@@ -482,7 +519,6 @@ export default async function DashboardPage({
         statusItems.push({
           alert: true,
           text: `Missed ${a.title || a.type}`,
-          href: DASH_ACTIVITY_LOG_ANCHOR
         });
       }
     }
@@ -527,44 +563,17 @@ export default async function DashboardPage({
     : todayDayStatus === 'MISSED'
       ? 'Day closed as missed'
       : 'Ready to log';
+  const heroStatusClass = todayDayStatus === 'DONE'
+    ? 'dash-hero-top-status dash-hero-top-status--done'
+    : todayDayStatus === 'MISSED'
+      ? 'dash-hero-top-status dash-hero-top-status--missed'
+      : 'dash-hero-top-status dash-hero-top-status--open';
   const logDayCtaLabel = todayDayStatus === 'OPEN' ? 'Log Day' : 'Review Day Log';
-  const todayLogActivities = [...todayActivities]
-    .sort((a, b) => {
-      const aRest = a.type === "REST" ? 1 : 0;
-      const bRest = b.type === "REST" ? 1 : 0;
-      return aRest - bRest;
-    })
-    .map((activity) => {
-      const plannedSourceUnit = resolveActivityDistanceSourceUnit(activity, viewerUnits);
-      const actualSourceUnit = resolveActivityDistanceSourceUnit(activity, viewerUnits, true);
-      const displayPlannedDistance = convertDistanceForDisplay(activity.distance, plannedSourceUnit, viewerUnits);
-      const displayActualDistance = convertDistanceForDisplay(activity.actualDistance, actualSourceUnit, viewerUnits);
-      const displayActualPace = convertPaceForDisplay(activity.actualPace, viewerUnits, actualSourceUnit);
-      const paceCategory = typeof activity.paceTargetBucket === 'string' && activity.paceTargetBucket.trim()
-        ? formatType(activity.paceTargetBucket)
-        : null;
-      const plannedNotes = typeof activity.rawText === 'string' && activity.rawText.trim()
-        ? activity.rawText.trim()
-        : null;
-      return {
-        id: activity.id,
-        title: activity.title || null,
-        type: activity.type || 'OTHER',
-        completed: Boolean(activity.completed),
-        plannedDetails: buildPlannedMetricParts(activity, viewerUnits),
-        plannedNotes,
-        paceCategory,
-        plannedDistance: displayPlannedDistance?.value ?? null,
-        plannedDuration: activity.duration ?? null,
-        actualDistance: displayActualDistance?.value ?? null,
-        actualDuration: activity.actualDuration ?? null,
-        actualPace: displayActualPace || null
-      };
-    });
+  const todayLogActivities = buildLogActivities(todayActivities, viewerUnits);
   const todayPlannedMetricParts = todayActivity
     ? buildPlannedMetricParts(todayActivity, viewerUnits)
     : [];
-  const todayMetaLine = [formatPlannedDate(today), ...todayPlannedMetricParts].join(" · ");
+  const todayMetaLine = todayPlannedMetricParts.join(" · ");
   const upcomingHeroMetricParts = upcomingHero
     ? buildPlannedMetricParts(upcomingHero, viewerUnits)
     : [];
@@ -633,68 +642,47 @@ export default async function DashboardPage({
 
           {/* Today's workout hero */}
           <div className={`dash-hero${isRestDay ? " dash-hero-rest" : ""}`}>
-            <div className="dash-hero-top">
-              <span className="dash-hero-chip">Up Next</span>
-              <span className="dash-hero-top-status">{heroStatusText}</span>
+            {/* Header: date + view plan link */}
+            <div className="dash-hero-header">
+              <span className="dash-hero-date">TODAY · {dateStr.toUpperCase()}</span>
+              <a className="dash-hero-view-plan" href={`/plans/${activePlan.id}`}>View Plan →</a>
             </div>
-            <div className="dash-hero-label">TODAY · {dateStr}</div>
-            {todayActivity && (
-              <span className={`dash-type-badge dash-type-${todayActivity.type}`}>
-                <span title={formatType(todayActivity.type)}>{typeAbbr(todayActivity.type)}</span>
-              </span>
-            )}
-            <h2 className="dash-hero-title">
-              {todayActivity?.title || "Recovery & Rest"}
-            </h2>
-            <div className="dash-hero-meta">
-              <span>{todayMetaLine}</span>
-              {todayPlannedMetricParts.length === 0 && (
-                <>
-                  <span className="dash-hero-sep" />
-                  <span>{todayActivity ? "Follow plan notes" : "No workout scheduled on today's plan date"}</span>
-                </>
-              )}
-            </div>
-            {todayActivity?.rawText && (
-              <div className="dash-hero-detail">{todayActivity.rawText}</div>
-            )}
-            <div className="dash-hero-actions">
-              <Link className="dash-btn-primary" href={todayLogHref}>
-                {logDayCtaLabel}
-              </Link>
-              <a className="dash-btn-secondary" href={`/plans/${activePlan.id}`}>
-                View Plan
-              </a>
-            </div>
-            <div className="dash-adjust-actions">
-              <span className="dash-adjust-label">Need to adapt?</span>
-              <a className="dash-adjust-link" href={buildAiAdjustHref(activePlan.id, "I missed today's workout. Rebalance this week safely.")}>
-                I missed this
-              </a>
-              <a className="dash-adjust-link" href={buildAiAdjustHref(activePlan.id, "I'm feeling extra tired this week. Suggest a lower-load adjustment.")}>
-                Low energy
-              </a>
-              <a className="dash-adjust-link" href={buildAiAdjustHref(activePlan.id, "I'm traveling and have limited training time. Adjust this week.")}>
-                Traveling
-              </a>
-              <a className="dash-adjust-link" href={buildAiAdjustHref(activePlan.id, "Replace today's workout with an equivalent option.")}>
-                Swap workout
-              </a>
-            </div>
-          </div>
 
-          <DashboardActivityLogCard
-            anchorId="dash-activity-log-card"
-            dateLabel={`Today · ${dateStr}`}
-            dateISO={todayLogDateISO}
-            planId={activePlan.id}
-            dayId={todayDay?.id || null}
-            viewerUnits={viewerUnits}
-            activities={todayLogActivities}
-            initialDayStatus={todayDayStatus}
-            initialMissedReason={todayDayMissedReason}
-            stravaConnected={Boolean(stravaAccount)}
-          />
+            {/* Workout info */}
+            <div className="dash-hero-workout">
+              {todayActivity && (
+                <span className={`dash-type-badge dash-type-${todayActivity.type}`}>
+                  {typeAbbr(todayActivity.type)}
+                </span>
+              )}
+              <div className="dash-hero-workout-info">
+                <h2 className="dash-hero-title">
+                  {todayActivity?.title || "Recovery & Rest"}
+                </h2>
+                {todayPlannedMetricParts.length > 0 && (
+                  <p className="dash-hero-metrics">{todayMetaLine}</p>
+                )}
+                {todayActivity?.rawText && (
+                  <p className="dash-hero-desc">{todayActivity.rawText}</p>
+                )}
+              </div>
+            </div>
+
+            {/* Inline log section */}
+            <DashboardActivityLogCard
+              anchorId="dash-activity-log-card"
+              dateLabel={`Today · ${dateStr}`}
+              dateISO={todayLogDateISO}
+              planId={activePlan.id}
+              dayId={todayDay?.id || null}
+              viewerUnits={viewerUnits}
+              activities={todayLogActivities}
+              initialDayStatus={todayDayStatus}
+              initialMissedReason={todayDayMissedReason}
+              stravaConnected={Boolean(stravaAccount)}
+              embedded
+            />
+          </div>
 
           {/* Upcoming workouts */}
           <div className="dash-card">
@@ -837,22 +825,7 @@ export default async function DashboardPage({
             <div className="dash-card-header">
               <span className="dash-card-title">Training Log Status</span>
             </div>
-            <div className="dash-status-feed">
-              {statusFeedItems.map((s, i) => (
-                s.href ? (
-                  <Link className="dash-status-item dash-status-item-link" href={s.href} key={i}>
-                    <span className={`dash-status-dot ${s.alert ? "warn" : "ok"}`} />
-                    <span>{s.text}</span>
-                    <span className="dash-status-cta">Open log card</span>
-                  </Link>
-                ) : (
-                  <div className="dash-status-item" key={i}>
-                    <span className={`dash-status-dot ${s.alert ? "warn" : "ok"}`} />
-                    <span>{s.text}</span>
-                  </div>
-                )
-              ))}
-            </div>
+            <DashboardTrainingLogStatus items={statusFeedItems} />
           </div>
 
           <div className="dash-card dash-week-snapshot">
