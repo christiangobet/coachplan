@@ -1411,4 +1411,46 @@
   .cal-strava-pill {
     padding: 1px 6px;
   }
+
+  /* Day-details card — compact on mobile */
+  .cal-detail-header {
+    padding: 12px 14px 10px;
+  }
+
+  .cal-detail-date {
+    font-size: 15px;
+  }
+
+  .cal-activity-section {
+    padding: 10px 14px;
+  }
+
+  .cal-activity-workout-row {
+    padding: 8px 10px;
+    gap: 8px;
+  }
+
+  .cal-activity-title {
+    font-size: 14px;
+  }
+
+  .cal-activity-metrics {
+    font-size: 12px;
+  }
+
+  .cal-activity-section .dash-log-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .cal-activity-section .dash-log-fields .dash-log-field:last-child {
+    grid-column: auto;
+  }
+
+  .cal-day-details-card .cal-day-toggle {
+    padding: 10px 14px;
+  }
+
+  .cal-day-detail-section {
+    padding: 10px 14px;
+  }
 }
