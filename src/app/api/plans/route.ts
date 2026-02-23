@@ -8,6 +8,8 @@ import { createHash } from 'crypto';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { parseWeekWithAI, maybeRunParserV4 } from '@/lib/ai-plan-parser';
+import { extractPlanGuide } from '@/lib/ai-guide-extractor';
+import { extractPdfText } from '@/lib/pdf/extract-text';
 import { FLAGS } from '@/lib/feature-flags';
 import { populatePlanFromV4 } from '@/lib/parsing/v4-to-plan';
 import { alignWeeksToRaceDate } from '@/lib/clone-plan';
@@ -2111,6 +2113,28 @@ export async function POST(req: Request) {
         }
       }
 
+      // Pass 1: Extract plan guide from full PDF text for context-aware week parsing.
+      // This runs async and never blocks the upload — failures are swallowed inside extractPlanGuide.
+      let planGuide = '';
+      if (ENABLE_AI_WEEK_PARSE) {
+        try {
+          const { fullText: pdfFullText } = await extractPdfText(buffer);
+          planGuide = await extractPlanGuide(pdfFullText);
+        } catch {
+          planGuide = '';
+        }
+        if (planGuide) {
+          try {
+            await prisma.trainingPlan.update({
+              where: { id: plan.id },
+              data: { planGuide }
+            });
+          } catch (guideErr) {
+            console.error('[extractPlanGuide] Failed to save planGuide (non-fatal):', guideErr instanceof Error ? guideErr.message : String(guideErr));
+          }
+        }
+      }
+
       if (!(FLAGS.PARSER_V4_PRIMARY && v4Data)) {
 
       const parsed = await withTimeout(
@@ -2201,6 +2225,7 @@ export async function POST(req: Request) {
                 weekNumber: i + 1,
                 days: aiInputDays,
                 legend: parsed?.glossary?.note || undefined,
+                planGuide: planGuide || undefined,
                 programProfile,
                 model: AI_WEEK_PARSE_MODEL
               }),
