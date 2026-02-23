@@ -158,6 +158,7 @@ export async function parseWeekWithAI(args: {
   weekNumber: number;
   days: Record<string, string>;
   legend?: string;
+  planGuide?: string;
   programProfile?: ProgramDocumentProfile;
   model?: string;
 }) {
@@ -179,7 +180,7 @@ export async function parseWeekWithAI(args: {
     "Decode abbreviations (WU, CD, T, I, LR, LRL, E, XT, STR, RST, MOB, YOG, HIK, RP, MP, NS).",
     "Interpret ★ as must_do and ♥ as bail_allowed.",
     "Preserve raw_text exactly as written in each cell when possible.",
-    "Also provide instruction_text as plain, readable coaching text with abbreviations expanded.",
+    "Also provide instruction_text as plain, readable coaching text with abbreviations expanded. Use the plan context guide to resolve abbreviations in raw cells and write detailed instruction_text.",
     "Infer session_type and primary_sport when possible (leave null when uncertain).",
     "Use target_intensity.type/value for explicit pace/heart-rate/RPE targets when present.",
     "For days where the raw cell is empty, return zero activities.",
@@ -188,6 +189,7 @@ export async function parseWeekWithAI(args: {
       ? `Program context (hints only; raw cells win if they conflict):\n${JSON.stringify(args.programProfile, null, 2)}`
       : "",
     args.legend ? `Legend:\n${args.legend}` : "",
+    args.planGuide ? `Plan context guide (use to resolve abbreviations and expand instructions):\n${args.planGuide}` : "",
     `Week ${args.weekNumber} raw cells:`,
     JSON.stringify(args.days, null, 2)
   ]
