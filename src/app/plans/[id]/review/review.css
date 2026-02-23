@@ -380,6 +380,11 @@
   color: #b42318;
 }
 
+.review-error-inline {
+  padding: 4px 0;
+  font-size: 12px;
+}
+
 .review-muted {
   color: #64748b;
 }

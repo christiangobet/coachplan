@@ -190,6 +190,7 @@ DISTANCES — always extract a numeric value when present:
 - Store in BOTH fields when you can convert: 6 miles → distance_miles=6, distance_km=9.66
 - Distance MUST be a number. Never leave it null if the text contains a distance.
 - Phrases like "trail miles", "road miles", "easy miles" still contain a distance — extract it.
+- RANGE DISTANCES: When distance is a range (e.g. "4-5 miles", "8-10 km"), use the UPPER bound as the distance value. Example: "4-5 miles" → distance_miles=5.
 
 DURATIONS:
 "40 mins" → duration_minutes=40
@@ -219,6 +220,8 @@ steps = [
   {"type":"Interval","repeat":4},
   {"type":"CoolDown"}
 ]
+
+WARMUP/COOLDOWN RULE: When a session is structured as Warmup + quality effort + Cooldown (e.g. "1mi WU, 4-5mi Tempo, 1mi CD"), keep it as ONE session. Set distance_miles/distance_km to the quality segment distance only (NOT total distance). Set intensity and session_role to reflect the quality effort (e.g. session_role="Tempo Run"). Put the full structure in steps. Example: "1mi WU, 4-5mi Tempo, 1mi CD" → distance_miles=5, session_role="Tempo Run", intensity="Tempo pace".
 
 --------------------------------------------------
 STEP 7 — GLOBAL RULE EXTRACTION

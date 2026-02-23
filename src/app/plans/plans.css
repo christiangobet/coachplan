@@ -440,6 +440,126 @@
   align-self: start;
 }
 
+/* ── Sidebar tab switcher ── */
+.pcal-sidebar-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 6px 6px 0;
+  background: var(--d-raised);
+  border: 1px solid var(--d-border);
+  border-bottom: none;
+  border-radius: 16px 16px 0 0;
+}
+
+.pcal-sidebar-tab {
+  flex: 1;
+  padding: 8px 10px;
+  font: 600 13px/1 'Figtree', sans-serif;
+  color: var(--d-muted);
+  background: none;
+  border: none;
+  border-radius: 10px 10px 0 0;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+  white-space: nowrap;
+}
+
+.pcal-sidebar-tab:hover {
+  color: var(--d-text);
+}
+
+.pcal-sidebar-tab.active {
+  color: var(--d-orange);
+  background: var(--d-bg);
+}
+
+/* ── Plan Guide panel ── */
+.pcal-guide-panel {
+  background: var(--d-raised);
+  border: 1px solid var(--d-border);
+  border-top: none;
+  border-radius: 0 0 16px 16px;
+  max-height: calc(100vh - 150px);
+  overflow-y: auto;
+  padding: 8px 4px 16px;
+}
+
+.pcal-guide-section {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--d-border-light);
+}
+
+.pcal-guide-section:last-child {
+  border-bottom: none;
+}
+
+.pcal-guide-section-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font: 700 11px/1.3 'Figtree', sans-serif;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--d-text-mid);
+  margin: 0 0 8px;
+}
+
+.pcal-guide-icon {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.pcal-guide-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 5px;
+}
+
+.pcal-guide-item {
+  font: 400 13px/1.5 'Figtree', sans-serif;
+  color: var(--d-text);
+  padding-left: 14px;
+  position: relative;
+}
+
+.pcal-guide-item::before {
+  content: '–';
+  position: absolute;
+  left: 0;
+  color: var(--d-muted);
+}
+
+/* Glossary items: make the key bold */
+.pcal-guide-glossary .pcal-guide-item {
+  font-size: 12.5px;
+}
+
+/* Pace zones: orange accent on value */
+.pcal-guide-paces .pcal-guide-item {
+  font-size: 12.5px;
+}
+
+.pcal-guide-empty {
+  padding: 16px;
+  font-size: 13px;
+  color: var(--d-muted);
+  text-align: center;
+}
+
+/* When tabs are present, attach the AI trainer card to the tab bar */
+.pcal-sidebar-tabs + .pcal-guide-panel + .pcal-ai-trainer,
+.pcal-sidebar-tabs + .pcal-ai-trainer {
+  margin-top: 0;
+  border-radius: 0 0 var(--d-radius) var(--d-radius);
+}
+
+/* muted text variant for activity modal */
+.pcal-modal-text-muted {
+  color: var(--d-muted);
+}
+
 .pcal-side {
   position: sticky;
   top: 88px;

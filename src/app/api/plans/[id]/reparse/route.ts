@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
+import { ActivityType } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { parseWeekWithAI } from '@/lib/ai-plan-parser';
 import {
@@ -7,6 +8,17 @@ import {
   extractEffortTargetFromText,
   deriveStructuredIntensityTargets
 } from '@/lib/intensity-targets';
+
+const PARSED_TYPE_MAP: Record<string, ActivityType> = {
+  run: ActivityType.RUN,
+  strength: ActivityType.STRENGTH,
+  cross_train: ActivityType.CROSS_TRAIN,
+  rest: ActivityType.REST,
+  mobility: ActivityType.MOBILITY,
+  yoga: ActivityType.YOGA,
+  hike: ActivityType.HIKE,
+  other: ActivityType.OTHER
+};
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
@@ -50,7 +62,6 @@ export async function POST(
           }
         }
       },
-      sourceDocument: true
     }
   });
 
@@ -60,13 +71,6 @@ export async function POST(
 
   if (plan.ownerId !== userId && plan.athleteId !== userId) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
-
-  if (!plan.sourceDocument) {
-    return NextResponse.json(
-      { error: 'No source document found — cannot re-parse without original PDF' },
-      { status: 400 }
-    );
   }
 
   const planGuide = plan.planGuide ?? undefined;
@@ -83,7 +87,7 @@ export async function POST(
       days[key] = '';
     }
     for (const day of week.days) {
-      const key = DAY_KEYS[day.dayOfWeek] ?? null;
+      const key = DAY_KEYS[day.dayOfWeek - 1] ?? null;
       if (key) {
         days[key] = day.rawText ?? '';
       }
@@ -111,7 +115,7 @@ export async function POST(
 
     // Merge parsed activities into existing activities per day
     for (const day of week.days) {
-      const key = DAY_KEYS[day.dayOfWeek] ?? null;
+      const key = DAY_KEYS[day.dayOfWeek - 1] ?? null;
       if (!key) continue;
 
       const parsedDay = parsedWeek.days?.[key];
@@ -152,7 +156,9 @@ export async function POST(
         });
 
         // Build the update payload — never touch athlete-owned fields
+        const mappedType = parsed.type ? PARSED_TYPE_MAP[parsed.type as string] : undefined;
         const updateData: {
+          type?: ActivityType;
           title?: string;
           rawText?: string | null;
           sessionInstructions?: string | null;
@@ -171,6 +177,7 @@ export async function POST(
           effortTargetBpmMax?: typeof structuredTargets.effortTargetBpmMax;
         } = {};
 
+        if (mappedType) updateData.type = mappedType;
         if (parsed.title && parsed.title.trim()) {
           updateData.title = parsed.title.trim();
         }

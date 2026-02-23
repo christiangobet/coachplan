@@ -63,7 +63,7 @@ const WEEK_SCHEMA = {
       activity: {
         type: "object",
         additionalProperties: false,
-        required: ["type", "title", "raw_text"],
+        required: ["type", "title", "raw_text", "instruction_text"],
         properties: {
           type: {
             type: "string",
@@ -184,6 +184,8 @@ export async function parseWeekWithAI(args: {
     "Infer session_type and primary_sport when possible (leave null when uncertain).",
     "Use target_intensity.type/value for explicit pace/heart-rate/RPE targets when present.",
     "For days where the raw cell is empty, return zero activities.",
+    "WARMUP/COOLDOWN RULE: When a cell describes a structured workout with a Warmup + quality effort + Cooldown (e.g. '1mi WU, 4mi Tempo, 1mi CD'), create ONE activity. Classify it by the quality effort (e.g. session_type='tempo'). Set metrics.distance and target_intensity to the quality segment only — NOT the total session distance. Put the full session structure in instruction_text.",
+    "RANGE RULE: When distance or duration is given as a range (e.g. '4-5 miles', '8-10 km', '40-50 min'), always use the UPPER bound as the numeric value (5 miles, 10 km, 50 min).",
     `Plan name: ${args.planName}`,
     args.programProfile
       ? `Program context (hints only; raw cells win if they conflict):\n${JSON.stringify(args.programProfile, null, 2)}`

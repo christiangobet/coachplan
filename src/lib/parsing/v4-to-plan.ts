@@ -7,6 +7,7 @@
 import { prisma } from '@/lib/prisma';
 import { ActivityType, Units } from '@prisma/client';
 import type { ProgramJsonV1 } from '@/lib/schemas/program-json-v1';
+import type { ProgramDocumentProfile } from '@/lib/plan-document-profile';
 import {
   deriveStructuredIntensityTargets,
   extractEffortTargetFromText,
@@ -163,14 +164,122 @@ export async function populatePlanFromV4(
     }
   }
 
+  // Derive parseProfile from V4 data so the review page profile card shows correctly
+  const parseProfile = buildProfileFromV4(data, sortedWeeks);
+
   // Update plan metadata from V4 program object
   await prisma.trainingPlan.update({
     where: { id: planId },
     data: {
       weekCount: sortedWeeks.length,
+      parseProfile,
       status: 'DRAFT'
     }
   });
 
   return { weeksCreated: sortedWeeks.length, activitiesCreated };
+}
+
+function buildProfileFromV4(
+  data: ProgramJsonV1,
+  sortedWeeks: ProgramJsonV1['weeks']
+): ProgramDocumentProfile {
+  const meta = data.program;
+  const planLengthWeeks = meta?.plan_length_weeks ?? sortedWeeks.length;
+
+  // days_per_week: median unique training days per week (max 7)
+  const sessionCountsPerWeek = sortedWeeks.map((w) => {
+    const activeDays = new Set(
+      (w.sessions || [])
+        .filter((s) => s.activity_type !== 'Rest' && s.day_of_week)
+        .map((s) => s.day_of_week)
+    );
+    return activeDays.size;
+  });
+  const sorted = [...sessionCountsPerWeek].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  const daysPerWeek = sorted.length ? (sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid]) : 0;
+
+  // units
+  const srcUnits = meta?.source_units;
+  const units: ProgramDocumentProfile['units'] = srcUnits === 'km' ? 'km' : srcUnits === 'miles' ? 'miles' : 'unknown';
+
+  // distance_type
+  const distTarget = meta?.distance_target;
+  const distanceTypeMap: Record<string, ProgramDocumentProfile['distance_type']> = {
+    '5K': '5K', '10K': '10K', 'HALF': 'HALF', 'MARATHON': 'MARATHON', 'ULTRA': 'BASE'
+  };
+  const distanceType: ProgramDocumentProfile['distance_type'] = distTarget ? (distanceTypeMap[distTarget] ?? 'CUSTOM') : 'UNKNOWN';
+
+  // intensity_model: scan intensity strings
+  let hasPace = false, hasHr = false, hasRpe = false;
+  for (const week of sortedWeeks) {
+    for (const session of week.sessions || []) {
+      const txt = (session.intensity || session.raw_text || '').toLowerCase();
+      if (/\d+:\d{2}/.test(txt) || /min\/km|min\/mi|pace/.test(txt)) hasPace = true;
+      if (/\d+\s*bpm|hr|heart rate|%\s*max/.test(txt)) hasHr = true;
+      if (/rpe|effort|easy|moderate|hard|zone/.test(txt)) hasRpe = true;
+    }
+  }
+  const intensityModel: ProgramDocumentProfile['intensity_model'] =
+    hasPace && hasHr ? 'hybrid' : hasPace ? 'pace' : hasHr ? 'hr' : hasRpe ? 'rpe' : 'unknown';
+
+  // quality flags
+  let hasIntervals = false, hasTempo = false, hasHills = false, hasStrides = false, hasStrength = false, hasCrossTraining = false;
+  for (const week of sortedWeeks) {
+    for (const session of week.sessions || []) {
+      const txt = (session.session_role || session.raw_text || session.intensity || '').toLowerCase();
+      if (/interval|repeat|rep/.test(txt)) hasIntervals = true;
+      if (/tempo|threshold/.test(txt)) hasTempo = true;
+      if (/hill|incline/.test(txt)) hasHills = true;
+      if (/stride/.test(txt)) hasStrides = true;
+      if (session.activity_type === 'Strength') hasStrength = true;
+      if (session.activity_type === 'CrossTraining') hasCrossTraining = true;
+    }
+  }
+
+  // peak week km & taper
+  const weeklyKm = sortedWeeks.map((w) =>
+    (w.sessions || []).reduce((sum, s) => sum + (s.distance_km ?? (s.distance_miles ? s.distance_miles * 1.60934 : 0)), 0)
+  );
+  const peakWeekKm = weeklyKm.length ? Math.max(...weeklyKm) : null;
+  const peakLongRunKm = (() => {
+    let max = 0;
+    for (const week of sortedWeeks) {
+      for (const s of week.sessions || []) {
+        const km = s.distance_km ?? (s.distance_miles ? s.distance_miles * 1.60934 : 0);
+        if (km > max) max = km;
+      }
+    }
+    return max || null;
+  })();
+  const taperWeeks = sortedWeeks.filter((w) => w.week_type === 'taper').length || null;
+
+  // structure_tags
+  const structureTags: string[] = [];
+  if (sortedWeeks.some((w) => w.week_type === 'cutback')) structureTags.push('cutback_weeks');
+  if (taperWeeks) structureTags.push('taper');
+  if (distTarget === 'MARATHON') structureTags.push('marathon');
+  else if (distTarget === 'HALF') structureTags.push('half_marathon');
+
+  return {
+    plan_length_weeks: planLengthWeeks ?? sortedWeeks.length,
+    days_per_week: Math.min(Math.round(daysPerWeek), 7),
+    distance_type: distanceType,
+    intensity_model: intensityModel,
+    units,
+    language_hint: 'en',
+    includes_quality: {
+      intervals: hasIntervals,
+      tempo: hasTempo,
+      hills: hasHills,
+      strides: hasStrides,
+      strength: hasStrength,
+      cross_training: hasCrossTraining
+    },
+    peak_week_km: peakWeekKm && peakWeekKm > 0 ? Math.round(peakWeekKm * 10) / 10 : null,
+    peak_long_run_km: peakLongRunKm && peakLongRunKm > 0 ? Math.round(peakLongRunKm * 10) / 10 : null,
+    taper_weeks: taperWeeks,
+    structure_tags: structureTags
+  };
 }

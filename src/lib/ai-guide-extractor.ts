@@ -36,11 +36,14 @@ GENERAL INSTRUCTIONS
 /**
  * Extract a structured Plan Context Document from the full PDF text.
  *
- * Returns a plain-text guide string. Returns an empty string if the call fails
- * or no AI provider is configured — never throws.
+ * With throwOnError=false (default): returns "" on failure — safe for upload flows.
+ * With throwOnError=true: throws on failure — use when caller needs the error message.
  */
-export async function extractPlanGuide(rawText: string): Promise<string> {
-  if (!rawText?.trim()) return "";
+export async function extractPlanGuide(rawText: string, { throwOnError = false } = {}): Promise<string> {
+  if (!rawText?.trim()) {
+    if (throwOnError) throw new Error("PDF text is empty — nothing to extract from");
+    return "";
+  }
 
   try {
     const provider = resolveAIProvider();
@@ -54,16 +57,18 @@ export async function extractPlanGuide(rawText: string): Promise<string> {
     }
     return await extractWithOpenAI(rawText, model);
   } catch (err) {
-    console.error("[extractPlanGuide] Guide extraction failed (non-fatal):", err instanceof Error ? err.message : String(err));
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("[extractPlanGuide] Guide extraction failed:", message);
+    if (throwOnError) throw err;
     return "";
   }
 }
 
 async function extractWithOpenAI(rawText: string, model: string): Promise<string> {
   const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) return "";
+  if (!apiKey) throw new Error("OPENAI_API_KEY is not set");
 
-  const res = await fetch("https://api.openai.com/v1/responses", {
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -71,15 +76,21 @@ async function extractWithOpenAI(rawText: string, model: string): Promise<string
     },
     body: JSON.stringify({
       model,
-      input: [
+      messages: [
         { role: "system", content: GUIDE_SYSTEM_PROMPT },
         { role: "user", content: rawText }
       ],
-      max_output_tokens: 2000
+      max_tokens: 2000
     })
   });
 
-  return extractTextFromResponse(await res.json());
+  const data = await res.json();
+  if (!res.ok) {
+    const msg = (data as { error?: { message?: string } })?.error?.message || `OpenAI API error ${res.status}`;
+    throw new Error(msg);
+  }
+
+  return extractTextFromResponse(data);
 }
 
 async function extractWithCloudflare(rawText: string, model: string): Promise<string> {
@@ -111,7 +122,7 @@ async function extractWithCloudflare(rawText: string, model: string): Promise<st
 
 async function extractWithGemini(rawText: string, model: string): Promise<string> {
   const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return "";
+  if (!apiKey) throw new Error("GEMINI_API_KEY is not set");
 
   const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
   const res = await fetch(endpoint, {
@@ -131,7 +142,13 @@ async function extractWithGemini(rawText: string, model: string): Promise<string
     })
   });
 
-  return extractTextFromResponse(await res.json());
+  const data = await res.json();
+  if (!res.ok) {
+    const msg = (data as { error?: { message?: string } })?.error?.message || `Gemini API error ${res.status}`;
+    throw new Error(msg);
+  }
+
+  return extractTextFromResponse(data);
 }
 
 type AnyResponse = Record<string, unknown>;

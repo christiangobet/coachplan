@@ -419,10 +419,14 @@ export default function PlanReviewPage() {
   const [planGuide, setPlanGuide] = useState('');
   const [guideSaving, setGuideSaving] = useState(false);
   const [guideSaved, setGuideSaved] = useState(false);
+  const [extractingGuide, setExtractingGuide] = useState(false);
+  const [extractGuideError, setExtractGuideError] = useState<string | null>(null);
   const [reparsing, setReparsing] = useState(false);
   const [reparseResult, setReparseResult] = useState<{ weeksProcessed: number; activitiesUpdated: number } | null>(null);
   const [reparseError, setReparseError] = useState<string | null>(null);
   const [expandedSessionInstructions, setExpandedSessionInstructions] = useState<Record<string, boolean>>({});
+  const [recheckingDayId, setRecheckingDayId] = useState<string | null>(null);
+  const [recheckErrors, setRecheckErrors] = useState<Record<string, string>>({});
 
   const daySaveTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const activitySaveTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
@@ -480,6 +484,7 @@ export default function PlanReviewPage() {
       setPlan(fetchedPlan);
       setPlanGuide(fetchedPlan.planGuide ?? '');
       initializeDrafts(fetchedPlan, units);
+      return fetchedPlan;
     } catch {
       setError('Failed to load plan.');
     } finally {
@@ -741,14 +746,14 @@ export default function PlanReviewPage() {
   const autosaveState = useMemo(() => {
     const queuedCount = Object.keys(queuedDayIds).length + Object.keys(queuedActivityIds).length;
     const savingCount = Object.keys(savingDayIds).length + Object.keys(savingActivityIds).length;
-    const busy = queuedCount + savingCount > 0;
+    const busy = queuedCount + savingCount > 0 || guideSaving;
     const label = busy
       ? 'Saving changes…'
       : lastSavedAt
         ? `All changes saved at ${formatSavedTime(lastSavedAt)}`
         : 'Changes save automatically';
     return { busy, label };
-  }, [lastSavedAt, queuedActivityIds, queuedDayIds, savingActivityIds, savingDayIds]);
+  }, [lastSavedAt, queuedActivityIds, queuedDayIds, savingActivityIds, savingDayIds, guideSaving]);
   const isActivated = plan?.status === 'ACTIVE';
   const effectiveRunCount = Math.max(paceRunCount, summary.runActivities);
   const showPaceCta = effectiveRunCount > 0;
@@ -992,12 +997,34 @@ export default function PlanReviewPage() {
     [planId]
   );
 
-  const handleGuideBlur = useCallback(() => {
+  const handleGuideChange = useCallback((value: string) => {
+    setPlanGuide(value);
     if (guideSaveTimerRef.current) clearTimeout(guideSaveTimerRef.current);
     guideSaveTimerRef.current = setTimeout(() => {
-      void persistPlanGuide(planGuide);
+      void persistPlanGuide(value);
     }, 800);
-  }, [persistPlanGuide, planGuide]);
+  }, [persistPlanGuide]);
+
+  const handleExtractGuide = useCallback(async () => {
+    if (!planId || extractingGuide) return;
+    setExtractingGuide(true);
+    setExtractGuideError(null);
+    try {
+      const res = await fetch(`/api/plans/${planId}/extract-guide`, { method: 'POST' });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        setExtractGuideError(data?.error || 'Guide extraction failed');
+        return;
+      }
+      if (data?.planGuide) {
+        setPlanGuide(data.planGuide);
+      }
+    } catch {
+      setExtractGuideError('Guide extraction failed');
+    } finally {
+      setExtractingGuide(false);
+    }
+  }, [planId, extractingGuide]);
 
   const handleReparse = useCallback(async () => {
     if (!planId || reparsing) return;
@@ -1016,13 +1043,71 @@ export default function PlanReviewPage() {
         activitiesUpdated: Number(data?.activitiesUpdated ?? 0)
       });
       router.refresh();
-      void loadPlan();
+      const refreshedPlan = await loadPlan();
+      if (refreshedPlan) {
+        const expanded: Record<string, boolean> = {};
+        for (const week of refreshedPlan.weeks) {
+          for (const day of week.days) {
+            for (const activity of day.activities) {
+              if (activity.sessionInstructions) expanded[activity.id] = true;
+            }
+          }
+        }
+        if (Object.keys(expanded).length > 0) setExpandedSessionInstructions(expanded);
+      }
     } catch {
       setReparseError('Re-parse failed');
     } finally {
       setReparsing(false);
     }
   }, [loadPlan, planId, reparsing, router]);
+
+  const handleRecheckDay = useCallback(async (dayId: string, weekIndex: number, dayOfWeek: number) => {
+    if (!planId || recheckingDayId) return;
+    setRecheckingDayId(dayId);
+    setRecheckErrors((prev) => ({ ...prev, [dayId]: '' }));
+    try {
+      const res = await fetch(`/api/plans/${planId}/reparse-day`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ weekIndex, dayOfWeek })
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        setRecheckErrors((prev) => ({ ...prev, [dayId]: data?.error || 'Re-check failed' }));
+        return;
+      }
+      // Patch plan state with refreshed day activities
+      const freshActivities: ReviewActivity[] = (data?.day?.activities ?? []) as ReviewActivity[];
+      if (freshActivities.length > 0) {
+        setPlan((prev) => {
+          if (!prev) return prev;
+          return applyDayUpdateToPlan(prev, dayId, (d) => ({ ...d, activities: freshActivities }));
+        });
+        // Re-init drafts for the updated activities
+        const fallbackUnit = viewerUnits === 'KM' ? 'KM' : 'MILES';
+        setActivityDrafts((prev) => {
+          const next = { ...prev };
+          for (const activity of freshActivities) {
+            next[activity.id] = toActivityDraft(activity, fallbackUnit);
+          }
+          return next;
+        });
+        // Auto-expand session instructions for activities that have them
+        setExpandedSessionInstructions((prev) => {
+          const next = { ...prev };
+          for (const activity of freshActivities) {
+            if (activity.sessionInstructions) next[activity.id] = true;
+          }
+          return next;
+        });
+      }
+    } catch {
+      setRecheckErrors((prev) => ({ ...prev, [dayId]: 'Re-check failed' }));
+    } finally {
+      setRecheckingDayId(null);
+    }
+  }, [planId, recheckingDayId, viewerUnits]);
 
   const applyPaceBucket = useCallback(
     (activityId: string, bucket: PaceBucketValue) => {
@@ -1983,15 +2068,30 @@ export default function PlanReviewPage() {
             {guideSaving && <span className="review-guide-status">Saving&hellip;</span>}
             {!guideSaving && guideSaved && <span className="review-guide-status saved">Saved &#10003;</span>}
           </div>
+          {!planGuide && (
+            <div className="review-guide-extract">
+              <button
+                className="review-save-btn"
+                type="button"
+                onClick={handleExtractGuide}
+                disabled={extractingGuide}
+              >
+                {extractingGuide ? 'Extracting guide\u2026 (30\u201360s)' : '\u2728 Extract Guide from PDF'}
+              </button>
+              {extractGuideError && <p className="review-error">{extractGuideError}</p>}
+              <p className="review-guide-warning">
+                Extracts abbreviations, pace zones, and session context from the original PDF. Review and correct before re-parsing.
+              </p>
+            </div>
+          )}
           <label className="review-field">
             <span className="review-visually-hidden">Plan guide content</span>
             <textarea
               className="review-guide-textarea"
               value={planGuide}
-              onChange={(event) => setPlanGuide(event.target.value)}
-              onBlur={handleGuideBlur}
+              onChange={(event) => handleGuideChange(event.target.value)}
               rows={6}
-              placeholder="No guide extracted yet. Add abbreviations and pace zone definitions here to improve parsing."
+              placeholder="No guide extracted yet. Click &quot;Extract Guide from PDF&quot; above, or paste abbreviations and pace zone definitions here."
             />
           </label>
           <div className="review-guide-actions">
@@ -2046,6 +2146,15 @@ export default function PlanReviewPage() {
                           {notesOpen ? 'Hide Notes' : 'Show Notes'}
                         </button>
                         <button
+                          className="review-save-btn secondary"
+                          type="button"
+                          onClick={() => void handleRecheckDay(day.id, week.weekIndex, day.dayOfWeek)}
+                          disabled={recheckingDayId === day.id || reparsing}
+                          title="Re-parse this day's activities from stored source text"
+                        >
+                          {recheckingDayId === day.id ? 'Checking…' : '↺ Re-check'}
+                        </button>
+                        <button
                           className="review-save-btn"
                           type="button"
                           onClick={() => addActivity(day.id)}
@@ -2055,6 +2164,10 @@ export default function PlanReviewPage() {
                         </button>
                       </div>
                     </div>
+
+                    {recheckErrors[day.id] && (
+                      <p className="review-error review-error-inline">{recheckErrors[day.id]}</p>
+                    )}
 
                     {notesOpen && (
                       <label className="review-field review-day-notes">

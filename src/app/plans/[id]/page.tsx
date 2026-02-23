@@ -37,6 +37,36 @@ function formatType(type: string) {
   return type.replace(/_/g, ' ').toLowerCase().replace(/^\w/, (c) => c.toUpperCase());
 }
 
+type GuideSection = { title: string; items: string[] };
+
+const GUIDE_SECTION_META: Record<string, { icon: string; slug: string }> = {
+  'PLAN OVERVIEW': { icon: '📋', slug: 'overview' },
+  'GLOSSARY & ABBREVIATIONS': { icon: '📖', slug: 'glossary' },
+  'GLOSSARY': { icon: '📖', slug: 'glossary' },
+  'PACE ZONES': { icon: '⚡', slug: 'paces' },
+  'NAMED SESSIONS & CIRCUITS': { icon: '🏃', slug: 'sessions' },
+  'NAMED SESSIONS': { icon: '🏃', slug: 'sessions' },
+  'GENERAL INSTRUCTIONS': { icon: '📌', slug: 'instructions' }
+};
+
+function parsePlanGuide(text: string): GuideSection[] {
+  const sections: GuideSection[] = [];
+  let current: GuideSection | null = null;
+  for (const raw of text.split('\n')) {
+    const line = raw.trim();
+    if (!line) continue;
+    // Section header: mostly uppercase, no leading dash, at least 4 chars
+    if (!line.startsWith('-') && /^[A-Z][A-Z &/]+$/.test(line) && line.length >= 4) {
+      if (current) sections.push(current);
+      current = { title: line, items: [] };
+    } else if (current) {
+      current.items.push(line.startsWith('- ') ? line.slice(2) : line);
+    }
+  }
+  if (current) sections.push(current);
+  return sections;
+}
+
 function formatWeekRange(startDate: Date | null, endDate: Date | null): string | null {
   if (!startDate) return null;
   const s = new Date(startDate);
@@ -408,6 +438,7 @@ export default function PlanDetailPage() {
   const [savingActuals, setSavingActuals] = useState(false);
   const [viewerUnits, setViewerUnits] = useState<DistanceUnit>('MILES');
   const [viewMode, setViewMode] = useState<'plan' | 'log'>('plan');
+  const [sidebarTab, setSidebarTab] = useState<'guide' | 'ai'>('ai');
   const [cellView, setCellView] = useState<'compact' | 'detail'>('detail');
   const [selectedDay, setSelectedDay] = useState<SelectedDayState | null>(null);
   const [stravaConnected, setStravaConnected] = useState(false);
@@ -1306,7 +1337,57 @@ export default function PlanDetailPage() {
         </section>
 
         <aside className="pcal-chat-panel" id="ai-trainer">
-          <section className="pcal-ai-trainer pcal-ai-trainer-chat">
+          {/* Sidebar tab switcher — only show Guide tab when guide exists */}
+          {plan?.planGuide && (
+            <div className="pcal-sidebar-tabs">
+              <button
+                className={`pcal-sidebar-tab${sidebarTab === 'guide' ? ' active' : ''}`}
+                type="button"
+                onClick={() => setSidebarTab('guide')}
+              >
+                📋 Plan Guide
+              </button>
+              <button
+                className={`pcal-sidebar-tab${sidebarTab === 'ai' ? ' active' : ''}`}
+                type="button"
+                onClick={() => setSidebarTab('ai')}
+              >
+                AI Trainer
+              </button>
+            </div>
+          )}
+
+          {/* Plan Guide panel */}
+          {plan?.planGuide && sidebarTab === 'guide' && (() => {
+            const sections = parsePlanGuide(plan.planGuide as string);
+            return (
+              <div className="pcal-guide-panel">
+                {sections.length === 0 ? (
+                  <p className="pcal-guide-empty">No guide content could be parsed.</p>
+                ) : sections.map((section) => {
+                  const meta = GUIDE_SECTION_META[section.title] ?? { icon: '•', slug: 'other' };
+                  return (
+                    <div key={section.title} className={`pcal-guide-section pcal-guide-${meta.slug}`}>
+                      <h3 className="pcal-guide-section-title">
+                        <span className="pcal-guide-icon">{meta.icon}</span>
+                        {section.title.replace('&', '&')}
+                      </h3>
+                      <ul className="pcal-guide-list">
+                        {section.items.map((item, i) => (
+                          <li key={i} className="pcal-guide-item">{item}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
+
+          <section
+            className="pcal-ai-trainer pcal-ai-trainer-chat"
+            style={plan?.planGuide && sidebarTab === 'guide' ? { display: 'none' } : undefined}
+          >
             <div className="pcal-ai-trainer-head">
               <div>
                 <h2>AI Trainer</h2>
@@ -1608,7 +1689,11 @@ export default function PlanDetailPage() {
                     {syncingStrava ? 'Syncing…' : 'Sync with Strava'}
                   </button>
                 </div>
-                <p className="pcal-modal-text">{selectedActivity.rawText || 'No extra instructions for this activity.'}</p>
+                {selectedActivity.sessionInstructions ? (
+                  <p className="pcal-modal-text">{selectedActivity.sessionInstructions}</p>
+                ) : (
+                  <p className="pcal-modal-text pcal-modal-text-muted">{selectedActivity.rawText || 'No instructions for this activity.'}</p>
+                )}
                 {stravaSyncError && <p className="pcal-modal-form-error">{stravaSyncError}</p>}
                 {stravaSyncStatus && <p className="pcal-modal-form-success">{stravaSyncStatus}</p>}
               </div>
