@@ -474,6 +474,49 @@
   border-top: 1px solid var(--d-border);
 }
 
+/* Session instructions collapsible block */
+.day-log-instructions {
+  margin-top: 8px;
+}
+
+.day-log-instructions-toggle {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--d-muted);
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  user-select: none;
+}
+
+.day-log-instructions-toggle::-webkit-details-marker {
+  display: none;
+}
+
+.day-log-instructions-toggle::before {
+  content: '▸';
+  font-size: 10px;
+  transition: transform 0.15s;
+}
+
+details[open] .day-log-instructions-toggle::before {
+  transform: rotate(90deg);
+}
+
+.day-log-instructions-text {
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--d-text-mid);
+  white-space: pre-wrap;
+  background: var(--d-bg);
+  border-radius: var(--d-radius-sm);
+  padding: 10px 12px;
+  border: 1px solid var(--d-border-light);
+}
+
 .dash-log-collapsed {
   margin: 0 -24px -24px;
 }
