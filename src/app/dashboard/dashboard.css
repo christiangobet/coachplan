@@ -474,6 +474,31 @@
   border-top: 1px solid var(--d-border);
 }
 
+.dash-log-collapsed {
+  margin: 0 -24px -24px;
+}
+
+.dash-log-collapsed .dash-btn-secondary {
+  display: flex;
+  width: 100%;
+  justify-content: center;
+  padding: 14px 24px;
+  border-radius: 0 0 var(--d-radius-lg) var(--d-radius-lg);
+  border: none;
+  border-top: 1px solid var(--d-border);
+  background: var(--d-bg);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--d-text-mid);
+  letter-spacing: 0.01em;
+  transition: background 0.12s, color 0.12s;
+}
+
+.dash-log-collapsed .dash-btn-secondary:hover {
+  background: var(--d-border-light);
+  color: var(--d-text);
+}
+
 .dash-log-header {
   display: flex;
   align-items: center;

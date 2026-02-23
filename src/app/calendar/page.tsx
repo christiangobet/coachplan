@@ -669,7 +669,6 @@ export default async function CalendarPage({
                       <div className="cal-day-head-badges">
                         {dayDone && <span className="cal-day-check" title="Day completed">✓</span>}
                         {dayMissed && <span className="cal-day-check missed" title="Day closed as missed">○</span>}
-                        {inPlan && <span className="cal-plan-dot" title="In plan window" />}
                       </div>
                     </div>
 

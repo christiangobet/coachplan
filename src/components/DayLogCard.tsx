@@ -152,16 +152,18 @@ function ActivityRow({
             className={form.durationPrefilled ? 'is-prefilled' : undefined}
           />
         </label>
-        <label className="dash-log-field">
-          <span>Pace</span>
-          <input
-            type="text"
-            value={form.actualPace}
-            onChange={(e) => onChange({ actualPace: e.target.value, pacePrefilled: false, paceUserEdited: true })}
-            placeholder={viewerUnits === 'KM' ? 'e.g. 4:40 /km' : 'e.g. 7:30 /mi'}
-            className={form.pacePrefilled ? 'is-prefilled' : undefined}
-          />
-        </label>
+        {activity.type === 'RUN' && (
+          <label className="dash-log-field">
+            <span>Pace</span>
+            <input
+              type="text"
+              value={form.actualPace}
+              onChange={(e) => onChange({ actualPace: e.target.value, pacePrefilled: false, paceUserEdited: true })}
+              placeholder={viewerUnits === 'KM' ? 'e.g. 4:40 /km' : 'e.g. 7:30 /mi'}
+              className={form.pacePrefilled ? 'is-prefilled' : undefined}
+            />
+          </label>
+        )}
       </div>
       {form.error && <p className="dash-log-error">{form.error}</p>}
       {form.savedStatus && <p className="dash-log-sync-note success">{form.savedStatus}</p>}

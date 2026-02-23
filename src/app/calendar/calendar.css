@@ -337,13 +337,6 @@
   color: var(--d-orange);
 }
 
-.cal-plan-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--d-orange);
-}
-
 .cal-day.day-done {
   border-color: rgba(15, 138, 71, 0.36);
   background: rgba(15, 138, 71, 0.08);
@@ -1465,11 +1458,6 @@
     width: 14px;
     height: 14px;
     font-size: 9px;
-  }
-
-  .cal-plan-dot {
-    width: 6px;
-    height: 6px;
   }
 
   .cal-day-list {

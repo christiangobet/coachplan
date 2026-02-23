@@ -335,14 +335,8 @@ export default function PlansClient() {
                           </div>
                         </div>
                         <div className="plan-card-actions">
-                          <Link className="dash-btn-ghost plan-card-edit-btn" href={`/plans/${plan.id}`} onClick={() => rememberSelectedPlan(plan.id)}>Open</Link>
-                          <button
-                            className="dash-btn-primary plan-card-cta"
-                            onClick={() => updatePlanStatus(plan.id, 'ACTIVE')}
-                            disabled={processingPlanId === plan.id}
-                          >
-                            {processingPlanId === plan.id ? 'Saving...' : 'Activate'}
-                          </button>
+                          <Link className="dash-btn-primary plan-card-cta" href={`/plans/${plan.id}/review?fromUpload=1`} onClick={() => rememberSelectedPlan(plan.id)}>Open Review</Link>
+                          <Link className="dash-btn-ghost plan-card-edit-btn" href={`/plans/${plan.id}`} onClick={() => rememberSelectedPlan(plan.id)}>View Plan</Link>
                         </div>
                         <div className="plan-card-secondary-actions">
                           <Link className="plan-card-use" href={`/plans/${plan.id}?mode=edit`} onClick={() => rememberSelectedPlan(plan.id)}>Edit</Link>

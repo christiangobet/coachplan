@@ -1341,6 +1341,7 @@ export default function PlanReviewPage() {
                 <button className="cta" onClick={handlePublish} disabled={publishing || autosaveState.busy}>
                   {publishing ? (arrivedFromUpload ? 'Activating…' : 'Publishing…') : (arrivedFromUpload ? 'Activate Plan' : 'Publish Plan')}
                 </button>
+                <Link className="cta secondary" href="/plans">Save as Draft</Link>
                 <Link className="cta secondary" href={`/plans/${plan.id}`}>View Plan</Link>
                 <button
                   className="cta secondary"
@@ -1912,7 +1913,7 @@ export default function PlanReviewPage() {
               {days.length === 0 && <p className="review-muted">No days parsed for this week.</p>}
 
               {days.map((day) => {
-                const notesOpen = expandedDayNotes[day.id] ?? false;
+                const notesOpen = expandedDayNotes[day.id] ?? true;
                 return (
                   <div key={day.id} className="review-day-block">
                     <div className="review-day-head">
