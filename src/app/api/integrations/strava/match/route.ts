@@ -6,6 +6,7 @@ type MatchBody = {
   externalActivityId?: unknown;
   planActivityId?: unknown;
   applyActuals?: unknown;
+  equivalenceOverride?: unknown;
 };
 
 export async function POST(req: Request) {
@@ -24,13 +25,25 @@ export async function POST(req: Request) {
   const planActivityId = typeof planActivityIdRaw === 'string'
     ? (planActivityIdRaw.trim() || null)
     : null;
+  const equivalenceOverrideRaw = body.equivalenceOverride;
+  const equivalenceOverride = equivalenceOverrideRaw === null
+    ? null
+    : (typeof equivalenceOverrideRaw === 'string' ? equivalenceOverrideRaw.trim().toUpperCase() : undefined);
+  if (
+    equivalenceOverride !== undefined
+    && equivalenceOverride !== null
+    && !['FULL', 'PARTIAL', 'NONE'].includes(equivalenceOverride)
+  ) {
+    return NextResponse.json({ error: 'equivalenceOverride must be FULL, PARTIAL, NONE, or null' }, { status: 400 });
+  }
 
   try {
     await setStravaActivityMatchForUser({
       userId: access.context.userId,
       externalActivityId,
       planActivityId,
-      applyActuals
+      applyActuals,
+      equivalenceOverride: equivalenceOverride as 'FULL' | 'PARTIAL' | 'NONE' | null | undefined
     });
     return NextResponse.json({ ok: true });
   } catch (error: unknown) {

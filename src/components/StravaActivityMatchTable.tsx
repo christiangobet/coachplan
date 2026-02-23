@@ -34,6 +34,11 @@ type StravaActivityRow = {
   durationSec: number | null;
   avgHeartRate: number | null;
   matchedPlanActivityId?: string | null;
+  equivalence?: 'FULL' | 'PARTIAL' | 'NONE' | null;
+  equivalenceOverride?: 'FULL' | 'PARTIAL' | 'NONE' | null;
+  equivalenceNote?: string | null;
+  equivalenceConfidence?: number | null;
+  loadRatio?: number | null;
 };
 
 type ReviewDay = {
@@ -101,6 +106,24 @@ function formatDate(value: string | null | undefined) {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return 'Never';
   return parsed.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function resolveEquivalence(activity: StravaActivityRow) {
+  return activity.equivalenceOverride || activity.equivalence || null;
+}
+
+function equivalenceLabel(value: 'FULL' | 'PARTIAL' | 'NONE' | null) {
+  if (value === 'FULL') return 'Counts fully';
+  if (value === 'PARTIAL') return 'Counts partially';
+  if (value === 'NONE') return 'Does not count';
+  return 'Not evaluated';
+}
+
+function equivalenceClass(value: 'FULL' | 'PARTIAL' | 'NONE' | null) {
+  if (value === 'FULL') return 'done';
+  if (value === 'PARTIAL') return 'partial';
+  if (value === 'NONE') return 'locked';
+  return 'pending';
 }
 
 export default function StravaActivityMatchTable() {
@@ -348,6 +371,14 @@ export default function StravaActivityMatchTable() {
                               </strong>
                               <span>{formatStravaSportType(activity.sportType)}</span>
                               {formatStravaActivity(activity, viewerUnits) && <em>{formatStravaActivity(activity, viewerUnits)}</em>}
+                              {activity.matchedPlanActivityId && (
+                                <span className={`dash-day-status-chip ${equivalenceClass(resolveEquivalence(activity))}`}>
+                                  {equivalenceLabel(resolveEquivalence(activity))}
+                                </span>
+                              )}
+                              {activity.equivalenceNote && (
+                                <em>{activity.equivalenceNote}</em>
+                              )}
                             </div>
                           ))}
                         </div>

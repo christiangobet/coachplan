@@ -123,6 +123,12 @@ enum IntegrationProvider {
   GARMIN
 }
 
+enum ActivityEquivalence {
+  FULL
+  PARTIAL
+  NONE
+}
+
 model TrainingPlan {
   id          String      @id @default(cuid())
   name        String
@@ -281,7 +287,13 @@ model ExternalActivity {
   avgHeartRate          Int?
   maxHeartRate          Int?
   calories              Float?
+  elevationGainM        Float?
   avgPaceSecPerKm       Float?
+  equivalence           ActivityEquivalence?
+  equivalenceNote       String?
+  equivalenceConfidence Float?
+  loadRatio             Float?
+  equivalenceOverride   ActivityEquivalence?
   raw                   Json?
   matchedPlanActivityId String?
   importedAt            DateTime            @default(now())

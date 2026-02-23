@@ -175,6 +175,11 @@ export async function GET(req: Request) {
     avgHeartRate: number | null;
     calories: number | null;
     matchedPlanActivityId: string | null;
+    equivalence: 'FULL' | 'PARTIAL' | 'NONE' | null;
+    equivalenceOverride: 'FULL' | 'PARTIAL' | 'NONE' | null;
+    equivalenceNote: string | null;
+    equivalenceConfidence: number | null;
+    loadRatio: number | null;
   }>>();
 
   for (const external of externalActivities) {
@@ -189,7 +194,12 @@ export async function GET(req: Request) {
       durationSec: external.durationSec ?? null,
       avgHeartRate: external.avgHeartRate ?? null,
       calories: external.calories ?? null,
-      matchedPlanActivityId: external.matchedPlanActivityId ?? null
+      matchedPlanActivityId: external.matchedPlanActivityId ?? null,
+      equivalence: external.equivalence ?? null,
+      equivalenceOverride: external.equivalenceOverride ?? null,
+      equivalenceNote: external.equivalenceNote ?? null,
+      equivalenceConfidence: external.equivalenceConfidence ?? null,
+      loadRatio: external.loadRatio ?? null
     });
     stravaByDate.set(key, row);
   }

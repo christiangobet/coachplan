@@ -1,4 +1,4 @@
-import { ActivityType, ExternalAccount, Units } from '@prisma/client';
+import { ActivityEquivalence, ActivityPriority, ActivityType, ExternalAccount, Units } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { buildPlanActivityActualsUpdate } from '@/lib/activity-actuals';
 import { getDayDateFromWeekStart, resolveWeekBounds } from '@/lib/plan-dates';
@@ -6,6 +6,7 @@ import { createIntegrationStateToken } from '@/lib/integrations/state';
 import { isDayClosed } from '@/lib/day-status';
 import { pickSelectedPlan } from '@/lib/plan-selection';
 import { resolveDistanceUnitFromActivity } from '@/lib/unit-display';
+import { evaluateStravaEquivalence } from '@/lib/integrations/strava-equivalence';
 
 const STRAVA_AUTH_URL = 'https://www.strava.com/oauth/authorize';
 const STRAVA_TOKEN_URL = 'https://www.strava.com/oauth/token';
@@ -37,12 +38,18 @@ type StravaActivity = {
   average_heartrate?: number;
   max_heartrate?: number;
   calories?: number;
+  total_elevation_gain?: number;
 };
 
 type PlannedActivityCandidate = {
   id: string;
   dateKey: string;
+  title: string;
   type: ActivityType;
+  subtype: string | null;
+  paceTargetBucket: string | null;
+  priority: ActivityPriority | null;
+  mustDo: boolean;
   distanceM: number | null;
   durationSec: number | null;
   completed: boolean;
@@ -64,16 +71,31 @@ export type StravaSyncSummary = {
   truncated?: boolean;
 };
 
-type DateMatchBucket = {
-  candidates: PlannedActivityCandidate[];
-  dayPenalty: number;
-};
-
 type PlanActivityCandidates = {
   byDate: Map<string, PlannedActivityCandidate[]>;
   byId: Map<string, PlannedActivityCandidate>;
   planId: string | null;
   lockedDateSet: Set<string>;
+};
+
+type MatchScoreResult = {
+  score: number;
+  reason: string;
+};
+
+type DayMatchInput = {
+  externalId: string;
+  sportType: string | null;
+  durationSec: number | null;
+  distanceM: number | null;
+  existingPlanActivityId?: string | null;
+};
+
+type DayMatchDecision = {
+  externalId: string;
+  matchedPlanActivityId: string | null;
+  score: number | null;
+  reason: string | null;
 };
 
 export type StravaDayImportSummary = {
@@ -82,6 +104,20 @@ export type StravaDayImportSummary = {
   matched: number;
   workoutsUpdated: number;
   unmatched: number;
+  decisions: StravaMatchDecision[];
+};
+
+export type StravaMatchDecision = {
+  externalActivityId: string;
+  externalName: string | null;
+  sportType: string | null;
+  planActivityId: string | null;
+  planActivityTitle: string | null;
+  equivalence: ActivityEquivalence | null;
+  equivalenceOverride: ActivityEquivalence | null;
+  loadRatio: number | null;
+  equivalenceConfidence: number | null;
+  equivalenceNote: string | null;
 };
 
 function getStravaClientId() {
@@ -384,7 +420,12 @@ async function buildPlanActivityCandidates(
         row.push({
           id: activity.id,
           dateKey: key,
+          title: activity.title || activity.type.replace(/_/g, ' '),
           type: activity.type,
+          subtype: activity.subtype ?? null,
+          paceTargetBucket: activity.paceTargetBucket ?? null,
+          priority: activity.priority ?? null,
+          mustDo: activity.mustDo ?? false,
           distanceM,
           durationSec,
           completed: activity.completed,
@@ -405,57 +446,227 @@ async function buildPlanActivityCandidates(
   return { byDate: map, byId, planId: plan.id, lockedDateSet };
 }
 
-function pickBestPlannedActivityFromBuckets(
-  buckets: DateMatchBucket[],
-  actualType: ActivityType,
-  durationSec: number | null,
-  distanceM: number | null,
-  usedPlanActivityIds: Set<string>,
-  minScore = 35
-) {
-  let best: PlannedActivityCandidate | null = null;
-  let bestScore = Number.NEGATIVE_INFINITY;
+function scorePlannedCandidateMatch(args: {
+  candidate: PlannedActivityCandidate;
+  actualType: ActivityType;
+  durationSec: number | null;
+  distanceM: number | null;
+  dayPenalty?: number;
+  preferExistingMatch?: boolean;
+}): MatchScoreResult {
+  const {
+    candidate,
+    actualType,
+    durationSec,
+    distanceM,
+    dayPenalty = 0,
+    preferExistingMatch = false
+  } = args;
 
-  for (const bucket of buckets) {
-    for (const candidate of bucket.candidates) {
-      if (usedPlanActivityIds.has(candidate.id)) continue;
+  const typeScore = typeCompatibilityScore(candidate.type, actualType);
+  if (typeScore < 0) return { score: Number.NEGATIVE_INFINITY, reason: 'incompatible type' };
 
-      const typeScore = typeCompatibilityScore(candidate.type, actualType);
-      if (typeScore < 0) continue;
+  let score = typeScore - dayPenalty;
+  const reasons: string[] = [];
+  if (candidate.mustDo || candidate.priority === 'KEY') {
+    score += 2;
+    reasons.push('key session');
+  }
+  if (candidate.completed) {
+    score -= 12;
+    reasons.push('already completed');
+  }
 
-      let score = typeScore - bucket.dayPenalty;
-      if (candidate.completed) score -= 12;
+  if (durationSec && candidate.durationSec) {
+    const durationDeltaMin = Math.abs(durationSec - candidate.durationSec) / 60;
+    score -= Math.min(durationDeltaMin, 40) * 0.8;
+    reasons.push(`duration Δ ${Math.round(durationDeltaMin)}m`);
+  }
 
-      if (durationSec && candidate.durationSec) {
-        const durationDeltaMin = Math.abs(durationSec - candidate.durationSec) / 60;
-        score -= Math.min(durationDeltaMin, 40) * 0.8;
-      }
+  if (distanceM && candidate.distanceM) {
+    const distanceDeltaKm = Math.abs(distanceM - candidate.distanceM) / 1000;
+    score -= Math.min(distanceDeltaKm, 30) * 2;
+    reasons.push(`distance Δ ${distanceDeltaKm.toFixed(1)}km`);
+  }
 
-      if (distanceM && candidate.distanceM) {
-        const distanceDeltaKm = Math.abs(distanceM - candidate.distanceM) / 1000;
-        score -= Math.min(distanceDeltaKm, 30) * 2;
-      }
+  if (preferExistingMatch) {
+    score += 8;
+    reasons.push('kept existing link');
+  }
 
-      if (score > bestScore) {
-        best = candidate;
-        bestScore = score;
-      }
+  return {
+    score,
+    reason: reasons.join(' · ') || 'type match'
+  };
+}
+
+function assignBestMatchesForDay(args: {
+  inputs: DayMatchInput[];
+  candidates: PlannedActivityCandidate[];
+  usedPlanActivityIds: Set<string>;
+  minScore?: number;
+}): DayMatchDecision[] {
+  const minScore = args.minScore ?? 35;
+  const pairs: Array<{
+    externalId: string;
+    candidateId: string;
+    score: number;
+    reason: string;
+  }> = [];
+
+  for (const input of args.inputs) {
+    const actualType = mapStravaSportTypeToPlanType(input.sportType);
+    for (const candidate of args.candidates) {
+      if (args.usedPlanActivityIds.has(candidate.id)) continue;
+      const scored = scorePlannedCandidateMatch({
+        candidate,
+        actualType,
+        durationSec: input.durationSec,
+        distanceM: input.distanceM,
+        preferExistingMatch: Boolean(input.existingPlanActivityId && input.existingPlanActivityId === candidate.id)
+      });
+      if (scored.score < minScore) continue;
+      pairs.push({
+        externalId: input.externalId,
+        candidateId: candidate.id,
+        score: scored.score,
+        reason: scored.reason
+      });
     }
   }
 
-  if (bestScore < minScore) return null;
+  pairs.sort((a, b) => b.score - a.score);
+
+  const assignedExternal = new Set<string>();
+  const assignedPlanned = new Set<string>();
+  const decisions = new Map<string, DayMatchDecision>();
+
+  for (const pair of pairs) {
+    if (assignedExternal.has(pair.externalId) || assignedPlanned.has(pair.candidateId)) continue;
+    assignedExternal.add(pair.externalId);
+    assignedPlanned.add(pair.candidateId);
+    decisions.set(pair.externalId, {
+      externalId: pair.externalId,
+      matchedPlanActivityId: pair.candidateId,
+      score: pair.score,
+      reason: pair.reason
+    });
+  }
+
+  for (const input of args.inputs) {
+    if (decisions.has(input.externalId)) continue;
+    decisions.set(input.externalId, {
+      externalId: input.externalId,
+      matchedPlanActivityId: null,
+      score: null,
+      reason: null
+    });
+  }
+
+  return args.inputs.map((input) => decisions.get(input.externalId) || {
+    externalId: input.externalId,
+    matchedPlanActivityId: null,
+    score: null,
+    reason: null
+  });
+}
+
+function pickHighestScoreCandidate(args: {
+  candidates: PlannedActivityCandidate[];
+  actualType: ActivityType;
+  durationSec: number | null;
+  distanceM: number | null;
+  blockedPlanActivityIds: Set<string>;
+  minScore?: number;
+}) {
+  const minScore = args.minScore ?? 35;
+  let best: { candidate: PlannedActivityCandidate; score: number; reason: string } | null = null;
+  for (const candidate of args.candidates) {
+    if (args.blockedPlanActivityIds.has(candidate.id)) continue;
+    const scored = scorePlannedCandidateMatch({
+      candidate,
+      actualType: args.actualType,
+      durationSec: args.durationSec,
+      distanceM: args.distanceM
+    });
+    if (scored.score < minScore) continue;
+    if (!best || scored.score > best.score) {
+      best = {
+        candidate,
+        score: scored.score,
+        reason: scored.reason
+      };
+    }
+  }
   return best;
 }
 
-function buildDateBuckets(
-  byDate: Map<string, PlannedActivityCandidate[]>,
-  primaryDateKey: string | null
-): DateMatchBucket[] {
-  if (!primaryDateKey) return [];
-  const buckets: DateMatchBucket[] = [];
-  const sameDay = byDate.get(primaryDateKey) || [];
-  if (sameDay.length) buckets.push({ candidates: sameDay, dayPenalty: 0 });
-  return buckets;
+function computeEquivalenceForMatch(args: {
+  candidate: PlannedActivityCandidate | null;
+  sportType: string | null;
+  movingTimeSec: number | null;
+  elapsedTimeSec: number | null;
+  distanceM: number | null;
+  avgHeartRate: number | null;
+  maxHeartRate: number | null;
+  elevationGainM: number | null;
+  matchReason?: string | null;
+}): {
+  equivalence: ActivityEquivalence | null;
+  equivalenceNote: string | null;
+  equivalenceConfidence: number | null;
+  loadRatio: number | null;
+} {
+  if (!args.candidate) {
+    return {
+      equivalence: null,
+      equivalenceNote: null,
+      equivalenceConfidence: null,
+      loadRatio: null
+    };
+  }
+
+  const result = evaluateStravaEquivalence({
+    planned: {
+      type: args.candidate.type,
+      title: args.candidate.title,
+      subtype: args.candidate.subtype,
+      paceTargetBucket: args.candidate.paceTargetBucket,
+      durationSec: args.candidate.durationSec,
+      distanceM: args.candidate.distanceM,
+      priority: args.candidate.priority,
+      mustDo: args.candidate.mustDo
+    },
+    actual: {
+      sportType: args.sportType,
+      movingTimeSec: args.movingTimeSec,
+      elapsedTimeSec: args.elapsedTimeSec,
+      distanceM: args.distanceM,
+      avgHeartRate: args.avgHeartRate,
+      maxHeartRate: args.maxHeartRate,
+      elevationGainM: args.elevationGainM
+    }
+  });
+
+  const reasonPrefix = args.matchReason ? `${args.matchReason}. ` : '';
+  return {
+    equivalence: result.status,
+    equivalenceNote: `${reasonPrefix}${result.note}`.trim(),
+    equivalenceConfidence: result.confidence,
+    loadRatio: result.loadRatio
+  };
+}
+
+function shouldAutoApplyActuals(
+  equivalence: ActivityEquivalence | null | undefined,
+  override: ActivityEquivalence | null | undefined,
+  confidence: number | null | undefined
+) {
+  const effective = override || equivalence || null;
+  if (!effective) return true;
+  if (effective !== 'FULL') return false;
+  if (confidence == null) return true;
+  return confidence >= 0.55;
 }
 
 async function applyMatchedExternalToWorkout(args: {
@@ -694,25 +905,135 @@ export async function syncStravaActivitiesForUser(args: {
   const useCursor = !args.forceLookback && Number.isFinite(cursorEpoch);
   const afterEpoch = useCursor ? cursorEpoch : fallbackAfterEpoch;
 
-  const [fetchedActivities, existingMatches, plannedCandidates] = await Promise.all([
-    fetchStravaActivities(accessToken, afterEpoch),
+  const fetchedActivities = await fetchStravaActivities(accessToken, afterEpoch);
+  const activities = fetchedActivities.activities;
+  const fetchedProviderIds = new Set(activities.map((activity) => String(activity.id)));
+
+  const [existingMatches, existingForFetched, plannedCandidates] = await Promise.all([
     prisma.externalActivity.findMany({
       where: {
         userId: args.userId,
         provider: 'STRAVA',
         matchedPlanActivityId: { not: null }
       },
-      select: { matchedPlanActivityId: true }
+      select: { providerActivityId: true, matchedPlanActivityId: true }
     }),
+    fetchedProviderIds.size > 0
+      ? prisma.externalActivity.findMany({
+        where: {
+          userId: args.userId,
+          provider: 'STRAVA',
+          providerActivityId: { in: [...fetchedProviderIds] }
+        },
+        select: {
+          providerActivityId: true,
+          matchedPlanActivityId: true
+        }
+      })
+      : Promise.resolve([]),
     buildPlanActivityCandidates(args.userId, args.preferredPlanId, user?.units ?? null)
   ]);
-  const activities = fetchedActivities.activities;
+  const existingByProviderId = new Map(existingForFetched.map((row) => [row.providerActivityId, row]));
 
   const usedPlanActivityIds = new Set(
     existingMatches
+      .filter((row) => !fetchedProviderIds.has(row.providerActivityId))
       .map((row) => row.matchedPlanActivityId)
       .filter((value): value is string => typeof value === 'string' && plannedCandidates.byId.has(value))
   );
+
+  const matchesByProviderId = new Map<string, DayMatchDecision>();
+  const dayGroups = new Map<string, DayMatchInput[]>();
+  for (const activity of activities) {
+    const providerActivityId = String(activity.id);
+    const dateKey = getStravaActivityDateKey(activity);
+    if (!dateKey) continue;
+    const durationSec = activity.moving_time || activity.elapsed_time || null;
+    const distanceM = activity.distance || null;
+    const row = dayGroups.get(dateKey) || [];
+    row.push({
+      externalId: providerActivityId,
+      sportType: activity.sport_type || null,
+      durationSec,
+      distanceM,
+      existingPlanActivityId: existingByProviderId.get(providerActivityId)?.matchedPlanActivityId || null
+    });
+    dayGroups.set(dateKey, row);
+  }
+
+  for (const [dateKey, dayInputs] of dayGroups.entries()) {
+    const dayCandidates = plannedCandidates.byDate.get(dateKey) || [];
+    if (dayCandidates.length === 0) {
+      for (const input of dayInputs) {
+        matchesByProviderId.set(input.externalId, {
+          externalId: input.externalId,
+          matchedPlanActivityId: null,
+          score: null,
+          reason: null
+        });
+      }
+      continue;
+    }
+
+    const dayDecisions = assignBestMatchesForDay({
+      inputs: dayInputs,
+      candidates: dayCandidates,
+      usedPlanActivityIds
+    });
+
+    const locallyUsedPlanIds = new Set<string>();
+    for (const decision of dayDecisions) {
+      if (!decision.matchedPlanActivityId) continue;
+      locallyUsedPlanIds.add(decision.matchedPlanActivityId);
+      usedPlanActivityIds.add(decision.matchedPlanActivityId);
+    }
+
+    for (const decision of dayDecisions) {
+      if (decision.matchedPlanActivityId) {
+        matchesByProviderId.set(decision.externalId, decision);
+        continue;
+      }
+      const source = dayInputs.find((input) => input.externalId === decision.externalId);
+      if (!source) {
+        matchesByProviderId.set(decision.externalId, decision);
+        continue;
+      }
+
+      const remainingNonRest = dayCandidates.filter(
+        (candidate) => !usedPlanActivityIds.has(candidate.id) && !locallyUsedPlanIds.has(candidate.id) && candidate.type !== 'REST'
+      );
+      let fallback: { candidate: PlannedActivityCandidate; score: number; reason: string } | null = null;
+      if (remainingNonRest.length === 1) {
+        fallback = {
+          candidate: remainingNonRest[0],
+          score: 34,
+          reason: 'single remaining candidate'
+        };
+      } else if (dayInputs.length === 1 && remainingNonRest.length > 0) {
+        fallback = pickHighestScoreCandidate({
+          candidates: remainingNonRest,
+          actualType: mapStravaSportTypeToPlanType(source.sportType),
+          durationSec: source.durationSec,
+          distanceM: source.distanceM,
+          blockedPlanActivityIds: usedPlanActivityIds,
+          minScore: Number.NEGATIVE_INFINITY
+        });
+      }
+
+      if (fallback) {
+        locallyUsedPlanIds.add(fallback.candidate.id);
+        usedPlanActivityIds.add(fallback.candidate.id);
+        matchesByProviderId.set(decision.externalId, {
+          externalId: decision.externalId,
+          matchedPlanActivityId: fallback.candidate.id,
+          score: fallback.score,
+          reason: fallback.reason
+        });
+      } else {
+        matchesByProviderId.set(decision.externalId, decision);
+      }
+    }
+  }
 
   let imported = 0;
   let matched = 0;
@@ -729,38 +1050,23 @@ export async function syncStravaActivitiesForUser(args: {
     const dateKey = getStravaActivityDateKey(activity);
     const durationSec = activity.moving_time || activity.elapsed_time || null;
     const distanceM = activity.distance || null;
-    const actualType = mapStravaSportTypeToPlanType(activity.sport_type);
-
-    const existing = await prisma.externalActivity.findUnique({
-      where: {
-        provider_providerActivityId: {
-          provider: 'STRAVA',
-          providerActivityId
-        }
-      },
-      select: { id: true, matchedPlanActivityId: true }
-    });
-
-    const existingMatchedCandidate = existing?.matchedPlanActivityId
-      ? plannedCandidates.byId.get(existing.matchedPlanActivityId) ?? null
+    const decision = matchesByProviderId.get(providerActivityId);
+    const matchedPlanActivityId = decision?.matchedPlanActivityId || null;
+    const matchedCandidate = matchedPlanActivityId
+      ? (plannedCandidates.byId.get(matchedPlanActivityId) || null)
       : null;
-    const canReuseExistingMatch = Boolean(
-      existingMatchedCandidate && dateKey && existingMatchedCandidate.dateKey === dateKey
-    );
-
-    const dateBuckets = buildDateBuckets(plannedCandidates.byDate, dateKey);
-    const matchedCandidate = canReuseExistingMatch
-      ? existingMatchedCandidate
-      : pickBestPlannedActivityFromBuckets(
-          dateBuckets,
-          actualType,
-          durationSec,
-          distanceM,
-          usedPlanActivityIds
-        );
-
-    const matchedPlanActivityId = matchedCandidate?.id || null;
-    if (matchedPlanActivityId) usedPlanActivityIds.add(matchedPlanActivityId);
+    const elevationGainM = activity.total_elevation_gain || null;
+    const equivalence = computeEquivalenceForMatch({
+      candidate: matchedCandidate,
+      sportType: activity.sport_type || null,
+      movingTimeSec: activity.moving_time || null,
+      elapsedTimeSec: activity.elapsed_time || null,
+      distanceM,
+      avgHeartRate: activity.average_heartrate ? Math.round(activity.average_heartrate) : null,
+      maxHeartRate: activity.max_heartrate ? Math.round(activity.max_heartrate) : null,
+      elevationGainM,
+      matchReason: decision?.reason || null
+    });
 
     const record = await prisma.externalActivity.upsert({
       where: {
@@ -784,9 +1090,14 @@ export async function syncStravaActivitiesForUser(args: {
         avgHeartRate: activity.average_heartrate ? Math.round(activity.average_heartrate) : null,
         maxHeartRate: activity.max_heartrate ? Math.round(activity.max_heartrate) : null,
         calories: activity.calories || null,
+        elevationGainM,
         avgPaceSecPerKm: durationSec && distanceM && distanceM > 0
           ? durationSec / (distanceM / 1000)
           : null,
+        equivalence: equivalence.equivalence,
+        equivalenceNote: equivalence.equivalenceNote,
+        equivalenceConfidence: equivalence.equivalenceConfidence,
+        loadRatio: equivalence.loadRatio,
         raw: activity as unknown as object,
         matchedPlanActivityId
       },
@@ -802,9 +1113,14 @@ export async function syncStravaActivitiesForUser(args: {
         avgHeartRate: activity.average_heartrate ? Math.round(activity.average_heartrate) : null,
         maxHeartRate: activity.max_heartrate ? Math.round(activity.max_heartrate) : null,
         calories: activity.calories || null,
+        elevationGainM,
         avgPaceSecPerKm: durationSec && distanceM && distanceM > 0
           ? durationSec / (distanceM / 1000)
           : null,
+        equivalence: equivalence.equivalence,
+        equivalenceNote: equivalence.equivalenceNote,
+        equivalenceConfidence: equivalence.equivalenceConfidence,
+        loadRatio: equivalence.loadRatio,
         raw: activity as unknown as object,
         matchedPlanActivityId
       }
@@ -813,18 +1129,20 @@ export async function syncStravaActivitiesForUser(args: {
 
     if (record.matchedPlanActivityId) {
       matched += 1;
-      const updated = await applyMatchedExternalToWorkout({
-        planActivityId: record.matchedPlanActivityId,
-        startTime,
-        sourceDateKey: dateKey,
-        distanceM,
-        durationSec,
-        userUnits: user?.units ?? null,
-        avgHeartRate: record.avgHeartRate,
-        calories: record.calories,
-        sourceLabel: 'Strava'
-      });
-      if (updated) workoutsUpdated += 1;
+      if (shouldAutoApplyActuals(record.equivalence, record.equivalenceOverride, record.equivalenceConfidence)) {
+        const updated = await applyMatchedExternalToWorkout({
+          planActivityId: record.matchedPlanActivityId,
+          startTime,
+          sourceDateKey: dateKey,
+          distanceM,
+          durationSec,
+          userUnits: user?.units ?? null,
+          avgHeartRate: record.avgHeartRate,
+          calories: record.calories,
+          sourceLabel: 'Strava'
+        });
+        if (updated) workoutsUpdated += 1;
+      }
     }
   }
 
@@ -861,6 +1179,7 @@ export async function setStravaActivityMatchForUser(args: {
   externalActivityId: string;
   planActivityId: string | null;
   applyActuals?: boolean;
+  equivalenceOverride?: ActivityEquivalence | null;
 }) {
   const external = await prisma.externalActivity.findFirst({
     where: {
@@ -875,7 +1194,10 @@ export async function setStravaActivityMatchForUser(args: {
       distanceM: true,
       durationSec: true,
       avgHeartRate: true,
-      calories: true
+      calories: true,
+      equivalence: true,
+      equivalenceConfidence: true,
+      equivalenceOverride: true
     }
   });
   if (!external) {
@@ -948,26 +1270,54 @@ export async function setStravaActivityMatchForUser(args: {
     await tx.externalActivity.update({
       where: { id: args.externalActivityId },
       data: {
-        matchedPlanActivityId: args.planActivityId
+        matchedPlanActivity: args.planActivityId
+          ? { connect: { id: args.planActivityId } }
+          : { disconnect: true },
+        ...(args.equivalenceOverride !== undefined
+          ? { equivalenceOverride: args.equivalenceOverride }
+          : {})
       }
     });
   });
 
-  if (args.planActivityId && args.applyActuals !== false) {
+  const refreshedExternal = await prisma.externalActivity.findUnique({
+    where: { id: args.externalActivityId },
+    select: {
+      matchedPlanActivityId: true,
+      startTime: true,
+      distanceM: true,
+      durationSec: true,
+      avgHeartRate: true,
+      calories: true,
+      equivalence: true,
+      equivalenceConfidence: true,
+      equivalenceOverride: true
+    }
+  });
+
+  if (args.planActivityId && args.applyActuals !== false && refreshedExternal?.matchedPlanActivityId) {
     const user = await prisma.user.findUnique({
       where: { id: args.userId },
       select: { units: true }
     });
-    await applyMatchedExternalToWorkout({
-      planActivityId: args.planActivityId,
-      startTime: external.startTime,
-      distanceM: external.distanceM,
-      durationSec: external.durationSec,
-      avgHeartRate: external.avgHeartRate,
-      calories: external.calories,
-      userUnits: user?.units ?? null,
-      sourceLabel: 'Strava'
-    });
+    if (
+      shouldAutoApplyActuals(
+        refreshedExternal.equivalence,
+        refreshedExternal.equivalenceOverride,
+        refreshedExternal.equivalenceConfidence
+      )
+    ) {
+      await applyMatchedExternalToWorkout({
+        planActivityId: refreshedExternal.matchedPlanActivityId,
+        startTime: refreshedExternal.startTime,
+        distanceM: refreshedExternal.distanceM,
+        durationSec: refreshedExternal.durationSec,
+        avgHeartRate: refreshedExternal.avgHeartRate,
+        calories: refreshedExternal.calories,
+        userUnits: user?.units ?? null,
+        sourceLabel: 'Strava'
+      });
+    }
   }
 
   return { ok: true };
@@ -1030,59 +1380,81 @@ export async function importStravaDayForUser(args: {
 
   const dayExternal = candidateExternal.filter((activity) => getExternalActivityDateKey(activity) === date);
   const totalDayExternal = dayExternal.length;
-
   const usedPlanActivityIds = new Set<string>();
+  const dayInputs: DayMatchInput[] = dayExternal.map((activity) => ({
+    externalId: activity.id,
+    sportType: activity.sportType,
+    durationSec: activity.durationSec || activity.movingTimeSec || activity.elapsedTimeSec || null,
+    distanceM: activity.distanceM || null,
+    existingPlanActivityId: activity.matchedPlanActivityId
+  }));
+  const dayDecisions = assignBestMatchesForDay({
+    inputs: dayInputs,
+    candidates: dayCandidates,
+    usedPlanActivityIds
+  });
+  const decisionByExternalId = new Map(dayDecisions.map((decision) => [decision.externalId, decision]));
+
+  for (const decision of dayDecisions) {
+    if (decision.matchedPlanActivityId) {
+      usedPlanActivityIds.add(decision.matchedPlanActivityId);
+      continue;
+    }
+    const source = dayInputs.find((input) => input.externalId === decision.externalId);
+    if (!source) continue;
+
+    const remainingNonRest = dayCandidates.filter(
+      (candidate) => !usedPlanActivityIds.has(candidate.id) && candidate.type !== 'REST'
+    );
+    let fallback: { candidate: PlannedActivityCandidate; score: number; reason: string } | null = null;
+    if (remainingNonRest.length === 1) {
+      fallback = {
+        candidate: remainingNonRest[0],
+        score: 34,
+        reason: 'single remaining candidate'
+      };
+    } else if (totalDayExternal === 1 && remainingNonRest.length > 0) {
+      fallback = pickHighestScoreCandidate({
+        candidates: remainingNonRest,
+        actualType: mapStravaSportTypeToPlanType(source.sportType),
+        durationSec: source.durationSec,
+        distanceM: source.distanceM,
+        blockedPlanActivityIds: usedPlanActivityIds,
+        minScore: Number.NEGATIVE_INFINITY
+      });
+    }
+    if (!fallback) continue;
+    usedPlanActivityIds.add(fallback.candidate.id);
+    decisionByExternalId.set(decision.externalId, {
+      externalId: decision.externalId,
+      matchedPlanActivityId: fallback.candidate.id,
+      score: fallback.score,
+      reason: fallback.reason
+    });
+  }
 
   let matched = 0;
   let workoutsUpdated = 0;
+  const decisions: StravaMatchDecision[] = [];
   for (const activity of dayExternal) {
+    const decision = decisionByExternalId.get(activity.id);
+    const matchedPlanActivityId = decision?.matchedPlanActivityId || null;
+    const matchedCandidate = matchedPlanActivityId ? (plannedCandidates.byId.get(matchedPlanActivityId) || null) : null;
     const durationSec = activity.durationSec || activity.movingTimeSec || activity.elapsedTimeSec || null;
     const distanceM = activity.distanceM || null;
-    const actualType = mapStravaSportTypeToPlanType(activity.sportType);
+    const equivalence = computeEquivalenceForMatch({
+      candidate: matchedCandidate,
+      sportType: activity.sportType,
+      movingTimeSec: activity.movingTimeSec || activity.durationSec || null,
+      elapsedTimeSec: activity.elapsedTimeSec || null,
+      distanceM,
+      avgHeartRate: activity.avgHeartRate,
+      maxHeartRate: activity.maxHeartRate,
+      elevationGainM: activity.elevationGainM,
+      matchReason: decision?.reason || null
+    });
 
-    const hasValidExistingMatch = Boolean(
-      activity.matchedPlanActivityId && dayCandidateIds.has(activity.matchedPlanActivityId)
-    );
-    let matchedPlanActivityId =
-      hasValidExistingMatch && activity.matchedPlanActivityId && !usedPlanActivityIds.has(activity.matchedPlanActivityId)
-        ? activity.matchedPlanActivityId
-        : null;
-
-    if (!matchedPlanActivityId) {
-      const matchedCandidate = pickBestPlannedActivityFromBuckets(
-        [{ candidates: dayCandidates, dayPenalty: 0 }],
-        actualType,
-        durationSec,
-        distanceM,
-        usedPlanActivityIds
-      );
-      matchedPlanActivityId = matchedCandidate?.id || null;
-    }
-
-    if (!matchedPlanActivityId) {
-      const remainingNonRest = dayCandidates.filter(
-        (candidate) => !usedPlanActivityIds.has(candidate.id) && candidate.type !== 'REST'
-      );
-      if (remainingNonRest.length === 1) {
-        matchedPlanActivityId = remainingNonRest[0].id;
-      } else if (totalDayExternal === 1 && remainingNonRest.length > 0) {
-        const fallbackCandidate = pickBestPlannedActivityFromBuckets(
-          [{ candidates: remainingNonRest, dayPenalty: 0 }],
-          actualType,
-          durationSec,
-          distanceM,
-          usedPlanActivityIds,
-          Number.NEGATIVE_INFINITY
-        );
-        matchedPlanActivityId = fallbackCandidate?.id || null;
-      }
-    }
-
-    if (matchedPlanActivityId) {
-      usedPlanActivityIds.add(matchedPlanActivityId);
-    }
-
-    await prisma.$transaction(async (tx) => {
+    const record = await prisma.$transaction(async (tx) => {
       if (matchedPlanActivityId) {
         await tx.externalActivity.updateMany({
           where: {
@@ -1094,27 +1466,50 @@ export async function importStravaDayForUser(args: {
           data: { matchedPlanActivityId: null }
         });
       }
-      await tx.externalActivity.update({
+      return tx.externalActivity.update({
         where: { id: activity.id },
-        data: { matchedPlanActivityId: matchedPlanActivityId || null }
+        data: {
+          matchedPlanActivity: matchedPlanActivityId
+            ? { connect: { id: matchedPlanActivityId } }
+            : { disconnect: true },
+          equivalence: equivalence.equivalence,
+          equivalenceNote: equivalence.equivalenceNote,
+          equivalenceConfidence: equivalence.equivalenceConfidence,
+          loadRatio: equivalence.loadRatio
+        }
       });
     });
 
-    if (matchedPlanActivityId) {
+    if (record.matchedPlanActivityId) {
       matched += 1;
-      const updated = await applyMatchedExternalToWorkout({
-        planActivityId: matchedPlanActivityId,
-        startTime: activity.startTime,
-        sourceDateKey: getExternalActivityDateKey(activity),
-        distanceM,
-        durationSec,
-        avgHeartRate: activity.avgHeartRate,
-        calories: activity.calories,
-        userUnits: user?.units ?? null,
-        sourceLabel: 'Strava'
-      });
-      if (updated) workoutsUpdated += 1;
+      if (shouldAutoApplyActuals(record.equivalence, record.equivalenceOverride, record.equivalenceConfidence)) {
+        const updated = await applyMatchedExternalToWorkout({
+          planActivityId: record.matchedPlanActivityId,
+          startTime: activity.startTime,
+          sourceDateKey: getExternalActivityDateKey(activity),
+          distanceM,
+          durationSec,
+          avgHeartRate: activity.avgHeartRate,
+          calories: activity.calories,
+          userUnits: user?.units ?? null,
+          sourceLabel: 'Strava'
+        });
+        if (updated) workoutsUpdated += 1;
+      }
     }
+
+    decisions.push({
+      externalActivityId: activity.id,
+      externalName: activity.name || null,
+      sportType: activity.sportType || null,
+      planActivityId: record.matchedPlanActivityId,
+      planActivityTitle: matchedCandidate?.title || null,
+      equivalence: record.equivalence,
+      equivalenceOverride: record.equivalenceOverride,
+      loadRatio: record.loadRatio ?? null,
+      equivalenceConfidence: record.equivalenceConfidence ?? null,
+      equivalenceNote: record.equivalenceNote ?? null
+    });
   }
 
   return {
@@ -1122,6 +1517,7 @@ export async function importStravaDayForUser(args: {
     stravaActivities: dayExternal.length,
     matched,
     workoutsUpdated,
-    unmatched: Math.max(0, dayExternal.length - matched)
+    unmatched: Math.max(0, dayExternal.length - matched),
+    decisions
   };
 }
