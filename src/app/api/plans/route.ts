@@ -829,6 +829,7 @@ type ActivityDraft = {
   subtype: string | null;
   title: string;
   rawText: string | null;
+  sessionInstructions?: string | null;
   distance: number | null;
   distanceUnit: 'MILES' | 'KM' | null;
   duration: number | null;
@@ -1186,7 +1187,8 @@ function buildAiActivities(args: {
     const sourceRawText = normalizeWhitespace(String(a.raw_text || dayRawText || ''));
     const decodedRawText = decodeActivityText(sourceRawText);
     const instructionText = normalizeWhitespace(String(a.instruction_text || ''));
-    const displayRawText = instructionText || decodedRawText || null;
+    const sessionInstructions = instructionText || null;
+    const displayRawText = decodedRawText || null;
     const normalizedSubtype = normalizeSubtypeToken(a.subtype || null);
     const sessionSubtype = mapAiSessionTypeToSubtype(a.session_type || null);
     const inferredSubtype = inferSubtype(displayRawText || String(a.title || ''));
@@ -1237,6 +1239,7 @@ function buildAiActivities(args: {
       subtype: effectiveSubtype,
       title: normalizedTitle || fallbackTitle,
       rawText: displayRawText,
+      sessionInstructions,
       distance: storageDistance.distance,
       distanceUnit: storageDistance.distanceUnit,
       duration: aiDuration,
