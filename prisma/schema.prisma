@@ -232,6 +232,7 @@ model PlanActivity {
   actualDuration Int?
   actualPace String?
   notes     String?
+  sessionInstructions String?
 
   plan TrainingPlan @relation(fields: [planId], references: [id])
   day  PlanDay @relation(fields: [dayId], references: [id])
