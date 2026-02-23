@@ -355,6 +355,12 @@
   box-shadow: inset 0 0 0 1px rgba(217, 119, 6, 0.12);
 }
 
+.cal-day.day-partial {
+  border-color: rgba(245, 158, 11, 0.36);
+  background: rgba(245, 158, 11, 0.06);
+  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, 0.1);
+}
+
 .cal-day.today.day-missed {
   border-color: var(--d-orange);
   background: linear-gradient(180deg, rgba(245, 158, 11, 0.16), #fff 38%);
@@ -381,6 +387,11 @@
   background: rgba(217, 119, 6, 0.12);
   border: 1px solid rgba(217, 119, 6, 0.44);
   font-size: 12px;
+}
+
+.cal-day-check.partial {
+  background: #d97706;
+  color: #fff;
 }
 
 .cal-day-list {
@@ -640,6 +651,11 @@
   background: var(--d-red-soft);
 }
 
+.cal-detail-badge.status-partial {
+  color: #d97706;
+  background: rgba(245, 158, 11, 0.12);
+}
+
 .cal-day-detail-hint {
   margin: 0;
   padding: 6px 20px;
@@ -715,6 +731,12 @@
 .cal-day-details-card .cal-day-toggle {
   padding: 14px 20px;
   border-top: 1px solid var(--d-border-light);
+}
+
+/* Status row at the top (below date header) */
+.cal-day-details-card .cal-day-toggle--top {
+  border-top: none;
+  border-bottom: 1px solid var(--d-border-light);
 }
 
 .cal-day-details-card .cal-day-toggle .dash-log-actions {
@@ -1117,7 +1139,65 @@
 }
 
 .cal-day-detail-item.log {
-  border-left: 3px solid rgba(15, 138, 71, 0.45);
+  border-left: 3px solid rgba(107, 107, 118, 0.25);
+}
+
+.cal-day-detail-item.log.match-full {
+  border-left-color: rgba(15, 138, 71, 0.55);
+}
+
+.cal-day-detail-item.log.match-partial {
+  border-left-color: rgba(204, 136, 0, 0.5);
+}
+
+.cal-day-detail-item.log.match-none {
+  border-left-color: rgba(192, 57, 43, 0.4);
+}
+
+.cal-day-log-match-row {
+  display: flex;
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 2px;
+}
+
+.cal-match-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+.cal-match-badge.full {
+  background: rgba(15, 138, 71, 0.12);
+  color: #0f8a47;
+}
+
+.cal-match-badge.partial {
+  background: rgba(204, 136, 0, 0.12);
+  color: #a36200;
+}
+
+.cal-match-badge.none {
+  background: rgba(192, 57, 43, 0.1);
+  color: #c0392b;
+}
+
+.cal-match-badge.matched,
+.cal-match-badge.unmatched {
+  background: rgba(107, 107, 118, 0.1);
+  color: var(--d-text-mid);
+}
+
+.cal-day-log-match-note {
+  font-size: 11px;
+  color: var(--d-muted);
+  line-height: 1.3;
 }
 
 .cal-day-detail-title {

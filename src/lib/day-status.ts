@@ -2,8 +2,9 @@ const DAY_DONE_TAG = '[DAY_DONE]';
 const DAY_MISSED_TAG = '[DAY_MISSED]';
 const DAY_MISSED_REASON_PREFIX = '[DAY_MISSED_REASON]';
 const DAY_OPEN_TAG = '[DAY_OPEN]'; // explicit reopen — overrides auto-done
+const DAY_PARTIAL_TAG = '[DAY_PARTIAL]';
 
-export type DayStatus = 'OPEN' | 'DONE' | 'MISSED';
+export type DayStatus = 'OPEN' | 'DONE' | 'MISSED' | 'PARTIAL';
 
 function splitNoteLines(notes: string | null | undefined) {
   return String(notes || '')
@@ -18,6 +19,7 @@ function stripStatusLines(notes: string | null | undefined) {
       line !== DAY_DONE_TAG
       && line !== DAY_MISSED_TAG
       && line !== DAY_OPEN_TAG
+      && line !== DAY_PARTIAL_TAG
       && !line.startsWith(DAY_MISSED_REASON_PREFIX)
     )
     .join('\n')
@@ -31,6 +33,7 @@ export function getDayStatus(notes: string | null | undefined): DayStatus {
   if (lines.includes(DAY_OPEN_TAG)) return 'OPEN';
   if (lines.includes(DAY_DONE_TAG)) return 'DONE';
   if (lines.includes(DAY_MISSED_TAG)) return 'MISSED';
+  if (lines.includes(DAY_PARTIAL_TAG)) return 'PARTIAL';
   return 'OPEN';
 }
 
@@ -49,7 +52,7 @@ export function isDayMarkedMissed(notes: string | null | undefined) {
 
 export function isDayClosed(notes: string | null | undefined) {
   const status = getDayStatus(notes);
-  return status === 'DONE' || status === 'MISSED';
+  return status === 'DONE' || status === 'MISSED' || status === 'PARTIAL';
 }
 
 export function getDayMissedReason(notes: string | null | undefined) {
@@ -77,6 +80,11 @@ export function setDayStatus(
 
   if (status === 'DONE') {
     entries.push(DAY_DONE_TAG);
+    return entries.join('\n').trim();
+  }
+
+  if (status === 'PARTIAL') {
+    entries.push(DAY_PARTIAL_TAG);
     return entries.join('\n').trim();
   }
 

@@ -39,8 +39,8 @@ export async function POST(
 
   if (typeof body.status === 'string') {
     const normalized = body.status.trim().toUpperCase();
-    if (normalized !== 'OPEN' && normalized !== 'DONE' && normalized !== 'MISSED') {
-      return NextResponse.json({ error: 'status must be OPEN, DONE, or MISSED' }, { status: 400 });
+    if (normalized !== 'OPEN' && normalized !== 'DONE' && normalized !== 'MISSED' && normalized !== 'PARTIAL') {
+      return NextResponse.json({ error: 'status must be OPEN, DONE, MISSED, or PARTIAL' }, { status: 400 });
     }
     nextStatus = normalized as DayStatus;
   } else if (body.completed !== undefined) {

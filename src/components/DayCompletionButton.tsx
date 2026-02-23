@@ -66,24 +66,42 @@ export default function DayCompletionButton({
         />
       )}
       <div className="dash-log-actions cal-day-toggle-actions">
-        {status !== 'DONE' && (
-          <button
-            type="button"
-            className="dash-btn-primary"
-            onClick={() => save('DONE')}
-            disabled={busy}
-          >
-            {busy ? 'Saving…' : '✓ Mark Day Done'}
-          </button>
+        {status === 'OPEN' && (
+          <div className="cal-day-status-row">
+            <button
+              type="button"
+              className="cal-day-status-btn cal-day-status-btn--done"
+              onClick={() => save('DONE')}
+              disabled={busy}
+            >
+              <span className="cal-day-status-icon">✓</span>Done
+            </button>
+            <button
+              type="button"
+              className="cal-day-status-btn cal-day-status-btn--partial"
+              onClick={() => save('PARTIAL')}
+              disabled={busy}
+            >
+              <span className="cal-day-status-icon">≈</span>Partial
+            </button>
+            <button
+              type="button"
+              className="cal-day-status-btn cal-day-status-btn--missed"
+              onClick={() => save('MISSED')}
+              disabled={busy}
+            >
+              <span className="cal-day-status-icon">✗</span>Missed
+            </button>
+          </div>
         )}
-        {status !== 'DONE' && (
+        {status === 'MISSED' && (
           <button
             type="button"
             className="dash-btn-ghost dash-btn-missed"
             onClick={() => save('MISSED')}
             disabled={busy}
           >
-            {busy && status !== 'MISSED' ? 'Saving…' : status === 'MISSED' ? 'Update Missed Day' : 'Mark as Missed'}
+            {busy ? 'Saving…' : 'Update Missed Day'}
           </button>
         )}
         {status !== 'OPEN' && (

@@ -679,6 +679,82 @@ details[open] .day-log-instructions-toggle::before {
   color: #c0392b;
 }
 
+.dash-btn-ghost.dash-btn-partial {
+  color: #d97706;
+}
+
+.dash-btn-ghost.dash-btn-partial:hover {
+  color: #b45309;
+}
+
+/* Day status row — 3 compact buttons in one line */
+.cal-day-status-row {
+  display: flex;
+  gap: 5px;
+  width: 100%;
+}
+
+.cal-day-status-btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 36px;
+  border-radius: 9px;
+  border: 1px solid var(--d-border);
+  background: #fff;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 0.12s, background 0.12s, color 0.12s;
+}
+
+.cal-day-status-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.cal-day-status-icon {
+  font-size: 13px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.cal-day-status-btn--done {
+  color: #0f8a47;
+  border-color: rgba(15, 138, 71, 0.3);
+  background: rgba(15, 138, 71, 0.05);
+}
+
+.cal-day-status-btn--done:hover:not(:disabled) {
+  background: rgba(15, 138, 71, 0.12);
+  border-color: rgba(15, 138, 71, 0.5);
+}
+
+.cal-day-status-btn--partial {
+  color: #d97706;
+  border-color: rgba(217, 119, 6, 0.3);
+  background: rgba(245, 158, 11, 0.05);
+}
+
+.cal-day-status-btn--partial:hover:not(:disabled) {
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(217, 119, 6, 0.5);
+}
+
+.cal-day-status-btn--missed {
+  color: var(--d-red);
+  border-color: rgba(192, 57, 43, 0.28);
+  background: rgba(192, 57, 43, 0.04);
+}
+
+.cal-day-status-btn--missed:hover:not(:disabled) {
+  background: rgba(192, 57, 43, 0.1);
+  border-color: rgba(192, 57, 43, 0.44);
+}
+
 /* Done / logged state */
 .dash-log-done {
   display: flex;

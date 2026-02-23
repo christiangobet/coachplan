@@ -75,6 +75,10 @@ type DayExternalLog = {
   avgHeartRate: number | null;
   calories: number | null;
   matchedPlanActivityId: string | null;
+  equivalence: string | null;
+  equivalenceOverride: string | null;
+  equivalenceNote: string | null;
+  loadRatio: number | null;
 };
 
 type DayInfo = {
@@ -247,6 +251,35 @@ function formatDistanceMeters(value: number | null | undefined, viewerUnit: Dist
   const converted = convertDistanceForDisplay(value / 1000, "KM", viewerUnit);
   if (!converted) return "—";
   return `${formatDistanceNumber(converted.value)} ${distanceUnitLabel(converted.unit)}`;
+}
+
+type MatchLevel = 'FULL' | 'PARTIAL' | 'NONE' | null;
+
+function resolveMatchLevel(log: DayExternalLog): MatchLevel {
+  return (log.equivalenceOverride || log.equivalence || null) as MatchLevel;
+}
+
+function matchBadgeClass(level: MatchLevel, isMatched: boolean) {
+  if (level === 'FULL') return 'cal-match-badge full';
+  if (level === 'PARTIAL') return 'cal-match-badge partial';
+  if (level === 'NONE') return 'cal-match-badge none';
+  if (isMatched) return 'cal-match-badge matched';
+  return 'cal-match-badge unmatched';
+}
+
+function matchBadgeLabel(level: MatchLevel, isMatched: boolean) {
+  if (level === 'FULL') return '✓ Full credit';
+  if (level === 'PARTIAL') return '≈ Partial credit';
+  if (level === 'NONE') return '✗ No credit';
+  if (isMatched) return 'Matched';
+  return 'No match';
+}
+
+function logItemClass(level: MatchLevel) {
+  if (level === 'FULL') return 'cal-day-detail-item log match-full';
+  if (level === 'PARTIAL') return 'cal-day-detail-item log match-partial';
+  if (level === 'NONE') return 'cal-day-detail-item log match-none';
+  return 'cal-day-detail-item log match-unmatched';
 }
 
 function parseExternalRawDateKey(raw: unknown) {
@@ -507,6 +540,10 @@ export default async function CalendarPage({
       avgHeartRate: true,
       calories: true,
       matchedPlanActivityId: true,
+      equivalence: true,
+      equivalenceOverride: true,
+      equivalenceNote: true,
+      loadRatio: true,
       raw: true
     }
   });
@@ -526,7 +563,11 @@ export default async function CalendarPage({
       durationSec: item.durationSec ?? null,
       avgHeartRate: item.avgHeartRate ?? null,
       calories: item.calories ?? null,
-      matchedPlanActivityId: item.matchedPlanActivityId ?? null
+      matchedPlanActivityId: item.matchedPlanActivityId ?? null,
+      equivalence: item.equivalence ?? null,
+      equivalenceOverride: item.equivalenceOverride ?? null,
+      equivalenceNote: item.equivalenceNote ?? null,
+      loadRatio: item.loadRatio ?? null,
     });
     externalByDate.set(key, row);
   }
@@ -542,6 +583,7 @@ export default async function CalendarPage({
   const selectedDayStatus: DayStatus = selectedDayExplicitlyOpen ? 'OPEN' : selectedDayAutoDone ? 'DONE' : selectedManualStatus;
   const selectedDayDone = selectedDayStatus === 'DONE';
   const selectedDayMissed = selectedDayStatus === 'MISSED';
+  const selectedDayPartial = selectedDayStatus === 'PARTIAL';
 
   const monthWorkoutCount = dayCells
     .filter((date) => date.getMonth() === monthStart.getMonth() && date.getFullYear() === monthStart.getFullYear())
@@ -647,6 +689,7 @@ export default async function CalendarPage({
                 const dayStatus: DayStatus = dayAutoDone ? 'DONE' : dayManualStatus;
                 const dayDone = dayStatus === 'DONE';
                 const dayMissed = dayStatus === 'MISSED';
+                const dayPartial = dayStatus === 'PARTIAL';
                 const stravaLogs = dayLogs.filter((log) => log.provider === "STRAVA");
                 const stravaMarkerLogs = stravaLogs.slice(0, 3);
                 const stravaOverflow = Math.max(0, stravaLogs.length - stravaMarkerLogs.length);
@@ -662,6 +705,7 @@ export default async function CalendarPage({
                       isSelected ? "selected" : "",
                       dayDone ? "day-done" : "",
                       dayMissed ? "day-missed" : "",
+                      dayPartial ? "day-partial" : "",
                       inPlan ? "in-plan" : ""
                     ].join(" ").trim()}
                   >
@@ -671,6 +715,7 @@ export default async function CalendarPage({
                       <div className="cal-day-head-badges">
                         {dayDone && <span className="cal-day-check" title="Day completed">✓</span>}
                         {dayMissed && <span className="cal-day-check missed" title="Day closed as missed">○</span>}
+                        {dayPartial && <span className="cal-day-check partial" title="Day partially completed">✓</span>}
                       </div>
                     </div>
 
@@ -751,6 +796,7 @@ export default async function CalendarPage({
               <div className="cal-detail-badges">
                 {selectedDayDone && <span className="cal-detail-badge status-done">✓ Done</span>}
                 {selectedDayMissed && <span className="cal-detail-badge status-missed">✗ Missed</span>}
+                {selectedDayPartial && <span className="cal-detail-badge status-partial">≈ Partial</span>}
               </div>
             </div>
 
@@ -781,32 +827,42 @@ export default async function CalendarPage({
                   <h4>Logged Activities</h4>
                   {stravaAccount && <StravaDaySyncButton dateISO={selectedDateKey} className="cal-strava-sync-btn" />}
                 </div>
-                {selectedExternalLogs.map((log) => (
-                  <div key={log.id} className="cal-day-detail-item log">
-                    <div className="cal-day-detail-title">
-                      <strong className="cal-day-log-title">
-                        <ExternalSportIcon
-                          provider={log.provider}
-                          sportType={log.sportType}
-                          className="cal-day-log-icon"
-                        />
-                        <span>{log.name}</span>
-                      </strong>
-                      <span className="cal-day-log-provider">
-                        {log.provider === 'STRAVA'
-                          ? <StravaIcon size={13} className="cal-day-log-provider-icon" />
-                          : formatProviderName(log.provider)}
-                        {' · '}{log.startTimeLabel || formatClock(log.startTime)}
-                      </span>
+                {selectedExternalLogs.map((log) => {
+                  const matchLevel = resolveMatchLevel(log);
+                  const isMatched = Boolean(log.matchedPlanActivityId);
+                  return (
+                    <div key={log.id} className={logItemClass(matchLevel)}>
+                      <div className="cal-day-detail-title">
+                        <strong className="cal-day-log-title">
+                          <ExternalSportIcon
+                            provider={log.provider}
+                            sportType={log.sportType}
+                            className="cal-day-log-icon"
+                          />
+                          <span>{log.name}</span>
+                        </strong>
+                        <span className="cal-day-log-provider">
+                          {log.provider === 'STRAVA'
+                            ? <StravaIcon size={13} className="cal-day-log-provider-icon" />
+                            : formatProviderName(log.provider)}
+                          {' · '}{log.startTimeLabel || formatClock(log.startTime)}
+                        </span>
+                      </div>
+                      <div className="cal-day-detail-meta">
+                        <span>{formatDistanceMeters(log.distanceM, viewerUnits)} · {formatDurationSeconds(log.durationSec)}{log.avgHeartRate ? ` · HR ${log.avgHeartRate} bpm` : ''}</span>
+                        {log.calories ? <span>{Math.round(log.calories)} kcal</span> : null}
+                      </div>
+                      <div className="cal-day-log-match-row">
+                        <span className={matchBadgeClass(matchLevel, isMatched)}>
+                          {matchBadgeLabel(matchLevel, isMatched)}
+                        </span>
+                        {log.equivalenceNote && (
+                          <span className="cal-day-log-match-note">{log.equivalenceNote}</span>
+                        )}
+                      </div>
                     </div>
-                    <div className="cal-day-detail-meta">
-                      <span>{formatDistanceMeters(log.distanceM, viewerUnits)} · {formatDurationSeconds(log.durationSec)}</span>
-                      {log.avgHeartRate ? <span>Avg HR: {log.avgHeartRate} bpm</span> : null}
-                      {log.calories ? <span>Calories: {Math.round(log.calories)}</span> : null}
-                      <span>{log.matchedPlanActivityId ? "Matched to plan activity" : "Not matched yet"}</span>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 
