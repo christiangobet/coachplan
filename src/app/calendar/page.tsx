@@ -60,6 +60,7 @@ type DatedActivity = {
   actualDuration: number | null;
   actualPace: string | null;
   notes: string | null;
+  sessionInstructions: string | null;
 };
 
 type DayExternalLog = {
@@ -417,7 +418,8 @@ export default async function CalendarPage({
           actualDistance: activity.actualDistance ?? null,
           actualDuration: activity.actualDuration ?? null,
           actualPace: activity.actualPace ?? null,
-          notes: activity.notes ?? null
+          notes: activity.notes ?? null,
+          sessionInstructions: activity.sessionInstructions ?? null
         };
         const existing = activitiesByDate.get(key) || [];
         existing.push(next);
