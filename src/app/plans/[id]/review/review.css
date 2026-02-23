@@ -1214,6 +1214,85 @@
   color: #344867;
 }
 
+/* ── Guide Panel ─────────────────────────────────────────────────────────── */
+
+.review-guide-panel {
+  display: grid;
+  gap: 10px;
+}
+
+.review-guide-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.review-guide-head h3 {
+  margin: 0;
+  font-size: 14px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #2c4467;
+}
+
+.review-guide-head p {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #60708d;
+}
+
+.review-guide-status {
+  font-size: 12px;
+  font-weight: 700;
+  color: #5f6f8a;
+  white-space: nowrap;
+  align-self: center;
+}
+
+.review-guide-status.saved {
+  color: #147a44;
+}
+
+.review-guide-textarea {
+  width: 100%;
+  min-height: 120px;
+  resize: vertical;
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.review-guide-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.review-guide-result {
+  font-size: 13px;
+  font-weight: 700;
+  color: #147a44;
+}
+
+.review-guide-warning {
+  margin: 0;
+  font-size: 11px;
+  color: #7a879b;
+}
+
+/* ── Session Instructions Panel ─────────────────────────────────────────── */
+
+.review-session-instructions-panel {
+  border-top: 1px solid #edf2fb;
+  padding-top: 10px;
+}
+
+.review-session-instructions-panel textarea {
+  min-height: 72px;
+}
+
 @media (max-width: 1099px) {
   .review-page-shell.with-source-pane {
     grid-template-columns: 1fr;

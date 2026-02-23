@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useParams, useSearchParams } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import './review.css';
 import {
   estimateGoalTimeFromEvidence,
@@ -77,6 +77,7 @@ type ReviewActivity = {
   effortTarget: string | null;
   rawText: string | null;
   notes: string | null;
+  sessionInstructions: string | null;
 };
 
 type ReviewDay = {
@@ -99,6 +100,7 @@ type ReviewPlan = {
   name: string;
   status: string;
   parseProfile?: unknown;
+  planGuide?: string | null;
   weeks: ReviewWeek[];
   days: ReviewDay[];
   activities: ReviewActivity[];
@@ -162,6 +164,7 @@ type ActivityDraft = {
   paceTarget: string;
   effortTarget: string;
   rawText: string;
+  sessionInstructions: string;
 };
 
 type ProfilePaceMap = Partial<Record<PaceBucketValue, string>>;
@@ -209,7 +212,8 @@ function toActivityDraft(activity: ReviewActivity, fallbackUnit: DistanceUnitVal
     paceTargetBucket: inferredPaceBucket || '',
     paceTarget: activity.paceTarget || '',
     effortTarget: activity.effortTarget || '',
-    rawText: activity.rawText || ''
+    rawText: activity.rawText || '',
+    sessionInstructions: activity.sessionInstructions || ''
   };
 }
 
@@ -350,6 +354,7 @@ function formatPace(goalTimeSec: number, raceDistanceKm: number, multiplier: num
 export default function PlanReviewPage() {
   const params = useParams<{ id: string }>();
   const searchParams = useSearchParams();
+  const router = useRouter();
   const planId = Array.isArray(params?.id) ? params?.id[0] : params?.id;
   const arrivedFromUpload = searchParams?.get('fromUpload') === '1';
   const parseWarningMsg = searchParams?.get('parseWarningMsg');
@@ -411,8 +416,18 @@ export default function PlanReviewPage() {
     error: null
   });
 
+  const [planGuide, setPlanGuide] = useState('');
+  const [guideSaving, setGuideSaving] = useState(false);
+  const [guideSaved, setGuideSaved] = useState(false);
+  const [reparsing, setReparsing] = useState(false);
+  const [reparseResult, setReparseResult] = useState<{ weeksProcessed: number; activitiesUpdated: number } | null>(null);
+  const [reparseError, setReparseError] = useState<string | null>(null);
+  const [expandedSessionInstructions, setExpandedSessionInstructions] = useState<Record<string, boolean>>({});
+
   const daySaveTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const activitySaveTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const guideSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const guideSavedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sourceToggleStorageKey = planId ? `review-source-pane:${planId}` : null;
 
   const initializeDrafts = useCallback((nextPlan: ReviewPlan, fallbackUnit: DistanceUnitValue) => {
@@ -463,6 +478,7 @@ export default function PlanReviewPage() {
       const units = data?.viewerUnits === 'KM' ? 'KM' : 'MILES';
       setViewerUnits(units);
       setPlan(fetchedPlan);
+      setPlanGuide(fetchedPlan.planGuide ?? '');
       initializeDrafts(fetchedPlan, units);
     } catch {
       setError('Failed to load plan.');
@@ -897,7 +913,8 @@ export default function PlanReviewPage() {
             paceTargetBucket: draft.paceTargetBucket || null,
             paceTarget: draft.paceTarget.trim() || null,
             effortTarget: draft.effortTarget.trim() || null,
-            rawText: draft.rawText.trim() || null
+            rawText: draft.rawText.trim() || null,
+            sessionInstructions: draft.sessionInstructions.trim() || null
           })
         });
         const data = await res.json().catch(() => null);
@@ -951,6 +968,61 @@ export default function PlanReviewPage() {
     },
     [queueActivityAutosave]
   );
+
+  const persistPlanGuide = useCallback(
+    async (value: string) => {
+      if (!planId) return;
+      setGuideSaving(true);
+      try {
+        const res = await fetch(`/api/plans/${planId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ planGuide: value })
+        });
+        if (!res.ok) return;
+        if (guideSavedTimerRef.current) clearTimeout(guideSavedTimerRef.current);
+        setGuideSaved(true);
+        guideSavedTimerRef.current = setTimeout(() => setGuideSaved(false), 2500);
+      } catch {
+        // Silently fail — guide save is best-effort
+      } finally {
+        setGuideSaving(false);
+      }
+    },
+    [planId]
+  );
+
+  const handleGuideBlur = useCallback(() => {
+    if (guideSaveTimerRef.current) clearTimeout(guideSaveTimerRef.current);
+    guideSaveTimerRef.current = setTimeout(() => {
+      void persistPlanGuide(planGuide);
+    }, 800);
+  }, [persistPlanGuide, planGuide]);
+
+  const handleReparse = useCallback(async () => {
+    if (!planId || reparsing) return;
+    setReparsing(true);
+    setReparseResult(null);
+    setReparseError(null);
+    try {
+      const res = await fetch(`/api/plans/${planId}/reparse`, { method: 'POST' });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        setReparseError(data?.error || 'Re-parse failed');
+        return;
+      }
+      setReparseResult({
+        weeksProcessed: Number(data?.weeksProcessed ?? 0),
+        activitiesUpdated: Number(data?.activitiesUpdated ?? 0)
+      });
+      router.refresh();
+      void loadPlan();
+    } catch {
+      setReparseError('Re-parse failed');
+    } finally {
+      setReparsing(false);
+    }
+  }, [loadPlan, planId, reparsing, router]);
 
   const applyPaceBucket = useCallback(
     (activityId: string, bucket: PaceBucketValue) => {
@@ -1899,6 +1971,51 @@ export default function PlanReviewPage() {
 
       <div className={showDesktopSourcePane ? 'review-main-column' : undefined}>
       {!isActivated && (
+        <section className="review-page-card review-guide-panel">
+          <div className="review-guide-head">
+            <div>
+              <h3>Plan Context Guide</h3>
+              <p>
+                This guide is used to expand abbreviations and write session instructions during parsing.
+                Correct any errors, then re-parse.
+              </p>
+            </div>
+            {guideSaving && <span className="review-guide-status">Saving&hellip;</span>}
+            {!guideSaving && guideSaved && <span className="review-guide-status saved">Saved &#10003;</span>}
+          </div>
+          <label className="review-field">
+            <span className="review-visually-hidden">Plan guide content</span>
+            <textarea
+              className="review-guide-textarea"
+              value={planGuide}
+              onChange={(event) => setPlanGuide(event.target.value)}
+              onBlur={handleGuideBlur}
+              rows={6}
+              placeholder="No guide extracted yet. Add abbreviations and pace zone definitions here to improve parsing."
+            />
+          </label>
+          <div className="review-guide-actions">
+            <button
+              className="review-save-btn"
+              type="button"
+              onClick={handleReparse}
+              disabled={reparsing || autosaveState.busy || guideSaving}
+            >
+              {reparsing ? 'Re-parsing\u2026 (this may take 30\u201360s)' : '\u21BA Re-parse Schedule with Current Guide'}
+            </button>
+            {reparseResult && (
+              <span className="review-guide-result">
+                &#10003; Re-parsed: {reparseResult.weeksProcessed} weeks &middot; {reparseResult.activitiesUpdated} activities updated
+              </span>
+            )}
+          </div>
+          {reparseError && <p className="review-error">{reparseError}</p>}
+          <p className="review-guide-warning">
+            Re-parse updates activity titles, instructions, and pace targets. It does not change logged data or planned distances.
+          </p>
+        </section>
+      )}
+      {!isActivated && (
         <section className="review-week-grid" id="review-week-grid">
           {weeks.map((week) => {
           const days = sortDays(week.days || []);
@@ -1970,6 +2087,7 @@ export default function PlanReviewPage() {
                         const hasPaceTarget = draft.paceTarget.trim() !== '';
                         const showPaceField = isRunActivity || hasPaceTarget;
                         const detailsOpen = expandedActivityDetails[activity.id] ?? false;
+                        const sessionInstructionsOpen = expandedSessionInstructions[activity.id] ?? false;
                         const activitySaving = Boolean(savingActivityIds[activity.id] || queuedActivityIds[activity.id]);
                         const activityDisplayType = draft.type.replace(/_/g, ' ');
                         return (
@@ -2077,6 +2195,15 @@ export default function PlanReviewPage() {
                                   className="review-save-btn secondary review-details-toggle"
                                   type="button"
                                   onClick={() =>
+                                    setExpandedSessionInstructions((prev) => ({ ...prev, [activity.id]: !sessionInstructionsOpen }))
+                                  }
+                                >
+                                  {sessionInstructionsOpen ? 'Hide Instructions' : 'Session Instructions'}
+                                </button>
+                                <button
+                                  className="review-save-btn secondary review-details-toggle"
+                                  type="button"
+                                  onClick={() =>
                                     setExpandedActivityDetails((prev) => ({ ...prev, [activity.id]: !detailsOpen }))
                                   }
                                 >
@@ -2092,6 +2219,22 @@ export default function PlanReviewPage() {
                                 </button>
                               </div>
                             </div>
+
+                            {sessionInstructionsOpen && (
+                              <div className="review-session-instructions-panel">
+                                <label className="review-field">
+                                  <span>Session Instructions</span>
+                                  <textarea
+                                    value={draft.sessionInstructions}
+                                    onChange={(event) =>
+                                      setActivityDraftField(activity.id, 'sessionInstructions', event.target.value)
+                                    }
+                                    rows={3}
+                                    placeholder="Generated session instructions will appear here after re-parsing."
+                                  />
+                                </label>
+                              </div>
+                            )}
 
                             {detailsOpen && (
                               <div className={`review-activity-details${showPaceField ? '' : ' no-pace'}`}>
