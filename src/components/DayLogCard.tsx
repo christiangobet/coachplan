@@ -550,6 +550,12 @@ export default function DayLogCard({
                 )}
               </div>
             </div>
+            {activity.sessionInstructions && (
+              <details className="day-log-instructions">
+                <summary className="day-log-instructions-toggle">How to execute</summary>
+                <p className="day-log-instructions-text">{activity.sessionInstructions}</p>
+              </details>
+            )}
             {showForm && (
               <ActivityRow
                 activity={activity}
