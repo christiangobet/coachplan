@@ -88,6 +88,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     raceName?: string | null;
     raceDate?: Date | null;
     status?: PlanStatus;
+    planGuide?: string | null;
   } = {};
 
   if ('raceName' in body) {
@@ -115,7 +116,13 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     updates.status = body.status as PlanStatus;
   }
 
-  if (!('raceName' in body) && !('raceDate' in body) && !('status' in body)) {
+  if ('planGuide' in body) {
+    if (body.planGuide === null || typeof body.planGuide === 'string') {
+      updates.planGuide = typeof body.planGuide === 'string' ? body.planGuide || null : null;
+    }
+  }
+
+  if (!('raceName' in body) && !('raceDate' in body) && !('status' in body) && !('planGuide' in body)) {
     return NextResponse.json({ error: 'No supported fields to update' }, { status: 400 });
   }
 

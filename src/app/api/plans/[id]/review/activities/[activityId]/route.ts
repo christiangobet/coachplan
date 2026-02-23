@@ -102,6 +102,7 @@ export async function PATCH(
     paceTarget?: unknown;
     effortTarget?: unknown;
     notes?: unknown;
+    sessionInstructions?: unknown;
   };
 
   const updates: {
@@ -126,6 +127,7 @@ export async function PATCH(
     effortTargetBpmMin?: number | null;
     effortTargetBpmMax?: number | null;
     notes?: string | null;
+    sessionInstructions?: string | null;
   } = {};
 
   if (raw.title !== undefined) {
@@ -209,6 +211,9 @@ export async function PATCH(
 
   const notes = normalizeOptionalText(raw.notes);
   if (notes !== undefined) updates.notes = notes;
+
+  const sessionInstructions = normalizeOptionalText(raw.sessionInstructions);
+  if (sessionInstructions !== undefined) updates.sessionInstructions = sessionInstructions;
 
   if (Object.keys(updates).length === 0 && !paceTargetBucketProvided) {
     return NextResponse.json({ error: 'No editable fields provided' }, { status: 400 });
