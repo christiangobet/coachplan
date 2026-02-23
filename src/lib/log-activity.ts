@@ -23,6 +23,7 @@ export type LogActivity = {
   // Raw fields needed for per-activity unit inference
   distanceUnit: 'MILES' | 'KM' | null;
   paceTarget: string | null;
+  sessionInstructions: string | null;
 };
 
 export function buildPlannedMetricParts(activity: any, viewerUnits: DistanceUnit): string[] {
@@ -94,6 +95,9 @@ export function buildLogActivities(rawActivities: any[], viewerUnits: DistanceUn
         actualPace: displayActualPace || null,
         distanceUnit: activity.distanceUnit ?? null,
         paceTarget: activity.paceTarget ?? null,
+        sessionInstructions: typeof activity.sessionInstructions === 'string' && activity.sessionInstructions.trim()
+          ? activity.sessionInstructions.trim()
+          : null,
       };
     });
 }
