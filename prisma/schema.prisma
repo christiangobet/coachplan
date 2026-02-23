@@ -137,6 +137,7 @@ model TrainingPlan {
   isPublic    Boolean     @default(false)
   sourceId    String?
   parseProfile Json?
+  planGuide   String?
   createdAt   DateTime    @default(now())
 
   ownerId    String?
