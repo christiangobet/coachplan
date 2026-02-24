@@ -542,6 +542,23 @@ details[open] .day-log-instructions-toggle::before {
   color: var(--d-text);
 }
 
+.dash-log-collapsed .dash-btn-secondary.is-done {
+  background: var(--d-orange);
+  border-top-color: var(--d-orange);
+  color: #fff;
+}
+
+.dash-log-collapsed .dash-btn-secondary.is-done:hover {
+  background: #e54400;
+  color: #fff;
+}
+
+.dash-log-collapsed-tick {
+  color: #4ade80;
+  font-size: 15px;
+  font-weight: 800;
+}
+
 .dash-log-header {
   display: flex;
   align-items: center;
@@ -1725,6 +1742,12 @@ details[open] .day-log-instructions-toggle::before {
   color: var(--d-orange);
 }
 
+.dash-guide-empty {
+  font-size: 13px;
+  color: var(--d-muted);
+  padding: 2px 0 8px;
+}
+
 /* ══════════════════════════
    Right sidebar
    ══════════════════════════ */
@@ -2828,6 +2851,15 @@ details[open] .day-log-instructions-toggle::before {
     grid-template-columns: 1fr;
   }
 
+  /* Log fields: 2-col on tablet */
+  .dash-log-fields {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .dash-log-actions {
+    flex-wrap: wrap;
+  }
+
   .dash-activity-log-item-top {
     flex-direction: column;
     align-items: flex-start;
@@ -2897,6 +2929,32 @@ details[open] .day-log-instructions-toggle::before {
 
   .dash-card-title {
     font-size: 14px;
+  }
+
+  /* Reduce hero card horizontal padding to match log button bleed */
+  .dash-hero {
+    padding: 16px 14px 14px;
+  }
+
+  /* Log button must bleed to the new 14px edge */
+  .dash-log-collapsed {
+    margin: 0 -14px -14px;
+  }
+
+  /* Log fields: 1-col on small phones */
+  .dash-log-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .dash-log-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .dash-log-actions .dash-btn-primary,
+  .dash-log-actions .dash-btn-ghost {
+    width: 100%;
+    justify-content: center;
   }
 
   .dash-activity-log-card {

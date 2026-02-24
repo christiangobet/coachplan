@@ -352,3 +352,10 @@
     display: none;
   }
 }
+
+@media (max-width: 480px) {
+  .body {
+    padding: 14px 14px;
+    gap: 14px;
+  }
+}
