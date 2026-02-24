@@ -786,8 +786,8 @@ export default async function DashboardPage({
             </div>
           </div>
 
-          {/* Weekly overview */}
-          <div className="dash-card">
+          {/* Weekly overview — hidden on mobile (dash-week-snapshot already shows this week) */}
+          <div className="dash-card dash-week-overview">
             <details className="dash-collapse">
               <summary className="dash-collapse-summary">
                 <span className="dash-card-title">This Week</span>
