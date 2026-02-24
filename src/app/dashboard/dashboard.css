@@ -526,11 +526,14 @@ details[open] .day-log-instructions-toggle::before {
   display: flex;
   width: 100%;
   justify-content: center;
+  align-items: center;
+  text-align: center;
+  line-height: 1.35;
+  min-height: 52px;
   padding: 14px 24px;
   border-radius: 0 0 var(--d-radius-lg) var(--d-radius-lg);
   border: none;
-  border-top: 1px solid var(--d-border);
-  background: var(--d-bg);
+  background: transparent;
   font-size: 14px;
   font-weight: 600;
   color: var(--d-text-mid);
@@ -565,6 +568,28 @@ details[open] .day-log-instructions-toggle::before {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 14px;
+}
+
+.dash-log-close-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 1px solid var(--d-border);
+  background: var(--d-surface);
+  color: var(--d-text-mid);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  transition: border-color 0.12s, color 0.12s, background 0.12s;
+}
+
+.dash-log-close-btn:hover {
+  border-color: var(--d-text-mid);
+  color: var(--d-text);
+  background: var(--d-raised);
 }
 
 .dash-log-label {
@@ -2523,12 +2548,18 @@ details[open] .day-log-instructions-toggle::before {
 
 .dash-status-item {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--d-space-1);
   padding: var(--d-space-1) 0;
   font-size: 13px;
   color: var(--d-text-mid);
   border-bottom: 1px solid var(--d-border-light);
+}
+
+.dash-status-text {
+  flex: 1;
+  min-width: 0;
+  line-height: 1.4;
 }
 
 .dash-status-item-link {
@@ -2571,7 +2602,7 @@ details[open] .day-log-instructions-toggle::before {
   flex-shrink: 0;
   font-size: 12px;
   font-weight: 700;
-  color: var(--d-primary);
+  color: var(--d-orange);
   background: none;
   border: none;
   cursor: pointer;
@@ -2594,6 +2625,11 @@ details[open] .day-log-instructions-toggle::before {
 .dash-status-group .dash-status-item {
   border-bottom: none;
   padding-bottom: var(--d-space-1);
+}
+
+.dash-plan-reference-mobile-copy,
+.dash-plan-reference-mobile-link {
+  display: none;
 }
 
 /* Expanded past-day panel in sidebar */
@@ -2799,6 +2835,11 @@ details[open] .day-log-instructions-toggle::before {
     font-size: 26px;
   }
 
+  .dash-page-heading p {
+    font-size: 13px;
+    line-height: 1.35;
+  }
+
   .dash-hero-title {
     font-size: 18px;
   }
@@ -2808,13 +2849,13 @@ details[open] .day-log-instructions-toggle::before {
   }
 
   .dash-greeting-meta {
-    grid-template-columns: repeat(3, 1fr);
-    gap: 4px;
-    margin-top: 8px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+    margin-top: 10px;
   }
 
   .dash-greeting-meta-item {
-    padding: 6px 8px;
+    padding: 7px 10px;
     gap: 1px;
   }
 
@@ -2844,6 +2885,30 @@ details[open] .day-log-instructions-toggle::before {
   .dash-card-header {
     flex-wrap: wrap;
     gap: 8px;
+  }
+
+  .dash-page-heading {
+    order: 1;
+  }
+
+  .dash-activation-banner {
+    order: 2;
+  }
+
+  .dash-hero {
+    order: 3;
+  }
+
+  .dash-plan-summary {
+    order: 4;
+  }
+
+  .dash-next-up-card {
+    order: 5;
+  }
+
+  .dash-plan-reference-card {
+    order: 6;
   }
 
   .dash-overview-grid {
@@ -2884,6 +2949,44 @@ details[open] .day-log-instructions-toggle::before {
 
   .dash-log-actions {
     flex-wrap: wrap;
+  }
+
+  .dash-hero-header {
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 6px 10px;
+  }
+
+  .dash-hero-date {
+    flex: 1 1 180px;
+    min-width: 0;
+    line-height: 1.35;
+  }
+
+  .dash-next-hero-top {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .dash-next-hero-date {
+    max-width: 100%;
+    text-align: left;
+  }
+
+  .dash-right {
+    gap: 12px;
+  }
+
+  .dash-status-card {
+    order: 1;
+  }
+
+  .dash-week-snapshot {
+    order: 2;
+  }
+
+  .dash-plan-progress-card {
+    order: 3;
   }
 
   .dash-activity-log-item-top {
@@ -2938,6 +3041,23 @@ details[open] .day-log-instructions-toggle::before {
   }
 }
 
+@media (max-width: 640px) {
+  .dash-greeting-meta {
+    grid-template-columns: 1fr;
+  }
+
+  .dash-greeting-meta-value {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+  }
+
+  .dash-log-section.is-closed {
+    margin-top: 14px;
+    padding-top: 14px;
+  }
+}
+
 @media (max-width: 480px) {
   .dash-grid {
     padding: var(--d-space-1) var(--d-space-1) var(--d-space-4);
@@ -2957,11 +3077,6 @@ details[open] .day-log-instructions-toggle::before {
     font-size: 14px;
   }
 
-  /* Plan/Race/Date meta — 2-col on small phones (Race Name truncates badly at 1/3 width) */
-  .dash-greeting-meta {
-    grid-template-columns: 1fr 1fr;
-  }
-
   /* Reduce upcoming-start chip so 2 chips fit comfortably */
   .dash-upcoming-start-chip {
     min-width: 60px;
@@ -2970,6 +3085,32 @@ details[open] .day-log-instructions-toggle::before {
   /* Reduce hero card horizontal padding to match log button bleed */
   .dash-hero {
     padding: 16px 14px 14px;
+  }
+
+  .dash-hero-workout {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .dash-hero-workout .dash-type-badge {
+    margin-top: 0;
+    margin-bottom: 0;
+  }
+
+  .dash-hero-date {
+    font-size: 10px;
+    letter-spacing: 0.04em;
+  }
+
+  .dash-hero-view-plan {
+    min-height: 30px;
+    padding: 0 10px;
+    border-radius: 999px;
+    border: 1px solid var(--d-border);
+    background: var(--d-surface);
+    font-size: 11px;
+    display: inline-flex;
+    align-items: center;
   }
 
   /* Log button must bleed to the new 14px edge */
@@ -2993,6 +3134,11 @@ details[open] .day-log-instructions-toggle::before {
     justify-content: center;
   }
 
+  .dash-log-close-btn {
+    width: 32px;
+    height: 32px;
+  }
+
   .dash-activity-log-card {
     scroll-margin-top: 72px;
   }
@@ -3012,6 +3158,73 @@ details[open] .day-log-instructions-toggle::before {
 
   .dash-next-hero-title {
     font-size: 14px;
+  }
+
+  .dash-upcoming-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .dash-upcoming-left {
+    width: 100%;
+  }
+
+  .dash-upcoming-title {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+  }
+
+  .dash-upcoming-metrics {
+    text-align: left;
+  }
+
+  .dash-status-item {
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+
+  .dash-status-cta {
+    margin-left: 16px;
+    min-height: 30px;
+    padding: 0 10px;
+    border: 1px solid var(--d-border);
+    border-radius: 999px;
+    background: var(--d-surface);
+    color: var(--d-text);
+  }
+
+  .dash-status-cta:hover {
+    text-decoration: none;
+    border-color: var(--d-text-mid);
+  }
+
+  .dash-plan-reference-card .dash-card-link {
+    display: none;
+  }
+
+  .dash-plan-reference-body {
+    display: none;
+  }
+
+  .dash-plan-reference-mobile-copy {
+    display: block;
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--d-text-mid);
+  }
+
+  .dash-plan-reference-mobile-link {
+    display: inline-flex;
+    width: 100%;
+    justify-content: center;
+    margin-top: 10px;
+  }
+
+  .dash-plan-progress-card {
+    display: none;
   }
 
   .dash-overview-grid {

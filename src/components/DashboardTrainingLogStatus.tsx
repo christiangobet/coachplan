@@ -40,7 +40,7 @@ export default function DashboardTrainingLogStatus({ items }: { items: StatusFee
         <div key={i} className="dash-status-group">
           <div className="dash-status-item">
             <span className={`dash-status-dot ${item.alert ? 'warn' : 'ok'}`} />
-            <span>{item.text}</span>
+            <span className="dash-status-text">{item.text}</span>
             {item.logDay && (
               <button
                 type="button"

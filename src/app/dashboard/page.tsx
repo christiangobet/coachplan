@@ -618,7 +618,7 @@ export default async function DashboardPage({
           </div>
 
           {/* Upcoming workouts */}
-          <div className="dash-card">
+          <div className="dash-card dash-next-up-card">
             <div className="dash-card-header">
               <span className="dash-card-title">Next Up</span>
               <a className="dash-card-link" href={`/plans/${activePlan.id}`}>
@@ -712,15 +712,23 @@ export default async function DashboardPage({
           </div>
 
           {/* Guide */}
-          <div className="dash-card">
+          <div className="dash-card dash-plan-reference-card">
             <div className="dash-card-header">
               <span className="dash-card-title">📋 Plan Reference</span>
               <a className="dash-card-link" href={`/plans/${activePlan.id}`}>Full guide →</a>
             </div>
-            <PlanSummarySection
-              summary={activePlan.planSummary as PlanSummary | null}
-              planId={activePlan.id}
-            />
+            <div className="dash-plan-reference-body">
+              <PlanSummarySection
+                summary={activePlan.planSummary as PlanSummary | null}
+                planId={activePlan.id}
+              />
+            </div>
+            <p className="dash-plan-reference-mobile-copy">
+              Open the full guide for phases, key workout structure, and glossary details.
+            </p>
+            <a className="dash-btn-secondary dash-plan-reference-mobile-link" href={`/plans/${activePlan.id}`}>
+              Open Full Guide
+            </a>
           </div>
         </section>
 
@@ -751,7 +759,7 @@ export default async function DashboardPage({
           </div>
 
           {/* Status feed */}
-          <div className="dash-card">
+          <div className="dash-card dash-status-card">
             <div className="dash-card-header">
               <span className="dash-card-title">Training Calendar Status</span>
             </div>
@@ -841,7 +849,7 @@ export default async function DashboardPage({
           </div>
 
           {/* Plan progress */}
-          <div className="dash-card">
+          <div className="dash-card dash-plan-progress-card">
             <details className="dash-collapse">
               <summary className="dash-collapse-summary">
                 <span className="dash-card-title">Plan Progress</span>
