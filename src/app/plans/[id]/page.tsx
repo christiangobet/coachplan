@@ -503,8 +503,8 @@ export default function PlanDetailPage() {
           const body = await res.json().catch(() => ({}));
           throw new Error(body.error || 'Failed to update activity');
         }
-        // Refresh plan
-        await loadPlan();
+        // Refresh plan in background so the modal closes immediately
+        loadPlan();
       } else if (addingToDayId) {
         // Add new
         const res = await fetch(`/api/plan-days/${addingToDayId}/activities`, {
@@ -516,7 +516,7 @@ export default function PlanDetailPage() {
           const body = await res.json().catch(() => ({}));
           throw new Error(body.error || 'Failed to add activity');
         }
-        await loadPlan();
+        loadPlan();
       }
     } catch (err: any) {
       alert(err.message); // Simple error feedback for now
