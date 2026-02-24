@@ -1403,6 +1403,45 @@
   color: var(--d-text-mid);
 }
 
+/* ── Plan Reference guide card ── */
+.cal-guide-details {
+  padding-bottom: 4px;
+}
+
+.cal-guide-details[open] {
+  padding-bottom: 12px;
+}
+
+.cal-guide-details[open] .cal-guide-summary-hint {
+  display: none;
+}
+
+.cal-guide-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font: 700 13px/1 'Figtree', sans-serif;
+  color: var(--d-text);
+  cursor: pointer;
+  list-style: none;
+  padding: 4px 0 2px;
+  user-select: none;
+}
+
+.cal-guide-summary::-webkit-details-marker {
+  display: none;
+}
+
+.cal-guide-summary-hint {
+  font: 400 12px/1 'Figtree', sans-serif;
+  color: var(--d-muted);
+}
+
+.cal-guide-body {
+  margin-top: 10px;
+  border-top: 1px solid var(--d-border-light);
+}
+
 @media (max-width: 1200px) {
   .cal-grid {
     gap: 6px;

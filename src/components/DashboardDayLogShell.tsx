@@ -51,12 +51,20 @@ export default function DashboardDayLogShell({
     <section id={ANCHOR_ID} className={`dash-log-section${open ? '' : ' is-closed'}`}>
       {!open ? (
         <div className="dash-log-collapsed">
-          <button type="button" className="dash-btn-secondary" onClick={() => setOpen(true)}>
-            {dayStatus === 'DONE'
-              ? '✓ Day logged — review log'
-              : dayStatus === 'MISSED'
-                ? '✗ Day missed — reopen'
-                : 'Log today\'s workout'}
+          <button
+            type="button"
+            className={`dash-btn-secondary${dayStatus === 'DONE' ? ' is-done' : dayStatus === 'MISSED' ? ' is-missed' : ''}`}
+            onClick={() => setOpen(true)}
+          >
+            {dayStatus === 'DONE' ? (
+              <><span className="dash-log-collapsed-tick">✓</span> Day logged — review log</>
+            ) : dayStatus === 'PARTIAL' ? (
+              <><span className="dash-log-collapsed-tick">✓</span> Partial day logged — review log</>
+            ) : dayStatus === 'MISSED' ? (
+              '✗ Day missed — reopen'
+            ) : (
+              'Log today\'s workout'
+            )}
           </button>
         </div>
       ) : (

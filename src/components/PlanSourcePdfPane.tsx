@@ -26,8 +26,10 @@ export default function PlanSourcePdfPane({
 }: PlanSourcePdfPaneProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const textLayerRef = useRef<HTMLDivElement | null>(null);
   const pdfRef = useRef<any>(null);
   const renderTaskRef = useRef<any>(null);
+  const textLayerTaskRef = useRef<any>(null);
 
   const [loadingDoc, setLoadingDoc] = useState(true);
   const [loadingPage, setLoadingPage] = useState(false);
@@ -80,12 +82,12 @@ export default function PlanSourcePdfPane({
       setPageCount(initialPageCount || 0);
 
       if (renderTaskRef.current) {
-        try {
-          renderTaskRef.current.cancel();
-        } catch {
-          // noop
-        }
+        try { renderTaskRef.current.cancel(); } catch { /* noop */ }
         renderTaskRef.current = null;
+      }
+      if (textLayerTaskRef.current) {
+        try { textLayerTaskRef.current.cancel(); } catch { /* noop */ }
+        textLayerTaskRef.current = null;
       }
       if (pdfRef.current) {
         try {
@@ -157,16 +159,19 @@ export default function PlanSourcePdfPane({
       setError(null);
 
       if (renderTaskRef.current) {
-        try {
-          renderTaskRef.current.cancel();
-        } catch {
-          // noop
-        }
+        try { renderTaskRef.current.cancel(); } catch { /* noop */ }
         renderTaskRef.current = null;
+      }
+      if (textLayerTaskRef.current) {
+        try { textLayerTaskRef.current.cancel(); } catch { /* noop */ }
+        textLayerTaskRef.current = null;
       }
 
       try {
-        const page = await pdf.getPage(pageNumber);
+        const [pdfjs, page] = await Promise.all([
+          import('pdfjs-dist/legacy/build/pdf.mjs') as any,
+          pdf.getPage(pageNumber)
+        ]);
         const cssViewport = page.getViewport({ scale: zoom });
         const outputScale = typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 1;
         const renderViewport = page.getViewport({ scale: zoom * outputScale });
@@ -187,6 +192,22 @@ export default function PlanSourcePdfPane({
         renderTaskRef.current = task;
         await task.promise;
         renderTaskRef.current = null;
+
+        // Text layer — render invisible selectable text over the canvas
+        const textLayerDiv = textLayerRef.current;
+        if (textLayerDiv && pdfjs.TextLayer && !cancelled) {
+          textLayerDiv.replaceChildren();
+          // --scale-factor is required by pdfjs TextLayer's setLayerDimensions() to size the container
+          textLayerDiv.style.setProperty('--scale-factor', String(zoom));
+          const tlTask = new pdfjs.TextLayer({
+            textContentSource: page.streamTextContent(),
+            container: textLayerDiv,
+            viewport: cssViewport
+          });
+          textLayerTaskRef.current = tlTask;
+          await tlTask.render();
+          textLayerTaskRef.current = null;
+        }
       } catch (renderError: any) {
         if (cancelled) return;
         const cancelledRender = typeof renderError?.message === 'string'
@@ -289,6 +310,7 @@ export default function PlanSourcePdfPane({
         {!loadingDoc && !error && (
           <div className="review-pdf-canvas-stage">
             <canvas ref={canvasRef} className="review-pdf-canvas" />
+            <div ref={textLayerRef} className="textLayer" />
             {loadingPage && (
               <div className="review-pdf-overlay">
                 <span>Rendering…</span>

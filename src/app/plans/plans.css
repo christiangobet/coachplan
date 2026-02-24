@@ -25,6 +25,12 @@
   --d-radius-lg: 16px;
   --d-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
   --d-shadow-md: 0 2px 8px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
+  --d-space-1: 8px;
+  --d-space-2: 16px;
+  --d-space-3: 24px;
+  --d-space-4: 32px;
+  --d-space-7: 64px;
+  --d-sticky-top: 88px;
 }
 
 .plans-page {
@@ -433,6 +439,109 @@
   min-width: 0;
 }
 
+/* ── Source PDF split screen ── */
+.pcal.with-source-pane {
+  max-width: min(1920px, 98vw);
+  display: grid;
+  grid-template-columns: var(--pcal-source-width, 380px) 6px minmax(0, 1fr);
+  align-items: start;
+  padding: 0;
+  gap: 0;
+}
+
+.pcal.with-source-pane .pcal-source-pane {
+  grid-column: 1;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--d-raised);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 12px 14px 16px;
+}
+
+.pcal-source-pane-resize {
+  grid-column: 2;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  width: 6px;
+  cursor: col-resize;
+  background: var(--d-border);
+  transition: background 0.15s;
+  z-index: 10;
+}
+
+.pcal-source-pane-resize:hover,
+.pcal-source-pane-resize.dragging {
+  background: var(--d-orange);
+}
+
+.pcal.with-source-pane .pcal-main-column {
+  grid-column: 3;
+  min-width: 0;
+  padding: 28px 20px 60px;
+}
+
+.pcal-source-pane-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.pcal-source-pane-head h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--d-text-mid);
+}
+
+.pcal-source-pane-head p {
+  margin: 3px 0 0;
+  font-size: 11px;
+  color: var(--d-muted);
+}
+
+.pcal-source-pane-close {
+  flex-shrink: 0;
+  font-size: 12px;
+  padding: 4px 10px;
+  height: 28px;
+}
+
+.pcal-source-pane-body {
+  flex: 1;
+  min-height: 0;
+  border: 1px solid var(--d-border);
+  border-radius: var(--d-radius);
+  background: #f6f9ff;
+  overflow: hidden;
+  padding: 8px;
+}
+
+/* Override review.css canvas stage centering — left-align so left edge is always reachable */
+.pcal-source-pane-body .review-pdf-canvas-stage {
+  justify-content: flex-start;
+}
+
+/* Allow the PDF pane to shrink inside the flex body */
+.pcal-source-pane-body .review-source-pane-body,
+.pcal-source-pane-body .review-pdf-canvas-wrap {
+  min-height: 0;
+}
+
+.pcal-muted {
+  color: var(--d-muted);
+  font-size: 13px;
+  padding: 12px;
+}
+
 .pcal-chat-panel {
   min-width: 0;
   position: sticky;
@@ -473,7 +582,7 @@
   background: var(--d-bg);
 }
 
-/* ── Plan Guide panel ── */
+/* ── Plan Guide panel wrapper ── */
 .pcal-guide-panel {
   background: var(--d-raised);
   border: 1px solid var(--d-border);
@@ -481,71 +590,7 @@
   border-radius: 0 0 16px 16px;
   max-height: calc(100vh - 150px);
   overflow-y: auto;
-  padding: 8px 4px 16px;
-}
-
-.pcal-guide-section {
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--d-border-light);
-}
-
-.pcal-guide-section:last-child {
-  border-bottom: none;
-}
-
-.pcal-guide-section-title {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  font: 700 11px/1.3 'Figtree', sans-serif;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--d-text-mid);
-  margin: 0 0 8px;
-}
-
-.pcal-guide-icon {
-  font-size: 14px;
-  line-height: 1;
-}
-
-.pcal-guide-list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: grid;
-  gap: 5px;
-}
-
-.pcal-guide-item {
-  font: 400 13px/1.5 'Figtree', sans-serif;
-  color: var(--d-text);
-  padding-left: 14px;
-  position: relative;
-}
-
-.pcal-guide-item::before {
-  content: '–';
-  position: absolute;
-  left: 0;
-  color: var(--d-muted);
-}
-
-/* Glossary items: make the key bold */
-.pcal-guide-glossary .pcal-guide-item {
-  font-size: 12.5px;
-}
-
-/* Pace zones: orange accent on value */
-.pcal-guide-paces .pcal-guide-item {
-  font-size: 12.5px;
-}
-
-.pcal-guide-empty {
-  padding: 16px;
-  font-size: 13px;
-  color: var(--d-muted);
-  text-align: center;
+  padding: 4px 0 12px;
 }
 
 /* When tabs are present, attach the AI trainer card to the tab bar */
@@ -724,6 +769,17 @@
   display: flex;
   align-items: center;
   gap: 10px;
+  flex-shrink: 0;
+}
+
+/* Collapse sidebar + AI trainer when source PDF is open */
+.pcal-layout.pdf-open {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.pcal-layout.pdf-open .dash-side,
+.pcal-layout.pdf-open .pcal-chat-panel {
+  display: none;
 }
 
 .pcal-view-toggle {
