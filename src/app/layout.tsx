@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { UserRole } from "@prisma/client";
 import { ClerkProvider } from "@clerk/nextjs";
 import { getCurrentUserRoleContext, getRoleHomePath, getRoleLabel } from "@/lib/user-roles";
@@ -8,6 +8,11 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "CoachPlan",
   description: "Upload training plans, align to race day, and track progress.",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
 };
 
 type TopNavItem = { href: string; label: string };
