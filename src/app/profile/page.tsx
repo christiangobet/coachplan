@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import AthleteSidebar from '@/components/AthleteSidebar';
+import StravaConnectButton from '@/components/StravaConnectButton';
 import '../dashboard/dashboard.css';
 import '../athlete-pages.css';
 
@@ -334,14 +335,12 @@ export default function ProfilePage() {
                   <span>Last sync: {formatDate(stravaAccount?.lastSyncAt)}</span>
                 </div>
                 <div className="athlete-integration-actions">
-                  <button
+                  <StravaConnectButton
                     className="cta secondary"
-                    type="button"
                     disabled={busyProvider === 'STRAVA'}
                     onClick={startStravaConnect}
-                  >
-                    {stravaAccount?.connected ? 'Reconnect' : 'Connect Strava'}
-                  </button>
+                    reconnect={Boolean(stravaAccount?.connected)}
+                  />
                   <button
                     className="cta secondary"
                     type="button"

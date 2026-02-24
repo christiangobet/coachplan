@@ -36,7 +36,7 @@ export async function GET() {
     const account = byProvider.get(provider);
     return {
       provider,
-      connected: Boolean(account),
+      connected: Boolean(account?.isActive),
       isActive: account?.isActive ?? false,
       providerUsername: account?.providerUsername ?? null,
       connectedAt: account?.connectedAt?.toISOString() ?? null,

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import StravaConnectButton from '@/components/StravaConnectButton';
 
 type IntegrationProvider = 'STRAVA' | 'GARMIN';
 
@@ -153,9 +154,12 @@ export default function StravaSyncPanel({ compact = false }: { compact?: boolean
       </div>
 
       <div className="dash-sync-actions">
-        <button className="dash-sync-btn" type="button" onClick={connectStrava} disabled={busy}>
-          {strava?.connected ? 'Reconnect' : 'Connect'}
-        </button>
+        <StravaConnectButton
+          className="dash-sync-btn"
+          onClick={connectStrava}
+          disabled={busy}
+          reconnect={Boolean(strava?.connected)}
+        />
         <button
           className="dash-sync-btn"
           type="button"

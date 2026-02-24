@@ -66,6 +66,7 @@ export async function GET(req: Request) {
       }
     },
     select: {
+      isActive: true,
       providerUsername: true,
       lastSyncAt: true,
       syncCursor: true
@@ -248,7 +249,7 @@ export async function GET(req: Request) {
   return NextResponse.json({
     viewerUnits,
     account: {
-      connected: Boolean(account),
+      connected: Boolean(account?.isActive),
       providerUsername: account?.providerUsername || null,
       lastSyncAt: account?.lastSyncAt?.toISOString() || null,
       syncCursor: account?.syncCursor || null

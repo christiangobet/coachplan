@@ -2134,6 +2134,49 @@ details[open] .day-log-instructions-toggle::before {
   cursor: not-allowed;
 }
 
+.strava-connect-btn {
+  align-items: center;
+  background: #fc4c02;
+  border: 1px solid #d84302;
+  color: #fff;
+  display: inline-flex;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  gap: 6px;
+  justify-content: center;
+  line-height: 1;
+}
+
+.dash-sync-btn.strava-connect-btn,
+.strava-connect-btn.cta,
+.strava-connect-btn.cta.secondary {
+  background: #fc4c02;
+  border-color: #d84302;
+  color: #fff;
+}
+
+.strava-connect-btn:hover,
+.dash-sync-btn.strava-connect-btn:hover,
+.strava-connect-btn.cta:hover,
+.strava-connect-btn.cta.secondary:hover {
+  background: #d84302;
+  border-color: #bd3a02;
+  color: #fff;
+}
+
+.strava-connect-btn:disabled,
+.dash-sync-btn.strava-connect-btn:disabled,
+.strava-connect-btn.cta:disabled,
+.strava-connect-btn.cta.secondary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.strava-connect-btn-icon {
+  flex-shrink: 0;
+}
+
 .dash-sync-note {
   margin: var(--d-space-1) 0 0;
   font-size: 12px;

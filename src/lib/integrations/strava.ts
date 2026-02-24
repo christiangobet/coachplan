@@ -887,7 +887,7 @@ export async function syncStravaActivitiesForUser(args: {
       }
     }
   });
-  if (!account) {
+  if (!account || !account.isActive) {
     throw new Error('Strava is not connected for this athlete');
   }
 
