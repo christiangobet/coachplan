@@ -1,0 +1,354 @@
+/* ── PlanSummaryCard — scoped styles ── */
+
+.card {
+  border-radius: var(--d-radius-lg);
+  border: 1px solid var(--d-border);
+  background: var(--d-raised);
+  box-shadow: var(--d-shadow);
+  overflow: hidden;
+}
+
+.body {
+  padding: 20px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* ── Header ── */
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.headerLeft {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.planLabel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font: 600 12px/1 'Figtree', sans-serif;
+  color: var(--d-text-mid);
+}
+
+.dotAccent {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--d-orange);
+  flex-shrink: 0;
+}
+
+.title {
+  font: 800 20px/1.2 'Figtree', sans-serif;
+  letter-spacing: -0.01em;
+  color: var(--d-text);
+  margin: 0;
+}
+
+.categoryRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.categoryBadge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 100px;
+  padding: 3px 10px;
+  font: 600 11px/1 'Figtree', sans-serif;
+  color: var(--d-text-mid);
+  background: var(--d-border-light);
+  border: 1px solid var(--d-border);
+}
+
+.headerMeta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.metaLabel {
+  font: 600 10px/1 'Figtree', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--d-muted);
+}
+
+.metaValue {
+  font: 700 16px/1 'Figtree', sans-serif;
+  color: var(--d-text);
+}
+
+/* ── Load curve ── */
+
+.curveWrap {
+  border-radius: var(--d-radius-sm);
+  border: 1px solid var(--d-border);
+  background: var(--d-bg);
+  padding: 10px 12px;
+}
+
+.curveHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.curveLabel {
+  font: 600 10px/1 'Figtree', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--d-muted);
+}
+
+.curveSub {
+  font: 400 11px/1 'Figtree', sans-serif;
+  color: var(--d-muted);
+}
+
+.curveSvg {
+  display: block;
+  width: 100%;
+}
+
+/* ── Phase grid ── */
+
+.phaseGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.phaseCard {
+  border-radius: var(--d-radius-sm);
+  border: 1px solid var(--d-border);
+  background: var(--d-raised);
+  padding: 12px 14px;
+}
+
+.phaseCardTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.phaseName {
+  font: 800 13px/1 'Figtree', sans-serif;
+  color: var(--d-text);
+}
+
+.phaseWeeks {
+  font: 600 11px/1 'Figtree', sans-serif;
+  color: var(--d-muted);
+  white-space: nowrap;
+}
+
+.phaseFocus {
+  font: 400 12px/1.4 'Figtree', sans-serif;
+  color: var(--d-text-mid);
+  margin: 0;
+}
+
+/* ── Typical week ── */
+
+.weekHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.weekTitle {
+  font: 800 13px/1 'Figtree', sans-serif;
+  color: var(--d-text);
+}
+
+.weekSub {
+  font: 400 11px/1 'Figtree', sans-serif;
+  color: var(--d-muted);
+}
+
+.weekScrollOuter {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.weekGrid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 7px;
+  min-width: 560px; /* prevents collapsing on narrow containers */
+}
+
+.weekCell {
+  border-radius: var(--d-radius-sm);
+  border: 1px solid var(--d-border);
+  background: var(--d-raised);
+  padding: 10px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.weekCellTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+}
+
+.dayAbbr {
+  font: 800 10px/1 'Figtree', sans-serif;
+  letter-spacing: 0.04em;
+  color: var(--d-text);
+}
+
+.intensityPill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 100px;
+  padding: 2px 5px;
+  font: 700 9px/1 'Figtree', sans-serif;
+  letter-spacing: 0.03em;
+}
+
+/* Pill variants */
+.pillQuality {
+  background: var(--d-text);
+  color: #fff;
+}
+
+.pillLong {
+  background: var(--d-orange-soft);
+  color: var(--d-orange);
+  border: 1px solid rgba(252, 76, 2, 0.2);
+}
+
+.pillEasy {
+  background: var(--d-border-light);
+  color: var(--d-text-mid);
+  border: 1px solid var(--d-border);
+}
+
+.pillRecovery {
+  background: var(--d-green-soft);
+  color: var(--d-green);
+  border: 1px solid rgba(46, 204, 113, 0.25);
+}
+
+.pillCross {
+  background: rgba(14, 165, 233, 0.08);
+  color: #0ea5e9;
+  border: 1px solid rgba(14, 165, 233, 0.2);
+}
+
+.pillRest {
+  background: var(--d-border-light);
+  color: var(--d-muted);
+  border: 1px solid var(--d-border);
+}
+
+.weekCellIcon {
+  color: var(--d-text-mid);
+  line-height: 0;
+}
+
+.weekCellLabel {
+  font: 400 11px/1.35 'Figtree', sans-serif;
+  color: var(--d-text);
+  margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ── Footer ── */
+
+.footer {
+  border-radius: var(--d-radius-sm);
+  border: 1px solid var(--d-border);
+  background: var(--d-bg);
+  padding: 13px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.principle {
+  font: 600 13px/1.4 'Figtree', sans-serif;
+  color: var(--d-text);
+  margin: 0;
+}
+
+.footerNote {
+  font: 400 12.5px/1.4 'Figtree', sans-serif;
+  color: var(--d-text-mid);
+  margin: 0;
+}
+
+/* ── Empty state ── */
+
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 28px 20px;
+  text-align: center;
+}
+
+.emptyText {
+  font: 400 13px/1.5 'Figtree', sans-serif;
+  color: var(--d-muted);
+  margin: 0;
+}
+
+.generateBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 18px;
+  font: 600 13px/1 'Figtree', sans-serif;
+  color: #fff;
+  background: var(--d-orange);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.generateBtn:hover {
+  opacity: 0.88;
+}
+
+/* ── Responsive ── */
+
+@media (max-width: 640px) {
+  .phaseGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .headerMeta {
+    display: none;
+  }
+
+  .weekSub {
+    display: none;
+  }
+}

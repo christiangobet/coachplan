@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
 import { extractPlanGuide } from '@/lib/ai-guide-extractor';
+import { extractPlanSummary } from '@/lib/ai-summary-extractor';
+import type { Prisma } from '@prisma/client';
 
 export const runtime = 'nodejs';
 export const maxDuration = 120;
@@ -80,12 +82,18 @@ export async function POST(
       );
     }
 
+    // Also extract structured summary (best-effort — does not fail the request)
+    const planSummary = await extractPlanSummary(fullText, { throwOnError: false });
+
     await prisma.trainingPlan.update({
       where: { id: planId },
-      data: { planGuide }
+      data: {
+        planGuide,
+        ...(planSummary && { planSummary: planSummary as Prisma.InputJsonValue }),
+      }
     });
 
-    return NextResponse.json({ planGuide });
+    return NextResponse.json({ planGuide, planSummary: planSummary ?? null });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unexpected error';
     console.error('[extract-guide] Unexpected error:', message);

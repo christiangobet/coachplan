@@ -23,6 +23,8 @@ import RaceDetailsEditor from "@/components/RaceDetailsEditor";
 import SelectedPlanCookie from "@/components/SelectedPlanCookie";
 import StravaDaySyncButton from "@/components/StravaDaySyncButton";
 import StravaIcon from "@/components/StravaIcon";
+import PlanSummarySection from "@/components/PlanSummarySection";
+import type { PlanSummary } from "@/lib/types/plan-summary";
 import "../dashboard/dashboard.css";
 import "./calendar.css";
 
@@ -982,6 +984,20 @@ export default async function CalendarPage({
               </div>
             </div>
           </div>
+
+          {/* Plan Reference guide — collapsible */}
+          <details className="dash-card cal-guide-details">
+            <summary className="cal-guide-summary">
+              <span>📋 Plan Reference</span>
+              <span className="cal-guide-summary-hint">expand</span>
+            </summary>
+            <div className="cal-guide-body">
+              <PlanSummarySection
+                summary={selectedPlan.planSummary as PlanSummary | null}
+                planId={selectedPlan.id}
+              />
+            </div>
+          </details>
 
         </aside>
       </div>

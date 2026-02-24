@@ -21,6 +21,8 @@ import SelectedPlanCookie from "@/components/SelectedPlanCookie";
 import DashboardDayLogShell from "@/components/DashboardDayLogShell";
 import { buildLogActivities, buildPlannedMetricParts, type LogActivity } from "@/lib/log-activity";
 import DashboardTrainingLogStatus, { type StatusFeedItem } from "@/components/DashboardTrainingLogStatus";
+import PlanSummarySection from "@/components/PlanSummarySection";
+import type { PlanSummary } from "@/lib/types/plan-summary";
 import "./dashboard.css";
 
 const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -712,16 +714,13 @@ export default async function DashboardPage({
           {/* Guide */}
           <div className="dash-card">
             <div className="dash-card-header">
-              <span className="dash-card-title">Guide</span>
+              <span className="dash-card-title">📋 Plan Reference</span>
+              <a className="dash-card-link" href={`/plans/${activePlan.id}`}>Full guide →</a>
             </div>
-            <a className="dash-guide-item" href="/guide">
-              <span>Training Guidelines</span>
-              <span className="dash-guide-arrow">&rarr;</span>
-            </a>
-            <a className="dash-guide-item" href="/guide">
-              <span>Nutrition &amp; Hydration</span>
-              <span className="dash-guide-arrow">&rarr;</span>
-            </a>
+            <PlanSummarySection
+              summary={activePlan.planSummary as PlanSummary | null}
+              planId={activePlan.id}
+            />
           </div>
         </section>
 

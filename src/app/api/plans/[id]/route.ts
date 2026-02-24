@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { currentUser } from '@clerk/nextjs/server';
-import { PlanStatus } from '@prisma/client';
+import { PlanStatus, Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { alignWeeksToRaceDate } from '@/lib/clone-plan';
 
@@ -89,6 +89,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     raceDate?: Date | null;
     status?: PlanStatus;
     planGuide?: string | null;
+    planSummary?: Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput;
   } = {};
 
   if ('raceName' in body) {
@@ -122,7 +123,15 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     }
   }
 
-  if (!('raceName' in body) && !('raceDate' in body) && !('status' in body) && !('planGuide' in body)) {
+  if ('planSummary' in body) {
+    if (body.planSummary === null) {
+      updates.planSummary = Prisma.JsonNull;
+    } else if (typeof body.planSummary === 'object' && !Array.isArray(body.planSummary)) {
+      updates.planSummary = body.planSummary as Prisma.InputJsonValue;
+    }
+  }
+
+  if (!('raceName' in body) && !('raceDate' in body) && !('status' in body) && !('planGuide' in body) && !('planSummary' in body)) {
     return NextResponse.json({ error: 'No supported fields to update' }, { status: 400 });
   }
 

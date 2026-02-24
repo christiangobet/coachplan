@@ -144,6 +144,7 @@ model TrainingPlan {
   sourceId    String?
   parseProfile Json?
   planGuide   String?
+  planSummary Json?
   createdAt   DateTime    @default(now())
 
   ownerId    String?

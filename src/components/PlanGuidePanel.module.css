@@ -1,0 +1,417 @@
+/* ── PlanGuidePanel — scoped styles ── */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Header row ── */
+.editHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px 6px;
+  min-height: 36px;
+}
+
+.editLabel {
+  font: 600 12px/1 'Figtree', sans-serif;
+  color: var(--d-text-mid);
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Zoom button — always visible */
+.zoomBtn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px;
+  font: 600 12px/1 'Figtree', sans-serif;
+  color: var(--d-orange);
+  background: var(--d-orange-soft, rgba(252,76,2,0.08));
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+
+.zoomBtn:hover {
+  background: rgba(252, 76, 2, 0.14);
+  border-color: var(--d-orange);
+}
+
+/* Edit button — ghost style */
+.editBtn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  font: 600 12px/1 'Figtree', sans-serif;
+  color: var(--d-text-mid);
+  background: none;
+  border: 1px solid var(--d-border);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.editBtn:hover {
+  color: var(--d-orange);
+  border-color: var(--d-orange);
+}
+
+.editTextarea {
+  box-sizing: border-box;
+  width: calc(100% - 28px);
+  min-height: 260px;
+  font: 400 12.5px/1.6 ui-monospace, 'Menlo', 'Monaco', monospace;
+  color: var(--d-text);
+  background: var(--d-bg);
+  border: 1px solid var(--d-border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  resize: vertical;
+  outline: none;
+  margin: 0 14px;
+}
+
+.editTextarea:focus {
+  border-color: var(--d-orange);
+}
+
+.editActions {
+  display: flex;
+  gap: 8px;
+  padding: 8px 14px 14px;
+}
+
+.saveBtn {
+  padding: 7px 16px;
+  font: 600 13px/1 'Figtree', sans-serif;
+  color: #fff;
+  background: var(--d-orange);
+  border: none;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.saveBtn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.cancelBtn {
+  padding: 7px 14px;
+  font: 600 13px/1 'Figtree', sans-serif;
+  color: var(--d-text-mid);
+  background: none;
+  border: 1px solid var(--d-border);
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.errorMsg {
+  padding: 0 14px 8px;
+  font-size: 12px;
+  color: var(--d-red, #e74c3c);
+}
+
+/* ── Section ── */
+.section {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--d-border-light);
+}
+
+.section:last-child {
+  border-bottom: none;
+}
+
+.sectionTitle {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font: 700 11px/1.3 'Figtree', sans-serif;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--d-text-mid);
+  margin: 0 0 8px;
+}
+
+.icon {
+  font-size: 13px;
+  line-height: 1;
+}
+
+/* ── List ── */
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 5px;
+}
+
+/* ── Plain item (overview, general instructions) ── */
+.item {
+  font: 400 13px/1.5 'Figtree', sans-serif;
+  color: var(--d-text);
+  padding-left: 14px;
+  position: relative;
+}
+
+.item::before {
+  content: '–';
+  position: absolute;
+  left: 0;
+  color: var(--d-muted);
+}
+
+/* ── Glossary item ── */
+.glossItem {
+  font: 400 12.5px/1.5 'Figtree', sans-serif;
+  color: var(--d-text);
+}
+
+.glossKey {
+  display: inline-block;
+  font: 700 11px/1 'Figtree', sans-serif;
+  letter-spacing: 0.03em;
+  background: var(--d-border);
+  border-radius: 4px;
+  padding: 2px 6px;
+  margin-right: 4px;
+  color: var(--d-text);
+}
+
+/* ── Named sessions item ── */
+.sessionItem {
+  font: 400 12.5px/1.5 'Figtree', sans-serif;
+  color: var(--d-text);
+}
+
+.sessionName {
+  font-weight: 700;
+}
+
+/* ── Pace zone row ── */
+.paceRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  border-left: 3px solid var(--d-border);
+  background: var(--d-border-light);
+}
+
+.paceLabel {
+  font: 600 12.5px/1 'Figtree', sans-serif;
+  min-width: 88px;
+  flex-shrink: 0;
+  color: var(--d-text);
+}
+
+.paceValue {
+  font: 400 12px/1.4 'Figtree', sans-serif;
+  color: var(--d-text-mid);
+}
+
+/* Intensity colour variants */
+.pace_easy {
+  border-left-color: var(--d-green, #2ecc71);
+  background: rgba(46, 204, 113, 0.07);
+}
+
+.pace_moderate {
+  border-left-color: var(--d-amber, #f39c12);
+  background: rgba(243, 156, 18, 0.07);
+}
+
+.pace_hard {
+  border-left-color: var(--d-orange, #fc4c02);
+  background: rgba(252, 76, 2, 0.07);
+}
+
+.pace_max {
+  border-left-color: var(--d-red, #e74c3c);
+  background: rgba(231, 76, 60, 0.07);
+}
+
+.pace_rest {
+  border-left-color: var(--d-muted, #9b9ba3);
+  background: var(--d-border-light, #eee);
+}
+
+/* ── Empty state ── */
+.empty {
+  padding: 14px 16px;
+  font: 400 13px/1.5 'Figtree', sans-serif;
+  color: var(--d-muted);
+  text-align: center;
+}
+
+/* ═══════════════════════════════════
+   Zoom modal overlay
+   ═══════════════════════════════════ */
+
+.zoomOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(15, 23, 42, 0.52);
+  backdrop-filter: blur(3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+}
+
+.zoomModal {
+  background: #fff;
+  border-radius: 18px;
+  box-shadow:
+    0 8px 32px rgba(15, 23, 42, 0.18),
+    0 2px 8px rgba(15, 23, 42, 0.10);
+  width: 100%;
+  max-width: 860px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Modal header bar */
+.zoomHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 22px 14px;
+  border-bottom: 1px solid #e8edf5;
+  flex-shrink: 0;
+}
+
+.zoomHeaderLeft {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.zoomTitle {
+  font: 700 17px/1.2 'Figtree', sans-serif;
+  color: #242428;
+  letter-spacing: -0.01em;
+}
+
+.zoomHeaderRight {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.zoomEditBtn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 14px;
+  font: 600 13px/1 'Figtree', sans-serif;
+  color: #6b6b76;
+  background: none;
+  border: 1px solid #e5e5e5;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.zoomEditBtn:hover {
+  color: #fc4c02;
+  border-color: #fc4c02;
+}
+
+.zoomCloseBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  font-size: 16px;
+  line-height: 1;
+  color: #9b9ba3;
+  background: #f3f3f3;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+
+.zoomCloseBtn:hover {
+  color: #242428;
+  background: #e8edf5;
+}
+
+/* Modal scrollable body */
+.zoomBody {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  flex: 1;
+  min-height: 0;
+}
+
+/* Two-column grid for sections in zoom mode */
+.zoomBody .section:first-child {
+  border-top: none;
+}
+
+/* Edit hint text */
+.zoomEditHint {
+  font: 400 12.5px/1.5 'Figtree', sans-serif;
+  color: #9b9ba3;
+  padding: 14px 20px 4px;
+  margin: 0;
+}
+
+/* Zoom-mode textarea */
+.zoomTextarea {
+  box-sizing: border-box;
+  display: block;
+  width: calc(100% - 40px);
+  min-height: 360px;
+  margin: 10px 20px 0;
+  font: 400 13px/1.6 ui-monospace, 'Menlo', 'Monaco', monospace;
+  color: #242428;
+  background: #f7f9fb;
+  border: 1px solid #e5e5e5;
+  border-radius: 10px;
+  padding: 12px 14px;
+  resize: vertical;
+  outline: none;
+}
+
+.zoomTextarea:focus {
+  border-color: #fc4c02;
+}
+
+.zoomSaveRow {
+  display: flex;
+  gap: 8px;
+  padding: 12px 20px 20px;
+}
+
+/* ── Responsive ── */
+@media (max-width: 640px) {
+  .zoomOverlay {
+    padding: 0;
+    align-items: flex-end;
+  }
+  .zoomModal {
+    max-height: 92vh;
+    border-radius: 18px 18px 0 0;
+    max-width: 100%;
+  }
+}

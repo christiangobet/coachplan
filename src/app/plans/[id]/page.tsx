@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
+import { useUser } from '@clerk/nextjs';
 import { getDayDateFromWeekStart, resolveWeekBounds } from '@/lib/plan-dates';
 import { isDayMarkedDone, getDayStatus, getDayMissedReason, type DayStatus } from '@/lib/day-status';
 import ActivityTypeIcon from '@/components/ActivityTypeIcon';
-import PlanSidebar from '@/components/PlanSidebar';
+import AthleteSidebar from '@/components/AthleteSidebar';
 import SelectedPlanCookie from '@/components/SelectedPlanCookie';
 import {
   convertDistanceForDisplay,
@@ -17,8 +18,13 @@ import {
 } from '@/lib/unit-display';
 import ActivityForm, { ActivityFormData } from '@/components/PlanEditor/ActivityForm';
 import DayLogCard from '@/components/DayLogCard';
+import PlanSourcePdfPane from '@/components/PlanSourcePdfPane';
+import PlanGuidePanel from '@/components/PlanGuidePanel';
+import PlanSummaryCard from '@/components/PlanSummaryCard';
+import type { PlanSummary } from '@/lib/types/plan-summary';
 import { buildLogActivities, type LogActivity } from '@/lib/log-activity';
 import '../plans.css';
+import './review/review.css';
 import '../../dashboard/dashboard.css';
 
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -37,35 +43,6 @@ function formatType(type: string) {
   return type.replace(/_/g, ' ').toLowerCase().replace(/^\w/, (c) => c.toUpperCase());
 }
 
-type GuideSection = { title: string; items: string[] };
-
-const GUIDE_SECTION_META: Record<string, { icon: string; slug: string }> = {
-  'PLAN OVERVIEW': { icon: '📋', slug: 'overview' },
-  'GLOSSARY & ABBREVIATIONS': { icon: '📖', slug: 'glossary' },
-  'GLOSSARY': { icon: '📖', slug: 'glossary' },
-  'PACE ZONES': { icon: '⚡', slug: 'paces' },
-  'NAMED SESSIONS & CIRCUITS': { icon: '🏃', slug: 'sessions' },
-  'NAMED SESSIONS': { icon: '🏃', slug: 'sessions' },
-  'GENERAL INSTRUCTIONS': { icon: '📌', slug: 'instructions' }
-};
-
-function parsePlanGuide(text: string): GuideSection[] {
-  const sections: GuideSection[] = [];
-  let current: GuideSection | null = null;
-  for (const raw of text.split('\n')) {
-    const line = raw.trim();
-    if (!line) continue;
-    // Section header: mostly uppercase, no leading dash, at least 4 chars
-    if (!line.startsWith('-') && /^[A-Z][A-Z &/]+$/.test(line) && line.length >= 4) {
-      if (current) sections.push(current);
-      current = { title: line, items: [] };
-    } else if (current) {
-      current.items.push(line.startsWith('- ') ? line.slice(2) : line);
-    }
-  }
-  if (current) sections.push(current);
-  return sections;
-}
 
 function formatWeekRange(startDate: Date | null, endDate: Date | null): string | null {
   if (!startDate) return null;
@@ -419,9 +396,19 @@ function humanizeAiText(text: string | null | undefined, lookup: AiChangeLookup)
   return next;
 }
 
+type SourceDocumentMeta = {
+  loading: boolean;
+  available: boolean;
+  fileUrl: string | null;
+  fileName: string | null;
+  pageCount: number | null;
+  error: string | null;
+};
+
 export default function PlanDetailPage() {
   const params = useParams<{ id: string }>();
   const searchParams = useSearchParams();
+  const { user } = useUser();
   const planId = Array.isArray(params?.id) ? params?.id[0] : params?.id;
   const aiPromptParam = searchParams?.get('aiPrompt')?.trim() || '';
   const aiPromptSource = searchParams?.get('aiSource')?.trim() || '';
@@ -463,6 +450,26 @@ export default function PlanDetailPage() {
     if (!activeProposalTurnId) return new Set<number>();
     return new Set(aiAppliedByTurn[activeProposalTurnId] || []);
   }, [aiAppliedByTurn, activeProposalTurnId]);
+
+  // -- Source PDF State --
+  const [isWideScreen, setIsWideScreen] = useState(
+    () => (typeof window === 'undefined' ? true : window.matchMedia('(min-width: 1100px)').matches)
+  );
+  const [showSourcePdf, setShowSourcePdf] = useState(false);
+  const [sourceDocumentChecked, setSourceDocumentChecked] = useState(false);
+  const [sourceDocument, setSourceDocument] = useState<SourceDocumentMeta>({
+    loading: false,
+    available: false,
+    fileUrl: null,
+    fileName: null,
+    pageCount: null,
+    error: null
+  });
+  const sourceToggleStorageKey = planId ? `plan-source-pane:${planId}` : null;
+  const [sourcePaneWidth, setSourcePaneWidth] = useState(380);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartXRef = useRef<number>(0);
+  const dragStartWidthRef = useRef<number>(380);
 
   // -- Edit Mode State --
   const [isEditMode, setIsEditMode] = useState(false);
@@ -577,6 +584,78 @@ export default function PlanDetailPage() {
       })
       .catch(() => {});
   }, []);
+
+  // -- Source PDF effects --
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const media = window.matchMedia('(min-width: 1100px)');
+    const handleChange = () => setIsWideScreen(media.matches);
+    handleChange();
+    media.addEventListener('change', handleChange);
+    return () => media.removeEventListener('change', handleChange);
+  }, []);
+
+  useEffect(() => {
+    if (!sourceToggleStorageKey || typeof window === 'undefined') return;
+    const saved = window.localStorage.getItem(sourceToggleStorageKey);
+    setShowSourcePdf(saved === '1');
+  }, [sourceToggleStorageKey]);
+
+  useEffect(() => {
+    if (!sourceToggleStorageKey || typeof window === 'undefined') return;
+    window.localStorage.setItem(sourceToggleStorageKey, showSourcePdf ? '1' : '0');
+  }, [showSourcePdf, sourceToggleStorageKey]);
+
+  const loadSourceDocument = useCallback(async () => {
+    if (!planId) return;
+    setSourceDocumentChecked(false);
+    setSourceDocument((prev) => ({ ...prev, loading: true, error: null }));
+    try {
+      const res = await fetch(`/api/plans/${planId}/source-document`, { cache: 'no-store' });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.available) {
+        setSourceDocumentChecked(true);
+        setSourceDocument({ loading: false, available: false, fileUrl: null, fileName: null, pageCount: null, error: data?.error || null });
+        return;
+      }
+      setSourceDocumentChecked(true);
+      setSourceDocument({
+        loading: false,
+        available: true,
+        fileUrl: typeof data.fileUrl === 'string' ? data.fileUrl : `/api/plans/${planId}/source-document/file`,
+        fileName: typeof data.fileName === 'string' ? data.fileName : 'Uploaded plan.pdf',
+        pageCount: typeof data.pageCount === 'number' ? data.pageCount : null,
+        error: null
+      });
+    } catch {
+      setSourceDocumentChecked(true);
+      setSourceDocument({ loading: false, available: false, fileUrl: null, fileName: null, pageCount: null, error: null });
+    }
+  }, [planId]);
+
+  useEffect(() => {
+    if (!planId || !isWideScreen) return;
+    void loadSourceDocument();
+  }, [isWideScreen, loadSourceDocument, planId]);
+
+  // -- Resize drag --
+  const startDrag = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    dragStartXRef.current = e.clientX;
+    dragStartWidthRef.current = sourcePaneWidth;
+    setIsDragging(true);
+    const onMove = (ev: MouseEvent) => {
+      const delta = ev.clientX - dragStartXRef.current;
+      setSourcePaneWidth(Math.max(260, Math.min(700, dragStartWidthRef.current + delta)));
+    };
+    const onUp = () => {
+      setIsDragging(false);
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  }, [sourcePaneWidth]);
 
   const applyActivityUpdate = useCallback((activityId: string, updater: (activity: any) => any) => {
     setPlan((prev: any) => {
@@ -1062,13 +1141,60 @@ export default function PlanDetailPage() {
     ? formatLocalDateKey(selectedActivity.dayDateISO)
     : null;
 
+  const sourcePaneAvailable = isWideScreen && sourceDocument.available;
+  const showDesktopSourcePane = sourcePaneAvailable && showSourcePdf;
+
   return (
-    <main className="pcal">
+    <main
+      className={`pcal${showDesktopSourcePane ? ' with-source-pane' : ''}`}
+      style={showDesktopSourcePane ? { '--pcal-source-width': `${sourcePaneWidth}px` } as React.CSSProperties : undefined}
+    >
       <SelectedPlanCookie planId={plan.status === 'ACTIVE' ? plan.id : null} />
-      <div className="pcal-layout">
-        <PlanSidebar
-          planId={plan.id}
-          active="overview"
+
+      {showDesktopSourcePane && (
+        <aside className="pcal-source-pane">
+          <div className="pcal-source-pane-head">
+            <div>
+              <h3>Source PDF</h3>
+              <p>
+                {sourceDocument.fileName || 'Uploaded training plan PDF'}
+                {sourceDocument.pageCount ? ` · ${sourceDocument.pageCount} pages` : ''}
+              </p>
+            </div>
+            <button
+              className="dash-btn-ghost pcal-source-pane-close"
+              type="button"
+              onClick={() => setShowSourcePdf(false)}
+            >
+              Close
+            </button>
+          </div>
+          <div className="pcal-source-pane-body">
+            {sourceDocument.fileUrl ? (
+              <PlanSourcePdfPane
+                fileUrl={sourceDocument.fileUrl}
+                initialPageCount={sourceDocument.pageCount}
+              />
+            ) : (
+              <p className="pcal-muted">Source PDF is unavailable.</p>
+            )}
+          </div>
+        </aside>
+      )}
+
+      {showDesktopSourcePane && (
+        <div
+          className={`pcal-source-pane-resize${isDragging ? ' dragging' : ''}`}
+          onMouseDown={startDrag}
+        />
+      )}
+
+      <div className={showDesktopSourcePane ? 'pcal-main-column' : undefined}>
+      <div className={`pcal-layout${showDesktopSourcePane ? ' pdf-open' : ''}`}>
+        <AthleteSidebar
+          name={user?.fullName || user?.firstName || 'Athlete'}
+          active="plans"
+          selectedPlanId={planId || null}
         />
 
         <section className="pcal-main">
@@ -1076,13 +1202,33 @@ export default function PlanDetailPage() {
           <div className="pcal-header" id="plan-overview">
             <div className="pcal-header-top">
               <h1>{plan.name}</h1>
-              <button
-                type="button"
-                className={`dash-btn-ghost pcal-edit-btn${isEditMode ? ' active' : ''}`}
-                onClick={() => setIsEditMode(!isEditMode)}
-              >
-                {isEditMode ? 'Done Editing' : 'Edit Plan'}
-              </button>
+              <div className="pcal-header-actions">
+                {isWideScreen && sourceDocumentChecked && (
+                  <button
+                    type="button"
+                    className="dash-btn-ghost"
+                    onClick={() => {
+                      if (!sourceDocument.available) return;
+                      setShowSourcePdf((prev) => !prev);
+                    }}
+                    disabled={sourceDocument.loading || !sourceDocument.available}
+                    title={sourceDocument.available ? undefined : 'No source PDF uploaded for this plan'}
+                  >
+                    {sourceDocument.loading
+                      ? 'Loading PDF…'
+                      : sourceDocument.available
+                        ? (showSourcePdf ? 'Hide Source PDF' : 'Show Source PDF')
+                        : 'No Source PDF'}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className={`dash-btn-ghost pcal-edit-btn${isEditMode ? ' active' : ''}`}
+                  onClick={() => setIsEditMode(!isEditMode)}
+                >
+                  {isEditMode ? 'Done Editing' : 'Edit Plan'}
+                </button>
+              </div>
             </div>
             <div className="pcal-header-meta">
               <span className={`plan-detail-status ${statusClass}`}>{plan.status}</span>
@@ -1337,56 +1483,48 @@ export default function PlanDetailPage() {
         </section>
 
         <aside className="pcal-chat-panel" id="ai-trainer">
-          {/* Sidebar tab switcher — only show Guide tab when guide exists */}
-          {plan?.planGuide && (
-            <div className="pcal-sidebar-tabs">
-              <button
-                className={`pcal-sidebar-tab${sidebarTab === 'guide' ? ' active' : ''}`}
-                type="button"
-                onClick={() => setSidebarTab('guide')}
-              >
-                📋 Plan Guide
-              </button>
-              <button
-                className={`pcal-sidebar-tab${sidebarTab === 'ai' ? ' active' : ''}`}
-                type="button"
-                onClick={() => setSidebarTab('ai')}
-              >
-                AI Trainer
-              </button>
+          {/* Sidebar tab switcher */}
+          <div className="pcal-sidebar-tabs">
+            <button
+              className={`pcal-sidebar-tab${sidebarTab === 'guide' ? ' active' : ''}`}
+              type="button"
+              onClick={() => setSidebarTab('guide')}
+            >
+              📋 Plan Guide
+            </button>
+            <button
+              className={`pcal-sidebar-tab${sidebarTab === 'ai' ? ' active' : ''}`}
+              type="button"
+              onClick={() => setSidebarTab('ai')}
+            >
+              AI Trainer
+            </button>
+          </div>
+
+          {/* Plan Guide panel */}
+          {sidebarTab === 'guide' && (
+            <div className="pcal-guide-panel">
+              <PlanSummaryCard
+                summary={plan?.planSummary as PlanSummary | null ?? null}
+                planId={planId as string}
+                onExtract={async () => {
+                  await fetch(`/api/plans/${planId}/extract-guide`, { method: 'POST' });
+                  await loadPlan();
+                }}
+              />
+              {plan?.planGuide && (
+                <PlanGuidePanel
+                  guideText={plan.planGuide as string}
+                  planId={planId as string}
+                  editable
+                />
+              )}
             </div>
           )}
 
-          {/* Plan Guide panel */}
-          {plan?.planGuide && sidebarTab === 'guide' && (() => {
-            const sections = parsePlanGuide(plan.planGuide as string);
-            return (
-              <div className="pcal-guide-panel">
-                {sections.length === 0 ? (
-                  <p className="pcal-guide-empty">No guide content could be parsed.</p>
-                ) : sections.map((section) => {
-                  const meta = GUIDE_SECTION_META[section.title] ?? { icon: '•', slug: 'other' };
-                  return (
-                    <div key={section.title} className={`pcal-guide-section pcal-guide-${meta.slug}`}>
-                      <h3 className="pcal-guide-section-title">
-                        <span className="pcal-guide-icon">{meta.icon}</span>
-                        {section.title.replace('&', '&')}
-                      </h3>
-                      <ul className="pcal-guide-list">
-                        {section.items.map((item, i) => (
-                          <li key={i} className="pcal-guide-item">{item}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  );
-                })}
-              </div>
-            );
-          })()}
-
           <section
             className="pcal-ai-trainer pcal-ai-trainer-chat"
-            style={plan?.planGuide && sidebarTab === 'guide' ? { display: 'none' } : undefined}
+            style={sidebarTab === 'guide' ? { display: 'none' } : undefined}
           >
             <div className="pcal-ai-trainer-head">
               <div>
@@ -1607,6 +1745,7 @@ export default function PlanDetailPage() {
             )}
           </section>
         </aside>
+      </div>
       </div>
 
       {/* Activity detail modal */}
