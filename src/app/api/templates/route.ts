@@ -34,6 +34,7 @@ export async function GET(req: Request) {
       ownerId: true,
       createdAt: true,
       planGuide: true,
+      planSummary: true,
       owner: { select: { name: true } },
     },
   });

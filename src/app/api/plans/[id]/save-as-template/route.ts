@@ -24,7 +24,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const template = await prisma.trainingPlan.create({
     data: {
       name: body?.name || plan.name,
-      description: body?.description || null,
+      description: body?.description || plan.description || null,
       isTemplate: true,
       isPublic: body?.isPublic ?? true,
       status: 'ACTIVE',
@@ -33,6 +33,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       raceType: body?.raceType || plan.raceType || null,
       difficulty: body?.difficulty || null,
       ...(plan.parseProfile !== null ? { parseProfile: plan.parseProfile } : {}),
+      ...(plan.planGuide ? { planGuide: plan.planGuide } : {}),
+      ...(plan.planSummary ? { planSummary: plan.planSummary } : {}),
       ownerId: user.id,
       sourceId: plan.id,
     },

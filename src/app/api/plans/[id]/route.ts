@@ -189,8 +189,8 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
   if (plan.ownerId !== user.id && plan.athleteId !== user.id) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
-  if (plan.isTemplate) {
-    return NextResponse.json({ error: 'Templates cannot be deleted from this endpoint' }, { status: 400 });
+  if (plan.isTemplate && plan.ownerId !== user.id) {
+    return NextResponse.json({ error: 'Only the template owner can delete it' }, { status: 403 });
   }
 
   const planActivityIds = await prisma.planActivity.findMany({

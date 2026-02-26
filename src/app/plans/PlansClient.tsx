@@ -4,6 +4,8 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import AthleteSidebar from '@/components/AthleteSidebar';
 import PlanGuidePanel from '@/components/PlanGuidePanel';
+import PlanSummaryCard from '@/components/PlanSummaryCard';
+import type { PlanSummary } from '@/lib/types/plan-summary';
 import { pickSelectedPlan, SELECTED_PLAN_COOKIE } from '@/lib/plan-selection';
 import '../dashboard/dashboard.css';
 import './plans.css';
@@ -18,8 +20,9 @@ type Plan = {
   raceDate?: string | null;
   createdAt?: string | null;
   updatedAt?: string | null;
+  planGuide?: string | null;
 };
-type Template = { id: string; name: string; weekCount?: number | null; planGuide?: string | null };
+type Template = { id: string; name: string; weekCount?: number | null; planGuide?: string | null; planSummary?: PlanSummary | null };
 
 function statusColor(status: string) {
   if (status === 'ACTIVE') return 'var(--d-green)';
@@ -51,6 +54,8 @@ export default function PlansClient() {
   const [templateRaceDate, setTemplateRaceDate] = useState('');
   const [savingAsTemplate, setSavingAsTemplate] = useState<string | null>(null);
   const [expandedGuideId, setExpandedGuideId] = useState<string | null>(null);
+  const [renamingTemplateId, setRenamingTemplateId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState('');
 
   const toggleMenu = (planId: string) =>
     setExpandedMenuId((prev) => (prev === planId ? null : planId));
@@ -208,6 +213,26 @@ export default function PlansClient() {
     }
   };
 
+  const handleRenameTemplate = async (tplId: string) => {
+    const trimmed = renameValue.trim();
+    if (!trimmed) return;
+    setProcessingPlanId(tplId);
+    try {
+      const res = await fetch(`/api/plans/${tplId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: trimmed })
+      });
+      if (!res.ok) throw new Error('Failed');
+      setTemplates((prev) => prev.map((t) => t.id === tplId ? { ...t, name: trimmed } : t));
+      setRenamingTemplateId(null);
+    } catch {
+      // silent
+    } finally {
+      setProcessingPlanId(null);
+    }
+  };
+
   const deletePlan = async (planId: string) => {
     if (!window.confirm('Delete this plan permanently? This cannot be undone.')) return;
     setProcessingPlanId(planId);
@@ -217,6 +242,7 @@ export default function PlansClient() {
       const data = await res.json().catch(() => null);
       if (!res.ok) throw new Error(data?.error || 'Failed to delete plan');
       setPlans((prev) => prev.filter((plan) => plan.id !== planId));
+      setTemplates((prev) => prev.filter((tpl) => tpl.id !== planId));
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to delete plan');
     } finally {
@@ -304,12 +330,25 @@ export default function PlansClient() {
                         />
                       </div>
                     </div>
+                    {expandedGuideId === plan.id && plan.planGuide && (
+                      <div className="plan-template-guide-body">
+                        <PlanGuidePanel guideText={plan.planGuide} planId={plan.id} />
+                      </div>
+                    )}
                     <div className="plan-card-actions">
                       <Link className="dash-btn-primary plan-card-cta" href={`/plans/${plan.id}`} onClick={() => rememberSelectedPlan(plan.id)}>Open Plan</Link>
                       <Link className="dash-btn-ghost plan-card-edit-btn" href={`/plans/${plan.id}?mode=edit`} onClick={() => rememberSelectedPlan(plan.id)}>Edit</Link>
                     </div>
                     {expandedMenuId === plan.id && (
                       <div className="plan-card-overflow-menu">
+                        {plan.planGuide && (
+                          <button
+                            className="plan-card-overflow-item"
+                            onClick={() => { setExpandedGuideId((prev) => (prev === plan.id ? null : plan.id)); setExpandedMenuId(null); }}
+                          >
+                            {expandedGuideId === plan.id ? 'Hide guide' : 'Show guide'}
+                          </button>
+                        )}
                         <button
                           className="plan-card-overflow-item"
                           onClick={() => { updatePlanStatus(plan.id, 'DRAFT'); setExpandedMenuId(null); }}
@@ -382,12 +421,25 @@ export default function PlansClient() {
                           />
                         </div>
                       </div>
+                      {expandedGuideId === plan.id && plan.planGuide && (
+                        <div className="plan-template-guide-body">
+                          <PlanGuidePanel guideText={plan.planGuide} planId={plan.id} />
+                        </div>
+                      )}
                       <div className="plan-card-actions">
                         <Link className="dash-btn-primary plan-card-cta" href={`/plans/${plan.id}/review?fromUpload=1`} onClick={() => rememberSelectedPlan(plan.id)}>Open Review</Link>
                         <Link className="dash-btn-ghost plan-card-edit-btn" href={`/plans/${plan.id}`} onClick={() => rememberSelectedPlan(plan.id)}>View Plan</Link>
                       </div>
                       {expandedMenuId === plan.id && (
                         <div className="plan-card-overflow-menu">
+                          {plan.planGuide && (
+                            <button
+                              className="plan-card-overflow-item"
+                              onClick={() => { setExpandedGuideId((prev) => (prev === plan.id ? null : plan.id)); setExpandedMenuId(null); }}
+                            >
+                              {expandedGuideId === plan.id ? 'Hide guide' : 'Show guide'}
+                            </button>
+                          )}
                           <Link
                             className="plan-card-overflow-item"
                             href={`/plans/${plan.id}?mode=edit`}
@@ -456,6 +508,11 @@ export default function PlansClient() {
                           />
                         </div>
                       </div>
+                      {expandedGuideId === plan.id && plan.planGuide && (
+                        <div className="plan-template-guide-body">
+                          <PlanGuidePanel guideText={plan.planGuide} planId={plan.id} />
+                        </div>
+                      )}
                       <div className="plan-card-actions">
                         <Link className="dash-btn-ghost plan-card-edit-btn" href={`/plans/${plan.id}`} onClick={() => rememberSelectedPlan(plan.id)}>Open</Link>
                         <button
@@ -468,6 +525,14 @@ export default function PlansClient() {
                       </div>
                       {expandedMenuId === plan.id && (
                         <div className="plan-card-overflow-menu">
+                          {plan.planGuide && (
+                            <button
+                              className="plan-card-overflow-item"
+                              onClick={() => { setExpandedGuideId((prev) => (prev === plan.id ? null : plan.id)); setExpandedMenuId(null); }}
+                            >
+                              {expandedGuideId === plan.id ? 'Hide guide' : 'Show guide'}
+                            </button>
+                          )}
                           <button
                             className="plan-card-overflow-item"
                             onClick={() => handleSaveAsTemplate(plan.id)}
@@ -504,25 +569,47 @@ export default function PlansClient() {
                   <div className="plan-card template" key={tpl.id}>
                     <div className="plan-card-top">
                       <span className="plan-template-badge">Template</span>
+                      <button
+                        className="plan-card-menu-btn"
+                        onClick={() => toggleMenu(tpl.id)}
+                        aria-label="More actions"
+                      >···</button>
                     </div>
-                    <h3 className="plan-card-name">{tpl.name}</h3>
+                    {renamingTemplateId === tpl.id ? (
+                      <div className="plan-template-rename">
+                        <input
+                          className="plan-template-rename-input"
+                          value={renameValue}
+                          onChange={(e) => setRenameValue(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === 'Enter') handleRenameTemplate(tpl.id); if (e.key === 'Escape') setRenamingTemplateId(null); }}
+                          autoFocus
+                        />
+                        <div className="plan-template-rename-actions">
+                          <button
+                            className="dash-btn-primary plan-card-cta"
+                            onClick={() => handleRenameTemplate(tpl.id)}
+                            disabled={!renameValue.trim() || processingPlanId === tpl.id}
+                          >
+                            {processingPlanId === tpl.id ? 'Saving…' : 'Save'}
+                          </button>
+                          <button className="plan-template-cancel" onClick={() => setRenamingTemplateId(null)}>Cancel</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <h3 className="plan-card-name">{tpl.name}</h3>
+                    )}
                     <span className="plan-card-meta">
                       {tpl.weekCount ? `${tpl.weekCount} wks` : 'No weeks set'}
                     </span>
-                    {tpl.planGuide && (
-                      <>
-                        <button
-                          className="plan-template-guide-toggle"
-                          onClick={() => setExpandedGuideId((prev) => (prev === tpl.id ? null : tpl.id))}
-                        >
-                          {expandedGuideId === tpl.id ? '▲ Hide guide' : '▼ Show guide'}
-                        </button>
-                        {expandedGuideId === tpl.id && (
-                          <div className="plan-template-guide-body">
-                            <PlanGuidePanel guideText={tpl.planGuide} planId={tpl.id} compact />
-                          </div>
+                    {expandedGuideId === tpl.id && (tpl.planSummary || tpl.planGuide) && (
+                      <div className="plan-template-guide-body">
+                        {tpl.planSummary && (
+                          <PlanSummaryCard summary={tpl.planSummary} planId={tpl.id} />
                         )}
-                      </>
+                        {tpl.planGuide && (
+                          <PlanGuidePanel guideText={tpl.planGuide} planId={tpl.id} />
+                        )}
+                      </div>
                     )}
                     {useTemplateId === tpl.id ? (
                       <div className="plan-template-setup">
@@ -535,6 +622,16 @@ export default function PlansClient() {
                             autoFocus
                           />
                         </label>
+                        {templateRaceDate && tpl.weekCount && (() => {
+                          const race = new Date(templateRaceDate);
+                          const start = new Date(race);
+                          start.setDate(start.getDate() - tpl.weekCount * 7);
+                          return (
+                            <p className="plan-template-start-hint">
+                              Starts {start.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                            </p>
+                          );
+                        })()}
                         <div className="plan-card-actions">
                           <button
                             className="dash-btn-primary plan-card-cta"
@@ -560,6 +657,31 @@ export default function PlansClient() {
                           disabled={!userId}
                         >
                           Use template
+                        </button>
+                      </div>
+                    )}
+                    {expandedMenuId === tpl.id && (
+                      <div className="plan-card-overflow-menu">
+                        <button
+                          className="plan-card-overflow-item"
+                          onClick={() => { setRenameValue(tpl.name); setRenamingTemplateId(tpl.id); setExpandedMenuId(null); }}
+                        >
+                          Rename
+                        </button>
+                        {(tpl.planSummary || tpl.planGuide) && (
+                          <button
+                            className="plan-card-overflow-item"
+                            onClick={() => { setExpandedGuideId((prev) => (prev === tpl.id ? null : tpl.id)); setExpandedMenuId(null); }}
+                          >
+                            {expandedGuideId === tpl.id ? 'Hide preview' : 'Show preview'}
+                          </button>
+                        )}
+                        <button
+                          className="plan-card-overflow-item danger"
+                          onClick={() => { deletePlan(tpl.id); setExpandedMenuId(null); }}
+                          disabled={processingPlanId === tpl.id}
+                        >
+                          {processingPlanId === tpl.id ? 'Deleting…' : 'Delete'}
                         </button>
                       </div>
                     )}
