@@ -45,6 +45,12 @@ export default function PlansClient() {
   const [processingPlanId, setProcessingPlanId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [cookieSelectedPlanId, setCookieSelectedPlanId] = useState<string | null>(null);
+  const [expandedMenuId, setExpandedMenuId] = useState<string | null>(null);
+  const [useTemplateId, setUseTemplateId] = useState<string | null>(null);
+  const [templateRaceDate, setTemplateRaceDate] = useState('');
+
+  const toggleMenu = (planId: string) =>
+    setExpandedMenuId((prev) => (prev === planId ? null : planId));
 
   const rememberSelectedPlan = (planId: string) => {
     if (!planId) return;
@@ -132,14 +138,14 @@ export default function PlansClient() {
   }, []);
 
   const handleUseTemplate = async (templateId: string) => {
-    if (!userId) return;
+    if (!userId || !templateRaceDate) return;
     setAssigning(templateId);
     setError(null);
     try {
       const res = await fetch('/api/plans/from-template', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ templateId })
+        body: JSON.stringify({ templateId, raceDate: templateRaceDate })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || 'Failed to create plan from template');
@@ -254,6 +260,11 @@ export default function PlansClient() {
                       {plan.id === focusedPlanId && (
                         <span className="plan-focus-badge">Current Plan</span>
                       )}
+                      <button
+                        className="plan-card-menu-btn"
+                        onClick={() => toggleMenu(plan.id)}
+                        aria-label="More actions"
+                      >···</button>
                     </div>
                     <h3 className="plan-card-name">{plan.name}</h3>
                     <span className="plan-card-meta">
@@ -272,29 +283,31 @@ export default function PlansClient() {
                       <Link className="dash-btn-primary plan-card-cta" href={`/plans/${plan.id}`} onClick={() => rememberSelectedPlan(plan.id)}>Open Plan</Link>
                       <Link className="dash-btn-ghost plan-card-edit-btn" href={`/plans/${plan.id}?mode=edit`} onClick={() => rememberSelectedPlan(plan.id)}>Edit</Link>
                     </div>
-                    <div className="plan-card-secondary-actions">
-                      <button
-                        className="plan-card-use"
-                        onClick={() => updatePlanStatus(plan.id, 'DRAFT')}
-                        disabled={processingPlanId === plan.id}
-                      >
-                        {processingPlanId === plan.id ? 'Saving...' : 'Move to draft'}
-                      </button>
-                      <button
-                        className="plan-card-use"
-                        onClick={() => updatePlanStatus(plan.id, 'ARCHIVED')}
-                        disabled={processingPlanId === plan.id}
-                      >
-                        {processingPlanId === plan.id ? 'Saving...' : 'Archive'}
-                      </button>
-                      <button
-                        className="plan-card-use plan-card-delete"
-                        onClick={() => deletePlan(plan.id)}
-                        disabled={processingPlanId === plan.id}
-                      >
-                        {processingPlanId === plan.id ? 'Deleting...' : 'Delete'}
-                      </button>
-                    </div>
+                    {expandedMenuId === plan.id && (
+                      <div className="plan-card-overflow-menu">
+                        <button
+                          className="plan-card-overflow-item"
+                          onClick={() => { updatePlanStatus(plan.id, 'DRAFT'); setExpandedMenuId(null); }}
+                          disabled={processingPlanId === plan.id}
+                        >
+                          {processingPlanId === plan.id ? 'Saving…' : 'Move to draft'}
+                        </button>
+                        <button
+                          className="plan-card-overflow-item"
+                          onClick={() => { updatePlanStatus(plan.id, 'ARCHIVED'); setExpandedMenuId(null); }}
+                          disabled={processingPlanId === plan.id}
+                        >
+                          {processingPlanId === plan.id ? 'Saving…' : 'Archive'}
+                        </button>
+                        <button
+                          className="plan-card-overflow-item danger"
+                          onClick={() => { deletePlan(plan.id); setExpandedMenuId(null); }}
+                          disabled={processingPlanId === plan.id}
+                        >
+                          {processingPlanId === plan.id ? 'Deleting…' : 'Delete'}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -303,129 +316,142 @@ export default function PlansClient() {
 
           {!plansLoadError && (
             <>
+              {draftPlans.length > 0 && (
               <section className="plans-section plans-shell-section">
-                <h2 className="plans-section-title">Draft Plans ({draftPlans.length})</h2>
-                {draftPlans.length === 0 ? (
-                  <p className="plans-empty-text">No draft plans.</p>
-                ) : (
-                  <div className="plans-grid">
-                    {draftPlans.map((plan) => (
-                      <div className={`plan-card status-draft${plan.id === focusedPlanId ? ' focused' : ''}`} key={plan.id}>
-                        <div className="plan-card-top">
-                          <span
-                            className="plan-status-dot"
-                            style={{ background: statusColor(plan.status) }}
+                <h2 className="plans-section-title">Draft Plans</h2>
+                <div className="plans-grid">
+                  {draftPlans.map((plan) => (
+                    <div className={`plan-card status-draft${plan.id === focusedPlanId ? ' focused' : ''}`} key={plan.id}>
+                      <div className="plan-card-top">
+                        <span
+                          className="plan-status-dot"
+                          style={{ background: statusColor(plan.status) }}
+                        />
+                        <span className="plan-status-label">{plan.status}</span>
+                        {plan.id === focusedPlanId && (
+                          <span className="plan-focus-badge">Current Plan</span>
+                        )}
+                        <button
+                          className="plan-card-menu-btn"
+                          onClick={() => toggleMenu(plan.id)}
+                          aria-label="More actions"
+                        >···</button>
+                      </div>
+                      <h3 className="plan-card-name">{plan.name}</h3>
+                      <span className="plan-card-meta">
+                        {plan.weekCount ? `${plan.weekCount} wks` : '–'} · {plan.raceName?.trim() || 'No race'} · {formatRaceDate(plan.raceDate)}
+                      </span>
+                      <div className="plan-card-progress">
+                        <span>{plan.progress ?? 0}% complete</span>
+                        <div className="plan-card-progress-track">
+                          <div
+                            className="plan-card-progress-fill"
+                            style={{ width: `${plan.progress ?? 0}%` }}
                           />
-                          <span className="plan-status-label">{plan.status}</span>
-                          {plan.id === focusedPlanId && (
-                            <span className="plan-focus-badge">Current Plan</span>
-                          )}
-                        </div>
-                        <h3 className="plan-card-name">{plan.name}</h3>
-                        <span className="plan-card-meta">
-                          {plan.weekCount ? `${plan.weekCount} wks` : '–'} · {plan.raceName?.trim() || 'No race'} · {formatRaceDate(plan.raceDate)}
-                        </span>
-                        <div className="plan-card-progress">
-                          <span>{plan.progress ?? 0}% complete</span>
-                          <div className="plan-card-progress-track">
-                            <div
-                              className="plan-card-progress-fill"
-                              style={{ width: `${plan.progress ?? 0}%` }}
-                            />
-                          </div>
-                        </div>
-                        <div className="plan-card-actions">
-                          <Link className="dash-btn-primary plan-card-cta" href={`/plans/${plan.id}/review?fromUpload=1`} onClick={() => rememberSelectedPlan(plan.id)}>Open Review</Link>
-                          <Link className="dash-btn-ghost plan-card-edit-btn" href={`/plans/${plan.id}`} onClick={() => rememberSelectedPlan(plan.id)}>View Plan</Link>
-                        </div>
-                        <div className="plan-card-secondary-actions">
-                          <Link className="plan-card-use" href={`/plans/${plan.id}?mode=edit`} onClick={() => rememberSelectedPlan(plan.id)}>Edit</Link>
-                          <button
-                            className="plan-card-use"
-                            onClick={() => updatePlanStatus(plan.id, 'ARCHIVED')}
-                            disabled={processingPlanId === plan.id}
-                          >
-                            {processingPlanId === plan.id ? 'Saving...' : 'Archive'}
-                          </button>
-                          <button
-                            className="plan-card-use plan-card-delete"
-                            onClick={() => deletePlan(plan.id)}
-                            disabled={processingPlanId === plan.id}
-                          >
-                            {processingPlanId === plan.id ? 'Deleting...' : 'Delete'}
-                          </button>
                         </div>
                       </div>
-                    ))}
-                  </div>
-                )}
+                      <div className="plan-card-actions">
+                        <Link className="dash-btn-primary plan-card-cta" href={`/plans/${plan.id}/review?fromUpload=1`} onClick={() => rememberSelectedPlan(plan.id)}>Open Review</Link>
+                        <Link className="dash-btn-ghost plan-card-edit-btn" href={`/plans/${plan.id}`} onClick={() => rememberSelectedPlan(plan.id)}>View Plan</Link>
+                      </div>
+                      {expandedMenuId === plan.id && (
+                        <div className="plan-card-overflow-menu">
+                          <Link
+                            className="plan-card-overflow-item"
+                            href={`/plans/${plan.id}?mode=edit`}
+                            onClick={() => { rememberSelectedPlan(plan.id); setExpandedMenuId(null); }}
+                          >Edit</Link>
+                          <button
+                            className="plan-card-overflow-item"
+                            onClick={() => { updatePlanStatus(plan.id, 'ARCHIVED'); setExpandedMenuId(null); }}
+                            disabled={processingPlanId === plan.id}
+                          >
+                            {processingPlanId === plan.id ? 'Saving…' : 'Archive'}
+                          </button>
+                          <button
+                            className="plan-card-overflow-item danger"
+                            onClick={() => { deletePlan(plan.id); setExpandedMenuId(null); }}
+                            disabled={processingPlanId === plan.id}
+                          >
+                            {processingPlanId === plan.id ? 'Deleting…' : 'Delete'}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </section>
+            )}
 
+          {archivedPlans.length > 0 && (
               <section className="plans-section plans-shell-section">
-                <h2 className="plans-section-title">Archived Plans ({archivedPlans.length})</h2>
-                {archivedPlans.length === 0 ? (
-                  <p className="plans-empty-text">No archived plans.</p>
-                ) : (
-                  <div className="plans-grid">
-                    {archivedPlans.map((plan) => (
-                      <div className={`plan-card status-archived${plan.id === focusedPlanId ? ' focused' : ''}`} key={plan.id}>
-                        <div className="plan-card-top">
-                          <span
-                            className="plan-status-dot"
-                            style={{ background: statusColor(plan.status) }}
+                <h2 className="plans-section-title">Archived Plans</h2>
+                <div className="plans-grid">
+                  {archivedPlans.map((plan) => (
+                    <div className={`plan-card status-archived${plan.id === focusedPlanId ? ' focused' : ''}`} key={plan.id}>
+                      <div className="plan-card-top">
+                        <span
+                          className="plan-status-dot"
+                          style={{ background: statusColor(plan.status) }}
+                        />
+                        <span className="plan-status-label">{plan.status}</span>
+                        {plan.id === focusedPlanId && (
+                          <span className="plan-focus-badge">Current Plan</span>
+                        )}
+                        <button
+                          className="plan-card-menu-btn"
+                          onClick={() => toggleMenu(plan.id)}
+                          aria-label="More actions"
+                        >···</button>
+                      </div>
+                      <h3 className="plan-card-name">{plan.name}</h3>
+                      <span className="plan-card-meta">
+                        {plan.weekCount ? `${plan.weekCount} wks` : '–'} · {plan.raceName?.trim() || 'No race'} · {formatRaceDate(plan.raceDate)}
+                      </span>
+                      <div className="plan-card-progress">
+                        <span>{plan.progress ?? 0}% complete</span>
+                        <div className="plan-card-progress-track">
+                          <div
+                            className="plan-card-progress-fill"
+                            style={{ width: `${plan.progress ?? 0}%` }}
                           />
-                          <span className="plan-status-label">{plan.status}</span>
-                          {plan.id === focusedPlanId && (
-                            <span className="plan-focus-badge">Current Plan</span>
-                          )}
-                        </div>
-                        <h3 className="plan-card-name">{plan.name}</h3>
-                        <span className="plan-card-meta">
-                          {plan.weekCount ? `${plan.weekCount} wks` : '–'} · {plan.raceName?.trim() || 'No race'} · {formatRaceDate(plan.raceDate)}
-                        </span>
-                        <div className="plan-card-progress">
-                          <span>{plan.progress ?? 0}% complete</span>
-                          <div className="plan-card-progress-track">
-                            <div
-                              className="plan-card-progress-fill"
-                              style={{ width: `${plan.progress ?? 0}%` }}
-                            />
-                          </div>
-                        </div>
-                        <div className="plan-card-actions">
-                          <Link className="dash-btn-ghost plan-card-edit-btn" href={`/plans/${plan.id}`} onClick={() => rememberSelectedPlan(plan.id)}>Open</Link>
-                          <button
-                            className="dash-btn-primary plan-card-cta"
-                            onClick={() => updatePlanStatus(plan.id, 'ACTIVE')}
-                            disabled={processingPlanId === plan.id}
-                          >
-                            {processingPlanId === plan.id ? 'Saving...' : 'Activate'}
-                          </button>
-                        </div>
-                        <div className="plan-card-secondary-actions">
-                          <button
-                            className="plan-card-use plan-card-delete"
-                            onClick={() => deletePlan(plan.id)}
-                            disabled={processingPlanId === plan.id}
-                          >
-                            {processingPlanId === plan.id ? 'Deleting...' : 'Delete'}
-                          </button>
                         </div>
                       </div>
-                    ))}
-                  </div>
-                )}
+                      <div className="plan-card-actions">
+                        <Link className="dash-btn-ghost plan-card-edit-btn" href={`/plans/${plan.id}`} onClick={() => rememberSelectedPlan(plan.id)}>Open</Link>
+                        <button
+                          className="dash-btn-primary plan-card-cta"
+                          onClick={() => updatePlanStatus(plan.id, 'ACTIVE')}
+                          disabled={processingPlanId === plan.id}
+                        >
+                          {processingPlanId === plan.id ? 'Saving…' : 'Activate'}
+                        </button>
+                      </div>
+                      {expandedMenuId === plan.id && (
+                        <div className="plan-card-overflow-menu">
+                          <button
+                            className="plan-card-overflow-item danger"
+                            onClick={() => { deletePlan(plan.id); setExpandedMenuId(null); }}
+                            disabled={processingPlanId === plan.id}
+                          >
+                            {processingPlanId === plan.id ? 'Deleting…' : 'Delete'}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </section>
+            )}
             </>
           )}
 
+          {(templates.length > 0 || Boolean(templatesLoadError)) && (
           <section className="plans-section plans-shell-section">
             <h2 className="plans-section-title">Templates</h2>
             {error && <p style={{ color: 'var(--d-red)', fontSize: 14, marginBottom: 12 }}>{error}</p>}
             {templatesLoadError ? (
               <p className="plans-empty-text" style={{ color: 'var(--d-red)' }}>{templatesLoadError}</p>
-            ) : templates.length === 0 ? (
-              <p className="plans-empty-text">No templates available.</p>
             ) : (
               <div className="plans-grid">
                 {templates.map((tpl) => (
@@ -437,20 +463,51 @@ export default function PlansClient() {
                     <span className="plan-card-meta">
                       {tpl.weekCount ? `${tpl.weekCount} wks` : 'No weeks set'}
                     </span>
-                    <div className="plan-card-actions">
-                      <button
-                        className="dash-btn-primary plan-card-cta"
-                        onClick={() => handleUseTemplate(tpl.id)}
-                        disabled={!userId || assigning === tpl.id}
-                      >
-                        {assigning === tpl.id ? 'Assigning...' : 'Use template'}
-                      </button>
-                    </div>
+                    {useTemplateId === tpl.id ? (
+                      <div className="plan-template-setup">
+                        <label className="plan-template-setup-label">
+                          <span>Race date <span className="plan-template-required">*</span></span>
+                          <input
+                            type="date"
+                            value={templateRaceDate}
+                            onChange={(e) => setTemplateRaceDate(e.target.value)}
+                            autoFocus
+                          />
+                        </label>
+                        <div className="plan-card-actions">
+                          <button
+                            className="dash-btn-primary plan-card-cta"
+                            onClick={() => handleUseTemplate(tpl.id)}
+                            disabled={!templateRaceDate || assigning === tpl.id}
+                          >
+                            {assigning === tpl.id ? 'Creating...' : 'Create plan'}
+                          </button>
+                          <button
+                            className="plan-template-cancel"
+                            type="button"
+                            onClick={() => { setUseTemplateId(null); setTemplateRaceDate(''); }}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="plan-card-actions">
+                        <button
+                          className="dash-btn-primary plan-card-cta"
+                          onClick={() => { setUseTemplateId(tpl.id); setTemplateRaceDate(''); }}
+                          disabled={!userId}
+                        >
+                          Use template
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
             )}
           </section>
+          )}
         </section>
 
         <aside className="dash-right">
@@ -483,9 +540,9 @@ export default function PlansClient() {
               <span className="dash-card-title">Actions</span>
             </div>
             <div className="plans-links">
-              <Link href="/dashboard">Open today dashboard</Link>
-              <Link href="/upload">Upload a PDF plan</Link>
-              <Link href="/profile">Update athlete profile</Link>
+              <Link href="/dashboard"><span>Open today dashboard</span><span className="plans-link-arrow">→</span></Link>
+              <Link href="/upload"><span>Upload a PDF plan</span><span className="plans-link-arrow">→</span></Link>
+              <Link href="/profile"><span>Update athlete profile</span><span className="plans-link-arrow">→</span></Link>
             </div>
           </div>
         </aside>

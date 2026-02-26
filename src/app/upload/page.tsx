@@ -85,6 +85,11 @@ export default function UploadPage() {
   }, [elapsedSec]);
 
   const handleSubmit = async () => {
+    if (!raceDate) {
+      setStatus('error');
+      setMessage('Please set a race date — it anchors all week numbers to calendar dates.');
+      return;
+    }
     if (!name.trim()) {
       setStatus('error');
       setMessage('Please add a plan name.');
@@ -180,12 +185,12 @@ export default function UploadPage() {
                     Signed in as: {user?.primaryEmailAddress?.emailAddress || 'Unknown'}
                   </div>
                   <label>
-                    Plan name
+                    <span>Race date <span className="upload-required">*</span></span>
                     <input
-                      type="text"
-                      placeholder="Half Marathon 2026"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
+                      type="date"
+                      required
+                      value={raceDate}
+                      onChange={(e) => setRaceDate(e.target.value)}
                     />
                   </label>
                   <label>
@@ -198,11 +203,12 @@ export default function UploadPage() {
                     />
                   </label>
                   <label>
-                    Race date
+                    Plan name
                     <input
-                      type="date"
-                      value={raceDate}
-                      onChange={(e) => setRaceDate(e.target.value)}
+                      type="text"
+                      placeholder="Half Marathon 2026"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
                     />
                   </label>
                   <label>
@@ -278,9 +284,9 @@ export default function UploadPage() {
               <span className="dash-card-title">Next Steps</span>
             </div>
             <div className="athlete-link-list">
-              <Link href="/plans">Review assigned plans</Link>
-              <Link href="/dashboard">Start today workout</Link>
-              <Link href="/profile">Set pace targets</Link>
+              <Link href="/plans"><span>Review assigned plans</span><span className="athlete-link-arrow">→</span></Link>
+              <Link href="/dashboard"><span>Start today workout</span><span className="athlete-link-arrow">→</span></Link>
+              <Link href="/profile"><span>Set pace targets</span><span className="athlete-link-arrow">→</span></Link>
             </div>
           </div>
 

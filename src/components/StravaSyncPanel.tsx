@@ -154,28 +154,40 @@ export default function StravaSyncPanel({ compact = false }: { compact?: boolean
       </div>
 
       <div className="dash-sync-actions">
-        <StravaConnectButton
-          className="dash-sync-btn"
-          onClick={connectStrava}
-          disabled={busy}
-          reconnect={Boolean(strava?.connected)}
-        />
-        <button
-          className="dash-sync-btn"
-          type="button"
-          onClick={syncNow}
-          disabled={!strava?.connected || busy}
-        >
-          Sync now
-        </button>
-        <button
-          className="dash-sync-btn"
-          type="button"
-          onClick={disconnectStrava}
-          disabled={!strava?.connected || busy}
-        >
-          Disconnect
-        </button>
+        {!strava?.connected ? (
+          <StravaConnectButton
+            className="dash-sync-btn"
+            onClick={connectStrava}
+            disabled={busy}
+          />
+        ) : (
+          <>
+            <button
+              className="dash-sync-btn"
+              type="button"
+              onClick={syncNow}
+              disabled={busy}
+            >
+              Sync now
+            </button>
+            <button
+              className="dash-sync-btn"
+              type="button"
+              onClick={disconnectStrava}
+              disabled={busy}
+            >
+              Disconnect
+            </button>
+            <button
+              className="dash-sync-btn dash-sync-btn--reconnect"
+              type="button"
+              onClick={connectStrava}
+              disabled={busy}
+            >
+              Reconnect
+            </button>
+          </>
+        )}
       </div>
 
       {!capability.stravaConfigured && (

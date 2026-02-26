@@ -14,6 +14,11 @@ type PaceTargets = {
   [key: string]: unknown;
   easy?: string;
   tempo?: string;
+  long?: string;
+  race?: string;
+  threshold?: string;
+  interval?: string;
+  recovery?: string;
 };
 
 type IntegrationProvider = 'STRAVA' | 'GARMIN';
@@ -33,11 +38,64 @@ type IntegrationCapability = {
   garminConfigured: boolean;
 };
 
+const RACE_DISTANCES = [
+  { label: '5K', key: '5K', km: 5 },
+  { label: '10K', key: '10K', km: 10 },
+  { label: 'Half Marathon', key: 'HALF', km: 21.0975 },
+  { label: 'Marathon', key: 'FULL', km: 42.195 },
+  { label: '50K', key: '50K', km: 50 },
+  { label: 'Custom', key: 'CUSTOM', km: 0 }
+];
+
+const ZONE_MULTIPLIERS: Record<string, number> = {
+  recovery: 1.22,
+  easy: 1.14,
+  long: 1.09,
+  race: 1.0,
+  tempo: 0.96,
+  threshold: 0.93,
+  interval: 0.87
+};
+
+const PACE_ZONE_DEFS = [
+  { key: 'recovery', label: 'Recovery' },
+  { key: 'easy', label: 'Easy' },
+  { key: 'long', label: 'Long run' },
+  { key: 'race', label: 'Race' },
+  { key: 'tempo', label: 'Tempo' },
+  { key: 'threshold', label: 'Threshold' },
+  { key: 'interval', label: 'Interval' }
+] as const;
+
 function formatDate(value: string | null | undefined) {
   if (!value) return 'Never';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return 'Never';
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function parseGoalTimeSec(str: string): number | null {
+  const parts = str.trim().split(':').map(Number);
+  if (parts.some((p) => Number.isNaN(p))) return null;
+  if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  if (parts.length === 2) return parts[0] * 60 + parts[1];
+  return null;
+}
+
+function formatGoalTime(sec: number): string {
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = Math.round(sec % 60);
+  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+function calcPace(raceSecPerKm: number, multiplier: number, unit: 'KM' | 'MILES'): string {
+  const secPerKm = raceSecPerKm * multiplier;
+  const secPerUnit = unit === 'KM' ? secPerKm : secPerKm * 1.609344;
+  const mins = Math.floor(secPerUnit / 60);
+  const secs = Math.round(secPerUnit - mins * 60);
+  return `${mins}:${String(secs).padStart(2, '0')} ${unit === 'KM' ? '/km' : '/mi'}`;
 }
 
 export default function ProfilePage() {
@@ -51,6 +109,10 @@ export default function ProfilePage() {
   const [coaches, setCoaches] = useState<Coach[]>([]);
   const [selectedCoach, setSelectedCoach] = useState('');
   const [status, setStatus] = useState<string | null>(null);
+
+  const [selectedDistanceKey, setSelectedDistanceKey] = useState('');
+  const [customDistanceKm, setCustomDistanceKm] = useState('');
+  const [goalTimeStr, setGoalTimeStr] = useState('');
 
   const [integrationAccounts, setIntegrationAccounts] = useState<IntegrationAccount[]>([]);
   const [integrationCapability, setIntegrationCapability] = useState<IntegrationCapability>({
@@ -85,7 +147,24 @@ export default function ProfilePage() {
         if (data?.name) setName(data.name);
         if (data?.units === 'MILES' || data?.units === 'KM') setUnits(data.units);
         if (data?.goalRaceDate) setGoalRaceDate(data.goalRaceDate.slice(0, 10));
-        if (data?.paceTargets) setPaceTargets(data.paceTargets);
+        if (data?.paceTargets) {
+          setPaceTargets(data.paceTargets);
+          const rg = data.paceTargets?.raceGoal as Record<string, unknown> | undefined;
+          if (rg?.raceDistanceKm && typeof rg.raceDistanceKm === 'number') {
+            const known = RACE_DISTANCES.find(
+              (d) => d.km > 0 && Math.abs(d.km - (rg.raceDistanceKm as number)) < 0.1
+            );
+            if (known) {
+              setSelectedDistanceKey(known.key);
+            } else {
+              setSelectedDistanceKey('CUSTOM');
+              setCustomDistanceKm(String(rg.raceDistanceKm));
+            }
+          }
+          if (rg?.goalTimeSec && typeof rg.goalTimeSec === 'number') {
+            setGoalTimeStr(formatGoalTime(rg.goalTimeSec));
+          }
+        }
         if (data?.role === 'ATHLETE' || data?.role === 'COACH') setRole(data.role);
       });
 
@@ -112,15 +191,31 @@ export default function ProfilePage() {
     }
   }, [searchParams]);
 
+  function calculateZones() {
+    const dist = RACE_DISTANCES.find((d) => d.key === selectedDistanceKey);
+    const distKm =
+      selectedDistanceKey === 'CUSTOM' ? parseFloat(customDistanceKm) : (dist?.km ?? 0);
+    if (!distKm || distKm <= 0) return;
+    const timeSec = parseGoalTimeSec(goalTimeStr);
+    if (!timeSec || timeSec <= 0) return;
+    const raceSecPerKm = timeSec / distKm;
+    const zones: Partial<PaceTargets> = {};
+    for (const [zone, mult] of Object.entries(ZONE_MULTIPLIERS)) {
+      zones[zone] = calcPace(raceSecPerKm, mult, units);
+    }
+    setPaceTargets((prev) => ({ ...prev, ...zones }));
+  }
+
   async function saveProfile() {
     setStatus('Saving...');
+    const zoneKeys = PACE_ZONE_DEFS.map((d) => d.key);
     const sanitizedPaceTargets: PaceTargets = { ...paceTargets };
-    const easy = typeof paceTargets.easy === 'string' ? paceTargets.easy.trim() : '';
-    const tempo = typeof paceTargets.tempo === 'string' ? paceTargets.tempo.trim() : '';
-    if (easy) sanitizedPaceTargets.easy = easy;
-    else delete sanitizedPaceTargets.easy;
-    if (tempo) sanitizedPaceTargets.tempo = tempo;
-    else delete sanitizedPaceTargets.tempo;
+    for (const zone of zoneKeys) {
+      const val =
+        typeof paceTargets[zone] === 'string' ? (paceTargets[zone] as string).trim() : '';
+      if (val) sanitizedPaceTargets[zone] = val;
+      else delete sanitizedPaceTargets[zone];
+    }
 
     await fetch('/api/me', {
       method: 'PUT',
@@ -144,7 +239,6 @@ export default function ProfilePage() {
       setIntegrationStatus('Strava server credentials are missing.');
       return;
     }
-
     setBusyProvider('STRAVA');
     setIntegrationStatus('Redirecting to Strava...');
     try {
@@ -221,9 +315,6 @@ export default function ProfilePage() {
   }
 
   const sidebarName = name.trim() || 'Athlete';
-  const raceDateLabel = goalRaceDate
-    ? new Date(`${goalRaceDate}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-    : 'Not set';
 
   const stravaAccount = useMemo(
     () => integrationAccounts.find((account) => account.provider === 'STRAVA') || null,
@@ -234,6 +325,14 @@ export default function ProfilePage() {
     [integrationAccounts]
   );
 
+  const filledZones = PACE_ZONE_DEFS.filter(({ key }) => paceTargets[key]);
+
+  const resolvedDistKm =
+    selectedDistanceKey === 'CUSTOM'
+      ? parseFloat(customDistanceKm) || 0
+      : (RACE_DISTANCES.find((d) => d.key === selectedDistanceKey)?.km ?? 0);
+  const canCalculate = resolvedDistKm > 0 && (parseGoalTimeSec(goalTimeStr) ?? 0) > 0;
+
   return (
     <main className="dash athlete-page-shell">
       <div className="dash-grid">
@@ -242,7 +341,9 @@ export default function ProfilePage() {
         <section className="dash-center">
           <section className="dash-card athlete-page-header">
             <h1>Profile Setup</h1>
-            <p className="muted">Tell us how you train so CoachPlan can personalize your weekly execution.</p>
+            <p className="muted">
+              Tell us how you train so CoachPlan can personalize your weekly execution.
+            </p>
           </section>
 
           <section className="grid-2 athlete-form-grid">
@@ -257,21 +358,23 @@ export default function ProfilePage() {
                 </label>
                 <label>
                   Role
-                  <select value={role} onChange={(e) => setRole(e.target.value as 'ATHLETE' | 'COACH')}>
+                  <select
+                    value={role}
+                    onChange={(e) => setRole(e.target.value as 'ATHLETE' | 'COACH')}
+                  >
                     <option value="ATHLETE">Athlete</option>
                     <option value="COACH">Coach</option>
                   </select>
                 </label>
                 <label>
                   Units
-                  <select value={units} onChange={(e) => setUnits(e.target.value as 'MILES' | 'KM')}>
+                  <select
+                    value={units}
+                    onChange={(e) => setUnits(e.target.value as 'MILES' | 'KM')}
+                  >
                     <option value="MILES">Miles</option>
                     <option value="KM">Kilometers</option>
                   </select>
-                </label>
-                <label>
-                  Default goal date
-                  <input type="date" value={goalRaceDate} onChange={(e) => setGoalRaceDate(e.target.value)} />
                 </label>
               </div>
             </div>
@@ -280,16 +383,68 @@ export default function ProfilePage() {
               <div className="section-title">
                 <h3>Pace targets</h3>
               </div>
-              <div className="form-stack">
-                <label>
-                  Easy pace
-                  <input value={paceTargets.easy || ''} onChange={(e) => setPaceTargets({ ...paceTargets, easy: e.target.value })} placeholder={units === 'KM' ? 'e.g. 6:00 /km' : 'e.g. 9:40 /mi'} />
-                </label>
-                <label>
-                  Tempo pace
-                  <input value={paceTargets.tempo || ''} onChange={(e) => setPaceTargets({ ...paceTargets, tempo: e.target.value })} placeholder={units === 'KM' ? 'e.g. 5:15 /km' : 'e.g. 8:27 /mi'} />
-                </label>
+
+              <div className="pace-race-goal">
+                <p className="pace-race-goal-label">Calculate from race goal</p>
+                <div className="pace-race-goal-inputs">
+                  <select
+                    value={selectedDistanceKey}
+                    onChange={(e) => setSelectedDistanceKey(e.target.value)}
+                  >
+                    <option value="">Distance</option>
+                    {RACE_DISTANCES.map((d) => (
+                      <option key={d.key} value={d.key}>
+                        {d.label}
+                      </option>
+                    ))}
+                  </select>
+                  {selectedDistanceKey === 'CUSTOM' && (
+                    <input
+                      type="number"
+                      className="pace-race-goal-custom-km"
+                      placeholder="km"
+                      value={customDistanceKm}
+                      onChange={(e) => setCustomDistanceKm(e.target.value)}
+                      min="1"
+                    />
+                  )}
+                  <input
+                    type="text"
+                    placeholder="Goal time (H:MM:SS)"
+                    value={goalTimeStr}
+                    onChange={(e) => setGoalTimeStr(e.target.value)}
+                  />
+                </div>
+                <button
+                  type="button"
+                  className="cta secondary pace-calc-btn"
+                  onClick={calculateZones}
+                  disabled={!canCalculate}
+                >
+                  Calculate zones
+                </button>
               </div>
+
+              <div className="pace-zone-divider" />
+
+              <div className="pace-zone-list">
+                {PACE_ZONE_DEFS.map(({ key, label }) => (
+                  <div key={key} className="pace-zone-row">
+                    <span className="pace-zone-label">{label}</span>
+                    <input
+                      className="pace-zone-input"
+                      value={(paceTargets[key] as string) || ''}
+                      onChange={(e) =>
+                        setPaceTargets({ ...paceTargets, [key]: e.target.value })
+                      }
+                      placeholder={units === 'KM' ? '0:00 /km' : '0:00 /mi'}
+                    />
+                  </div>
+                ))}
+              </div>
+              <p className="pace-zone-hint">
+                Format: M:SS {units === 'KM' ? '/km' : '/mi'} — edit manually or use Calculate above
+              </p>
             </div>
           </section>
 
@@ -301,7 +456,10 @@ export default function ProfilePage() {
               <div className="form-stack">
                 <label>
                   Coach
-                  <select value={selectedCoach} onChange={(e) => setSelectedCoach(e.target.value)}>
+                  <select
+                    value={selectedCoach}
+                    onChange={(e) => setSelectedCoach(e.target.value)}
+                  >
                     <option value="">Choose a coach</option>
                     {coaches.map((coach) => (
                       <option key={coach.id} value={coach.id}>
@@ -319,7 +477,8 @@ export default function ProfilePage() {
               <h3>Activity Integrations</h3>
             </div>
             <p className="muted athlete-intro">
-              Sync recorded activities so completed sessions automatically feed your training-plan workout logs.
+              Sync recorded activities so completed sessions automatically feed your training-plan
+              workout logs.
             </p>
 
             <div className="athlete-integration-grid">
@@ -335,31 +494,45 @@ export default function ProfilePage() {
                   <span>Last sync: {formatDate(stravaAccount?.lastSyncAt)}</span>
                 </div>
                 <div className="athlete-integration-actions">
-                  <StravaConnectButton
-                    className="cta secondary"
-                    disabled={busyProvider === 'STRAVA'}
-                    onClick={startStravaConnect}
-                    reconnect={Boolean(stravaAccount?.connected)}
-                  />
-                  <button
-                    className="cta secondary"
-                    type="button"
-                    disabled={!stravaAccount?.connected || busyProvider === 'STRAVA'}
-                    onClick={syncStravaNow}
-                  >
-                    Sync now
-                  </button>
-                  <button
-                    className="cta secondary"
-                    type="button"
-                    disabled={!stravaAccount?.connected || busyProvider === 'STRAVA'}
-                    onClick={() => disconnectProvider('STRAVA')}
-                  >
-                    Disconnect
-                  </button>
+                  {!stravaAccount?.connected ? (
+                    <StravaConnectButton
+                      className="cta secondary"
+                      disabled={busyProvider === 'STRAVA'}
+                      onClick={startStravaConnect}
+                    />
+                  ) : (
+                    <>
+                      <button
+                        className="cta secondary"
+                        type="button"
+                        onClick={syncStravaNow}
+                        disabled={busyProvider === 'STRAVA'}
+                      >
+                        Sync now
+                      </button>
+                      <button
+                        className="cta secondary"
+                        type="button"
+                        onClick={() => disconnectProvider('STRAVA')}
+                        disabled={busyProvider === 'STRAVA'}
+                      >
+                        Disconnect
+                      </button>
+                      <button
+                        className="cta secondary athlete-reconnect-btn"
+                        type="button"
+                        onClick={startStravaConnect}
+                        disabled={busyProvider === 'STRAVA'}
+                      >
+                        Reconnect
+                      </button>
+                    </>
+                  )}
                 </div>
                 {!integrationCapability.stravaConfigured && (
-                  <p className="muted">Server credentials missing: set `STRAVA_CLIENT_ID` and `STRAVA_CLIENT_SECRET`.</p>
+                  <p className="muted">
+                    Server credentials missing: set `STRAVA_CLIENT_ID` and `STRAVA_CLIENT_SECRET`.
+                  </p>
                 )}
               </article>
 
@@ -396,16 +569,21 @@ export default function ProfilePage() {
                   </button>
                 </div>
                 <p className="muted">
-                  Garmin requires approved Garmin Health API credentials before OAuth + activity sync can be enabled.
+                  Garmin requires approved Garmin Health API credentials before OAuth + activity
+                  sync can be enabled.
                 </p>
               </article>
             </div>
 
-            {integrationStatus && <p className="muted athlete-integration-status">{integrationStatus}</p>}
+            {integrationStatus && (
+              <p className="muted athlete-integration-status">{integrationStatus}</p>
+            )}
           </section>
 
           <section className="dash-card athlete-save-row">
-            <button className="cta" onClick={saveProfile}>Save profile</button>
+            <button className="cta" onClick={saveProfile}>
+              Save profile
+            </button>
             {status && <span className="muted">{status}</span>}
           </section>
         </section>
@@ -425,13 +603,24 @@ export default function ProfilePage() {
                 <span>{units === 'MILES' ? 'Miles' : 'Kilometers'}</span>
               </div>
               <div>
-                <strong>Default goal date</strong>
-                <span>{raceDateLabel}</span>
-              </div>
-              <div>
                 <strong>Strava</strong>
                 <span>{stravaAccount?.connected ? 'Connected' : 'Not connected'}</span>
               </div>
+              {filledZones.length > 0 && (
+                <div>
+                  <strong>Pace zones</strong>
+                  <div className="athlete-summary-paces">
+                    {filledZones.map(({ key, label }) => (
+                      <span key={key} className="athlete-pace-chip">
+                        <span className="athlete-pace-chip-label">{label}</span>
+                        <span className="athlete-pace-chip-value">
+                          {paceTargets[key] as string}
+                        </span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -440,9 +629,18 @@ export default function ProfilePage() {
               <span className="dash-card-title">Actions</span>
             </div>
             <div className="athlete-link-list">
-              <Link href="/dashboard">Go to today dashboard</Link>
-              <Link href="/plans">Open Plans Management</Link>
-              <Link href="/plans">Manage plans and uploads</Link>
+              <Link href="/dashboard">
+                <span>Go to today dashboard</span>
+                <span className="athlete-link-arrow">→</span>
+              </Link>
+              <Link href="/plans">
+                <span>Open Plans Management</span>
+                <span className="athlete-link-arrow">→</span>
+              </Link>
+              <Link href="/plans">
+                <span>Manage plans and uploads</span>
+                <span className="athlete-link-arrow">→</span>
+              </Link>
             </div>
           </div>
         </aside>

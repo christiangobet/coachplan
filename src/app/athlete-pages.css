@@ -58,16 +58,35 @@
 
 .athlete-link-list {
   display: grid;
-  gap: 10px;
+  gap: 0;
 }
 
 .athlete-link-list a {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--d-border-light);
   color: var(--d-text-mid);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
+  text-decoration: none;
+}
+
+.athlete-link-list a:last-child {
+  border-bottom: none;
 }
 
 .athlete-link-list a:hover {
+  color: var(--d-orange);
+}
+
+.athlete-link-arrow {
+  color: var(--d-muted);
+  font-size: 13px;
+}
+
+.athlete-link-list a:hover .athlete-link-arrow {
   color: var(--d-orange);
 }
 
@@ -151,6 +170,129 @@
 .athlete-integration-status {
   margin: 8px 0 0;
   font-weight: 600;
+}
+
+/* Reconnect button — muted style */
+.athlete-reconnect-btn {
+  color: var(--d-muted) !important;
+  border-color: transparent !important;
+  font-size: 12px !important;
+}
+
+.athlete-reconnect-btn:hover {
+  border-color: var(--d-border) !important;
+  color: var(--d-text-mid) !important;
+}
+
+/* Pace race goal sub-section */
+.pace-race-goal {
+  display: grid;
+  gap: 8px;
+  padding-bottom: 14px;
+}
+
+.pace-race-goal-label {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--d-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.pace-race-goal-inputs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.pace-race-goal-inputs select,
+.pace-race-goal-inputs input {
+  flex: 1;
+  min-width: 80px;
+}
+
+.pace-race-goal-custom-km {
+  max-width: 70px !important;
+  flex: none !important;
+}
+
+.pace-calc-btn {
+  align-self: flex-start;
+  font-size: 12px !important;
+  min-height: 32px !important;
+  padding: 0 12px !important;
+}
+
+/* Divider between race goal and zone list */
+.pace-zone-divider {
+  height: 1px;
+  background: var(--d-border-light);
+  margin: 4px 0 10px;
+}
+
+/* Pace zone list */
+.pace-zone-list {
+  display: grid;
+  gap: 6px;
+}
+
+.pace-zone-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pace-zone-label {
+  width: 76px;
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--d-text-mid);
+}
+
+.pace-zone-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.pace-zone-hint {
+  margin: 6px 0 0;
+  font-size: 11px;
+  color: var(--d-muted);
+}
+
+/* Current Setup pace zone chips */
+.athlete-summary-paces {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 4px;
+}
+
+.athlete-pace-chip {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  padding: 2px 0;
+}
+
+.athlete-pace-chip-label {
+  color: var(--d-muted);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.athlete-pace-chip-value {
+  color: var(--d-text);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.upload-required {
+  color: var(--d-orange);
+  font-weight: 700;
 }
 
 .upload-header h1 {

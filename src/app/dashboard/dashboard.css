@@ -533,17 +533,17 @@ details[open] .day-log-instructions-toggle::before {
   padding: 14px 24px;
   border-radius: 0 0 var(--d-radius-lg) var(--d-radius-lg);
   border: none;
-  background: transparent;
+  background: var(--d-orange);
   font-size: 14px;
   font-weight: 600;
-  color: var(--d-text-mid);
+  color: #fff;
   letter-spacing: 0.01em;
   transition: background 0.12s, color 0.12s;
 }
 
 .dash-log-collapsed .dash-btn-secondary:hover {
-  background: var(--d-border-light);
-  color: var(--d-text);
+  background: #e54400;
+  color: #fff;
 }
 
 .dash-log-collapsed .dash-btn-secondary.is-done {
@@ -2132,6 +2132,16 @@ details[open] .day-log-instructions-toggle::before {
 .dash-sync-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.dash-sync-btn--reconnect {
+  color: var(--d-muted);
+  font-size: 12px;
+}
+
+.dash-sync-btn--reconnect:hover {
+  border-color: var(--d-border);
+  color: var(--d-text-mid);
 }
 
 .strava-connect-btn {

@@ -1,6 +1,6 @@
 # CoachPlan — Developer Onboarding & Project Plan
 
-> **Last updated:** 2026-02-20
+> **Last updated:** 2026-02-26
 > **Audience:** New developers joining CoachPlan
 > **Goal:** This document is the single-source onboarding guide for architecture, environments, workflows, and operations.
 
@@ -370,13 +370,22 @@ The card is integrated into the calendar day-details sidebar via `.cal-workout-c
 
 ## 15) Known Gaps / Roadmap
 
+### Recently completed (2026-02-26 session)
+- **Profile — pace targets expanded**: 7-zone display (recovery/easy/long/race/tempo/threshold/interval) with race goal calculator (distance dropdown + goal time + Calculate). Client-side Riegel formula matches backend `derivePaceProfileFromRaceTarget()`. Zone values pre-populated from stored `paceTargets.raceGoal` metadata on load. Pace zones summary chips added to Current Setup sidebar.
+- **Profile — goalRaceDate removed from UI**: Field removed from profile form; silently preserved in save payload to avoid wiping stored values. Race date is now per-plan only.
+- **Profile — Strava section compliance**: Branded "Connect with Strava" button only when disconnected; Sync + Disconnect + muted Reconnect when connected.
+- **Upload — race date required and promoted to #1**: Race date field is now field #1 with required validation before submit. Orange asterisk (*) indicator. Order: race date → race name → plan name → PDF.
+- **Template → active plan flow**: "Use template" now expands an inline form inside the template card, requiring race date before creating the plan. No more floated plans without date alignment.
+
+### Remaining gaps
 1. Garmin integration completion
 2. Coach feedback/comments loop on day/activity
-3. Upload UX (progress, richer retries)
-4. Strava conflict-resolution UX for same-day multi-match
-5. Admin moderation/audit trail depth
-6. Mobile polish across dashboard/calendar/detail
-7. Click-through from calendar day cell to workout detail modal (currently day click → sidebar only)
+3. Strava conflict-resolution UX for same-day multi-match
+4. Admin moderation/audit trail depth
+5. Mobile polish across dashboard/calendar/detail
+6. Click-through from calendar day cell to workout detail modal (currently day click → sidebar only)
+7. Pace personalization surface in plan detail view ("Personalize paces for this plan" CTA linking to profile)
+8. Planned vs. actual pace comparison in calendar + pace trend in progress page
 
 ---
 

@@ -714,7 +714,7 @@ export default async function DashboardPage({
           {/* Guide */}
           <div className="dash-card dash-plan-reference-card">
             <div className="dash-card-header">
-              <span className="dash-card-title">📋 Plan Reference</span>
+              <span className="dash-card-title">Plan Reference</span>
               <a className="dash-card-link" href={`/plans/${activePlan.id}`}>Full guide →</a>
             </div>
             <div className="dash-plan-reference-body">
@@ -794,59 +794,6 @@ export default async function DashboardPage({
             </div>
           </div>
 
-          {/* Weekly overview — hidden on mobile (dash-week-snapshot already shows this week) */}
-          <div className="dash-card dash-week-overview">
-            <details className="dash-collapse">
-              <summary className="dash-collapse-summary">
-                <span className="dash-card-title">This Week</span>
-                <span style={{ fontSize: 12, color: "var(--d-muted)" }}>
-                  Week {currentWeekIndex}
-                </span>
-              </summary>
-              <div className="dash-collapse-body">
-                <div className="dash-week-strip">
-                  {DAY_LABELS.map((label, idx) => {
-                    const day = idx + 1;
-                    const dayEntry = weekByDay.get(day);
-                    const hasActivities = dayEntry?.activities?.length > 0;
-                    const dayStatus = getDayStatus(dayEntry?.notes);
-                    const manualDone = dayStatus === 'DONE';
-                    const manualMissed = dayStatus === 'MISSED';
-                    const allDone = manualDone || (hasActivities && dayEntry.activities.every((a: any) => a.completed));
-                    const isToday = isTodayInsideCurrentWeek && day === isoDay;
-                    const isMissed = manualMissed || (isTodayInsideCurrentWeek && hasActivities && !allDone && day < isoDay);
-
-                    let dotClass = "dash-week-dot";
-                    let dotContent = "";
-                    if (allDone) { dotClass += " done"; dotContent = "\u2713"; }
-                    else if (isToday) { dotClass += " today"; dotContent = "\u2022"; }
-                    else if (isMissed) { dotClass += " missed"; dotContent = "\u2715"; }
-
-                    return (
-                      <div className="dash-week-day" key={label}>
-                        <span className="dash-week-label">{label[0]}</span>
-                        <span className={dotClass}>{dotContent}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-                <div className="dash-week-stats">
-                  <div className="dash-week-stat">
-                    <div className="dash-week-stat-value">
-                      {completedKey}/{keyActivities.length}
-                    </div>
-                    <div className="dash-week-stat-label">Key Workouts</div>
-                  </div>
-                  <div className="dash-week-stat">
-                    <div className="dash-week-stat-value">
-                      {Math.floor(totalMinutes / 60)}h{totalMinutes % 60 > 0 ? ` ${totalMinutes % 60}m` : ""}
-                    </div>
-                    <div className="dash-week-stat-label">Total Time</div>
-                  </div>
-                </div>
-              </div>
-            </details>
-          </div>
 
           {/* Plan progress */}
           <div className="dash-card dash-plan-progress-card">
