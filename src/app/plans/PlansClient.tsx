@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import AthleteSidebar from '@/components/AthleteSidebar';
+import PlanGuidePanel from '@/components/PlanGuidePanel';
 import { pickSelectedPlan, SELECTED_PLAN_COOKIE } from '@/lib/plan-selection';
 import '../dashboard/dashboard.css';
 import './plans.css';
@@ -18,7 +19,7 @@ type Plan = {
   createdAt?: string | null;
   updatedAt?: string | null;
 };
-type Template = { id: string; name: string; weekCount?: number | null };
+type Template = { id: string; name: string; weekCount?: number | null; planGuide?: string | null };
 
 function statusColor(status: string) {
   if (status === 'ACTIVE') return 'var(--d-green)';
@@ -48,6 +49,8 @@ export default function PlansClient() {
   const [expandedMenuId, setExpandedMenuId] = useState<string | null>(null);
   const [useTemplateId, setUseTemplateId] = useState<string | null>(null);
   const [templateRaceDate, setTemplateRaceDate] = useState('');
+  const [savingAsTemplate, setSavingAsTemplate] = useState<string | null>(null);
+  const [expandedGuideId, setExpandedGuideId] = useState<string | null>(null);
 
   const toggleMenu = (planId: string) =>
     setExpandedMenuId((prev) => (prev === planId ? null : planId));
@@ -183,6 +186,28 @@ export default function PlansClient() {
     }
   };
 
+  const handleSaveAsTemplate = async (planId: string) => {
+    setSavingAsTemplate(planId);
+    setExpandedMenuId(null);
+    try {
+      const res = await fetch(`/api/plans/${planId}/save-as-template`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+      });
+      if (!res.ok) throw new Error('Failed');
+      const tRes = await fetch('/api/templates');
+      if (tRes.ok) {
+        const tData = await tRes.json().catch(() => null);
+        setTemplates(Array.isArray(tData?.templates) ? tData.templates : []);
+      }
+    } catch {
+      // silent
+    } finally {
+      setSavingAsTemplate(null);
+    }
+  };
+
   const deletePlan = async (planId: string) => {
     if (!window.confirm('Delete this plan permanently? This cannot be undone.')) return;
     setProcessingPlanId(planId);
@@ -300,6 +325,13 @@ export default function PlansClient() {
                           {processingPlanId === plan.id ? 'Saving…' : 'Archive'}
                         </button>
                         <button
+                          className="plan-card-overflow-item"
+                          onClick={() => handleSaveAsTemplate(plan.id)}
+                          disabled={savingAsTemplate === plan.id}
+                        >
+                          {savingAsTemplate === plan.id ? 'Saving…' : 'Save as template'}
+                        </button>
+                        <button
                           className="plan-card-overflow-item danger"
                           onClick={() => { deletePlan(plan.id); setExpandedMenuId(null); }}
                           disabled={processingPlanId === plan.id}
@@ -369,6 +401,13 @@ export default function PlansClient() {
                             {processingPlanId === plan.id ? 'Saving…' : 'Archive'}
                           </button>
                           <button
+                            className="plan-card-overflow-item"
+                            onClick={() => handleSaveAsTemplate(plan.id)}
+                            disabled={savingAsTemplate === plan.id}
+                          >
+                            {savingAsTemplate === plan.id ? 'Saving…' : 'Save as template'}
+                          </button>
+                          <button
                             className="plan-card-overflow-item danger"
                             onClick={() => { deletePlan(plan.id); setExpandedMenuId(null); }}
                             disabled={processingPlanId === plan.id}
@@ -430,6 +469,13 @@ export default function PlansClient() {
                       {expandedMenuId === plan.id && (
                         <div className="plan-card-overflow-menu">
                           <button
+                            className="plan-card-overflow-item"
+                            onClick={() => handleSaveAsTemplate(plan.id)}
+                            disabled={savingAsTemplate === plan.id}
+                          >
+                            {savingAsTemplate === plan.id ? 'Saving…' : 'Save as template'}
+                          </button>
+                          <button
                             className="plan-card-overflow-item danger"
                             onClick={() => { deletePlan(plan.id); setExpandedMenuId(null); }}
                             disabled={processingPlanId === plan.id}
@@ -463,6 +509,21 @@ export default function PlansClient() {
                     <span className="plan-card-meta">
                       {tpl.weekCount ? `${tpl.weekCount} wks` : 'No weeks set'}
                     </span>
+                    {tpl.planGuide && (
+                      <>
+                        <button
+                          className="plan-template-guide-toggle"
+                          onClick={() => setExpandedGuideId((prev) => (prev === tpl.id ? null : tpl.id))}
+                        >
+                          {expandedGuideId === tpl.id ? '▲ Hide guide' : '▼ Show guide'}
+                        </button>
+                        {expandedGuideId === tpl.id && (
+                          <div className="plan-template-guide-body">
+                            <PlanGuidePanel guideText={tpl.planGuide} planId={tpl.id} compact />
+                          </div>
+                        )}
+                      </>
+                    )}
                     {useTemplateId === tpl.id ? (
                       <div className="plan-template-setup">
                         <label className="plan-template-setup-label">

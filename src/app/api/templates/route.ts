@@ -33,6 +33,7 @@ export async function GET(req: Request) {
       difficulty: true,
       ownerId: true,
       createdAt: true,
+      planGuide: true,
       owner: { select: { name: true } },
     },
   });
