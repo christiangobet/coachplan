@@ -85,12 +85,20 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   }
 
   const updates: {
+    name?: string;
     raceName?: string | null;
     raceDate?: Date | null;
     status?: PlanStatus;
     planGuide?: string | null;
     planSummary?: Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput;
   } = {};
+
+  if ('name' in body) {
+    if (typeof body.name !== 'string' || !body.name.trim()) {
+      return NextResponse.json({ error: 'name must be a non-empty string' }, { status: 400 });
+    }
+    updates.name = body.name.trim();
+  }
 
   if ('raceName' in body) {
     if (body.raceName !== null && typeof body.raceName !== 'string') {
@@ -131,7 +139,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     }
   }
 
-  if (!('raceName' in body) && !('raceDate' in body) && !('status' in body) && !('planGuide' in body) && !('planSummary' in body)) {
+  if (!('name' in body) && !('raceName' in body) && !('raceDate' in body) && !('status' in body) && !('planGuide' in body) && !('planSummary' in body)) {
     return NextResponse.json({ error: 'No supported fields to update' }, { status: 400 });
   }
 

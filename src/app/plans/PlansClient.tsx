@@ -55,10 +55,35 @@ export default function PlansClient() {
   const [savingAsTemplate, setSavingAsTemplate] = useState<string | null>(null);
   const [expandedGuideId, setExpandedGuideId] = useState<string | null>(null);
   const [renamingTemplateId, setRenamingTemplateId] = useState<string | null>(null);
+  const [renamingPlanId, setRenamingPlanId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
 
   const toggleMenu = (planId: string) =>
     setExpandedMenuId((prev) => (prev === planId ? null : planId));
+
+  useEffect(() => {
+    if (!expandedMenuId) return;
+    const handler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('.plan-card-overflow-menu') && !target.closest('.plan-card-menu-btn')) {
+        setExpandedMenuId(null);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [expandedMenuId]);
+
+  useEffect(() => {
+    if (!expandedGuideId) return;
+    const handler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('.plan-card')) {
+        setExpandedGuideId(null);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [expandedGuideId]);
 
   const rememberSelectedPlan = (planId: string) => {
     if (!planId) return;
@@ -233,6 +258,26 @@ export default function PlansClient() {
     }
   };
 
+  const handleRenamePlan = async (planId: string) => {
+    const trimmed = renameValue.trim();
+    if (!trimmed) return;
+    setProcessingPlanId(planId);
+    try {
+      const res = await fetch(`/api/plans/${planId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: trimmed })
+      });
+      if (!res.ok) throw new Error('Failed');
+      setPlans((prev) => prev.map((p) => p.id === planId ? { ...p, name: trimmed } : p));
+      setRenamingPlanId(null);
+    } catch {
+      // silent
+    } finally {
+      setProcessingPlanId(null);
+    }
+  };
+
   const deletePlan = async (planId: string) => {
     if (!window.confirm('Delete this plan permanently? This cannot be undone.')) return;
     setProcessingPlanId(planId);
@@ -317,7 +362,29 @@ export default function PlansClient() {
                         aria-label="More actions"
                       >···</button>
                     </div>
-                    <h3 className="plan-card-name">{plan.name}</h3>
+                    {renamingPlanId === plan.id ? (
+                      <div className="plan-template-rename">
+                        <input
+                          className="plan-template-rename-input"
+                          value={renameValue}
+                          onChange={(e) => setRenameValue(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === 'Enter') handleRenamePlan(plan.id); if (e.key === 'Escape') setRenamingPlanId(null); }}
+                          autoFocus
+                        />
+                        <div className="plan-template-rename-actions">
+                          <button
+                            className="dash-btn-primary plan-card-cta"
+                            onClick={() => handleRenamePlan(plan.id)}
+                            disabled={!renameValue.trim() || processingPlanId === plan.id}
+                          >
+                            {processingPlanId === plan.id ? 'Saving…' : 'Save'}
+                          </button>
+                          <button className="plan-template-cancel" onClick={() => setRenamingPlanId(null)}>Cancel</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <h3 className="plan-card-name">{plan.name}</h3>
+                    )}
                     <span className="plan-card-meta">
                       {plan.weekCount ? `${plan.weekCount} wks` : '–'} · {plan.raceName?.trim() || 'No race'} · {formatRaceDate(plan.raceDate)}
                     </span>
@@ -337,10 +404,20 @@ export default function PlansClient() {
                     )}
                     <div className="plan-card-actions">
                       <Link className="dash-btn-primary plan-card-cta" href={`/plans/${plan.id}`} onClick={() => rememberSelectedPlan(plan.id)}>Open Plan</Link>
-                      <Link className="dash-btn-ghost plan-card-edit-btn" href={`/plans/${plan.id}?mode=edit`} onClick={() => rememberSelectedPlan(plan.id)}>Edit</Link>
                     </div>
                     {expandedMenuId === plan.id && (
                       <div className="plan-card-overflow-menu">
+                        <button
+                          className="plan-card-overflow-item"
+                          onClick={() => { setRenameValue(plan.name); setRenamingPlanId(plan.id); setExpandedMenuId(null); }}
+                        >
+                          Rename
+                        </button>
+                        <Link
+                          className="plan-card-overflow-item"
+                          href={`/plans/${plan.id}?mode=edit`}
+                          onClick={() => { rememberSelectedPlan(plan.id); setExpandedMenuId(null); }}
+                        >Edit plan</Link>
                         {plan.planGuide && (
                           <button
                             className="plan-card-overflow-item"
