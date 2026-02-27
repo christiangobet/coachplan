@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { buildPlanActivityActualsUpdate } from '@/lib/activity-actuals';
 import { getDayDateFromWeekStart, resolveWeekBounds } from '@/lib/plan-dates';
 import { createIntegrationStateToken } from '@/lib/integrations/state';
-import { isDayClosed } from '@/lib/day-status';
+import { isDayClosed, setDayStatus } from '@/lib/day-status';
 import { pickSelectedPlan } from '@/lib/plan-selection';
 import { resolveDistanceUnitFromActivity } from '@/lib/unit-display';
 import { evaluateStravaEquivalence } from '@/lib/integrations/strava-equivalence';
@@ -105,6 +105,8 @@ export type StravaDayImportSummary = {
   workoutsUpdated: number;
   unmatched: number;
   decisions: StravaMatchDecision[];
+  /** True when the day is a pure rest day and a Strava activity was found — day is auto-marked done. */
+  restDayAutoCompleted?: boolean;
 };
 
 export type StravaMatchDecision = {
@@ -1512,12 +1514,37 @@ export async function importStravaDayForUser(args: {
     });
   }
 
+  // If this is a pure rest day (all planned activities are REST type) and the athlete
+  // has at least one Strava activity for the day, auto-mark the day as done.
+  let restDayAutoCompleted = false;
+  const isRestDay =
+    dayCandidates.length > 0 && dayCandidates.every((c) => c.type === 'REST');
+  if (isRestDay && dayExternal.length > 0) {
+    // Find the PlanDay record for this date so we can update its status.
+    const planDay = await prisma.planDay.findFirst({
+      where: {
+        plan: { athleteId: args.userId },
+        activities: { some: { id: { in: dayCandidates.map((c) => c.id) } } }
+      },
+      select: { id: true, notes: true }
+    });
+    if (planDay) {
+      const nextNotes = setDayStatus(planDay.notes, 'DONE');
+      await prisma.planDay.update({
+        where: { id: planDay.id },
+        data: { notes: nextNotes }
+      });
+      restDayAutoCompleted = true;
+    }
+  }
+
   return {
     date,
     stravaActivities: dayExternal.length,
     matched,
     workoutsUpdated,
     unmatched: Math.max(0, dayExternal.length - matched),
-    decisions
+    decisions,
+    restDayAutoCompleted
   };
 }

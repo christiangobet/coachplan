@@ -24,6 +24,7 @@ type StravaImportSummary = {
   workoutsUpdated: number;
   unmatched: number;
   decisions?: StravaSyncDecision[];
+  restDayAutoCompleted?: boolean;
 };
 
 type StravaSyncDecision = {
@@ -69,6 +70,7 @@ function parseNumericOrNull(raw: string) {
 
 function summarizeImport(summary: StravaImportSummary) {
   if (summary.stravaActivities === 0) return 'No Strava activities found for this day.';
+  if (summary.restDayAutoCompleted) return 'Rest day — Strava activity found, day marked done ✓';
   const noun = summary.stravaActivities === 1 ? 'activity' : 'activities';
   return `Synced ${summary.stravaActivities} ${noun} · ${summary.matched} matched · ${summary.workoutsUpdated} updated · ${summary.unmatched} unmatched`;
 }

@@ -14,6 +14,7 @@ type StravaImportSummary = {
   matched: number;
   workoutsUpdated: number;
   unmatched: number;
+  restDayAutoCompleted?: boolean;
 };
 
 type SyncTone = 'info' | 'success' | 'warning' | 'error';
@@ -45,6 +46,7 @@ function formatDayStatus(status: DayStatus) {
 
 function summarizeImport(summary: StravaImportSummary) {
   if (summary.stravaActivities === 0) return 'No Strava activities found for this day.';
+  if (summary.restDayAutoCompleted) return 'Rest day — Strava activity found, day marked done ✓';
   const noun = summary.stravaActivities === 1 ? 'activity' : 'activities';
   return `Synced ${summary.stravaActivities} ${noun} · ${summary.matched} matched · ${summary.workoutsUpdated} updated · ${summary.unmatched} unmatched`;
 }

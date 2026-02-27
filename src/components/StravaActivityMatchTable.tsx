@@ -215,6 +215,8 @@ export default function StravaActivityMatchTable() {
       const totalCount = Number(summary.stravaActivities ?? 0);
       if (totalCount === 0) {
         setStatus(`Imported ${summary.date}: no Strava activities found for this date.`);
+      } else if (summary.restDayAutoCompleted) {
+        setStatus(`Imported ${summary.date}: rest day — Strava activity found, day marked done ✓`);
       } else if (matchedCount === 0) {
         setStatus(`Imported ${summary.date}: found ${totalCount} Strava activities, but no plan matches were applied.`);
       } else {
