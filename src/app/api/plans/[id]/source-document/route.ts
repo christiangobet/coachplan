@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { currentUser } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
+import { resolveSourceDocument } from '@/lib/resolve-source-document';
 
 export async function GET(
   _req: Request,
@@ -12,21 +13,7 @@ export async function GET(
   const { id } = await params;
   const plan = await prisma.trainingPlan.findUnique({
     where: { id },
-    select: {
-      id: true,
-      ownerId: true,
-      athleteId: true,
-      sourceDocument: {
-        select: {
-          id: true,
-          fileName: true,
-          mimeType: true,
-          fileSize: true,
-          pageCount: true,
-          createdAt: true
-        }
-      }
-    }
+    select: { id: true, ownerId: true, athleteId: true }
   });
 
   if (!plan) return NextResponse.json({ error: 'Not found' }, { status: 404 });
@@ -34,19 +21,20 @@ export async function GET(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  if (!plan.sourceDocument) {
-    return NextResponse.json({
-      available: false
-    });
+  const resolved = await resolveSourceDocument(id);
+
+  if (!resolved) {
+    return NextResponse.json({ available: false });
   }
 
+  const { doc } = resolved;
   return NextResponse.json({
     available: true,
-    fileName: plan.sourceDocument.fileName,
-    mimeType: plan.sourceDocument.mimeType,
-    fileSize: plan.sourceDocument.fileSize,
-    pageCount: plan.sourceDocument.pageCount,
-    createdAt: plan.sourceDocument.createdAt.toISOString(),
-    fileUrl: `/api/plans/${plan.id}/source-document/file`
+    fileName: doc.fileName,
+    mimeType: doc.mimeType,
+    fileSize: doc.fileSize,
+    pageCount: doc.pageCount,
+    createdAt: doc.createdAt.toISOString(),
+    fileUrl: `/api/plans/${id}/source-document/file`
   });
 }

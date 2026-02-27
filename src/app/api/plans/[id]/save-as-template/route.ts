@@ -41,9 +41,32 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   });
 
   await clonePlanStructure(plan, template.id);
+
+  // Reset week dates and all completion state on the template
   await prisma.planWeek.updateMany({
     where: { planId: template.id },
     data: { startDate: null, endDate: null }
+  });
+  await prisma.planActivity.updateMany({
+    where: { planId: template.id },
+    data: {
+      completed: false,
+      completedAt: null,
+      actualDistance: null,
+      actualDuration: null,
+      actualPace: null,
+    }
+  });
+  // Disconnect any strava matches from template activities
+  await prisma.externalActivity.updateMany({
+    where: { matchedPlanActivity: { planId: template.id } },
+    data: { matchedPlanActivityId: null }
+  });
+
+  // Clear day notes (strips [DAY_DONE] / [DAY_MISSED] status tags carried from original)
+  await prisma.planDay.updateMany({
+    where: { planId: template.id },
+    data: { notes: null }
   });
 
   return NextResponse.json({ template: { id: template.id } });

@@ -59,6 +59,22 @@ export async function POST(req: Request) {
 
   await clonePlanStructure(template, newPlan.id);
 
+  // Ensure new plan starts clean — no completion state, no day status tags
+  await prisma.planActivity.updateMany({
+    where: { planId: newPlan.id },
+    data: {
+      completed: false,
+      completedAt: null,
+      actualDistance: null,
+      actualDuration: null,
+      actualPace: null,
+    }
+  });
+  await prisma.planDay.updateMany({
+    where: { planId: newPlan.id },
+    data: { notes: null }
+  });
+
   const totalWeeks = template.weeks.length || template.weekCount || 0;
   if (raceDate && totalWeeks > 0) {
     await alignWeeksToRaceDate(newPlan.id, totalWeeks, raceDate);
