@@ -561,59 +561,57 @@ export default function DayLogCard({
   return (
     <div className="day-log-card">
 
-      {/* Day status row — sits right below the date header */}
+      {/* Day status row */}
       {dayId && enabled && (
-        <div className="cal-day-toggle cal-day-toggle--top">
-          <div className="dash-log-actions cal-day-toggle-actions">
-            {!isClosed && (
-              <div className="cal-day-status-row">
-                <button
-                  type="button"
-                  className="cal-day-status-btn cal-day-status-btn--done"
-                  onClick={() => saveDayStatus('DONE')}
-                  disabled={dayBusy}
-                >
-                  <span className="cal-day-status-icon">✓</span>Done
-                </button>
-                <button
-                  type="button"
-                  className="cal-day-status-btn cal-day-status-btn--partial"
-                  onClick={() => saveDayStatus('PARTIAL')}
-                  disabled={dayBusy}
-                >
-                  <span className="cal-day-status-icon">≈</span>Partial
-                </button>
-                <button
-                  type="button"
-                  className="cal-day-status-btn cal-day-status-btn--missed"
-                  onClick={() => saveDayStatus('MISSED')}
-                  disabled={dayBusy}
-                >
-                  <span className="cal-day-status-icon">✗</span>Missed
-                </button>
-              </div>
-            )}
-            {isMissed && (
+        <div className="day-log-status-bar">
+          {!isClosed && (
+            <div className="cal-day-status-row">
               <button
                 type="button"
-                className="dash-btn-ghost dash-btn-missed"
+                className="cal-day-status-btn cal-day-status-btn--done"
+                onClick={() => saveDayStatus('DONE')}
+                disabled={dayBusy}
+              >
+                <span className="cal-day-status-icon">✓</span>Done
+              </button>
+              <button
+                type="button"
+                className="cal-day-status-btn cal-day-status-btn--partial"
+                onClick={() => saveDayStatus('PARTIAL')}
+                disabled={dayBusy}
+              >
+                <span className="cal-day-status-icon">≈</span>Partial
+              </button>
+              <button
+                type="button"
+                className="cal-day-status-btn cal-day-status-btn--missed"
                 onClick={() => saveDayStatus('MISSED')}
                 disabled={dayBusy}
               >
-                {dayBusy ? 'Saving…' : 'Update Missed Day'}
+                <span className="cal-day-status-icon">✗</span>Missed
               </button>
-            )}
-            {isClosed && (
-              <button
-                type="button"
-                className="dash-btn-ghost"
-                onClick={() => saveDayStatus('OPEN')}
-                disabled={dayBusy}
-              >
-                Reopen Day
-              </button>
-            )}
-          </div>
+            </div>
+          )}
+          {isMissed && (
+            <button
+              type="button"
+              className="dash-btn-ghost dash-btn-missed"
+              onClick={() => saveDayStatus('MISSED')}
+              disabled={dayBusy}
+            >
+              {dayBusy ? 'Saving…' : 'Update Missed Day'}
+            </button>
+          )}
+          {isClosed && (
+            <button
+              type="button"
+              className="dash-btn-ghost"
+              onClick={() => saveDayStatus('OPEN')}
+              disabled={dayBusy}
+            >
+              Reopen Day
+            </button>
+          )}
           {isMissed && (
             <textarea
               value={missedReason}
@@ -628,10 +626,9 @@ export default function DayLogCard({
         </div>
       )}
 
-      {/* Strava sync row */}
+      {/* Strava sync */}
       {enabled && !isClosed && (
-        <div className="dash-log-header">
-          <span className="dash-log-label">Log activities</span>
+        <div className="day-log-strava-bar">
           <button
             type="button"
             className="dash-log-strava-btn"
@@ -642,21 +639,27 @@ export default function DayLogCard({
           </button>
         </div>
       )}
-      {syncMessage && (
-        <p className={`dash-log-sync-note ${syncTone}`}>{syncMessage}</p>
-      )}
-      {syncDecisions.length > 0 && (
-        <div className="dash-log-section" style={{ marginBottom: 12 }}>
-          {syncDecisions.map((decision) => {
-            const effective = resolveDecisionEquivalence(decision);
-            return (
-              <div key={decision.externalActivityId} style={{ borderTop: '1px solid var(--d-border-light)', padding: '10px 0' }}>
-                <p className={`dash-log-sync-note ${equivalenceTone(effective)}`} style={{ marginBottom: 4 }}>
-                  {equivalenceCopy(effective)}
-                </p>
-              </div>
-            );
-          })}
+
+      {/* Sync results */}
+      {(syncMessage || syncDecisions.length > 0) && (
+        <div className="day-log-sync-area">
+          {syncMessage && (
+            <p className={`dash-log-sync-note ${syncTone}`}>{syncMessage}</p>
+          )}
+          {syncDecisions.length > 0 && (
+            <div className="day-log-decisions">
+              {syncDecisions.map((decision) => {
+                const effective = resolveDecisionEquivalence(decision);
+                return (
+                  <div key={decision.externalActivityId} className="day-log-decision">
+                    <p className={`dash-log-sync-note ${equivalenceTone(effective)}`}>
+                      {equivalenceCopy(effective)}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 

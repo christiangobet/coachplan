@@ -3476,3 +3476,63 @@ details[open] .day-log-instructions-toggle::before {
     grid-column: auto;
   }
 }
+
+/* ── Day-log layout helpers ── */
+
+.day-log-status-bar {
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--d-border-light);
+  display: grid;
+  gap: 6px;
+}
+
+.day-log-strava-bar {
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--d-border-light);
+}
+
+.day-log-sync-area {
+  padding: 0 20px 6px;
+}
+
+.day-log-sync-area .dash-log-sync-note {
+  margin-bottom: 0;
+}
+
+.day-log-decisions {
+  border-top: 1px solid var(--d-border-light);
+  margin-top: 6px;
+}
+
+.day-log-decision {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--d-border-light);
+}
+
+.day-log-decision:last-child {
+  border-bottom: none;
+}
+
+.day-log-decision .dash-log-sync-note {
+  margin-bottom: 0;
+}
+
+/* Missed-day reason textarea */
+.cal-day-missed-reason {
+  width: 100%;
+  border: 1px solid var(--d-border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--d-text);
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.4;
+  padding: 8px 10px;
+  resize: vertical;
+}
+
+/* Prefilled inputs (from Strava sync) */
+.cal-activity-log input.is-prefilled {
+  font-weight: 700;
+  color: var(--d-text);
+}
