@@ -362,6 +362,12 @@
   gap: 8px;
 }
 
+.plan-template-start-hint {
+  font-size: 12px;
+  color: var(--d-text-mid);
+  margin: 4px 0 0;
+}
+
 .plan-template-guide-body {
   border-top: 1px solid var(--d-border-light);
   padding-top: 10px;
