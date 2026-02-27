@@ -658,6 +658,20 @@ export default async function CalendarPage({
             </div>
           )}
 
+          {/* Plan Reference guide — collapsible */}
+          <details className="dash-card cal-guide-details">
+            <summary className="cal-guide-summary">
+              <span>📋 Plan Reference</span>
+              <span className="cal-guide-summary-hint">expand</span>
+            </summary>
+            <div className="cal-guide-body">
+              <PlanSummarySection
+                summary={selectedPlan.planSummary as PlanSummary | null}
+                planId={selectedPlan.id}
+              />
+            </div>
+          </details>
+
           <div className="dash-card cal-month-card">
             <div className="cal-month-nav-row">
               <div className="cal-month-nav">
@@ -984,20 +998,6 @@ export default async function CalendarPage({
               </div>
             </div>
           </div>
-
-          {/* Plan Reference guide — collapsible */}
-          <details className="dash-card cal-guide-details">
-            <summary className="cal-guide-summary">
-              <span>📋 Plan Reference</span>
-              <span className="cal-guide-summary-hint">expand</span>
-            </summary>
-            <div className="cal-guide-body">
-              <PlanSummarySection
-                summary={selectedPlan.planSummary as PlanSummary | null}
-                planId={selectedPlan.id}
-              />
-            </div>
-          </details>
 
         </aside>
       </div>
