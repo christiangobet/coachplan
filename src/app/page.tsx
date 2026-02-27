@@ -107,7 +107,7 @@ export default async function Home() {
         <p>Import a plan, set your race date, and make every workout count.</p>
         <div className={styles.ctas}>
           <Link className={styles.ctaPrimary} href="/sign-up">Create account</Link>
-          <Link className={styles.ctaSecondary} href="/sign-in">I already have an account</Link>
+          <Link className={styles.ctaSecondary} href="/sign-in">Sign in</Link>
         </div>
       </section>
     </main>
