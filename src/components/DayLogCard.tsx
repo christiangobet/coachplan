@@ -100,6 +100,20 @@ function typeAbbr(type: string) {
   return TYPE_ABBR[String(type || 'OTHER').toUpperCase()] || 'OTH';
 }
 
+/** Show actuals when completed + logged, otherwise fall back to planned. */
+function buildDisplayDetails(activity: LogActivity, viewerUnits: DistanceUnit): string[] {
+  const hasActuals = activity.actualDistance != null || activity.actualDuration != null || !!activity.actualPace;
+  if (activity.completed && hasActuals) {
+    const parts: string[] = [];
+    if (activity.actualDistance != null)
+      parts.push(`${formatDistanceNumber(activity.actualDistance)} ${distanceUnitLabel(viewerUnits)}`);
+    if (activity.actualDuration != null) parts.push(`${activity.actualDuration} min`);
+    if (activity.actualPace) parts.push(activity.actualPace);
+    return parts;
+  }
+  return activity.plannedDetails;
+}
+
 // ── ActivityRow ───────────────────────────────────────────────────────────────
 
 function ActivityRow({
@@ -683,6 +697,7 @@ export default function DayLogCard({
               busy: false, error: null, savedStatus: null,
             };
             const showForm = enabled && !isClosed && !activity.completed;
+            const displayDetails = buildDisplayDetails(activity, viewerUnits);
             return (
               <div key={activity.id} className="cal-activity-section">
                 <div className="cal-activity-workout-row">
@@ -694,8 +709,8 @@ export default function DayLogCard({
                       {activity.title || activity.type}
                       {activity.completed && <span className="cal-activity-done-chip">✓</span>}
                     </span>
-                    {activity.plannedDetails.length > 0 && (
-                      <span className="cal-activity-metrics">{activity.plannedDetails.join(' · ')}</span>
+                    {displayDetails.length > 0 && (
+                      <span className="cal-activity-metrics">{displayDetails.join(' · ')}</span>
                     )}
                   </div>
                 </div>
@@ -730,7 +745,7 @@ export default function DayLogCard({
           const distUnit = distanceUnitLabel(viewerUnits);
 
           return (
-            <details key={`session-${item.group.sessionGroupId}-${idx}`} className="cal-session-group" open>
+            <details key={`session-${item.group.sessionGroupId}-${idx}`} className="cal-session-group">
               <summary className="cal-session-group-header">
                 <span className="cal-session-group-label">Session</span>
                 {totalPlannedDist > 0 && (
@@ -753,6 +768,7 @@ export default function DayLogCard({
                   };
                   const showForm = enabled && !isClosed && !activity.completed;
                   const isLast = mIdx === members.length - 1;
+                  const memberDisplayDetails = buildDisplayDetails(activity, viewerUnits);
                   return (
                     <div key={activity.id} className={`cal-activity-section cal-session-member${isLast ? ' cal-session-member--last' : ''}`}>
                       <div className="cal-activity-workout-row">
@@ -764,8 +780,8 @@ export default function DayLogCard({
                             {activity.title || activity.type}
                             {activity.completed && <span className="cal-activity-done-chip">✓</span>}
                           </span>
-                          {activity.plannedDetails.length > 0 && (
-                            <span className="cal-activity-metrics">{activity.plannedDetails.join(' · ')}</span>
+                          {memberDisplayDetails.length > 0 && (
+                            <span className="cal-activity-metrics">{memberDisplayDetails.join(' · ')}</span>
                           )}
                         </div>
                       </div>

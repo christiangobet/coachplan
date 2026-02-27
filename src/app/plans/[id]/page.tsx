@@ -1386,7 +1386,17 @@ export default function PlanDetailPage() {
                               + Add
                             </button>
                           )}
-                          {activities.map((a: any) => {
+                          {(cellView === 'compact' ? (() => {
+                            // In compact mode collapse session groups into one chip
+                            const seen = new Set<string>();
+                            return activities.flatMap((a: any) => {
+                              if (!a.sessionGroupId) return [{ a, sessionCount: undefined }];
+                              if (seen.has(a.sessionGroupId)) return [];
+                              seen.add(a.sessionGroupId);
+                              const count = activities.filter((x: any) => x.sessionGroupId === a.sessionGroupId).length;
+                              return [{ a, sessionCount: count }];
+                            });
+                          })() : activities.map((a: any) => ({ a, sessionCount: undefined }))).map(({ a, sessionCount }: { a: any; sessionCount: number | undefined }) => {
                             const plannedSourceUnit = resolveActivityDistanceSourceUnit(a, viewerUnits);
                             const actualSourceUnit = resolveActivityDistanceSourceUnit(
                               a,
@@ -1422,6 +1432,25 @@ export default function PlanDetailPage() {
                             }
 
                             const activityTypeAbbr = ACTIVITY_TYPE_ABBR[String(a.type || 'OTHER')] ?? 'OTH';
+
+                            // Distance label for compact chip (sum for sessions, single for standalone)
+                            let compactDistLabel: string | null = null;
+                            if (cellView === 'compact') {
+                              if (sessionCount && sessionCount > 1) {
+                                const members = activities.filter((x: any) => x.sessionGroupId === a.sessionGroupId);
+                                let total = 0;
+                                let hasAny = false;
+                                for (const m of members) {
+                                  const srcUnit = resolveActivityDistanceSourceUnit(m, viewerUnits);
+                                  const converted = toDisplayDistance(m.distance, srcUnit);
+                                  if (converted) { total += converted.value; hasAny = true; }
+                                }
+                                if (hasAny) compactDistLabel = `${formatDistanceNumber(total)}${viewerUnitLabel}`;
+                              } else {
+                                compactDistLabel = formatDisplayDistance(a.distance, plannedSourceUnit);
+                              }
+                            }
+
                             return (
                               <div
                                 className={`pcal-activity pcal-activity-clickable${a.completed ? ' pcal-activity-done' : ''}${a.mustDo || a.priority === 'KEY' ? ' pcal-activity-key' : ''}${cellView === 'compact' ? ' pcal-activity-compact' : ''}`}
@@ -1442,7 +1471,7 @@ export default function PlanDetailPage() {
                                 />
                                 {cellView === 'compact' ? (
                                   <span className={`pcal-activity-abbr type-${String(a.type || 'OTHER').toLowerCase()}`}>
-                                    {activityTypeAbbr}
+                                    {activityTypeAbbr}{sessionCount && sessionCount > 1 ? ` ×${sessionCount}` : ''}{compactDistLabel ? ` · ${compactDistLabel}` : ''}
                                   </span>
                                 ) : (
                                   <div className="pcal-activity-content">

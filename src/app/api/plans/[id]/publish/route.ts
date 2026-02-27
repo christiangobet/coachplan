@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { currentUser } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
+import { assignSessionGroups } from '@/lib/assign-session-groups';
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await currentUser();
@@ -13,6 +14,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (plan.athleteId !== user.id) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
+
+  // Auto-group multi-run days before activating
+  await assignSessionGroups(plan.id).catch((err) =>
+    console.error('[publish] assignSessionGroups failed:', err)
+  );
 
   const updated = await prisma.trainingPlan.update({
     where: { id: plan.id },

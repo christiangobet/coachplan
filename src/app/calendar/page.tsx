@@ -63,6 +63,8 @@ type DatedActivity = {
   actualPace: string | null;
   notes: string | null;
   sessionInstructions: string | null;
+  sessionGroupId: string | null;
+  sessionOrder: number | null;
 };
 
 type DayExternalLog = {
@@ -454,7 +456,9 @@ export default async function CalendarPage({
           actualDuration: activity.actualDuration ?? null,
           actualPace: activity.actualPace ?? null,
           notes: activity.notes ?? null,
-          sessionInstructions: activity.sessionInstructions ?? null
+          sessionInstructions: activity.sessionInstructions ?? null,
+          sessionGroupId: activity.sessionGroupId ?? null,
+          sessionOrder: activity.sessionOrder ?? null
         };
         const existing = activitiesByDate.get(key) || [];
         existing.push(next);
@@ -709,7 +713,22 @@ export default async function CalendarPage({
                 const stravaLogs = dayLogs.filter((log) => log.provider === "STRAVA");
                 const stravaMarkerLogs = stravaLogs.slice(0, 3);
                 const stravaOverflow = Math.max(0, stravaLogs.length - stravaMarkerLogs.length);
-                const moreCount = dayActivities.length > 3 ? dayActivities.length - 3 : 0;
+                // Collapse session members into one display item per group
+                type DisplayActivity = { activity: DatedActivity; sessionCount?: number };
+                const displayActivities: DisplayActivity[] = [];
+                const seenGroups = new Set<string>();
+                for (const activity of dayActivities) {
+                  if (activity.sessionGroupId) {
+                    if (!seenGroups.has(activity.sessionGroupId)) {
+                      seenGroups.add(activity.sessionGroupId);
+                      const members = dayActivities.filter(a => a.sessionGroupId === activity.sessionGroupId);
+                      displayActivities.push({ activity, sessionCount: members.length });
+                    }
+                  } else {
+                    displayActivities.push({ activity });
+                  }
+                }
+                const moreCount = displayActivities.length > 3 ? displayActivities.length - 3 : 0;
                 const dayHref = `${buildCalendarHref(monthStart, selectedPlan.id, key, returnToParam)}#day-details-card`;
                 return (
                   <div
@@ -736,20 +755,27 @@ export default async function CalendarPage({
                     </div>
 
                     <div className="cal-day-list">
-                      {dayActivities.slice(0, 3).map((activity) => (
-                        <div
-                          key={activity.id}
-                          className={`cal-activity type-${activity.type.toLowerCase()}${activity.completed ? " completed" : ""}`}
-                          title={activity.title}
-                        >
-                          <span className="cal-activity-title">
-                            <span className={`cal-activity-code type-${activity.type.toLowerCase()}`}>
-                              {getTypeAbbr(activity.type)}
+                      {displayActivities.slice(0, 3).map(({ activity, sessionCount }) => {
+                        const sessionMembers = sessionCount
+                          ? dayActivities.filter(a => a.sessionGroupId === activity.sessionGroupId)
+                          : null;
+                        const sessionAllDone = sessionMembers?.every(a => a.completed) ?? false;
+                        const isCompleted = sessionCount ? sessionAllDone : activity.completed;
+                        return (
+                          <div
+                            key={activity.id}
+                            className={`cal-activity type-${activity.type.toLowerCase()}${isCompleted ? " completed" : ""}`}
+                            title={sessionCount ? `${getTypeAbbr(activity.type)} ×${sessionCount}` : activity.title}
+                          >
+                            <span className="cal-activity-title">
+                              <span className={`cal-activity-code type-${activity.type.toLowerCase()}`}>
+                                {getTypeAbbr(activity.type)}{sessionCount && sessionCount > 1 ? ` ×${sessionCount}` : ""}
+                              </span>
+                              {isCompleted && <span className="cal-activity-done-dot" />}
                             </span>
-                            {activity.completed && <span className="cal-activity-done-dot" />}
-                          </span>
-                        </div>
-                      ))}
+                          </div>
+                        );
+                      })}
                       {moreCount > 0 && (
                         <span className="cal-more">
                           +{moreCount} more
