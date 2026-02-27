@@ -663,6 +663,69 @@
   color: var(--d-muted);
 }
 
+/* ── Session group ── */
+.cal-session-group {
+  border-bottom: 1px solid var(--d-border-light);
+}
+
+.cal-session-group[open] > summary .cal-session-group-header::before {
+  content: '▼ ';
+  font-size: 10px;
+  color: var(--d-muted);
+}
+
+.cal-session-group-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.cal-session-group-header::-webkit-details-marker { display: none; }
+
+.cal-session-group-label {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--d-muted);
+}
+
+.cal-session-group-label::before {
+  content: '▶ ';
+  font-size: 9px;
+}
+
+.cal-session-group[open] .cal-session-group-label::before {
+  content: '▼ ';
+}
+
+.cal-session-group-meta {
+  font-size: 13px;
+  color: var(--d-text-mid);
+}
+
+.cal-session-actual {
+  color: var(--d-green);
+  font-weight: 600;
+}
+
+.cal-session-group-members {
+  border-top: 1px solid var(--d-border-light);
+}
+
+.cal-session-member {
+  padding-left: 32px;
+  border-bottom: 1px solid var(--d-border-light);
+}
+
+.cal-session-member--last {
+  border-bottom: none;
+}
+
 /* ── Per-activity section (workout row + log form) ── */
 .cal-activity-section {
   padding: 14px 20px;

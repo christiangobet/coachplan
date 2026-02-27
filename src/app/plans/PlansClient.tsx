@@ -57,6 +57,8 @@ export default function PlansClient() {
   const [renamingTemplateId, setRenamingTemplateId] = useState<string | null>(null);
   const [renamingPlanId, setRenamingPlanId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
+  const [groupingPlanId, setGroupingPlanId] = useState<string | null>(null);
+  const [groupingResult, setGroupingResult] = useState<{ planId: string; message: string; ok: boolean } | null>(null);
 
   const toggleMenu = (planId: string) =>
     setExpandedMenuId((prev) => (prev === planId ? null : planId));
@@ -278,6 +280,33 @@ export default function PlansClient() {
     }
   };
 
+  const handleAssignSessionGroups = async (planId: string) => {
+    setGroupingPlanId(planId);
+    setGroupingResult(null);
+    setExpandedMenuId(null);
+    try {
+      const res = await fetch(`/api/plans/${planId}/assign-session-groups`, { method: 'POST' });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error || 'Failed');
+      const { daysGrouped = 0, activitiesTagged = 0 } = data ?? {};
+      setGroupingResult({
+        planId,
+        ok: true,
+        message: daysGrouped === 0
+          ? 'No new run sessions found to group.'
+          : `Grouped ${activitiesTagged} activities across ${daysGrouped} day${daysGrouped !== 1 ? 's' : ''}.`
+      });
+    } catch (err: unknown) {
+      setGroupingResult({
+        planId,
+        ok: false,
+        message: err instanceof Error ? err.message : 'Failed to group sessions'
+      });
+    } finally {
+      setGroupingPlanId(null);
+    }
+  };
+
   const deletePlan = async (planId: string) => {
     if (!window.confirm('Delete this plan permanently? This cannot be undone.')) return;
     setProcessingPlanId(planId);
@@ -405,6 +434,11 @@ export default function PlansClient() {
                     <div className="plan-card-actions">
                       <Link className="dash-btn-primary plan-card-cta" href={`/plans/${plan.id}`} onClick={() => rememberSelectedPlan(plan.id)}>Open Plan</Link>
                     </div>
+                    {groupingResult?.planId === plan.id && (
+                      <p style={{ fontSize: 13, padding: '6px 16px 10px', margin: 0, color: groupingResult.ok ? 'var(--d-green)' : 'var(--d-red)' }}>
+                        {groupingResult.message}
+                      </p>
+                    )}
                     {expandedMenuId === plan.id && (
                       <div className="plan-card-overflow-menu">
                         <button
@@ -426,6 +460,13 @@ export default function PlansClient() {
                             {expandedGuideId === plan.id ? 'Hide guide' : 'Show guide'}
                           </button>
                         )}
+                        <button
+                          className="plan-card-overflow-item"
+                          onClick={() => handleAssignSessionGroups(plan.id)}
+                          disabled={groupingPlanId === plan.id}
+                        >
+                          {groupingPlanId === plan.id ? 'Grouping…' : 'Group run sessions'}
+                        </button>
                         <button
                           className="plan-card-overflow-item"
                           onClick={() => { updatePlanStatus(plan.id, 'DRAFT'); setExpandedMenuId(null); }}
@@ -507,6 +548,11 @@ export default function PlansClient() {
                         <Link className="dash-btn-primary plan-card-cta" href={`/plans/${plan.id}/review?fromUpload=1`} onClick={() => rememberSelectedPlan(plan.id)}>Open Review</Link>
                         <Link className="dash-btn-ghost plan-card-edit-btn" href={`/plans/${plan.id}`} onClick={() => rememberSelectedPlan(plan.id)}>View Plan</Link>
                       </div>
+                      {groupingResult?.planId === plan.id && (
+                        <p style={{ fontSize: 13, padding: '6px 16px 10px', margin: 0, color: groupingResult.ok ? 'var(--d-green)' : 'var(--d-red)' }}>
+                          {groupingResult.message}
+                        </p>
+                      )}
                       {expandedMenuId === plan.id && (
                         <div className="plan-card-overflow-menu">
                           {plan.planGuide && (
@@ -522,6 +568,13 @@ export default function PlansClient() {
                             href={`/plans/${plan.id}?mode=edit`}
                             onClick={() => { rememberSelectedPlan(plan.id); setExpandedMenuId(null); }}
                           >Edit</Link>
+                          <button
+                            className="plan-card-overflow-item"
+                            onClick={() => handleAssignSessionGroups(plan.id)}
+                            disabled={groupingPlanId === plan.id}
+                          >
+                            {groupingPlanId === plan.id ? 'Grouping…' : 'Group run sessions'}
+                          </button>
                           <button
                             className="plan-card-overflow-item"
                             onClick={() => { updatePlanStatus(plan.id, 'ARCHIVED'); setExpandedMenuId(null); }}
@@ -600,6 +653,11 @@ export default function PlansClient() {
                           {processingPlanId === plan.id ? 'Saving…' : 'Activate'}
                         </button>
                       </div>
+                      {groupingResult?.planId === plan.id && (
+                        <p style={{ fontSize: 13, padding: '6px 16px 10px', margin: 0, color: groupingResult.ok ? 'var(--d-green)' : 'var(--d-red)' }}>
+                          {groupingResult.message}
+                        </p>
+                      )}
                       {expandedMenuId === plan.id && (
                         <div className="plan-card-overflow-menu">
                           {plan.planGuide && (
@@ -616,6 +674,13 @@ export default function PlansClient() {
                             disabled={savingAsTemplate === plan.id}
                           >
                             {savingAsTemplate === plan.id ? 'Saving…' : 'Save as template'}
+                          </button>
+                          <button
+                            className="plan-card-overflow-item"
+                            onClick={() => handleAssignSessionGroups(plan.id)}
+                            disabled={groupingPlanId === plan.id}
+                          >
+                            {groupingPlanId === plan.id ? 'Grouping…' : 'Group run sessions'}
                           </button>
                           <button
                             className="plan-card-overflow-item danger"

@@ -646,50 +646,153 @@ export default function DayLogCard({
         </div>
       )}
 
-      {/* Per-activity forms */}
-      {activities.map((activity) => {
-        const f = forms[activity.id] ?? {
-          actualDistance: '', actualDuration: '', actualPace: '',
-          distancePrefilled: false, durationPrefilled: false,
-          pacePrefilled: false, paceUserEdited: false,
-          busy: false, error: null, savedStatus: null,
-        };
-        const showForm = enabled && !isClosed && (!activity.completed);
-        return (
-          <div key={activity.id} className="cal-activity-section">
-            <div className="cal-activity-workout-row">
-              <span className={`dash-type-badge dash-type-${String(activity.type || 'OTHER').toLowerCase()}`}>
-                {typeAbbr(activity.type)}
-              </span>
-              <div className="cal-activity-workout-info">
-                <span className="cal-activity-title">
-                  {activity.title || activity.type}
-                  {activity.completed && <span className="cal-activity-done-chip">✓</span>}
-                </span>
-                {activity.plannedDetails.length > 0 && (
-                  <span className="cal-activity-metrics">{activity.plannedDetails.join(' · ')}</span>
+      {/* Per-activity forms — grouped by sessionGroupId */}
+      {(() => {
+        // Build display list: standalone activities or session groups (in original order)
+        type SessionGroup = { sessionGroupId: string; members: LogActivity[] };
+        type DisplayItem = { kind: 'standalone'; activity: LogActivity } | { kind: 'session'; group: SessionGroup };
+        const displayItems: DisplayItem[] = [];
+        const seenGroups = new Map<string, SessionGroup>();
+
+        for (const activity of activities) {
+          if (!activity.sessionGroupId) {
+            displayItems.push({ kind: 'standalone', activity });
+          } else {
+            let group = seenGroups.get(activity.sessionGroupId);
+            if (!group) {
+              group = { sessionGroupId: activity.sessionGroupId, members: [] };
+              seenGroups.set(activity.sessionGroupId, group);
+              displayItems.push({ kind: 'session', group });
+            }
+            // Insert sorted by sessionOrder
+            const insertAt = activity.sessionOrder != null
+              ? group.members.findIndex((m) => (m.sessionOrder ?? 0) > (activity.sessionOrder ?? 0))
+              : -1;
+            if (insertAt === -1) group.members.push(activity);
+            else group.members.splice(insertAt, 0, activity);
+          }
+        }
+
+        return displayItems.map((item, idx) => {
+          if (item.kind === 'standalone') {
+            const activity = item.activity;
+            const f = forms[activity.id] ?? {
+              actualDistance: '', actualDuration: '', actualPace: '',
+              distancePrefilled: false, durationPrefilled: false,
+              pacePrefilled: false, paceUserEdited: false,
+              busy: false, error: null, savedStatus: null,
+            };
+            const showForm = enabled && !isClosed && !activity.completed;
+            return (
+              <div key={activity.id} className="cal-activity-section">
+                <div className="cal-activity-workout-row">
+                  <span className={`dash-type-badge dash-type-${String(activity.type || 'OTHER').toLowerCase()}`}>
+                    {typeAbbr(activity.type)}
+                  </span>
+                  <div className="cal-activity-workout-info">
+                    <span className="cal-activity-title">
+                      {activity.title || activity.type}
+                      {activity.completed && <span className="cal-activity-done-chip">✓</span>}
+                    </span>
+                    {activity.plannedDetails.length > 0 && (
+                      <span className="cal-activity-metrics">{activity.plannedDetails.join(' · ')}</span>
+                    )}
+                  </div>
+                </div>
+                {activity.sessionInstructions && activity.sessionInstructions !== activity.plannedNotes && (
+                  <details className="day-log-instructions" open>
+                    <summary className="day-log-instructions-toggle">How to execute</summary>
+                    <p className="day-log-instructions-text">{activity.sessionInstructions}</p>
+                  </details>
+                )}
+                {showForm && (
+                  <ActivityRow
+                    activity={activity}
+                    viewerUnits={viewerUnits}
+                    enabled={enabled}
+                    form={f}
+                    onChange={(patch) => patchForm(activity.id, patch)}
+                    onSubmit={() => submitActivity(activity)}
+                  />
                 )}
               </div>
-            </div>
-            {activity.sessionInstructions && activity.sessionInstructions !== activity.plannedNotes && (
-              <details className="day-log-instructions" open>
-                <summary className="day-log-instructions-toggle">How to execute</summary>
-                <p className="day-log-instructions-text">{activity.sessionInstructions}</p>
-              </details>
-            )}
-            {showForm && (
-              <ActivityRow
-                activity={activity}
-                viewerUnits={viewerUnits}
-                enabled={enabled}
-                form={f}
-                onChange={(patch) => patchForm(activity.id, patch)}
-                onSubmit={() => submitActivity(activity)}
-              />
-            )}
-          </div>
-        );
-      })}
+            );
+          }
+
+          // Session group
+          const { members } = item.group;
+          const totalPlannedDist = members.reduce((s, m) => s + (m.plannedDistance ?? 0), 0);
+          const totalPlannedDur = members.reduce((s, m) => s + (m.plannedDuration ?? 0), 0);
+          const anyLogged = members.some((m) => m.actualDistance != null);
+          const totalActualDist = anyLogged
+            ? members.reduce((s, m) => s + (m.actualDistance ?? 0), 0)
+            : null;
+          const distUnit = distanceUnitLabel(viewerUnits);
+
+          return (
+            <details key={`session-${item.group.sessionGroupId}-${idx}`} className="cal-session-group" open>
+              <summary className="cal-session-group-header">
+                <span className="cal-session-group-label">Session</span>
+                {totalPlannedDist > 0 && (
+                  <span className="cal-session-group-meta">
+                    {formatDistanceNumber(totalPlannedDist)} {distUnit}
+                    {totalPlannedDur > 0 && <> · ~{totalPlannedDur} min</>}
+                    {totalActualDist != null && (
+                      <> · <span className="cal-session-actual">{formatDistanceNumber(totalActualDist)} {distUnit} actual</span></>
+                    )}
+                  </span>
+                )}
+              </summary>
+              <div className="cal-session-group-members">
+                {members.map((activity, mIdx) => {
+                  const f = forms[activity.id] ?? {
+                    actualDistance: '', actualDuration: '', actualPace: '',
+                    distancePrefilled: false, durationPrefilled: false,
+                    pacePrefilled: false, paceUserEdited: false,
+                    busy: false, error: null, savedStatus: null,
+                  };
+                  const showForm = enabled && !isClosed && !activity.completed;
+                  const isLast = mIdx === members.length - 1;
+                  return (
+                    <div key={activity.id} className={`cal-activity-section cal-session-member${isLast ? ' cal-session-member--last' : ''}`}>
+                      <div className="cal-activity-workout-row">
+                        <span className={`dash-type-badge dash-type-${String(activity.type || 'OTHER').toLowerCase()}`}>
+                          {typeAbbr(activity.type)}
+                        </span>
+                        <div className="cal-activity-workout-info">
+                          <span className="cal-activity-title">
+                            {activity.title || activity.type}
+                            {activity.completed && <span className="cal-activity-done-chip">✓</span>}
+                          </span>
+                          {activity.plannedDetails.length > 0 && (
+                            <span className="cal-activity-metrics">{activity.plannedDetails.join(' · ')}</span>
+                          )}
+                        </div>
+                      </div>
+                      {activity.sessionInstructions && activity.sessionInstructions !== activity.plannedNotes && (
+                        <details className="day-log-instructions" open>
+                          <summary className="day-log-instructions-toggle">How to execute</summary>
+                          <p className="day-log-instructions-text">{activity.sessionInstructions}</p>
+                        </details>
+                      )}
+                      {showForm && (
+                        <ActivityRow
+                          activity={activity}
+                          viewerUnits={viewerUnits}
+                          enabled={enabled}
+                          form={f}
+                          onChange={(patch) => patchForm(activity.id, patch)}
+                          onSubmit={() => submitActivity(activity)}
+                        />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </details>
+          );
+        });
+      })()}
     </div>
   );
 }

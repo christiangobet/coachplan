@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { promises as fs } from 'fs';
 import path from 'path';
 import os from 'os';
-import { createHash } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { parseWeekWithAI, maybeRunParserV4 } from '@/lib/ai-plan-parser';
@@ -853,6 +853,8 @@ type ActivityDraft = {
   priority: string | null;
   bailAllowed: boolean;
   mustDo: boolean;
+  sessionGroupId?: string | null;
+  sessionOrder?: number | null;
 };
 
 function ensureDistanceConsistency(activity: ActivityDraft): ActivityDraft {
@@ -1169,6 +1171,11 @@ function buildDeterministicActivities(args: {
         bailAllowed
       }));
     }
+  }
+
+  if (drafts.length >= 2) {
+    const groupId = randomUUID();
+    drafts.forEach((d, i) => { d.sessionGroupId = groupId; d.sessionOrder = i + 1; });
   }
 
   return drafts;

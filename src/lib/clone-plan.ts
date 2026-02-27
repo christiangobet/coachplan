@@ -38,6 +38,8 @@ type PlanWithRelations = {
         bailAllowed: boolean;
         mustDo: boolean;
         notes: string | null;
+        sessionGroupId: string | null;
+        sessionOrder: number | null;
       }[];
     }[];
   }[];
@@ -110,6 +112,8 @@ export async function clonePlanStructure(
         bailAllowed: a.bailAllowed,
         mustDo: a.mustDo,
         notes: a.notes || null,
+        sessionGroupId: a.sessionGroupId ?? null,
+        sessionOrder: a.sessionOrder ?? null,
       }))
     )
   );

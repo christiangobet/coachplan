@@ -58,6 +58,8 @@ type PlannedActivityCandidate = {
   actualPace: string | null;
   completedAt: Date | null;
   notes: string | null;
+  sessionGroupId: string | null;
+  sessionOrder: number | null;
 };
 
 export type StravaSyncSummary = {
@@ -96,6 +98,7 @@ type DayMatchDecision = {
   matchedPlanActivityId: string | null;
   score: number | null;
   reason: string | null;
+  sessionMemberIds?: string[];
 };
 
 export type StravaDayImportSummary = {
@@ -435,7 +438,9 @@ async function buildPlanActivityCandidates(
           actualDuration: activity.actualDuration,
           actualPace: activity.actualPace,
           completedAt: activity.completedAt,
-          notes: activity.notes
+          notes: activity.notes,
+          sessionGroupId: activity.sessionGroupId ?? null,
+          sessionOrder: activity.sessionOrder ?? null,
         });
         byId.set(activity.id, row[row.length - 1]);
       }
@@ -508,6 +513,66 @@ function assignBestMatchesForDay(args: {
   usedPlanActivityIds: Set<string>;
   minScore?: number;
 }): DayMatchDecision[] {
+  // ── Session group detection ──────────────────────────────────────────────
+  // When there is exactly 1 external activity and a session group whose
+  // combined planned distance is within 20% of the external distance,
+  // match the whole session to the single external activity.
+  if (args.inputs.length === 1) {
+    const ext = args.inputs[0];
+
+    // Explicit session match: activities share sessionGroupId
+    const sessionGroups = new Map<string, PlannedActivityCandidate[]>();
+    for (const c of args.candidates) {
+      if (c.sessionGroupId && !args.usedPlanActivityIds.has(c.id)) {
+        const g = sessionGroups.get(c.sessionGroupId) ?? [];
+        g.push(c);
+        sessionGroups.set(c.sessionGroupId, g);
+      }
+    }
+    for (const [groupId, members] of sessionGroups) {
+      if (members.length < 2) continue;
+      const totalPlanned = members.reduce((s, m) => s + (m.distanceM ?? 0), 0);
+      if (
+        totalPlanned > 0 &&
+        ext.distanceM != null &&
+        Math.abs((ext.distanceM - totalPlanned) / totalPlanned) <= 0.20
+      ) {
+        const sorted = [...members].sort((a, b) => (a.sessionOrder ?? 0) - (b.sessionOrder ?? 0));
+        const primary = sorted[0];
+        for (const m of sorted) args.usedPlanActivityIds.add(m.id);
+        return [{
+          externalId: ext.externalId,
+          matchedPlanActivityId: primary.id,
+          sessionMemberIds: sorted.slice(1).map((m) => m.id),
+          score: 100,
+          reason: `session-match groupId=${groupId}`
+        }];
+      }
+    }
+
+    // Implicit session heuristic for legacy plans (no sessionGroupId):
+    // if 2+ uncompleted non-rest candidates all of RUN type with combined
+    // distance within 20% of external, treat as implicit session.
+    const ungroupedNonRest = args.candidates.filter(
+      (c) => !c.sessionGroupId && !args.usedPlanActivityIds.has(c.id) && !c.completed && c.type !== 'REST'
+    );
+    if (ungroupedNonRest.length >= 2 && ext.distanceM != null) {
+      const allRun = ungroupedNonRest.every((c) => c.type === 'RUN');
+      const totalPlanned = ungroupedNonRest.reduce((s, c) => s + (c.distanceM ?? 0), 0);
+      if (allRun && totalPlanned > 0 && Math.abs((ext.distanceM - totalPlanned) / totalPlanned) <= 0.20) {
+        const primary = ungroupedNonRest[0];
+        for (const m of ungroupedNonRest) args.usedPlanActivityIds.add(m.id);
+        return [{
+          externalId: ext.externalId,
+          matchedPlanActivityId: primary.id,
+          sessionMemberIds: ungroupedNonRest.slice(1).map((m) => m.id),
+          score: 90,
+          reason: 'implicit-session-match'
+        }];
+      }
+    }
+  }
+
   const minScore = args.minScore ?? 35;
   const pairs: Array<{
     externalId: string;
@@ -669,6 +734,39 @@ function shouldAutoApplyActuals(
   if (effective !== 'FULL') return false;
   if (confidence == null) return true;
   return confidence >= 0.55;
+}
+
+async function applyMatchedExternalToSession(args: {
+  planMembers: PlannedActivityCandidate[];
+  externalDistanceM: number | null;
+  externalMovingTimeSec: number | null;
+  startTime: Date;
+  sourceDateKey: string;
+  userUnits: Units | null;
+}): Promise<number> {
+  const totalPlannedDistanceM = args.planMembers.reduce((s, m) => s + (m.distanceM ?? 0), 0);
+  let updated = 0;
+  for (const member of args.planMembers) {
+    const ratio =
+      totalPlannedDistanceM > 0 && member.distanceM != null
+        ? member.distanceM / totalPlannedDistanceM
+        : args.planMembers.length > 0
+          ? 1 / args.planMembers.length
+          : 0;
+    const memberDistanceM = args.externalDistanceM != null ? args.externalDistanceM * ratio : null;
+    const memberDurationSec = args.externalMovingTimeSec != null ? args.externalMovingTimeSec * ratio : null;
+    const didUpdate = await applyMatchedExternalToWorkout({
+      planActivityId: member.id,
+      startTime: args.startTime,
+      sourceDateKey: args.sourceDateKey,
+      distanceM: memberDistanceM,
+      durationSec: memberDurationSec,
+      userUnits: args.userUnits,
+      sourceLabel: 'Strava (session)'
+    });
+    if (didUpdate) updated += 1;
+  }
+  return updated;
 }
 
 async function applyMatchedExternalToWorkout(args: {
@@ -1485,18 +1583,36 @@ export async function importStravaDayForUser(args: {
     if (record.matchedPlanActivityId) {
       matched += 1;
       if (shouldAutoApplyActuals(record.equivalence, record.equivalenceOverride, record.equivalenceConfidence)) {
-        const updated = await applyMatchedExternalToWorkout({
-          planActivityId: record.matchedPlanActivityId,
-          startTime: activity.startTime,
-          sourceDateKey: getExternalActivityDateKey(activity),
-          distanceM,
-          durationSec,
-          avgHeartRate: activity.avgHeartRate,
-          calories: activity.calories,
-          userUnits: user?.units ?? null,
-          sourceLabel: 'Strava'
-        });
-        if (updated) workoutsUpdated += 1;
+        const sessionMemberIds = decision?.sessionMemberIds;
+        if (sessionMemberIds && sessionMemberIds.length > 0) {
+          // Session match: distribute actuals proportionally across all session members
+          const allMemberIds = [record.matchedPlanActivityId, ...sessionMemberIds];
+          const allMembers = allMemberIds
+            .map((id) => plannedCandidates.byId.get(id))
+            .filter((m): m is PlannedActivityCandidate => m != null);
+          const sessionUpdated = await applyMatchedExternalToSession({
+            planMembers: allMembers,
+            externalDistanceM: distanceM,
+            externalMovingTimeSec: activity.movingTimeSec || activity.durationSec || null,
+            startTime: activity.startTime,
+            sourceDateKey: getExternalActivityDateKey(activity),
+            userUnits: user?.units ?? null
+          });
+          workoutsUpdated += sessionUpdated;
+        } else {
+          const updated = await applyMatchedExternalToWorkout({
+            planActivityId: record.matchedPlanActivityId,
+            startTime: activity.startTime,
+            sourceDateKey: getExternalActivityDateKey(activity),
+            distanceM,
+            durationSec,
+            avgHeartRate: activity.avgHeartRate,
+            calories: activity.calories,
+            userUnits: user?.units ?? null,
+            sourceLabel: 'Strava'
+          });
+          if (updated) workoutsUpdated += 1;
+        }
       }
     }
 
