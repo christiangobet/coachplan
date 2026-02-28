@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { appendPlanQueryToHref, extractPlanIdFromPathname } from "@/lib/plan-selection";
@@ -48,6 +49,21 @@ export default function AthleteSidebar({
     || searchParams.get("plan")
     || extractPlanIdFromPathname(pathname);
 
+  const [debugMode, setDebugMode] = useState(false);
+
+  useEffect(() => {
+    const on = localStorage.getItem('cp-debug') === '1';
+    setDebugMode(on);
+    document.body.classList.toggle('debug-mode', on);
+  }, []);
+
+  function toggleDebug() {
+    const next = !debugMode;
+    setDebugMode(next);
+    localStorage.setItem('cp-debug', next ? '1' : '0');
+    document.body.classList.toggle('debug-mode', next);
+  }
+
   const initials = name
     .split(/\s+/)
     .filter(Boolean)
@@ -59,7 +75,7 @@ export default function AthleteSidebar({
     active === id || (id === "dashboard" && active === "today");
 
   return (
-    <aside className={`dash-side${sticky ? "" : " no-sticky"}`}>
+    <aside className={`dash-side${sticky ? "" : " no-sticky"}`} data-debug-id="NAV">
       <Link className="dash-side-brand" href={appendPlanQueryToHref("/dashboard", contextualPlanId)}>
         <span>Coach</span> Plan
       </Link>
@@ -97,6 +113,19 @@ export default function AthleteSidebar({
           <div className="dash-user-name">{name}</div>
           <div className="dash-user-role">Athlete</div>
         </div>
+      </div>
+
+      <div className="dash-side-debug">
+        <button
+          type="button"
+          className={`dash-nav-item dash-debug-toggle${debugMode ? ' active' : ''}`}
+          onClick={toggleDebug}
+          title="Toggle debug mode — shows component IDs"
+        >
+          <span className="dash-nav-dot" />
+          Debug
+          <span className={`dash-debug-pill${debugMode ? ' on' : ''}`}>{debugMode ? 'ON' : 'OFF'}</span>
+        </button>
       </div>
     </aside>
   );

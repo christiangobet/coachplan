@@ -66,7 +66,7 @@ export default function Header({
     }, [menuOpen]);
 
     return (
-        <header className="header">
+        <header className="header" data-debug-id="HDR">
             {!isSignedIn ? (
                 <>
                     <Link className="brand" href="/">{brand}</Link>

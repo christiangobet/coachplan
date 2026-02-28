@@ -4,6 +4,17 @@
 import { useState, useEffect } from 'react';
 import { ActivityType, ActivityPriority, Units } from '@prisma/client';
 import Modal from '@/components/ui/Modal';
+import { inferPaceBucketFromText, paceBucketLabel, type PaceBucket } from '@/lib/intensity-targets';
+
+const PACE_BUCKET_OPTIONS: { value: PaceBucket; short: string; label: string }[] = [
+    { value: 'RECOVERY', short: 'RE', label: 'Recovery' },
+    { value: 'EASY',     short: 'EZ', label: 'Easy' },
+    { value: 'LONG',     short: 'LR', label: 'Long run' },
+    { value: 'RACE',     short: 'RP', label: 'Race pace' },
+    { value: 'TEMPO',    short: 'TP', label: 'Tempo' },
+    { value: 'THRESHOLD',short: 'TH', label: 'Threshold' },
+    { value: 'INTERVAL', short: 'IN', label: 'Interval' },
+];
 
 type ActivityFormProps = {
     isOpen: boolean;
@@ -13,6 +24,7 @@ type ActivityFormProps = {
     initialData?: Partial<ActivityFormData> & { id?: string };
     title?: string;
     dayId?: string; // Optional context
+    sessionInstructions?: string | null;
 };
 
 export type ActivityFormData = {
@@ -32,7 +44,7 @@ const ACTIVITY_TYPES: ActivityType[] = [
     'RUN', 'STRENGTH', 'CROSS_TRAIN', 'REST', 'MOBILITY', 'YOGA', 'HIKE', 'OTHER'
 ];
 
-export default function ActivityForm({ isOpen, onClose, onSubmit, onDelete, initialData, title }: ActivityFormProps) {
+export default function ActivityForm({ isOpen, onClose, onSubmit, onDelete, initialData, title, sessionInstructions }: ActivityFormProps) {
     const [formData, setFormData] = useState<ActivityFormData>({
         type: 'RUN',
         title: '',
@@ -43,7 +55,6 @@ export default function ActivityForm({ isOpen, onClose, onSubmit, onDelete, init
     });
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [showAdvancedTargets, setShowAdvancedTargets] = useState(false);
 
     useEffect(() => {
         if (isOpen) {
@@ -59,7 +70,6 @@ export default function ActivityForm({ isOpen, onClose, onSubmit, onDelete, init
                 priority: initialData?.priority || 'MEDIUM',
                 mustDo: initialData?.mustDo || false
             });
-            setShowAdvancedTargets(Boolean(initialData?.paceTarget || initialData?.effortTarget));
             setError(null);
         }
     }, [isOpen, initialData]);
@@ -118,6 +128,13 @@ export default function ActivityForm({ isOpen, onClose, onSubmit, onDelete, init
                     />
                 </label>
 
+                {sessionInstructions && (
+                    <div style={{ background: 'var(--d-bg,#f3f3f3)', borderRadius: 8, padding: '8px 12px', fontSize: 12, color: 'var(--d-text-mid)', lineHeight: 1.5 }}>
+                        <div style={{ fontWeight: 700, fontSize: 11, marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--d-muted)' }}>How to execute</div>
+                        {sessionInstructions}
+                    </div>
+                )}
+
                 <div className="grid-2">
                     <label>
                         Duration (min)
@@ -154,41 +171,40 @@ export default function ActivityForm({ isOpen, onClose, onSubmit, onDelete, init
                     )}
                 </div>
 
-                <div style={{ display: 'grid', gap: '8px' }}>
-                    <button
-                        type="button"
-                        className="btn-ghost"
-                        style={{ justifySelf: 'start', minHeight: '32px', padding: '4px 10px', fontSize: '12px' }}
-                        onClick={() => setShowAdvancedTargets((value) => !value)}
-                    >
-                        {showAdvancedTargets ? 'Hide advanced targets' : 'Advanced targets'}
-                    </button>
-
-                    {showAdvancedTargets && (
-                        <div className="grid-2" style={{ gridTemplateColumns: isRun ? undefined : '1fr' }}>
-                            {isRun && (
-                                <label>
-                                    Pace Target
-                                    <input
-                                        type="text"
-                                        value={formData.paceTarget || ''}
-                                        onChange={(e) => setFormData({ ...formData, paceTarget: e.target.value || undefined })}
-                                        placeholder={`e.g. ${formData.distanceUnit === 'MILES' ? '7:50-8:10 /mi' : '5:00-5:15 /km'}`}
-                                    />
-                                </label>
-                            )}
-
-                            <label>
-                                Effort Target
-                                <input
-                                    type="text"
-                                    value={formData.effortTarget || ''}
-                                    onChange={(e) => setFormData({ ...formData, effortTarget: e.target.value || undefined })}
-                                    placeholder="e.g. RPE 6 or Z2"
-                                />
-                            </label>
-                        </div>
+                <div className="grid-2" style={{ gridTemplateColumns: isRun ? undefined : '1fr' }}>
+                    {isRun && (
+                        <label>
+                            Pace Target
+                            <div className="review-pace-categories-inline" style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', marginTop: '6px' }}>
+                                {PACE_BUCKET_OPTIONS.map(option => {
+                                    const selected = inferPaceBucketFromText(formData.paceTarget) === option.value;
+                                    return (
+                                        <button
+                                            key={option.value}
+                                            type="button"
+                                            className={`review-pace-chip${selected ? ' active' : ''}`}
+                                            title={option.label}
+                                            onClick={() => {
+                                                const next = selected ? undefined : paceBucketLabel(option.value);
+                                                setFormData({ ...formData, paceTarget: next });
+                                            }}
+                                        >
+                                            {option.short}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </label>
                     )}
+                    <label>
+                        Effort Target
+                        <input
+                            type="text"
+                            value={formData.effortTarget || ''}
+                            onChange={(e) => setFormData({ ...formData, effortTarget: e.target.value || undefined })}
+                            placeholder="e.g. RPE 6 or Z2"
+                        />
+                    </label>
                 </div>
 
                 <label>

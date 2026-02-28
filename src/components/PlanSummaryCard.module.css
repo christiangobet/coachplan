@@ -102,9 +102,16 @@
 
 .curveHeader {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
+  gap: 8px;
   margin-bottom: 6px;
+}
+
+.curveHeaderLeft {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .curveLabel {
@@ -116,6 +123,23 @@
 
 .curveSub {
   font: 400 11px/1 'Figtree', sans-serif;
+  color: var(--d-muted);
+}
+
+.curveLegend {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.legendTotal {
+  font: 600 10px/1 'Figtree', sans-serif;
+  color: #fc4c02;
+}
+
+.legendLr {
+  font: 400 10px/1 'Figtree', sans-serif;
   color: var(--d-muted);
 }
 

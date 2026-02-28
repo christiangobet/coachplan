@@ -240,6 +240,7 @@ export default function DayLogCard({
   missedReason: initialMissedReason,
   stravaConnected,
   enabled,
+  planView = false,
   onClose,
   successRedirectHref = null,
 }: {
@@ -252,6 +253,8 @@ export default function DayLogCard({
   missedReason?: string | null;
   stravaConnected: boolean;
   enabled: boolean;
+  /** Plan-edit mode: show instructions only, hide all log forms and status buttons */
+  planView?: boolean;
   onClose?: () => void;
   successRedirectHref?: string | null;
 }) {
@@ -559,10 +562,10 @@ export default function DayLogCard({
   const isClosed = isDone || isMissed || isPartial;
 
   return (
-    <div className="day-log-card">
+    <div className="day-log-card" data-debug-id="DLC">
 
       {/* Day status row */}
-      {dayId && enabled && (
+      {dayId && enabled && !planView && (
         <div className="day-log-status-bar">
           {!isClosed && (
             <div className="cal-day-status-row">
@@ -627,7 +630,7 @@ export default function DayLogCard({
       )}
 
       {/* Strava sync */}
-      {enabled && !isClosed && (
+      {enabled && !isClosed && !planView && (
         <div className="day-log-strava-bar">
           <button
             type="button"
@@ -723,7 +726,7 @@ export default function DayLogCard({
                     <p className="day-log-instructions-text">{activity.sessionInstructions}</p>
                   </details>
                 )}
-                {showForm && (
+                {showForm && !planView && (
                   <ActivityRow
                     activity={activity}
                     viewerUnits={viewerUnits}
@@ -794,7 +797,7 @@ export default function DayLogCard({
                           <p className="day-log-instructions-text">{activity.sessionInstructions}</p>
                         </details>
                       )}
-                      {showForm && (
+                      {showForm && !planView && (
                         <ActivityRow
                           activity={activity}
                           viewerUnits={viewerUnits}

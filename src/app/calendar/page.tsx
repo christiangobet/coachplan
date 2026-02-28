@@ -607,7 +607,7 @@ export default async function CalendarPage({
     "Adjust this week around my schedule, recovery, and available training time."
   );
   return (
-    <main className="dash cal-page">
+    <main className="dash cal-page" data-debug-id="TRL">
       <SelectedPlanCookie planId={selectedPlan.id} />
       <div className="dash-grid">
         <AthleteSidebar active="calendar" name={name} selectedPlanId={selectedPlan.id} />

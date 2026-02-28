@@ -5,10 +5,14 @@ import s from './PlanSummaryCard.module.css';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
+export type WeeklyRunPoint = { weekIndex: number; total: number; longRun: number };
+
 type Props = {
   summary: PlanSummary | null;
   planId?: string;
   onExtract?: () => Promise<void>;
+  weeklyRuns?: WeeklyRunPoint[];
+  weeklyRunUnit?: string;
 };
 
 // ── Icon components ─────────────────────────────────────────────────────────
@@ -90,36 +94,85 @@ function intensityClass(intensity?: WeekDay['intensity']): string {
   }
 }
 
-// ── Load curve SVG ──────────────────────────────────────────────────────────
+// ── Weekly run chart SVG ─────────────────────────────────────────────────────
 
-function LoadCurve({ points }: { points: number[] }) {
+function WeeklyRunChart({ points, unit }: { points: WeeklyRunPoint[]; unit: string }) {
   const W = 640;
-  const H = 100;
-  const padX = 6;
-  const padY = 8;
-  const n = Math.max(points.length, 2);
-  const dx = (W - padX * 2) / (n - 1);
-  const y = (v: number) => H - padY - Math.min(1, Math.max(0, v)) * (H - padY * 2);
+  const H = 112;
+  const padX = 10;
+  const plotTop = 8;
+  const plotBottom = 90;
+  const plotH = plotBottom - plotTop;
+  const n = points.length;
 
-  const line = points.map((v, i) => `${i === 0 ? 'M' : 'L'} ${padX + i * dx} ${y(v)}`).join(' ');
-  const area = `${line} L ${padX + (n - 1) * dx} ${H - padY} L ${padX} ${H - padY} Z`;
+  if (n < 2) return null;
+
+  const maxVal = Math.max(...points.map(p => p.total), 1);
+  const hasLongRun = points.some(p => p.longRun > 0);
+
+  const xAt = (i: number) => padX + (i * (W - padX * 2)) / (n - 1);
+  const yAt = (v: number) => plotBottom - (v / maxVal) * plotH;
+
+  const totalPath = points.map((p, i) =>
+    `${i === 0 ? 'M' : 'L'} ${xAt(i).toFixed(1)} ${yAt(p.total).toFixed(1)}`
+  ).join(' ');
+  const lrPath = points.map((p, i) =>
+    `${i === 0 ? 'M' : 'L'} ${xAt(i).toFixed(1)} ${yAt(p.longRun).toFixed(1)}`
+  ).join(' ');
+  const totalArea = `${totalPath} L ${xAt(n - 1).toFixed(1)} ${plotBottom} L ${padX} ${plotBottom} Z`;
+
+  // X-axis labels: first, every 4 weeks, last
+  const labelIdxSet = new Set<number>([0, n - 1]);
+  points.forEach((p, i) => { if (p.weekIndex % 4 === 0) labelIdxSet.add(i); });
+  const labelIdxs = [...labelIdxSet].sort((a, b) => a - b);
+
+  const peakTotal = Math.round(maxVal * 10) / 10;
 
   return (
     <div className={s.curveWrap}>
       <div className={s.curveHeader}>
-        <span className={s.curveLabel}>Training Load</span>
-        <span className={s.curveSub}>Build → Peak → Taper</span>
+        <div className={s.curveHeaderLeft}>
+          <span className={s.curveLabel}>Running Volume</span>
+          <span className={s.curveSub}>weekly · runs only · peak {peakTotal} {unit}</span>
+        </div>
+        {hasLongRun && (
+          <div className={s.curveLegend}>
+            <span className={s.legendTotal}>— Total</span>
+            <span className={s.legendLr}>- - Long run</span>
+          </div>
+        )}
       </div>
       <svg viewBox={`0 0 ${W} ${H}`} className={s.curveSvg} aria-hidden="true">
         <defs>
-          <linearGradient id="psAreaGrad" x1="0" x2="1">
-            <stop offset="0%" stopColor="#fc4c02" stopOpacity="0.22" />
-            <stop offset="100%" stopColor="#fc4c02" stopOpacity="0.05" />
+          <linearGradient id="wrcAreaGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#fc4c02" stopOpacity="0.18" />
+            <stop offset="100%" stopColor="#fc4c02" stopOpacity="0.02" />
           </linearGradient>
         </defs>
-        <path d={`M ${padX} ${H - padY} L ${W - padX} ${H - padY}`} stroke="rgba(0,0,0,0.1)" strokeWidth="1" />
-        <path d={area} fill="url(#psAreaGrad)" />
-        <path d={line} fill="none" stroke="#fc4c02" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+        {/* Baseline */}
+        <path d={`M ${padX} ${plotBottom} L ${W - padX} ${plotBottom}`} stroke="rgba(0,0,0,0.1)" strokeWidth="1" />
+        {/* Area under total */}
+        <path d={totalArea} fill="url(#wrcAreaGrad)" />
+        {/* Total line */}
+        <path d={totalPath} fill="none" stroke="#fc4c02" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+        {/* Long run dashed line */}
+        {hasLongRun && (
+          <path d={lrPath} fill="none" stroke="#aaaaaa" strokeWidth="1.8" strokeDasharray="5 3" strokeLinejoin="round" strokeLinecap="round" />
+        )}
+        {/* X-axis week labels */}
+        {labelIdxs.map(i => (
+          <text
+            key={i}
+            x={xAt(i)}
+            y={H - 2}
+            textAnchor={i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle'}
+            fontSize="10"
+            fill="var(--d-muted)"
+            fontFamily="'Figtree', sans-serif"
+          >
+            W{points[i].weekIndex}
+          </text>
+        ))}
       </svg>
     </div>
   );
@@ -127,16 +180,21 @@ function LoadCurve({ points }: { points: number[] }) {
 
 // ── Main component ──────────────────────────────────────────────────────────
 
-export default function PlanSummaryCard({ summary, onExtract }: Props) {
+export default function PlanSummaryCard({ summary, onExtract, weeklyRuns, weeklyRunUnit = 'km' }: Props) {
+  const hasChart = weeklyRuns && weeklyRuns.length >= 2;
+
   if (!summary) {
     return (
-      <div className={s.emptyState}>
-        <p className={s.emptyText}>No plan summary generated yet.</p>
-        {onExtract && (
-          <button className={s.generateBtn} onClick={onExtract}>
-            ✦ Generate plan summary
-          </button>
-        )}
+      <div>
+        {hasChart && <WeeklyRunChart points={weeklyRuns!} unit={weeklyRunUnit} />}
+        <div className={s.emptyState}>
+          <p className={s.emptyText}>No plan summary generated yet.</p>
+          {onExtract && (
+            <button className={s.generateBtn} onClick={onExtract}>
+              ✦ Generate plan summary
+            </button>
+          )}
+        </div>
       </div>
     );
   }
@@ -171,9 +229,14 @@ export default function PlanSummaryCard({ summary, onExtract }: Props) {
           )}
         </div>
 
-        {/* Load curve */}
-        {summary.loadCurve?.points?.length ? (
-          <LoadCurve points={summary.loadCurve.points} />
+        {/* Running volume chart — real data takes priority over AI loadCurve */}
+        {hasChart ? (
+          <WeeklyRunChart points={weeklyRuns!} unit={weeklyRunUnit} />
+        ) : summary.loadCurve?.points?.length ? (
+          <WeeklyRunChart
+            points={summary.loadCurve.points.map((v, i) => ({ weekIndex: i + 1, total: v, longRun: 0 }))}
+            unit={weeklyRunUnit}
+          />
         ) : null}
 
         {/* Phase chips */}

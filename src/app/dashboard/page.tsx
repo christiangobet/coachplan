@@ -527,7 +527,7 @@ export default async function DashboardPage({
   const statusFeedItems = recentDayStatuses.length > 0 ? recentDayStatuses : statusItems.slice(0, 5);
 
   return (
-    <main className="dash">
+    <main className="dash" data-debug-id="DSH">
       <SelectedPlanCookie planId={activePlan.id} />
       <div className="dash-atmosphere" />
       <div className="dash-topo" />
@@ -558,7 +558,7 @@ export default async function DashboardPage({
             </div>
           )}
 
-          <div className="dash-card dash-plan-summary">
+          <div className="dash-card dash-plan-summary" data-debug-id="DPS">
             <div className="dash-greeting-meta">
               <div className="dash-greeting-meta-item">
                 <span className="dash-greeting-meta-label">Plan</span>
@@ -577,7 +577,7 @@ export default async function DashboardPage({
           </div>
 
           {/* Today's workout hero */}
-          <div className={`dash-hero${isRestDay ? " dash-hero-rest" : ""}`}>
+          <div className={`dash-hero${isRestDay ? " dash-hero-rest" : ""}`} data-debug-id="DHW">
             {/* Header: date + view plan link */}
             <div className="dash-hero-header">
               <span className="dash-hero-date">TODAY · {dateStr.toUpperCase()}</span>
@@ -618,7 +618,7 @@ export default async function DashboardPage({
           </div>
 
           {/* Upcoming workouts */}
-          <div className="dash-card dash-next-up-card">
+          <div className="dash-card dash-next-up-card" data-debug-id="DNX">
             <div className="dash-card-header">
               <span className="dash-card-title">Next Up</span>
               <a className="dash-card-link" href={`/plans/${activePlan.id}`}>
@@ -712,7 +712,7 @@ export default async function DashboardPage({
           </div>
 
           {/* Guide */}
-          <div className="dash-card dash-plan-reference-card">
+          <div className="dash-card dash-plan-reference-card" data-debug-id="DPR">
             <div className="dash-card-header">
               <span className="dash-card-title">Plan Reference</span>
               <a className="dash-card-link" href={`/plans/${activePlan.id}`}>Full guide →</a>
@@ -759,14 +759,14 @@ export default async function DashboardPage({
           </div>
 
           {/* Status feed */}
-          <div className="dash-card dash-status-card">
+          <div className="dash-card dash-status-card" data-debug-id="DTF">
             <div className="dash-card-header">
               <span className="dash-card-title">Training Calendar Status</span>
             </div>
             <DashboardTrainingLogStatus items={statusFeedItems} />
           </div>
 
-          <div className="dash-card dash-week-snapshot">
+          <div className="dash-card dash-week-snapshot" data-debug-id="DWK">
             <div className="dash-card-header">
               <span className="dash-card-title">This Week</span>
               <span className="dash-week-snapshot-range">Week {currentWeekIndex}</span>
@@ -796,7 +796,7 @@ export default async function DashboardPage({
 
 
           {/* Plan progress */}
-          <div className="dash-card dash-plan-progress-card">
+          <div className="dash-card dash-plan-progress-card" data-debug-id="DPC">
             <details className="dash-collapse">
               <summary className="dash-collapse-summary">
                 <span className="dash-card-title">Plan Progress</span>

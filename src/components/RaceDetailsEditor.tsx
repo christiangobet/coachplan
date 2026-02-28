@@ -54,7 +54,7 @@ export default function RaceDetailsEditor({
   }
 
   return (
-    <div className="cal-race-editor">
+    <div className="cal-race-editor" data-debug-id="RDE">
       <button
         type="button"
         className="dash-sync-btn"

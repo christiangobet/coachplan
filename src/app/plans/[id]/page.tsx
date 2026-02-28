@@ -16,6 +16,7 @@ import {
   resolveDistanceUnitFromActivity,
   type DistanceUnit
 } from '@/lib/unit-display';
+import { inferPaceBucketFromText, parseStructuredPaceTarget } from '@/lib/intensity-targets';
 import ActivityForm, { ActivityFormData } from '@/components/PlanEditor/ActivityForm';
 import DayLogCard from '@/components/DayLogCard';
 import PlanSourcePdfPane from '@/components/PlanSourcePdfPane';
@@ -37,6 +38,11 @@ const ACTIVITY_TYPE_ABBR: Record<string, string> = {
   YOGA: 'YOG',
   HIKE: 'HIK',
   OTHER: 'OTH'
+};
+
+const PACE_BUCKET_SHORT: Record<string, string> = {
+  RECOVERY: 'RE', EASY: 'EZ', LONG: 'LR', RACE: 'RP',
+  TEMPO: 'TP', THRESHOLD: 'TH', INTERVAL: 'IN'
 };
 
 function formatType(type: string) {
@@ -425,7 +431,6 @@ export default function PlanDetailPage() {
   const [savingActuals, setSavingActuals] = useState(false);
   const [viewerUnits, setViewerUnits] = useState<DistanceUnit>('MILES');
   const [viewMode, setViewMode] = useState<'plan' | 'log'>('plan');
-  const [sidebarTab, setSidebarTab] = useState<'guide' | 'ai'>('ai');
   const [cellView, setCellView] = useState<'compact' | 'detail'>('detail');
   const [selectedDay, setSelectedDay] = useState<SelectedDayState | null>(null);
   const [stravaConnected, setStravaConnected] = useState(false);
@@ -1117,6 +1122,23 @@ export default function PlanDetailPage() {
   const viewerUnitLabel = distanceUnitLabel(viewerUnits);
   const toDisplayDistance = (value: number | null | undefined, sourceUnit: string | null | undefined) =>
     convertDistanceForDisplay(value, sourceUnit, viewerUnits);
+
+  // Weekly run data for the volume chart in PlanSummaryCard
+  const weeklyRunData = weeks.map((week: any) => {
+    const runs = (week.days || [])
+      .flatMap((d: any) => d.activities || [])
+      .filter((a: any) => String(a.type).toUpperCase() === 'RUN');
+    let total = 0;
+    let longRun = 0;
+    for (const a of runs) {
+      const src = resolveActivityDistanceSourceUnit(a, viewerUnits);
+      const dist = toDisplayDistance(a.distance, src);
+      const val = dist?.value ?? 0;
+      total += val;
+      if (val > longRun) longRun = val;
+    }
+    return { weekIndex: week.weekIndex as number, total: Math.round(total * 10) / 10, longRun: Math.round(longRun * 10) / 10 };
+  });
   const formatDisplayDistance = (value: number | null | undefined, sourceUnit: string | null | undefined) => {
     const converted = toDisplayDistance(value, sourceUnit);
     if (!converted) return null;
@@ -1190,14 +1212,14 @@ export default function PlanDetailPage() {
       )}
 
       <div className={showDesktopSourcePane ? 'pcal-main-column' : undefined}>
-      <div className={`pcal-layout${showDesktopSourcePane ? ' pdf-open' : ''}`}>
+      <div className={`pcal-layout${showDesktopSourcePane ? ' pdf-open' : ''}`} data-debug-id="PLD">
         <AthleteSidebar
           name={user?.fullName || user?.firstName || 'Athlete'}
           active="plans"
           selectedPlanId={planId || null}
         />
 
-        <section className="pcal-main">
+        <section className="pcal-main" data-debug-id="PCG">
           {/* Header */}
           <div className="pcal-header" id="plan-overview">
             <div className="pcal-header-top">
@@ -1258,6 +1280,256 @@ export default function PlanDetailPage() {
             <div className="pcal-stat-bar-fill" style={{ width: `${completionPct}%` }} />
           </div>
 
+          {/* Inline accordion panels — Plan Guide + AI Trainer */}
+          <div className="pcal-inline-sections">
+            <details className="pcal-inline-panel">
+              <summary className="pcal-inline-panel-summary">📋 Plan Guide</summary>
+              <div className="pcal-inline-panel-body pcal-guide-panel">
+                <PlanSummaryCard
+                  summary={plan?.planSummary as PlanSummary | null ?? null}
+                  planId={planId as string}
+                  weeklyRuns={weeklyRunData}
+                  weeklyRunUnit={viewerUnitLabel}
+                  onExtract={async () => {
+                    await fetch(`/api/plans/${planId}/extract-guide`, { method: 'POST' });
+                    await loadPlan();
+                  }}
+                />
+                {plan?.planGuide && (
+                  <PlanGuidePanel
+                    guideText={plan.planGuide as string}
+                    planId={planId as string}
+                    editable
+                  />
+                )}
+              </div>
+            </details>
+            <details className="pcal-inline-panel">
+              <summary className="pcal-inline-panel-summary">AI Trainer</summary>
+              <div className="pcal-inline-panel-body">
+                <section className="pcal-ai-trainer pcal-ai-trainer-chat">
+                  <div className="pcal-ai-trainer-head">
+                    <div>
+                      <h2>AI Trainer</h2>
+                      <p>Chat with your coach. Each new request starts a fresh recommendation thread.</p>
+                    </div>
+                    <div className="pcal-ai-trainer-head-actions">
+                      <button
+                        className="dash-btn-ghost"
+                        type="button"
+                        onClick={clearAiChat}
+                        disabled={aiTrainerLoading || aiTrainerApplying}
+                      >
+                        Clear chat
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="pcal-ai-thread">
+                    {aiChatTurns.length === 0 && (
+                      <p className="pcal-ai-trainer-status">
+                        Start with one clear request, for example: &quot;Move this week&apos;s long run to Sunday and rebalance recovery.&quot;
+                      </p>
+                    )}
+                    {aiChatTurns.map((turn) => (
+                      <article key={turn.id} className={`pcal-ai-turn role-${turn.role}`}>
+                        <div className="pcal-ai-turn-head">
+                          <strong>
+                            {turn.role === 'athlete' ? 'You' : turn.role === 'coach' ? 'Coach' : 'System'}
+                          </strong>
+                          {turn.proposal && (
+                            <span className={`pcal-ai-turn-state state-${turn.proposalState || 'superseded'}`}>
+                              {turn.proposalState === 'active'
+                                ? 'Active proposal'
+                                : turn.proposalState === 'applied'
+                                  ? 'Applied'
+                                  : 'History'}
+                            </span>
+                          )}
+                        </div>
+                        <p>{humanizeAiText(turn.text, aiChangeLookup)}</p>
+                        {turn.errorCode && (
+                          <span className="pcal-ai-turn-error-code">{turn.errorCode}</span>
+                        )}
+                        {turn.proposal && turn.proposalState !== 'active' && turn.proposalState !== 'applied' && (
+                          <button
+                            className="dash-btn-ghost pcal-ai-turn-use"
+                            type="button"
+                            onClick={() => activateProposalTurn(turn.id)}
+                          >
+                            Use this proposal
+                          </button>
+                        )}
+                      </article>
+                    ))}
+                  </div>
+
+                  <div className="pcal-ai-composer">
+                    <textarea
+                      value={aiTrainerInput}
+                      onChange={(e) => setAiTrainerInput(e.target.value)}
+                      placeholder="Example: Move this week's long run to Sunday because I'll ski Saturday, and rebalance the week safely."
+                      rows={4}
+                    />
+                    <div className="pcal-ai-trainer-actions">
+                      <button
+                        className="dash-btn-primary"
+                        type="button"
+                        onClick={generateAiAdjustment}
+                        disabled={aiTrainerLoading || aiTrainerApplying}
+                      >
+                        {aiTrainerLoading ? 'Generating…' : 'Generate Recommendation'}
+                      </button>
+                    </div>
+                    {aiTrainerError && <p className="pcal-ai-trainer-error">{aiTrainerError}</p>}
+                    {aiTrainerStatus && (
+                      <p className="pcal-ai-trainer-status">
+                        {humanizeAiText(aiTrainerStatus, aiChangeLookup)}
+                      </p>
+                    )}
+                  </div>
+
+                  {aiTrainerProposal ? (
+                    <div className="pcal-ai-trainer-proposal">
+                      <div className="pcal-ai-trainer-meta">
+                        <strong>Active Recommendation</strong>
+                        <span>Confidence: {aiTrainerProposal.confidence}</span>
+                      </div>
+                      <p>{humanizeAiText(aiTrainerProposal.coachReply, aiChangeLookup)}</p>
+                      {aiTrainerProposal.followUpQuestion && (
+                        <p className="pcal-ai-trainer-followup">
+                          Follow-up: {humanizeAiText(aiTrainerProposal.followUpQuestion, aiChangeLookup)}
+                        </p>
+                      )}
+                      {aiTrainerProposal.requiresClarification && (
+                        <div className="pcal-ai-trainer-followup">
+                          <p>
+                            Clarification required: {humanizeAiText(aiTrainerProposal.clarificationPrompt || 'Please confirm constraints before applying.', aiChangeLookup)}
+                          </p>
+                          <textarea
+                            value={aiTrainerClarification}
+                            onChange={(e) => setAiTrainerClarification(e.target.value)}
+                            placeholder="Example: Keep long run on Sunday, max 1 hard session mid-week, no added mileage this week."
+                            rows={3}
+                          />
+                        </div>
+                      )}
+                      {aiTrainerProposal.invariantReport && aiTrainerProposal.invariantReport.weeks.length > 0 && (
+                        <div className="pcal-ai-trainer-invariants">
+                          <div className="pcal-ai-trainer-meta">
+                            <strong>Week Balance Check</strong>
+                            <span>
+                              Mode: {aiTrainerProposal.invariantReport.selectedMode.replace(/_/g, ' ')} · Score: {aiTrainerProposal.invariantReport.candidateScore}
+                            </span>
+                          </div>
+                          <div className="pcal-ai-trainer-invariant-grid">
+                            {aiTrainerProposal.invariantReport.weeks.map((week) => (
+                              <article key={`inv-${week.weekIndex}`} className="pcal-ai-trainer-invariant-week">
+                                <header>
+                                  <strong>Week {week.weekIndex}</strong>
+                                </header>
+                                <p>Rest: {week.before.restDays} → {week.after.restDays}</p>
+                                <p>Hard days: {week.before.hardDays} → {week.after.hardDays}</p>
+                                <p>Long run: {formatDowLabel(week.before.longRunDayOfWeek)} → {formatDowLabel(week.after.longRunDayOfWeek)}</p>
+                                <p>Planned duration: {week.before.plannedDurationMin}m → {week.after.plannedDurationMin}m</p>
+                                {week.flags.length > 0 && (
+                                  <ul>
+                                    {week.flags.map((flag, idx) => (
+                                      <li key={`${week.weekIndex}-${flag}-${idx}`}>{flag}</li>
+                                    ))}
+                                  </ul>
+                                )}
+                              </article>
+                            ))}
+                          </div>
+                          {aiTrainerProposal.invariantReport.summaryFlags.length > 0 && (
+                            <div className="pcal-ai-trainer-risks">
+                              <strong>Balance Notes</strong>
+                              <ul>
+                                {aiTrainerProposal.invariantReport.summaryFlags.map((flag, idx) => (
+                                  <li key={`summary-${idx}`}>{flag}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      <div className="pcal-ai-trainer-meta">
+                        <strong>Planned Changes ({aiTrainerProposal.changes.length})</strong>
+                      </div>
+                      {aiTrainerProposal.changes.length === 0 && (
+                        <p className="pcal-ai-trainer-followup">
+                          This request needs a plan-structure update (weeks/dates), which is not supported yet.
+                        </p>
+                      )}
+                      <ul className="pcal-ai-trainer-change-list">
+                        {aiTrainerProposal.changes.map((change, idx) => (
+                          <li
+                            key={`${change.op}-${idx}`}
+                            className={aiTrainerAppliedRows.has(idx) ? 'is-applied' : ''}
+                          >
+                            <div className="pcal-ai-trainer-change-head">
+                              <span className="pcal-ai-trainer-op">{change.op.replace(/_/g, ' ')}</span>
+                              <strong>{describeAiChange(change, aiChangeLookup)}</strong>
+                              <button
+                                className="dash-btn-ghost pcal-ai-trainer-apply-one"
+                                type="button"
+                                onClick={() => applyAiAdjustment(idx)}
+                                disabled={
+                                  aiTrainerAppliedRows.has(idx)
+                                  || aiTrainerLoading
+                                  || aiTrainerApplying
+                                  || (aiTrainerProposal.requiresClarification && !aiTrainerClarification.trim())
+                                }
+                              >
+                                {aiTrainerAppliedRows.has(idx)
+                                  ? 'Applied'
+                                  : aiTrainerApplyingTarget === idx
+                                    ? 'Applying…'
+                                    : 'Apply'}
+                              </button>
+                            </div>
+                            <p>{humanizeAiText(change.reason, aiChangeLookup)}</p>
+                          </li>
+                        ))}
+                      </ul>
+                      <div className="pcal-ai-trainer-apply-all">
+                        <button
+                          className="dash-btn-primary"
+                          type="button"
+                          onClick={() => applyAiAdjustment()}
+                          disabled={
+                            aiTrainerProposal.changes.length === 0
+                            || aiTrainerAppliedRows.size >= aiTrainerProposal.changes.length
+                            || aiTrainerLoading
+                            || aiTrainerApplying
+                            || (aiTrainerProposal.requiresClarification && !aiTrainerClarification.trim())
+                          }
+                        >
+                          {aiTrainerApplyingTarget === 'all' ? 'Applying all…' : 'Apply All Changes'}
+                        </button>
+                      </div>
+                      {(aiTrainerProposal.riskFlags || []).length > 0 && (
+                        <div className="pcal-ai-trainer-risks">
+                          <strong>Risk Flags</strong>
+                          <ul>
+                            {(aiTrainerProposal.riskFlags || []).map((flag, idx) => (
+                              <li key={`${flag}-${idx}`}>{humanizeAiText(flag, aiChangeLookup)}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="pcal-ai-trainer-proposal pcal-ai-proposal-empty">
+                      <p>No active recommendation. Generate a new one from the chat above.</p>
+                    </div>
+                  )}
+                </section>
+              </div>
+            </details>
+          </div>
+
           {/* View toggle + column headers */}
           <div className="pcal-calendar-header">
             <div className="pcal-calendar-header-top">
@@ -1294,10 +1566,14 @@ export default function PlanDetailPage() {
                 </button>
               </div>
             </div>
-            <div className="pcal-col-headers">
-              {DAY_LABELS.map((d) => (
-                <span key={d}>{d}</span>
-              ))}
+            {/* Column day-of-week headers — inside calendar-header so they scroll with it */}
+            <div className="pcal-week pcal-week-col-header">
+              <div className="pcal-week-label" />
+              <div className="pcal-week-grid">
+                {DAY_LABELS.map((d) => (
+                  <span key={d} className="pcal-col-header-label">{d}</span>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -1321,8 +1597,26 @@ export default function PlanDetailPage() {
               const weekEnd = bounds.endDate;
               const isCurrentWeek = !!(weekStart && weekEnd && today >= weekStart && today <= weekEnd);
 
+              // Weekly run totals for the label
+              const allWeekActivities = week.days?.flatMap((d: any) => d.activities || []) || [];
+              const runActivities = allWeekActivities.filter((a: any) => String(a.type).toUpperCase() === 'RUN');
+              const weekTotalRunDist = runActivities.reduce((sum: number, a: any) => {
+                const src = resolveActivityDistanceSourceUnit(a, viewerUnits);
+                const d = toDisplayDistance(a.distance, src);
+                return sum + (d?.value ?? 0);
+              }, 0);
+              const longRun = runActivities.reduce((best: any, a: any) => {
+                const src = resolveActivityDistanceSourceUnit(a, viewerUnits);
+                const d = toDisplayDistance(a.distance, src);
+                const bestSrc = best ? resolveActivityDistanceSourceUnit(best, viewerUnits) : null;
+                const bestD = best ? toDisplayDistance(best.distance, bestSrc) : null;
+                return (d?.value ?? 0) > (bestD?.value ?? 0) ? a : best;
+              }, null);
+              const longRunSrc = longRun ? resolveActivityDistanceSourceUnit(longRun, viewerUnits) : null;
+              const longRunDist = longRun ? toDisplayDistance(longRun.distance, longRunSrc) : null;
+
               return (
-                <div className={`pcal-week${isCurrentWeek ? ' pcal-week-current' : ''}`} key={week.id}>
+                <div className={`pcal-week${isCurrentWeek ? ' pcal-week-current' : ''}`} key={week.id} data-debug-id="WKR">
                   <div className="pcal-week-label">
                     <div className="pcal-week-head">
                       <span className="pcal-week-num">W{week.weekIndex}</span>
@@ -1330,21 +1624,36 @@ export default function PlanDetailPage() {
                     </div>
                     {weekRange && <span className="pcal-week-range">{weekRange}</span>}
                     {!weekRange && <span className="pcal-week-range muted">Dates not set</span>}
+                    {weekTotalRunDist > 0 && (
+                      <div className="pcal-week-run-summary">
+                        <span className="pcal-week-run-total">
+                          {formatDistanceNumber(weekTotalRunDist)}{viewerUnitLabel}
+                        </span>
+                        {longRunDist && (
+                          <span className="pcal-week-long-run" title="Longest run">
+                            LR {formatDistanceNumber(longRunDist.value)}{viewerUnitLabel}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
                   <div className="pcal-week-grid">
                     {[1, 2, 3, 4, 5, 6, 7].map((dow) => {
                       const day = dayMap.get(dow);
                       const activities = day?.activities || [];
                       const dayDate = getDayDateFromWeekStart(bounds.startDate, dow);
-                      const dayManualDone = isDayMarkedDone(day?.notes);
-                      const dayDone = dayManualDone || (activities.length > 0 && activities.every((activity: any) => activity.completed));
+                      const cellDayStatus: DayStatus = day ? getDayStatus(day.notes) : 'OPEN';
+                      const dayAutoCompleted = activities.length > 0 && activities.every((activity: any) => activity.completed);
+                      const dayDone = cellDayStatus === 'DONE' || dayAutoCompleted;
+                      const dayMissed = cellDayStatus === 'MISSED' && !dayAutoCompleted;
+                      const dayPartial = cellDayStatus === 'PARTIAL' && !dayAutoCompleted;
                       const isToday = dayDate && dayDate.getTime() === today.getTime();
                       const isPast = dayDate && dayDate.getTime() < today.getTime();
                       const showMonthInDate = !!dayDate && (dow === 1 || dayDate.getDate() === 1);
 
                       const openDayLog = () => {
                         if (!dayDate) return;
-                        const dayStatus = day ? getDayStatus(day.notes) : 'OPEN';
+                        const dayStatus = cellDayStatus;
                         const missedReason = day ? (getDayMissedReason(day.notes) || null) : null;
                         setSelectedDay({
                           dayId: day?.id || null,
@@ -1354,13 +1663,24 @@ export default function PlanDetailPage() {
                           dayStatus,
                           missedReason,
                         });
+                        document.querySelector('.pcal-layout')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
                       };
+
+                      // Primary type: KEY activity first, then first RUN, then first activity
+                      const primaryActivity =
+                        activities.find((a: any) => a.mustDo || a.priority === 'KEY') ||
+                        activities.find((a: any) => String(a.type).toUpperCase() === 'RUN') ||
+                        activities[0];
+                      const primaryType = primaryActivity
+                        ? String(primaryActivity.type || 'OTHER').toLowerCase()
+                        : activities.length === 0 && dayDate ? 'rest' : null;
 
                       return (
                         <div
-                          className={`pcal-cell${isToday ? ' pcal-cell-today' : ''}${isPast ? ' pcal-cell-past' : ''}${dayDone ? ' pcal-cell-day-done' : ''}${!isEditMode && dayDate ? ' pcal-cell-clickable' : ''}`}
+                          className={`pcal-cell${isToday ? ' pcal-cell-today' : ''}${isPast ? ' pcal-cell-past' : ''}${dayDone ? ' pcal-cell-day-done' : ''}${dayMissed ? ' pcal-cell-day-missed' : ''}${dayPartial ? ' pcal-cell-day-partial' : ''}${primaryType ? ` pcal-cell--type-${primaryType}` : ''}${dayDate ? ' pcal-cell-clickable' : ''}`}
+                          data-debug-id="PDC"
                           key={dow}
-                          onClick={!isEditMode && dayDate ? openDayLog : undefined}
+                          onClick={dayDate ? openDayLog : undefined}
                         >
                           {dayDate && (
                             <span className="pcal-cell-date">
@@ -1370,6 +1690,8 @@ export default function PlanDetailPage() {
                             </span>
                           )}
                           {dayDone && <span className="pcal-cell-day-check" title="Day completed">✓</span>}
+                          {dayMissed && <span className="pcal-cell-day-check pcal-cell-day-check--missed" title="Day missed">✗</span>}
+                          {dayPartial && <span className="pcal-cell-day-check pcal-cell-day-check--partial" title="Day partial">≈</span>}
                           {isToday && <span className="pcal-cell-today-badge">Today</span>}
                           {activities.length === 0 && !isEditMode && (
                             <span className="pcal-cell-empty" />
@@ -1406,16 +1728,39 @@ export default function PlanDetailPage() {
                             );
                             const details: string[] = [];
                             let targetBadges: string[] = [];
+                            let paceShort: string | null = null;
+                            let displayPaceTarget: string | null = null;
 
                             if (viewMode === 'plan') {
                               const plannedDistanceLabel = formatDisplayDistance(a.distance, plannedSourceUnit);
                               if (plannedDistanceLabel) details.push(plannedDistanceLabel);
                               if (a.duration) details.push(`${a.duration}m`);
-                              const displayPaceTarget = formatDisplayPace(a.paceTarget, plannedSourceUnit);
-                              targetBadges = createTargetBadges({
-                                paceTarget: displayPaceTarget,
-                                effortTarget: a.effortTarget
-                              });
+
+                              // Pace badge: abbreviation for circle, fallback text
+                              const bucket = (a.paceTargetBucket as string | null) || inferPaceBucketFromText(a.paceTarget);
+                              paceShort = bucket ? (PACE_BUCKET_SHORT[bucket] ?? null) : null;
+                              displayPaceTarget = formatDisplayPace(a.paceTarget, plannedSourceUnit);
+
+                              // Est. run time from distance × parsed pace (when no explicit duration)
+                              if (String(a.type).toUpperCase() === 'RUN' && !a.duration) {
+                                const distVal = toDisplayDistance(a.distance, plannedSourceUnit)?.value;
+                                if (distVal && a.paceTarget) {
+                                  const parsed = parseStructuredPaceTarget(a.paceTarget, plannedSourceUnit);
+                                  if (parsed?.minSec) {
+                                    let d = distVal;
+                                    if (parsed.unit && parsed.unit !== viewerUnits) {
+                                      d = viewerUnits === 'KM' ? d / 1.60934 : d * 1.60934;
+                                    }
+                                    const minMin = Math.round(d * parsed.minSec / 60);
+                                    const maxMin = Math.round(d * (parsed.maxSec ?? parsed.minSec) / 60);
+                                    if (minMin > 0) {
+                                      details.push(minMin === maxMin ? `~${minMin}m` : `~${minMin}-${maxMin}m`);
+                                    }
+                                  }
+                                }
+                              }
+
+                              if (a.effortTarget) targetBadges = [`Effort ${a.effortTarget}`];
                             } else {
                               // Log view: actuals for completed, planned for upcoming
                               if (a.completed) {
@@ -1453,7 +1798,7 @@ export default function PlanDetailPage() {
 
                             return (
                               <div
-                                className={`pcal-activity pcal-activity-clickable${a.completed ? ' pcal-activity-done' : ''}${a.mustDo || a.priority === 'KEY' ? ' pcal-activity-key' : ''}${cellView === 'compact' ? ' pcal-activity-compact' : ''}`}
+                                className={`pcal-activity pcal-activity-clickable${a.completed ? ' pcal-activity-done' : ''}${a.mustDo || a.priority === 'KEY' ? ' pcal-activity-key' : ''}${longRun && a.id === longRun.id ? ' pcal-activity-long-run' : ''}${cellView === 'compact' ? ' pcal-activity-compact' : ''}`}
                                 key={a.id}
                                 title={cellView === 'compact' ? a.title : undefined}
                                 onClick={(e) => {
@@ -1464,31 +1809,35 @@ export default function PlanDetailPage() {
                                   // non-edit: let click bubble up to cell → opens day log
                                 }}
                               >
-                                <span
-                                  className={`pcal-complete-indicator${a.completed ? ' pcal-complete-indicator-done' : ''}`}
-                                  aria-hidden="true"
-                                  title={a.completed ? 'Completed' : 'Planned'}
-                                />
                                 {cellView === 'compact' ? (
                                   <span className={`pcal-activity-abbr type-${String(a.type || 'OTHER').toLowerCase()}`}>
                                     {activityTypeAbbr}{sessionCount && sessionCount > 1 ? ` ×${sessionCount}` : ''}{compactDistLabel ? ` · ${compactDistLabel}` : ''}
                                   </span>
                                 ) : (
                                   <div className="pcal-activity-content">
-                                    <span className="pcal-activity-title">
-                                      <ActivityTypeIcon
-                                        type={a.type}
-                                        className={`pcal-activity-icon type-${String(a.type || 'OTHER').toLowerCase()}`}
-                                      />
+                                    <div className="pcal-detail-row">
+                                      <span className={`pcal-activity-abbr type-${String(a.type || 'OTHER').toLowerCase()}${a.completed ? ' pcal-activity-abbr--done' : ''}`}>
+                                        {a.completed ? '✓' : activityTypeAbbr}
+                                      </span>
                                       <span className="pcal-activity-title-text">{a.title}</span>
-                                    </span>
+                                    </div>
                                     {details.length > 0 && (
                                       <span className="pcal-activity-details">
                                         {details.join(' · ')}
                                       </span>
                                     )}
-                                    {targetBadges.length > 0 && (
+                                    {(paceShort || displayPaceTarget || targetBadges.length > 0) && (
                                       <span className="pcal-activity-targets">
+                                        {paceShort ? (
+                                          <span
+                                            className="review-pace-chip active pcal-pace-chip-sm"
+                                            title={a.paceTarget ?? undefined}
+                                          >
+                                            {paceShort}
+                                          </span>
+                                        ) : displayPaceTarget ? (
+                                          <span className="pcal-activity-target-chip">{displayPaceTarget}</span>
+                                        ) : null}
                                         {targetBadges.map((badge, index) => (
                                           <span key={`${a.id}-target-${index}`} className="pcal-activity-target-chip">
                                             {badge}
@@ -1511,268 +1860,54 @@ export default function PlanDetailPage() {
           </div>
         </section>
 
-        <aside className="pcal-chat-panel" id="ai-trainer">
-          {/* Sidebar tab switcher */}
-          <div className="pcal-sidebar-tabs">
-            <button
-              className={`pcal-sidebar-tab${sidebarTab === 'guide' ? ' active' : ''}`}
-              type="button"
-              onClick={() => setSidebarTab('guide')}
-            >
-              📋 Plan Guide
-            </button>
-            <button
-              className={`pcal-sidebar-tab${sidebarTab === 'ai' ? ' active' : ''}`}
-              type="button"
-              onClick={() => setSidebarTab('ai')}
-            >
-              AI Trainer
-            </button>
-          </div>
-
-          {/* Plan Guide panel */}
-          {sidebarTab === 'guide' && (
-            <div className="pcal-guide-panel">
-              <PlanSummaryCard
-                summary={plan?.planSummary as PlanSummary | null ?? null}
-                planId={planId as string}
-                onExtract={async () => {
-                  await fetch(`/api/plans/${planId}/extract-guide`, { method: 'POST' });
-                  await loadPlan();
-                }}
+        <aside className={`pcal-chat-panel${selectedDay ? ' day-open' : ''}`} id="ai-trainer" data-debug-id="PSB">
+          {selectedDay && (
+            <div className="pcal-day-panel" data-debug-id="PDL">
+              <div className="pcal-day-modal-head">
+                <div className="pcal-day-modal-head-left">
+                  <span className="pcal-day-modal-date">{selectedDay.dateLabel}</span>
+                  {selectedDay.activities.length === 0 && (
+                    <h3 className="pcal-day-modal-title">Rest Day</h3>
+                  )}
+                  {selectedDay.activities.map((a) => (
+                    <div key={a.id} className="pcal-day-modal-activity">
+                      <span className={`pcal-activity-abbr type-${String(a.type || 'OTHER').toLowerCase()}`}>
+                        {typeAbbr(a.type)}
+                      </span>
+                      <div className="pcal-day-modal-activity-copy">
+                        <span className="pcal-day-modal-title">{a.title || formatType(a.type)}</span>
+                        {a.plannedDetails.length > 0 && (
+                          <span className="pcal-day-modal-metrics">{a.plannedDetails.join(' · ')}</span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  className="pcal-day-modal-close"
+                  onClick={() => { setSelectedDay(null); loadPlan(); }}
+                  aria-label="Close"
+                >
+                  ✕
+                </button>
+              </div>
+              <DayLogCard
+                key={selectedDay.dateISO}
+                dayId={selectedDay.dayId}
+                dateISO={selectedDay.dateISO}
+                planId={planId}
+                activities={selectedDay.activities}
+                viewerUnits={viewerUnits}
+                dayStatus={selectedDay.dayStatus}
+                missedReason={selectedDay.missedReason}
+                stravaConnected={stravaConnected}
+                enabled
+                planView={isEditMode}
+                onClose={() => { setSelectedDay(null); loadPlan(); }}
               />
-              {plan?.planGuide && (
-                <PlanGuidePanel
-                  guideText={plan.planGuide as string}
-                  planId={planId as string}
-                  editable
-                />
-              )}
             </div>
           )}
-
-          <section
-            className="pcal-ai-trainer pcal-ai-trainer-chat"
-            style={sidebarTab === 'guide' ? { display: 'none' } : undefined}
-          >
-            <div className="pcal-ai-trainer-head">
-              <div>
-                <h2>AI Trainer</h2>
-                <p>Chat with your coach. Each new request starts a fresh recommendation thread.</p>
-              </div>
-              <div className="pcal-ai-trainer-head-actions">
-                <button
-                  className="dash-btn-ghost"
-                  type="button"
-                  onClick={clearAiChat}
-                  disabled={aiTrainerLoading || aiTrainerApplying}
-                >
-                  Clear chat
-                </button>
-              </div>
-            </div>
-
-            <div className="pcal-ai-thread">
-              {aiChatTurns.length === 0 && (
-                <p className="pcal-ai-trainer-status">
-                  Start with one clear request, for example: &quot;Move this week’s long run to Sunday and rebalance recovery.&quot;
-                </p>
-              )}
-              {aiChatTurns.map((turn) => (
-                <article key={turn.id} className={`pcal-ai-turn role-${turn.role}`}>
-                  <div className="pcal-ai-turn-head">
-                    <strong>
-                      {turn.role === 'athlete' ? 'You' : turn.role === 'coach' ? 'Coach' : 'System'}
-                    </strong>
-                    {turn.proposal && (
-                      <span className={`pcal-ai-turn-state state-${turn.proposalState || 'superseded'}`}>
-                        {turn.proposalState === 'active'
-                          ? 'Active proposal'
-                          : turn.proposalState === 'applied'
-                            ? 'Applied'
-                            : 'History'}
-                      </span>
-                    )}
-                  </div>
-                  <p>{humanizeAiText(turn.text, aiChangeLookup)}</p>
-                  {turn.errorCode && (
-                    <span className="pcal-ai-turn-error-code">{turn.errorCode}</span>
-                  )}
-                  {turn.proposal && turn.proposalState !== 'active' && turn.proposalState !== 'applied' && (
-                    <button
-                      className="dash-btn-ghost pcal-ai-turn-use"
-                      type="button"
-                      onClick={() => activateProposalTurn(turn.id)}
-                    >
-                      Use this proposal
-                    </button>
-                  )}
-                </article>
-              ))}
-            </div>
-
-            <div className="pcal-ai-composer">
-              <textarea
-                value={aiTrainerInput}
-                onChange={(e) => setAiTrainerInput(e.target.value)}
-                placeholder="Example: Move this week's long run to Sunday because I'll ski Saturday, and rebalance the week safely."
-                rows={4}
-              />
-              <div className="pcal-ai-trainer-actions">
-                <button
-                  className="dash-btn-primary"
-                  type="button"
-                  onClick={generateAiAdjustment}
-                  disabled={aiTrainerLoading || aiTrainerApplying}
-                >
-                  {aiTrainerLoading ? 'Generating…' : 'Generate Recommendation'}
-                </button>
-              </div>
-              {aiTrainerError && <p className="pcal-ai-trainer-error">{aiTrainerError}</p>}
-              {aiTrainerStatus && (
-                <p className="pcal-ai-trainer-status">
-                  {humanizeAiText(aiTrainerStatus, aiChangeLookup)}
-                </p>
-              )}
-            </div>
-
-            {aiTrainerProposal ? (
-              <div className="pcal-ai-trainer-proposal">
-                <div className="pcal-ai-trainer-meta">
-                  <strong>Active Recommendation</strong>
-                  <span>Confidence: {aiTrainerProposal.confidence}</span>
-                </div>
-                <p>{humanizeAiText(aiTrainerProposal.coachReply, aiChangeLookup)}</p>
-                {aiTrainerProposal.followUpQuestion && (
-                  <p className="pcal-ai-trainer-followup">
-                    Follow-up: {humanizeAiText(aiTrainerProposal.followUpQuestion, aiChangeLookup)}
-                  </p>
-                )}
-                {aiTrainerProposal.requiresClarification && (
-                  <div className="pcal-ai-trainer-followup">
-                    <p>
-                      Clarification required: {humanizeAiText(aiTrainerProposal.clarificationPrompt || 'Please confirm constraints before applying.', aiChangeLookup)}
-                    </p>
-                    <textarea
-                      value={aiTrainerClarification}
-                      onChange={(e) => setAiTrainerClarification(e.target.value)}
-                      placeholder="Example: Keep long run on Sunday, max 1 hard session mid-week, no added mileage this week."
-                      rows={3}
-                    />
-                  </div>
-                )}
-                {aiTrainerProposal.invariantReport && aiTrainerProposal.invariantReport.weeks.length > 0 && (
-                  <div className="pcal-ai-trainer-invariants">
-                    <div className="pcal-ai-trainer-meta">
-                      <strong>Week Balance Check</strong>
-                      <span>
-                        Mode: {aiTrainerProposal.invariantReport.selectedMode.replace(/_/g, ' ')} · Score: {aiTrainerProposal.invariantReport.candidateScore}
-                      </span>
-                    </div>
-                    <div className="pcal-ai-trainer-invariant-grid">
-                      {aiTrainerProposal.invariantReport.weeks.map((week) => (
-                        <article key={`inv-${week.weekIndex}`} className="pcal-ai-trainer-invariant-week">
-                          <header>
-                            <strong>Week {week.weekIndex}</strong>
-                          </header>
-                          <p>Rest: {week.before.restDays} → {week.after.restDays}</p>
-                          <p>Hard days: {week.before.hardDays} → {week.after.hardDays}</p>
-                          <p>Long run: {formatDowLabel(week.before.longRunDayOfWeek)} → {formatDowLabel(week.after.longRunDayOfWeek)}</p>
-                          <p>Planned duration: {week.before.plannedDurationMin}m → {week.after.plannedDurationMin}m</p>
-                          {week.flags.length > 0 && (
-                            <ul>
-                              {week.flags.map((flag, idx) => (
-                                <li key={`${week.weekIndex}-${flag}-${idx}`}>{flag}</li>
-                              ))}
-                            </ul>
-                          )}
-                        </article>
-                      ))}
-                    </div>
-                    {aiTrainerProposal.invariantReport.summaryFlags.length > 0 && (
-                      <div className="pcal-ai-trainer-risks">
-                        <strong>Balance Notes</strong>
-                        <ul>
-                          {aiTrainerProposal.invariantReport.summaryFlags.map((flag, idx) => (
-                            <li key={`summary-${idx}`}>{flag}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                  </div>
-                )}
-                <div className="pcal-ai-trainer-meta">
-                  <strong>Planned Changes ({aiTrainerProposal.changes.length})</strong>
-                </div>
-                {aiTrainerProposal.changes.length === 0 && (
-                  <p className="pcal-ai-trainer-followup">
-                    This request needs a plan-structure update (weeks/dates), which is not supported yet.
-                  </p>
-                )}
-                <ul className="pcal-ai-trainer-change-list">
-                  {aiTrainerProposal.changes.map((change, idx) => (
-                    <li
-                      key={`${change.op}-${idx}`}
-                      className={aiTrainerAppliedRows.has(idx) ? 'is-applied' : ''}
-                    >
-                      <div className="pcal-ai-trainer-change-head">
-                        <span className="pcal-ai-trainer-op">{change.op.replace(/_/g, ' ')}</span>
-                        <strong>{describeAiChange(change, aiChangeLookup)}</strong>
-                        <button
-                          className="dash-btn-ghost pcal-ai-trainer-apply-one"
-                          type="button"
-                          onClick={() => applyAiAdjustment(idx)}
-                          disabled={
-                            aiTrainerAppliedRows.has(idx)
-                            || aiTrainerLoading
-                            || aiTrainerApplying
-                            || (aiTrainerProposal.requiresClarification && !aiTrainerClarification.trim())
-                          }
-                        >
-                          {aiTrainerAppliedRows.has(idx)
-                            ? 'Applied'
-                            : aiTrainerApplyingTarget === idx
-                              ? 'Applying…'
-                              : 'Apply'}
-                        </button>
-                      </div>
-                      <p>{humanizeAiText(change.reason, aiChangeLookup)}</p>
-                    </li>
-                  ))}
-                </ul>
-                <div className="pcal-ai-trainer-apply-all">
-                  <button
-                    className="dash-btn-primary"
-                    type="button"
-                    onClick={() => applyAiAdjustment()}
-                    disabled={
-                      aiTrainerProposal.changes.length === 0
-                      || aiTrainerAppliedRows.size >= aiTrainerProposal.changes.length
-                      || aiTrainerLoading
-                      || aiTrainerApplying
-                      || (aiTrainerProposal.requiresClarification && !aiTrainerClarification.trim())
-                    }
-                  >
-                    {aiTrainerApplyingTarget === 'all' ? 'Applying all…' : 'Apply All Changes'}
-                  </button>
-                </div>
-                {(aiTrainerProposal.riskFlags || []).length > 0 && (
-                  <div className="pcal-ai-trainer-risks">
-                    <strong>Risk Flags</strong>
-                    <ul>
-                      {(aiTrainerProposal.riskFlags || []).map((flag, idx) => (
-                        <li key={`${flag}-${idx}`}>{humanizeAiText(flag, aiChangeLookup)}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="pcal-ai-trainer-proposal pcal-ai-proposal-empty">
-                <p>No active recommendation. Generate a new one from the chat above.</p>
-              </div>
-            )}
-          </section>
         </aside>
       </div>
       </div>
@@ -1985,62 +2120,9 @@ export default function PlanDetailPage() {
         initialData={editingActivity || {}}
         title={editingActivity ? 'Edit Activity' : 'Add Activity'}
         dayId={addingToDayId || undefined}
+        sessionInstructions={(editingActivity as any)?.sessionInstructions ?? null}
       />
 
-      {/* Day log modal */}
-      {selectedDay && (
-        <div
-          className="pcal-day-overlay"
-          onClick={() => { setSelectedDay(null); loadPlan(); }}
-        >
-          <div className="pcal-day-modal" onClick={(e) => e.stopPropagation()}>
-            {/* Header */}
-            <div className="pcal-day-modal-head">
-              <div className="pcal-day-modal-head-left">
-                <span className="pcal-day-modal-date">{selectedDay.dateLabel}</span>
-                {selectedDay.activities.length === 0 && (
-                  <h3 className="pcal-day-modal-title">Rest Day</h3>
-                )}
-                {selectedDay.activities.map((a) => (
-                  <div key={a.id} className="pcal-day-modal-activity">
-                    <span className={`pcal-activity-abbr type-${String(a.type || 'OTHER').toLowerCase()}`}>
-                      {typeAbbr(a.type)}
-                    </span>
-                    <div className="pcal-day-modal-activity-copy">
-                      <span className="pcal-day-modal-title">{a.title || formatType(a.type)}</span>
-                      {a.plannedDetails.length > 0 && (
-                        <span className="pcal-day-modal-metrics">{a.plannedDetails.join(' · ')}</span>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <button
-                type="button"
-                className="pcal-day-modal-close"
-                onClick={() => { setSelectedDay(null); loadPlan(); }}
-                aria-label="Close"
-              >
-                ✕
-              </button>
-            </div>
-            {/* Day log card */}
-            <DayLogCard
-              key={selectedDay.dateISO}
-              dayId={selectedDay.dayId}
-              dateISO={selectedDay.dateISO}
-              planId={planId}
-              activities={selectedDay.activities}
-              viewerUnits={viewerUnits}
-              dayStatus={selectedDay.dayStatus}
-              missedReason={selectedDay.missedReason}
-              stravaConnected={stravaConnected}
-              enabled
-              onClose={() => { setSelectedDay(null); loadPlan(); }}
-            />
-          </div>
-        </div>
-      )}
 
     </main>
   );

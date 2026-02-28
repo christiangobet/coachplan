@@ -100,11 +100,11 @@
   top: var(--d-sticky-top);
   display: grid;
   gap: var(--d-space-3);
-  background: var(--d-surface);
-  border: 1px solid var(--d-border-light);
-  border-radius: var(--d-radius-lg);
-  padding: var(--d-space-2);
-  box-shadow: var(--d-shadow);
+  background: var(--d-surface, #ffffff);
+  border: 1px solid var(--d-border-light, #eeeeee);
+  border-radius: var(--d-radius-lg, 16px);
+  padding: var(--d-space-2, 16px);
+  box-shadow: var(--d-shadow, 0 1px 3px rgba(0,0,0,0.04));
 }
 
 .dash-side.no-sticky {
@@ -3423,7 +3423,7 @@ details[open] .day-log-instructions-toggle::before {
   grid-template-columns: 1fr 1fr;
 }
 
-.cal-activity-section .dash-log-fields .dash-log-field:last-child {
+.cal-activity-section .dash-log-fields .dash-log-field:last-child:nth-child(3) {
   grid-column: 1 / -1;
 }
 
@@ -3535,4 +3535,63 @@ details[open] .day-log-instructions-toggle::before {
 .cal-activity-log input.is-prefilled {
   font-weight: 700;
   color: var(--d-text);
+}
+
+/* ── Debug Mode ── */
+.debug-mode [data-debug-id] {
+  outline: 1px dashed rgba(0, 200, 130, 0.35);
+  position: relative;
+}
+.debug-mode [data-debug-id]::before {
+  content: attr(data-debug-id);
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  background: #0d1117;
+  color: #00e676;
+  font-size: 9px;
+  font-weight: 800;
+  font-family: 'Courier New', monospace;
+  padding: 1px 5px;
+  border-radius: 3px;
+  z-index: 9999;
+  pointer-events: none;
+  line-height: 1.6;
+  letter-spacing: 0.08em;
+}
+
+/* Sidebar debug toggle */
+.dash-side-debug {
+  padding: 4px 0 0;
+}
+.dash-debug-toggle {
+  width: 100%;
+  background: none;
+  border: none;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.dash-debug-toggle.active {
+  color: var(--d-text);
+  background: var(--d-surface);
+  font-weight: 700;
+  box-shadow: var(--d-shadow);
+}
+.dash-debug-toggle.active .dash-nav-dot {
+  background: var(--d-orange);
+}
+.dash-debug-pill {
+  margin-left: auto;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--d-border);
+  color: var(--d-muted);
+}
+.dash-debug-pill.on {
+  background: var(--d-orange);
+  color: #fff;
 }

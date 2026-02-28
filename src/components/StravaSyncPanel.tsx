@@ -140,7 +140,7 @@ export default function StravaSyncPanel({ compact = false }: { compact?: boolean
   }
 
   return (
-    <div className={`dash-card dash-sync-card${compact ? ' compact' : ''}`}>
+    <div className={`dash-card dash-sync-card${compact ? ' compact' : ''}`} data-debug-id="SSP">
       <div className="dash-card-header">
         <span className="dash-card-title">Strava Sync</span>
         <span className={`dash-sync-state ${strava?.connected ? 'connected' : 'disconnected'}`}>

@@ -350,7 +350,7 @@ export default function PlansClient() {
   }
 
   return (
-    <main className="dash plans-page-shell">
+    <main className="dash plans-page-shell" data-debug-id="PLN">
       <div className="dash-grid">
         <AthleteSidebar active="plans" name={athleteName} />
 
@@ -375,7 +375,7 @@ export default function PlansClient() {
             ) : (
               <div className="plans-grid">
                 {activePlans.map((plan) => (
-                  <div className={`plan-card status-active${plan.id === focusedPlanId ? ' focused' : ''}`} key={plan.id}>
+                  <div className={`plan-card status-active${plan.id === focusedPlanId ? ' focused' : ''}`} key={plan.id} data-debug-id="PLC">
                     <div className="plan-card-top">
                       <span
                         className="plan-status-dot"
@@ -510,7 +510,7 @@ export default function PlansClient() {
                 <h2 className="plans-section-title">Draft Plans</h2>
                 <div className="plans-grid">
                   {draftPlans.map((plan) => (
-                    <div className={`plan-card status-draft${plan.id === focusedPlanId ? ' focused' : ''}`} key={plan.id}>
+                    <div className={`plan-card status-draft${plan.id === focusedPlanId ? ' focused' : ''}`} key={plan.id} data-debug-id="PLC">
                       <div className="plan-card-top">
                         <span
                           className="plan-status-dot"
@@ -609,7 +609,7 @@ export default function PlansClient() {
                 <h2 className="plans-section-title">Archived Plans</h2>
                 <div className="plans-grid">
                   {archivedPlans.map((plan) => (
-                    <div className={`plan-card status-archived${plan.id === focusedPlanId ? ' focused' : ''}`} key={plan.id}>
+                    <div className={`plan-card status-archived${plan.id === focusedPlanId ? ' focused' : ''}`} key={plan.id} data-debug-id="PLC">
                       <div className="plan-card-top">
                         <span
                           className="plan-status-dot"

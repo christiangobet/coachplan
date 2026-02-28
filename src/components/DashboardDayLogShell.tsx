@@ -48,7 +48,7 @@ export default function DashboardDayLogShell({
   };
 
   return (
-    <section id={ANCHOR_ID} className={`dash-log-section${open ? '' : ' is-closed'}`}>
+    <section id={ANCHOR_ID} className={`dash-log-section${open ? '' : ' is-closed'}`} data-debug-id="DDL">
       {!open ? (
         <div className="dash-log-collapsed">
           <button
