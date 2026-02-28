@@ -381,6 +381,15 @@ export default function StravaActivityMatchTable() {
                               {activity.equivalenceNote && (
                                 <em>{activity.equivalenceNote}</em>
                               )}
+                              <a
+                                href={`https://www.strava.com/activities/${activity.id}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="dash-day-strava-link"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                View on Strava
+                              </a>
                             </div>
                           ))}
                         </div>

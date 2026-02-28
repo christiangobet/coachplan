@@ -162,9 +162,9 @@
 }
 
 .athlete-integration-actions .strava-connect-btn {
-  min-height: 32px;
+  min-height: 48px;
   font-size: 12px;
-  padding: 0 10px;
+  padding: 0 16px;
 }
 
 .athlete-integration-status {
