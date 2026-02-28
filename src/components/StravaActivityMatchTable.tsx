@@ -27,6 +27,7 @@ type PlanActivityRow = {
 
 type StravaActivityRow = {
   id: string;
+  providerActivityId: string;
   name: string;
   sportType: string | null;
   startTime: string;
@@ -382,7 +383,7 @@ export default function StravaActivityMatchTable() {
                                 <em>{activity.equivalenceNote}</em>
                               )}
                               <a
-                                href={`https://www.strava.com/activities/${activity.id}`}
+                                href={`https://www.strava.com/activities/${activity.providerActivityId}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="dash-day-strava-link"

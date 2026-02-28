@@ -6,6 +6,8 @@ import { getDayDateFromWeekStart, resolveWeekBounds } from '@/lib/plan-dates';
 import { isDayClosed } from '@/lib/day-status';
 import { pickSelectedPlan, SELECTED_PLAN_COOKIE } from '@/lib/plan-selection';
 
+export const dynamic = 'force-dynamic';
+
 function toDateKey(date: Date) {
   const yyyy = date.getFullYear();
   const mm = String(date.getMonth() + 1).padStart(2, '0');
@@ -168,6 +170,7 @@ export async function GET(req: Request) {
 
   const stravaByDate = new Map<string, Array<{
     id: string;
+    providerActivityId: string;
     name: string;
     sportType: string | null;
     startTime: string;
@@ -188,6 +191,7 @@ export async function GET(req: Request) {
     const row = stravaByDate.get(key) || [];
     row.push({
       id: external.id,
+      providerActivityId: external.providerActivityId,
       name: external.name || external.sportType || 'Strava activity',
       sportType: external.sportType,
       startTime: external.startTime.toISOString(),
@@ -246,25 +250,32 @@ export async function GET(req: Request) {
     0
   );
 
-  return NextResponse.json({
-    viewerUnits,
-    account: {
-      connected: Boolean(account?.isActive),
-      providerUsername: account?.providerUsername || null,
-      lastSyncAt: account?.lastSyncAt?.toISOString() || null,
-      syncCursor: account?.syncCursor || null
+  return NextResponse.json(
+    {
+      viewerUnits,
+      account: {
+        connected: Boolean(account?.isActive),
+        providerUsername: account?.providerUsername || null,
+        lastSyncAt: account?.lastSyncAt?.toISOString() || null,
+        syncCursor: account?.syncCursor || null
+      },
+      plan: activePlan
+        ? {
+            id: activePlan.id,
+            name: activePlan.name
+          }
+        : null,
+      summary: {
+        dayCount: days.length,
+        unmatchedPlan,
+        unmatchedStrava
+      },
+      days
     },
-    plan: activePlan
-      ? {
-          id: activePlan.id,
-          name: activePlan.name
-        }
-      : null,
-    summary: {
-      dayCount: days.length,
-      unmatchedPlan,
-      unmatchedStrava
-    },
-    days
-  });
+    {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate'
+      }
+    }
+  );
 }
