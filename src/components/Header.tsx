@@ -70,11 +70,9 @@ export default function Header({
             {!isSignedIn ? (
                 <>
                     <Link className="brand" href="/">{brand}</Link>
-                    <nav className="nav">
-                        <Link href="/">Home</Link>
-                    </nav>
-                    <div style={{ marginLeft: 'auto' }}>
+                    <div className="header-auth-actions">
                         <Link className="cta secondary" href="/sign-in">Sign in</Link>
+                        <Link className="cta" href="/sign-up">Create account</Link>
                     </div>
                 </>
             ) : (

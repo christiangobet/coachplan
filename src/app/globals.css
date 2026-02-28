@@ -225,6 +225,13 @@ main {
   background: rgba(252, 76, 2, 0.06);
 }
 
+.header-auth-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
 .btn-light {
   background: var(--background);
   color: var(--accent);

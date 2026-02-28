@@ -45,9 +45,10 @@ export default async function Home() {
             and gives you one place to track execution week by week.
           </p>
           <div className={styles.ctas}>
-            <Link className={styles.ctaPrimary} href="/sign-in">Sign in</Link>
-            <Link className={styles.ctaSecondary} href="/sign-up">Create account</Link>
+            <Link className={styles.ctaPrimary} href="/sign-up">Create account</Link>
+            <Link className={styles.ctaSecondary} href="/sign-in">Sign in</Link>
           </div>
+          <p className={styles.socialProof}>Works with any PDF training plan · Align to your race in minutes</p>
           <div className={styles.metrics}>
             <div className={styles.metric}>
               <strong>PDF to schedule</strong>

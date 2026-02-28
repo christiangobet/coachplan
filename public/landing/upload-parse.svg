@@ -1,27 +1,58 @@
 <svg width="800" height="520" viewBox="0 0 800 520" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <linearGradient id="u-bg" x1="58" y1="34" x2="716" y2="481" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#E5ECFB"/>
-      <stop offset="1" stop-color="#C6D4F0"/>
-    </linearGradient>
-  </defs>
-  <rect width="800" height="520" fill="url(#u-bg)"/>
-  <circle cx="145" cy="100" r="120" fill="#FC4C02" fill-opacity="0.15"/>
-  <rect x="70" y="86" width="332" height="350" rx="24" fill="#FFFFFF" fill-opacity="0.95" stroke="#D5DEED"/>
-  <rect x="108" y="132" width="128" height="30" rx="15" fill="#FC4C02" fill-opacity="0.16"/>
-  <rect x="108" y="184" width="252" height="15" rx="7.5" fill="#5C667E" fill-opacity="0.35"/>
-  <rect x="108" y="212" width="236" height="15" rx="7.5" fill="#5C667E" fill-opacity="0.25"/>
-  <rect x="108" y="240" width="184" height="15" rx="7.5" fill="#5C667E" fill-opacity="0.2"/>
-  <rect x="108" y="292" width="180" height="92" rx="14" fill="#F3F7FF"/>
-  <path d="M198 316V358" stroke="#FC4C02" stroke-width="9" stroke-linecap="round"/>
-  <path d="M173 341L198 316L223 341" stroke="#FC4C02" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
-  <rect x="452" y="124" width="280" height="272" rx="20" fill="#1F2D45"/>
-  <rect x="480" y="156" width="136" height="23" rx="11.5" fill="#FFFFFF" fill-opacity="0.16"/>
-  <rect x="480" y="198" width="220" height="11" rx="5.5" fill="#8EA1C4"/>
-  <rect x="480" y="220" width="198" height="11" rx="5.5" fill="#6F85AD"/>
-  <rect x="480" y="242" width="170" height="11" rx="5.5" fill="#5A6F94"/>
-  <rect x="480" y="276" width="224" height="84" rx="12" fill="#F8FAFF"/>
-  <rect x="496" y="292" width="92" height="13" rx="6.5" fill="#FC4C02" fill-opacity="0.3"/>
-  <rect x="496" y="315" width="186" height="9" rx="4.5" fill="#D3DBEA"/>
-  <rect x="496" y="334" width="166" height="9" rx="4.5" fill="#D3DBEA"/>
+  <rect width="800" height="520" fill="#ECF2FB"/>
+  <circle cx="130" cy="88" r="108" fill="#FC4C02" fill-opacity="0.1"/>
+
+  <!-- PDF source card -->
+  <rect x="64" y="88" width="268" height="344" rx="20" fill="white" stroke="#D2DCF0" stroke-width="1.5"/>
+  <!-- Orange PDF header -->
+  <rect x="64" y="88" width="268" height="62" rx="20" fill="#FC4C02"/>
+  <rect x="64" y="130" width="268" height="20" fill="#FC4C02"/>
+  <!-- Doc icon -->
+  <rect x="88" y="106" width="28" height="28" rx="5" fill="white" fill-opacity="0.28"/>
+  <path d="M116 106 L116 116 L126 116" fill="none" stroke="white" stroke-opacity="0.5" stroke-width="2"/>
+  <!-- Filename bar -->
+  <rect x="134" y="113" width="140" height="13" rx="6.5" fill="white" fill-opacity="0.55"/>
+  <!-- Unstructured text lines -->
+  <rect x="96" y="174" width="212" height="11" rx="5.5" fill="#BEC9DC"/>
+  <rect x="96" y="197" width="184" height="11" rx="5.5" fill="#BEC9DC"/>
+  <rect x="96" y="220" width="200" height="11" rx="5.5" fill="#BEC9DC"/>
+  <rect x="96" y="251" width="212" height="11" rx="5.5" fill="#BEC9DC"/>
+  <rect x="96" y="274" width="156" height="11" rx="5.5" fill="#BEC9DC"/>
+  <rect x="96" y="297" width="192" height="11" rx="5.5" fill="#BEC9DC"/>
+  <rect x="96" y="328" width="212" height="11" rx="5.5" fill="#BEC9DC"/>
+  <rect x="96" y="351" width="144" height="11" rx="5.5" fill="#BEC9DC"/>
+  <rect x="96" y="374" width="172" height="11" rx="5.5" fill="#BEC9DC"/>
+
+  <!-- Transform arrow -->
+  <circle cx="400" cy="260" r="42" fill="#FC4C02" fill-opacity="0.14"/>
+  <circle cx="400" cy="260" r="28" fill="#FC4C02"/>
+  <path d="M387 260h26M407 249l13 11-13 11" stroke="white" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Parsed output card (dark) -->
+  <rect x="468" y="88" width="268" height="344" rx="20" fill="#1A2840"/>
+  <!-- Header label -->
+  <rect x="494" y="116" width="156" height="16" rx="8" fill="white" fill-opacity="0.14"/>
+
+  <!-- Workout row 1: RUN -->
+  <rect x="484" y="154" width="236" height="64" rx="14" fill="white" fill-opacity="0.07"/>
+  <rect x="500" y="170" width="48" height="18" rx="9" fill="#FC4C02" fill-opacity="0.85"/>
+  <rect x="560" y="170" width="120" height="18" rx="9" fill="white" fill-opacity="0.3"/>
+  <rect x="500" y="196" width="168" height="10" rx="5" fill="white" fill-opacity="0.16"/>
+
+  <!-- Workout row 2: QUALITY -->
+  <rect x="484" y="230" width="236" height="64" rx="14" fill="white" fill-opacity="0.07"/>
+  <rect x="500" y="246" width="72" height="18" rx="9" fill="#F5A623" fill-opacity="0.8"/>
+  <rect x="584" y="246" width="92" height="18" rx="9" fill="white" fill-opacity="0.3"/>
+  <rect x="500" y="272" width="148" height="10" rx="5" fill="white" fill-opacity="0.16"/>
+
+  <!-- Workout row 3: LONG -->
+  <rect x="484" y="306" width="236" height="64" rx="14" fill="white" fill-opacity="0.07"/>
+  <rect x="500" y="322" width="56" height="18" rx="9" fill="#0F8A47" fill-opacity="0.75"/>
+  <rect x="568" y="322" width="104" height="18" rx="9" fill="white" fill-opacity="0.3"/>
+  <rect x="500" y="348" width="184" height="10" rx="5" fill="white" fill-opacity="0.16"/>
+
+  <!-- Workout row 4: REST -->
+  <rect x="484" y="382" width="236" height="44" rx="14" fill="white" fill-opacity="0.04"/>
+  <rect x="500" y="396" width="48" height="16" rx="8" fill="white" fill-opacity="0.12"/>
+  <rect x="560" y="396" width="96" height="16" rx="8" fill="white" fill-opacity="0.1"/>
 </svg>

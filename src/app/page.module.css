@@ -61,8 +61,8 @@
 
 .ctaPrimary,
 .ctaSecondary {
-  height: 40px;
-  padding: 0 18px;
+  height: 46px;
+  padding: 0 20px;
   border-radius: 10px;
   display: inline-flex;
   align-items: center;
@@ -91,6 +91,13 @@
 .ctaSecondary:hover {
   border-color: rgba(252, 76, 2, 0.7);
   color: #fff;
+}
+
+.socialProof {
+  margin-top: 12px;
+  font-size: 13px;
+  color: rgba(229, 236, 251, 0.55);
+  letter-spacing: 0.01em;
 }
 
 .metrics {

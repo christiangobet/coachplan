@@ -1,36 +1,59 @@
 <svg width="800" height="520" viewBox="0 0 800 520" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <linearGradient id="c-bg" x1="53" y1="56" x2="736" y2="474" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#E6EDF9"/>
-      <stop offset="1" stop-color="#C5D4EC"/>
-    </linearGradient>
-    <linearGradient id="c-card" x1="98" y1="172" x2="360" y2="355" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#FFFFFF"/>
-      <stop offset="1" stop-color="#F6F9FF"/>
-    </linearGradient>
-  </defs>
-  <rect width="800" height="520" fill="url(#c-bg)"/>
-  <circle cx="88" cy="112" r="86" fill="#2E67D0" fill-opacity="0.14"/>
+  <rect width="800" height="520" fill="#EDF2FB"/>
+  <circle cx="84" cy="108" r="84" fill="#2E67D0" fill-opacity="0.12"/>
 
-  <rect x="92" y="135" width="280" height="254" rx="20" fill="url(#c-card)" stroke="#D1DCED"/>
-  <circle cx="152" cy="192" r="28" fill="#FC4C02" fill-opacity="0.2"/>
-  <rect x="196" y="178" width="136" height="14" rx="7" fill="#38465F" fill-opacity="0.72"/>
-  <rect x="196" y="202" width="110" height="11" rx="5.5" fill="#66728B" fill-opacity="0.4"/>
-  <rect x="124" y="240" width="216" height="10" rx="5" fill="#CFD8E9"/>
-  <rect x="124" y="260" width="188" height="10" rx="5" fill="#CFD8E9"/>
-  <rect x="124" y="280" width="164" height="10" rx="5" fill="#CFD8E9"/>
-  <rect x="124" y="315" width="98" height="32" rx="16" fill="#FC4C02"/>
-  <rect x="234" y="315" width="106" height="32" rx="16" fill="#1E2D46"/>
+  <!-- Plan card (top center) — shared by coach -->
+  <rect x="190" y="84" width="420" height="86" rx="18" fill="#1A2840"/>
+  <!-- Plan badge -->
+  <rect x="218" y="104" width="64" height="16" rx="8" fill="#FC4C02" fill-opacity="0.55"/>
+  <!-- Plan title bar -->
+  <rect x="294" y="104" width="152" height="16" rx="8" fill="white" fill-opacity="0.45"/>
+  <!-- Subtitle bar -->
+  <rect x="218" y="128" width="210" height="11" rx="5.5" fill="white" fill-opacity="0.18"/>
+  <!-- Share icon (top-right of card) -->
+  <circle cx="568" cy="127" r="16" fill="white" fill-opacity="0.1"/>
+  <path d="M562 132v-8h12v8" stroke="white" stroke-opacity="0.6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M568 124v-8M564 120l4-4 4 4" stroke="white" stroke-opacity="0.6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
 
-  <rect x="430" y="104" width="278" height="300" rx="20" fill="#1E2C45"/>
-  <rect x="456" y="138" width="96" height="20" rx="10" fill="#FFFFFF" fill-opacity="0.15"/>
-  <rect x="456" y="174" width="226" height="170" rx="12" fill="#F7FAFF"/>
-  <rect x="472" y="192" width="112" height="12" rx="6" fill="#FC4C02" fill-opacity="0.28"/>
-  <path d="M472 268L504 239L538 258L573 222L610 236L650 204" stroke="#2F6AD4" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
-  <circle cx="504" cy="239" r="5" fill="#2F6AD4"/>
-  <circle cx="538" cy="258" r="5" fill="#2F6AD4"/>
-  <circle cx="573" cy="222" r="5" fill="#2F6AD4"/>
-  <circle cx="610" cy="236" r="5" fill="#2F6AD4"/>
-  <circle cx="650" cy="204" r="5" fill="#2F6AD4"/>
-  <rect x="456" y="364" width="226" height="16" rx="8" fill="#3A4C6D"/>
+  <!-- Connector lines from plan to athlete cards -->
+  <path d="M310 170 L230 216" stroke="#C8D6EC" stroke-width="2" stroke-dasharray="6 5"/>
+  <path d="M490 170 L570 216" stroke="#C8D6EC" stroke-width="2" stroke-dasharray="6 5"/>
+
+  <!-- Athlete 1 card -->
+  <rect x="64" y="216" width="298" height="224" rx="18" fill="white" stroke="#D4DCF0" stroke-width="1.5"/>
+  <!-- Avatar circle -->
+  <circle cx="120" cy="272" r="32" fill="#FC4C02" fill-opacity="0.18"/>
+  <circle cx="120" cy="262" r="13" fill="#FC4C02" fill-opacity="0.5"/>
+  <path d="M92 300 Q120 282 148 300" fill="#FC4C02" fill-opacity="0.28"/>
+  <!-- Name + role -->
+  <rect x="168" y="258" width="148" height="16" rx="8" fill="#1A2840" fill-opacity="0.65"/>
+  <rect x="168" y="282" width="100" height="11" rx="5.5" fill="#8BA0C0"/>
+  <!-- Progress label -->
+  <rect x="96" y="322" width="60" height="11" rx="5.5" fill="#0F8A47" fill-opacity="0.45"/>
+  <rect x="164" y="322" width="48" height="11" rx="5.5" fill="#C0CEDF"/>
+  <!-- Progress bar -->
+  <rect x="96" y="342" width="238" height="12" rx="6" fill="#E8F0F8"/>
+  <rect x="96" y="342" width="178" height="12" rx="6" fill="#0F8A47" fill-opacity="0.55"/>
+  <!-- Status chips -->
+  <rect x="96" y="368" width="80" height="26" rx="13" fill="#0F8A47" fill-opacity="0.14"/>
+  <rect x="184" y="368" width="84" height="26" rx="13" fill="#E8EEF5"/>
+
+  <!-- Athlete 2 card -->
+  <rect x="438" y="216" width="298" height="224" rx="18" fill="white" stroke="#D4DCF0" stroke-width="1.5"/>
+  <!-- Avatar circle -->
+  <circle cx="494" cy="272" r="32" fill="#2E67D0" fill-opacity="0.15"/>
+  <circle cx="494" cy="262" r="13" fill="#2E67D0" fill-opacity="0.42"/>
+  <path d="M466 300 Q494 282 522 300" fill="#2E67D0" fill-opacity="0.22"/>
+  <!-- Name + role -->
+  <rect x="542" y="258" width="152" height="16" rx="8" fill="#1A2840" fill-opacity="0.65"/>
+  <rect x="542" y="282" width="92" height="11" rx="5.5" fill="#8BA0C0"/>
+  <!-- Progress label -->
+  <rect x="470" y="322" width="60" height="11" rx="5.5" fill="#FC4C02" fill-opacity="0.45"/>
+  <rect x="538" y="322" width="48" height="11" rx="5.5" fill="#C0CEDF"/>
+  <!-- Progress bar -->
+  <rect x="470" y="342" width="238" height="12" rx="6" fill="#E8F0F8"/>
+  <rect x="470" y="342" width="126" height="12" rx="6" fill="#FC4C02" fill-opacity="0.5"/>
+  <!-- Status chips -->
+  <rect x="470" y="368" width="88" height="26" rx="13" fill="#FC4C02" fill-opacity="0.12"/>
+  <rect x="566" y="368" width="76" height="26" rx="13" fill="#E8EEF5"/>
 </svg>

@@ -1,31 +1,68 @@
 <svg width="800" height="520" viewBox="0 0 800 520" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <linearGradient id="r-bg" x1="85" y1="36" x2="741" y2="468" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#E8EEF9"/>
-      <stop offset="1" stop-color="#D1DCF0"/>
-    </linearGradient>
-  </defs>
-  <rect width="800" height="520" fill="url(#r-bg)"/>
-  <circle cx="690" cy="84" r="92" fill="#FC4C02" fill-opacity="0.16"/>
-  <rect x="66" y="106" width="668" height="310" rx="22" fill="#FFFFFF" fill-opacity="0.96" stroke="#D3DDED"/>
+  <rect width="800" height="520" fill="#EEF2FA"/>
+  <circle cx="688" cy="76" r="92" fill="#FC4C02" fill-opacity="0.13"/>
 
-  <rect x="112" y="154" width="118" height="24" rx="12" fill="#1C2A43" fill-opacity="0.1"/>
-  <rect x="112" y="198" width="576" height="164" rx="14" fill="#F2F6FD"/>
+  <!-- Main calendar card -->
+  <rect x="60" y="96" width="680" height="328" rx="20" fill="white" stroke="#D0DCF0" stroke-width="1.5"/>
 
-  <path d="M138 282H657" stroke="#CCD7EB" stroke-width="3" stroke-linecap="round" stroke-dasharray="8 8"/>
-  <path d="M184 247V322" stroke="#5A7095" stroke-width="3" stroke-linecap="round"/>
-  <path d="M312 247V322" stroke="#5A7095" stroke-width="3" stroke-linecap="round"/>
-  <path d="M440 247V322" stroke="#5A7095" stroke-width="3" stroke-linecap="round"/>
-  <path d="M568 247V322" stroke="#5A7095" stroke-width="3" stroke-linecap="round"/>
+  <!-- Header bar -->
+  <rect x="60" y="96" width="680" height="58" rx="20" fill="#1A2840"/>
+  <rect x="60" y="134" width="680" height="20" fill="#1A2840"/>
+  <!-- Month label -->
+  <rect x="96" y="112" width="128" height="16" rx="8" fill="white" fill-opacity="0.28"/>
+  <!-- Nav chevrons -->
+  <path d="M262 122l-10 7 10 7" stroke="white" stroke-opacity="0.4" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M530 122l10 7-10 7" stroke="white" stroke-opacity="0.4" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
 
-  <rect x="162" y="220" width="44" height="28" rx="8" fill="#8FA8D3"/>
-  <rect x="290" y="220" width="44" height="28" rx="8" fill="#8FA8D3"/>
-  <rect x="418" y="220" width="44" height="28" rx="8" fill="#8FA8D3"/>
-  <rect x="546" y="220" width="44" height="28" rx="8" fill="#8FA8D3"/>
+  <!-- Day-of-week headers (7 cols across 680px starting x=60) -->
+  <!-- col centers: 60+48=108, 108+97=205... let's use 7 equal cols: 680/7≈97px, centers at ~108,205,303,400,497,595,692 -->
+  <rect x="87" y="168" width="42" height="13" rx="6.5" fill="#8BA0C0"/>
+  <rect x="184" y="168" width="42" height="13" rx="6.5" fill="#8BA0C0"/>
+  <rect x="281" y="168" width="42" height="13" rx="6.5" fill="#8BA0C0"/>
+  <rect x="379" y="168" width="42" height="13" rx="6.5" fill="#8BA0C0"/>
+  <rect x="476" y="168" width="42" height="13" rx="6.5" fill="#8BA0C0"/>
+  <rect x="573" y="168" width="42" height="13" rx="6.5" fill="#8BA0C0"/>
+  <rect x="671" y="168" width="42" height="13" rx="6.5" fill="#8BA0C0"/>
 
-  <rect x="530" y="256" width="84" height="52" rx="12" fill="#FC4C02"/>
-  <path d="M566 272H578" stroke="white" stroke-width="6" stroke-linecap="round"/>
-  <path d="M572 266V278" stroke="white" stroke-width="6" stroke-linecap="round"/>
-  <rect x="532" y="312" width="80" height="14" rx="7" fill="#FC4C02" fill-opacity="0.23"/>
-  <rect x="138" y="344" width="520" height="9" rx="4.5" fill="#CED9EC"/>
+  <!-- Week 1 (y=192) -->
+  <rect x="87"  y="192" width="42" height="42" rx="10" fill="#E3EBF8"/>
+  <rect x="184" y="192" width="42" height="42" rx="10" fill="#D0DDEF"/>
+  <rect x="281" y="192" width="42" height="42" rx="10" fill="#E3EBF8"/>
+  <rect x="379" y="192" width="42" height="42" rx="10" fill="#D0DDEF"/>
+  <rect x="476" y="192" width="42" height="42" rx="10" fill="#E3EBF8"/>
+  <rect x="573" y="192" width="42" height="42" rx="10" fill="#D0DDEF"/>
+  <rect x="671" y="192" width="42" height="42" rx="10" fill="#EAF0F8"/>
+
+  <!-- Week 2 (y=244) -->
+  <rect x="87"  y="244" width="42" height="42" rx="10" fill="#D0DDEF"/>
+  <rect x="184" y="244" width="42" height="42" rx="10" fill="#E3EBF8"/>
+  <rect x="281" y="244" width="42" height="42" rx="10" fill="#D0DDEF"/>
+  <rect x="379" y="244" width="42" height="42" rx="10" fill="#EAF0F8"/>
+  <rect x="476" y="244" width="42" height="42" rx="10" fill="#D0DDEF"/>
+  <rect x="573" y="244" width="42" height="42" rx="10" fill="#D0DDEF"/>
+  <rect x="671" y="244" width="42" height="42" rx="10" fill="#EAF0F8"/>
+
+  <!-- Week 3 (y=296) -->
+  <rect x="87"  y="296" width="42" height="42" rx="10" fill="#E3EBF8"/>
+  <rect x="184" y="296" width="42" height="42" rx="10" fill="#D0DDEF"/>
+  <rect x="281" y="296" width="42" height="42" rx="10" fill="#E3EBF8"/>
+  <rect x="379" y="296" width="42" height="42" rx="10" fill="#D0DDEF"/>
+  <rect x="476" y="296" width="42" height="42" rx="10" fill="#EAF0F8"/>
+  <rect x="573" y="296" width="42" height="42" rx="10" fill="#D0DDEF"/>
+  <rect x="671" y="296" width="42" height="42" rx="10" fill="#EAF0F8"/>
+
+  <!-- Week 4 — Race Week (y=348) -->
+  <rect x="87"  y="348" width="42" height="42" rx="10" fill="#D0DDEF"/>
+  <rect x="184" y="348" width="42" height="42" rx="10" fill="#E3EBF8"/>
+  <rect x="281" y="348" width="42" height="42" rx="10" fill="#EAF0F8"/>
+  <rect x="379" y="348" width="42" height="42" rx="10" fill="#D0DDEF"/>
+  <rect x="476" y="348" width="42" height="42" rx="10" fill="#EAF0F8"/>
+  <!-- Race Day cell — highlighted orange with flag -->
+  <rect x="573" y="344" width="50" height="50" rx="12" fill="#FC4C02"/>
+  <path d="M591 358v18M591 358h18l-6 6 6 7H591" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Rest day -->
+  <rect x="671" y="348" width="42" height="42" rx="10" fill="#EAF0F8"/>
+
+  <!-- "Race Day" label below race cell -->
+  <rect x="557" y="402" width="82" height="14" rx="7" fill="#FC4C02" fill-opacity="0.22"/>
 </svg>
