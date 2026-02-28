@@ -111,6 +111,14 @@ export default async function Home() {
           <Link className={styles.ctaSecondary} href="/sign-in">Sign in</Link>
         </div>
       </section>
+
+      <footer className={styles.legalFooter}>
+        <Link href="/privacy">Privacy Policy</Link>
+        <span>·</span>
+        <Link href="/terms">Terms of Service</Link>
+        <span>·</span>
+        <span>© {new Date().getFullYear()} mytrainingplan.io</span>
+      </footer>
     </main>
   );
 }
