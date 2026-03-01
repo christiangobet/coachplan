@@ -26,7 +26,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       name: body?.name || plan.name,
       description: body?.description || plan.description || null,
       isTemplate: true,
-      isPublic: body?.isPublic ?? true,
+      isPublic: body?.isPublic ?? false,
       status: 'ACTIVE',
       weekCount: plan.weekCount,
       raceName: body?.raceName || plan.raceName || null,
