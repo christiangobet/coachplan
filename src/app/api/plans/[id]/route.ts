@@ -91,6 +91,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     status?: PlanStatus;
     planGuide?: string | null;
     planSummary?: Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput;
+    isPublic?: boolean;
   } = {};
 
   if ('name' in body) {
@@ -139,7 +140,17 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     }
   }
 
-  if (!('name' in body) && !('raceName' in body) && !('raceDate' in body) && !('status' in body) && !('planGuide' in body) && !('planSummary' in body)) {
+  if ('isPublic' in body) {
+    if (typeof body.isPublic !== 'boolean') {
+      return NextResponse.json({ error: 'isPublic must be a boolean' }, { status: 400 });
+    }
+    if (existingPlan.ownerId !== user.id) {
+      return NextResponse.json({ error: 'Only the template owner can change visibility' }, { status: 403 });
+    }
+    updates.isPublic = body.isPublic;
+  }
+
+  if (!('name' in body) && !('raceName' in body) && !('raceDate' in body) && !('status' in body) && !('planGuide' in body) && !('planSummary' in body) && !('isPublic' in body)) {
     return NextResponse.json({ error: 'No supported fields to update' }, { status: 400 });
   }
 

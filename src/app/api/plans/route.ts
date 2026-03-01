@@ -1917,7 +1917,21 @@ export async function GET(req: Request) {
     return { ...rest, progress };
   });
 
-  return NextResponse.json({ plans: plansWithProgress });
+  const myTemplates = await prisma.trainingPlan.findMany({
+    where: { ownerId: user.id, isTemplate: true },
+    orderBy: { createdAt: 'desc' },
+    select: {
+      id: true,
+      name: true,
+      weekCount: true,
+      isPublic: true,
+      planGuide: true,
+      planSummary: true,
+      createdAt: true,
+    }
+  });
+
+  return NextResponse.json({ plans: plansWithProgress, myTemplates });
 }
 
 async function parsePdfToJson(planId: string, pdfPath: string, name: string): Promise<ParsedPlanOutput> {
