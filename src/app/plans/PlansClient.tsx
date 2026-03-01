@@ -23,6 +23,7 @@ type Plan = {
   planGuide?: string | null;
 };
 type Template = { id: string; name: string; weekCount?: number | null; planGuide?: string | null; planSummary?: PlanSummary | null };
+type MyTemplate = { id: string; name: string; weekCount?: number | null; isPublic: boolean; planGuide?: string | null; planSummary?: PlanSummary | null };
 
 function statusColor(status: string) {
   if (status === 'ACTIVE') return 'var(--d-green)';
@@ -39,7 +40,9 @@ function formatRaceDate(value: string | null | undefined) {
 
 export default function PlansClient() {
   const [plans, setPlans] = useState<Plan[]>([]);
-  const [templates, setTemplates] = useState<Template[]>([]);
+  const [myTemplates, setMyTemplates] = useState<MyTemplate[]>([]);
+  const [publicTemplates, setPublicTemplates] = useState<Template[]>([]);
+  const [togglingVisibilityId, setTogglingVisibilityId] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [athleteName, setAthleteName] = useState('Athlete');
   const [initialLoading, setInitialLoading] = useState(true);
@@ -139,6 +142,7 @@ export default function PlansClient() {
           const plansData = await plansRes.json().catch(() => null);
           if (!cancelled) {
             setPlans(Array.isArray(plansData?.plans) ? plansData.plans : []);
+            setMyTemplates(Array.isArray(plansData?.myTemplates) ? plansData.myTemplates : []);
           }
         } else if (!cancelled) {
           setPlans([]);
@@ -148,17 +152,18 @@ export default function PlansClient() {
         if (templatesRes.ok) {
           const templatesData = await templatesRes.json().catch(() => null);
           if (!cancelled) {
-            setTemplates(Array.isArray(templatesData?.templates) ? templatesData.templates : []);
+            setPublicTemplates(Array.isArray(templatesData?.templates) ? templatesData.templates : []);
           }
         } else if (!cancelled) {
-          setTemplates([]);
+          setPublicTemplates([]);
           setTemplatesLoadError('Could not load templates right now. Refresh to try again.');
         }
       } catch {
         if (cancelled) return;
         setUserId(null);
         setPlans([]);
-        setTemplates([]);
+        setMyTemplates([]);
+        setPublicTemplates([]);
         setPlansLoadError('Could not load plans right now. Check your connection and refresh.');
         setTemplatesLoadError('Could not load templates right now. Check your connection and refresh.');
       } finally {
@@ -228,15 +233,40 @@ export default function PlansClient() {
         body: JSON.stringify({})
       });
       if (!res.ok) throw new Error('Failed');
-      const tRes = await fetch('/api/templates');
-      if (tRes.ok) {
-        const tData = await tRes.json().catch(() => null);
-        setTemplates(Array.isArray(tData?.templates) ? tData.templates : []);
+      const pRes = await fetch('/api/plans');
+      if (pRes.ok) {
+        const pData = await pRes.json().catch(() => null);
+        setPlans(Array.isArray(pData?.plans) ? pData.plans : []);
+        setMyTemplates(Array.isArray(pData?.myTemplates) ? pData.myTemplates : []);
       }
     } catch {
       // silent
     } finally {
       setSavingAsTemplate(null);
+    }
+  };
+
+  const handleToggleVisibility = async (tplId: string, currentIsPublic: boolean) => {
+    setTogglingVisibilityId(tplId);
+    try {
+      const res = await fetch(`/api/plans/${tplId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isPublic: !currentIsPublic })
+      });
+      if (!res.ok) return;
+      setMyTemplates((prev) => prev.map((t) => t.id === tplId ? { ...t, isPublic: !currentIsPublic } : t));
+      if (!currentIsPublic) {
+        const tRes = await fetch('/api/templates');
+        if (tRes.ok) {
+          const tData = await tRes.json().catch(() => null);
+          setPublicTemplates(Array.isArray(tData?.templates) ? tData.templates : []);
+        }
+      } else {
+        setPublicTemplates((prev) => prev.filter((t) => t.id !== tplId));
+      }
+    } finally {
+      setTogglingVisibilityId(null);
     }
   };
 
@@ -251,7 +281,7 @@ export default function PlansClient() {
         body: JSON.stringify({ name: trimmed })
       });
       if (!res.ok) throw new Error('Failed');
-      setTemplates((prev) => prev.map((t) => t.id === tplId ? { ...t, name: trimmed } : t));
+      setMyTemplates((prev) => prev.map((t) => t.id === tplId ? { ...t, name: trimmed } : t));
       setRenamingTemplateId(null);
     } catch {
       // silent
@@ -316,7 +346,7 @@ export default function PlansClient() {
       const data = await res.json().catch(() => null);
       if (!res.ok) throw new Error(data?.error || 'Failed to delete plan');
       setPlans((prev) => prev.filter((plan) => plan.id !== planId));
-      setTemplates((prev) => prev.filter((tpl) => tpl.id !== planId));
+      setMyTemplates((prev) => prev.filter((tpl) => tpl.id !== planId));
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to delete plan');
     } finally {
@@ -699,140 +729,240 @@ export default function PlansClient() {
             </>
           )}
 
-          {(templates.length > 0 || Boolean(templatesLoadError)) && (
+          {myTemplates.length > 0 && (
           <section className="plans-section plans-shell-section">
-            <h2 className="plans-section-title">Templates</h2>
-            {error && <p style={{ color: 'var(--d-red)', fontSize: 14, marginBottom: 12 }}>{error}</p>}
-            {templatesLoadError ? (
-              <p className="plans-empty-text" style={{ color: 'var(--d-red)' }}>{templatesLoadError}</p>
-            ) : (
-              <div className="plans-grid">
-                {templates.map((tpl) => (
-                  <div className="plan-card template" key={tpl.id}>
-                    <div className="plan-card-top">
-                      <span className="plan-template-badge">Template</span>
-                      <button
-                        className="plan-card-menu-btn"
-                        onClick={() => toggleMenu(tpl.id)}
-                        aria-label="More actions"
-                      >···</button>
+            <h2 className="plans-section-title">My Templates</h2>
+            <div className="plans-grid">
+              {myTemplates.map((tpl) => (
+                <div className="plan-card template" key={tpl.id}>
+                  <div className="plan-card-top">
+                    <span className={`plan-template-badge ${tpl.isPublic ? 'public' : 'personal'}`}>
+                      {tpl.isPublic ? 'Public' : 'Personal'}
+                    </span>
+                    <button
+                      className="plan-card-menu-btn"
+                      onClick={() => toggleMenu(tpl.id)}
+                      aria-label="More actions"
+                    >···</button>
+                  </div>
+                  {renamingTemplateId === tpl.id ? (
+                    <div className="plan-template-rename">
+                      <input
+                        className="plan-template-rename-input"
+                        value={renameValue}
+                        onChange={(e) => setRenameValue(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') handleRenameTemplate(tpl.id); if (e.key === 'Escape') setRenamingTemplateId(null); }}
+                        autoFocus
+                      />
+                      <div className="plan-template-rename-actions">
+                        <button
+                          className="dash-btn-primary plan-card-cta"
+                          onClick={() => handleRenameTemplate(tpl.id)}
+                          disabled={!renameValue.trim() || processingPlanId === tpl.id}
+                        >
+                          {processingPlanId === tpl.id ? 'Saving…' : 'Save'}
+                        </button>
+                        <button className="plan-template-cancel" onClick={() => setRenamingTemplateId(null)}>Cancel</button>
+                      </div>
                     </div>
-                    {renamingTemplateId === tpl.id ? (
-                      <div className="plan-template-rename">
+                  ) : (
+                    <h3 className="plan-card-name">{tpl.name}</h3>
+                  )}
+                  <span className="plan-card-meta">
+                    {tpl.weekCount ? `${tpl.weekCount} wks` : 'No weeks set'}
+                  </span>
+                  {expandedGuideId === tpl.id && (tpl.planSummary || tpl.planGuide) && (
+                    <div className="plan-template-guide-body">
+                      {tpl.planSummary && (
+                        <PlanSummaryCard summary={tpl.planSummary} planId={tpl.id} />
+                      )}
+                      {tpl.planGuide && (
+                        <PlanGuidePanel guideText={tpl.planGuide} planId={tpl.id} />
+                      )}
+                    </div>
+                  )}
+                  {useTemplateId === tpl.id ? (
+                    <div className="plan-template-setup">
+                      <label className="plan-template-setup-label">
+                        <span>Race date <span className="plan-template-required">*</span></span>
                         <input
-                          className="plan-template-rename-input"
-                          value={renameValue}
-                          onChange={(e) => setRenameValue(e.target.value)}
-                          onKeyDown={(e) => { if (e.key === 'Enter') handleRenameTemplate(tpl.id); if (e.key === 'Escape') setRenamingTemplateId(null); }}
+                          type="date"
+                          value={templateRaceDate}
+                          onChange={(e) => setTemplateRaceDate(e.target.value)}
                           autoFocus
                         />
-                        <div className="plan-template-rename-actions">
-                          <button
-                            className="dash-btn-primary plan-card-cta"
-                            onClick={() => handleRenameTemplate(tpl.id)}
-                            disabled={!renameValue.trim() || processingPlanId === tpl.id}
-                          >
-                            {processingPlanId === tpl.id ? 'Saving…' : 'Save'}
-                          </button>
-                          <button className="plan-template-cancel" onClick={() => setRenamingTemplateId(null)}>Cancel</button>
-                        </div>
-                      </div>
-                    ) : (
-                      <h3 className="plan-card-name">{tpl.name}</h3>
-                    )}
-                    <span className="plan-card-meta">
-                      {tpl.weekCount ? `${tpl.weekCount} wks` : 'No weeks set'}
-                    </span>
-                    {expandedGuideId === tpl.id && (tpl.planSummary || tpl.planGuide) && (
-                      <div className="plan-template-guide-body">
-                        {tpl.planSummary && (
-                          <PlanSummaryCard summary={tpl.planSummary} planId={tpl.id} />
-                        )}
-                        {tpl.planGuide && (
-                          <PlanGuidePanel guideText={tpl.planGuide} planId={tpl.id} />
-                        )}
-                      </div>
-                    )}
-                    {useTemplateId === tpl.id ? (
-                      <div className="plan-template-setup">
-                        <label className="plan-template-setup-label">
-                          <span>Race date <span className="plan-template-required">*</span></span>
-                          <input
-                            type="date"
-                            value={templateRaceDate}
-                            onChange={(e) => setTemplateRaceDate(e.target.value)}
-                            autoFocus
-                          />
-                        </label>
-                        {templateRaceDate && tpl.weekCount && (() => {
-                          const race = new Date(templateRaceDate);
-                          const start = new Date(race);
-                          start.setDate(start.getDate() - tpl.weekCount * 7);
-                          return (
-                            <p className="plan-template-start-hint">
-                              Starts {start.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                            </p>
-                          );
-                        })()}
-                        <div className="plan-card-actions">
-                          <button
-                            className="dash-btn-primary plan-card-cta"
-                            onClick={() => handleUseTemplate(tpl.id)}
-                            disabled={!templateRaceDate || assigning === tpl.id}
-                          >
-                            {assigning === tpl.id ? 'Creating...' : 'Create plan'}
-                          </button>
-                          <button
-                            className="plan-template-cancel"
-                            type="button"
-                            onClick={() => { setUseTemplateId(null); setTemplateRaceDate(''); }}
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
+                      </label>
+                      {templateRaceDate && tpl.weekCount && (() => {
+                        const race = new Date(templateRaceDate);
+                        const start = new Date(race);
+                        start.setDate(start.getDate() - tpl.weekCount * 7);
+                        return (
+                          <p className="plan-template-start-hint">
+                            Starts {start.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                          </p>
+                        );
+                      })()}
                       <div className="plan-card-actions">
                         <button
                           className="dash-btn-primary plan-card-cta"
-                          onClick={() => { setUseTemplateId(tpl.id); setTemplateRaceDate(''); }}
-                          disabled={!userId}
+                          onClick={() => handleUseTemplate(tpl.id)}
+                          disabled={!templateRaceDate || assigning === tpl.id}
                         >
-                          Use template
+                          {assigning === tpl.id ? 'Creating...' : 'Create plan'}
+                        </button>
+                        <button
+                          className="plan-template-cancel"
+                          type="button"
+                          onClick={() => { setUseTemplateId(null); setTemplateRaceDate(''); }}
+                        >
+                          Cancel
                         </button>
                       </div>
-                    )}
-                    {expandedMenuId === tpl.id && (
-                      <div className="plan-card-overflow-menu">
+                    </div>
+                  ) : (
+                    <div className="plan-card-actions">
+                      <button
+                        className="dash-btn-primary plan-card-cta"
+                        onClick={() => { setUseTemplateId(tpl.id); setTemplateRaceDate(''); }}
+                        disabled={!userId}
+                      >
+                        Use template
+                      </button>
+                    </div>
+                  )}
+                  {expandedMenuId === tpl.id && (
+                    <div className="plan-card-overflow-menu">
+                      <button
+                        className="plan-card-overflow-item"
+                        onClick={() => { setRenameValue(tpl.name); setRenamingTemplateId(tpl.id); setExpandedMenuId(null); }}
+                      >
+                        Rename
+                      </button>
+                      <button
+                        className="plan-card-overflow-item"
+                        onClick={() => { void handleToggleVisibility(tpl.id, tpl.isPublic); setExpandedMenuId(null); }}
+                        disabled={togglingVisibilityId === tpl.id}
+                      >
+                        {togglingVisibilityId === tpl.id ? 'Saving…' : tpl.isPublic ? 'Make private' : 'Make public'}
+                      </button>
+                      {(tpl.planSummary || tpl.planGuide) && (
                         <button
                           className="plan-card-overflow-item"
-                          onClick={() => { setRenameValue(tpl.name); setRenamingTemplateId(tpl.id); setExpandedMenuId(null); }}
+                          onClick={() => { setExpandedGuideId((prev) => (prev === tpl.id ? null : tpl.id)); setExpandedMenuId(null); }}
                         >
-                          Rename
+                          {expandedGuideId === tpl.id ? 'Hide preview' : 'Show preview'}
                         </button>
-                        {(tpl.planSummary || tpl.planGuide) && (
-                          <button
-                            className="plan-card-overflow-item"
-                            onClick={() => { setExpandedGuideId((prev) => (prev === tpl.id ? null : tpl.id)); setExpandedMenuId(null); }}
-                          >
-                            {expandedGuideId === tpl.id ? 'Hide preview' : 'Show preview'}
-                          </button>
-                        )}
-                        <button
-                          className="plan-card-overflow-item danger"
-                          onClick={() => { deletePlan(tpl.id); setExpandedMenuId(null); }}
-                          disabled={processingPlanId === tpl.id}
-                        >
-                          {processingPlanId === tpl.id ? 'Deleting…' : 'Delete'}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
+                      )}
+                      <button
+                        className="plan-card-overflow-item danger"
+                        onClick={() => { deletePlan(tpl.id); setExpandedMenuId(null); }}
+                        disabled={processingPlanId === tpl.id}
+                      >
+                        {processingPlanId === tpl.id ? 'Deleting…' : 'Delete'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
           </section>
           )}
+
+          {(() => {
+            const myIds = new Set(myTemplates.map((t) => t.id));
+            const communityTemplates = publicTemplates.filter((t) => !myIds.has(t.id));
+            if (communityTemplates.length === 0 && !templatesLoadError) return null;
+            return (
+              <section className="plans-section plans-shell-section">
+                <h2 className="plans-section-title">Public Templates</h2>
+                {error && <p style={{ color: 'var(--d-red)', fontSize: 14, marginBottom: 12 }}>{error}</p>}
+                {templatesLoadError ? (
+                  <p className="plans-empty-text" style={{ color: 'var(--d-red)' }}>{templatesLoadError}</p>
+                ) : (
+                  <div className="plans-grid">
+                    {communityTemplates.map((tpl) => (
+                      <div className="plan-card template" key={tpl.id}>
+                        <div className="plan-card-top">
+                          <span className="plan-template-badge public">Public</span>
+                        </div>
+                        <h3 className="plan-card-name">{tpl.name}</h3>
+                        <span className="plan-card-meta">
+                          {tpl.weekCount ? `${tpl.weekCount} wks` : 'No weeks set'}
+                        </span>
+                        {expandedGuideId === tpl.id && (tpl.planSummary || tpl.planGuide) && (
+                          <div className="plan-template-guide-body">
+                            {tpl.planSummary && (
+                              <PlanSummaryCard summary={tpl.planSummary} planId={tpl.id} />
+                            )}
+                            {tpl.planGuide && (
+                              <PlanGuidePanel guideText={tpl.planGuide} planId={tpl.id} />
+                            )}
+                          </div>
+                        )}
+                        {useTemplateId === tpl.id ? (
+                          <div className="plan-template-setup">
+                            <label className="plan-template-setup-label">
+                              <span>Race date <span className="plan-template-required">*</span></span>
+                              <input
+                                type="date"
+                                value={templateRaceDate}
+                                onChange={(e) => setTemplateRaceDate(e.target.value)}
+                                autoFocus
+                              />
+                            </label>
+                            {templateRaceDate && tpl.weekCount && (() => {
+                              const race = new Date(templateRaceDate);
+                              const start = new Date(race);
+                              start.setDate(start.getDate() - tpl.weekCount * 7);
+                              return (
+                                <p className="plan-template-start-hint">
+                                  Starts {start.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                </p>
+                              );
+                            })()}
+                            <div className="plan-card-actions">
+                              <button
+                                className="dash-btn-primary plan-card-cta"
+                                onClick={() => handleUseTemplate(tpl.id)}
+                                disabled={!templateRaceDate || assigning === tpl.id}
+                              >
+                                {assigning === tpl.id ? 'Creating...' : 'Create plan'}
+                              </button>
+                              <button
+                                className="plan-template-cancel"
+                                type="button"
+                                onClick={() => { setUseTemplateId(null); setTemplateRaceDate(''); }}
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="plan-card-actions">
+                            <button
+                              className="dash-btn-primary plan-card-cta"
+                              onClick={() => { setUseTemplateId(tpl.id); setTemplateRaceDate(''); }}
+                              disabled={!userId}
+                            >
+                              Use template
+                            </button>
+                            {(tpl.planSummary || tpl.planGuide) && (
+                              <button
+                                className="dash-btn-ghost plan-card-edit-btn"
+                                onClick={() => setExpandedGuideId((prev) => (prev === tpl.id ? null : tpl.id))}
+                              >
+                                {expandedGuideId === tpl.id ? 'Hide' : 'Preview'}
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+            );
+          })()}
         </section>
 
         <aside className="dash-right">

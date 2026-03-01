@@ -37,6 +37,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Template not found' }, { status: 404 });
   }
 
+  if (!template.isPublic && template.ownerId !== user.id) {
+    return NextResponse.json({ error: 'Template not found' }, { status: 404 });
+  }
+
   const raceDate = explicitRaceDate || dbUser.goalRaceDate || null;
 
   const newPlan = await prisma.trainingPlan.create({
