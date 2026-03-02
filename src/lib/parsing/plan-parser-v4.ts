@@ -2,6 +2,15 @@
 import { openaiJsonSchema, getDefaultAiModel, JsonParseError } from '@/lib/openai';
 import { V4_MASTER_PROMPT } from '@/lib/prompts/plan-parser/v4_master';
 import { ProgramJsonV1Schema, type ProgramJsonV1 } from '@/lib/schemas/program-json-v1';
+import {
+  buildWeekRanges,
+  findMissingWeekNumbers,
+  formatWeekRange,
+  inferExpectedWeekCount,
+  mergeWeeksFromPasses,
+  splitWeekRange,
+  type WeekRange
+} from './v4-pass-strategy';
 
 const PARSER_VERSION = 'v4';
 const TEXT_LIMIT = 40000;
@@ -208,8 +217,8 @@ async function runSinglePass(
 
 /**
  * Run Parser V4 on extracted PDF text.
- * Attempts a single-pass parse; if truncated, falls back to two parallel
- * passes (weeks 1–8 and weeks 9–16) and merges the results.
+ * Attempts a single-pass parse; if truncated, falls back to chunked
+ * week-range passes and merges successful results.
  * Returns the structured result (validated or not) — never throws.
  *
  * @param promptText  Optional prompt text override. Falls back to V4_MASTER_PROMPT constant.
@@ -232,47 +241,60 @@ export async function runParserV4(fullText: string, promptText?: string): Promis
     return single;
   }
 
-  // ── Multi-pass fallback (4 parallel passes, 5-week chunks) ─────────────────
-  // Single-pass truncates at ~5 weeks for verbose prompts (v5+).
-  // 5-week chunks give a safe margin; 4 passes cover plans up to 22 weeks.
-  console.info('[ParserV4] Single pass truncated — falling back to four-pass (wks 1-5, 6-10, 11-15, 16-22)');
+  // ── Multi-pass fallback (strict 5-week chunks + targeted retries) ──────────
+  // Single-pass truncates for verbose prompts; strict chunking keeps each call bounded.
+  const initialRanges = buildWeekRanges(25, 5);
+  console.info('[ParserV4] Single pass truncated — falling back to chunked passes', {
+    ranges: initialRanges.map((range) => formatWeekRange(range))
+  });
 
-  const [p1, p2, p3, p4] = await Promise.all([
-    runSinglePass(fullText, model, resolvedPrompt, '1 through 5'),
-    runSinglePass(fullText, model, resolvedPrompt, '6 through 10'),
-    runSinglePass(fullText, model, resolvedPrompt, '11 through 15'),
-    runSinglePass(fullText, model, resolvedPrompt, '16 through 22')
-  ]);
+  const initialPasses = await Promise.all(
+    initialRanges.map(async (range) => ({
+      range,
+      result: await runSinglePass(fullText, model, resolvedPrompt, formatWeekRange(range))
+    }))
+  );
 
-  const passes = [p1, p2, p3, p4];
-  const successfulPasses = passes.filter((p) => !p.truncated && p.data);
+  const successfulPasses: Array<{ range: WeekRange; data: ProgramJsonV1 }> = initialPasses
+    .filter((pass) => !pass.result.truncated && pass.result.data)
+    .map((pass) => ({ range: pass.range, data: pass.result.data! }));
 
   if (successfulPasses.length === 0) {
-    console.error('[ParserV4] All four passes truncated — returning single-pass artifact');
+    console.error('[ParserV4] All chunked passes failed — returning single-pass artifact');
     return single;
   }
 
-  if (successfulPasses.length < passes.length) {
-    const failedRanges = [
-      !p1.data && '1-5',
-      !p2.data && '6-10',
-      !p3.data && '11-15',
-      !p4.data && '16-22'
-    ].filter(Boolean);
-    console.warn('[ParserV4] Some passes failed — merging successful passes only', { failedRanges });
+  const failedInitialRanges = initialPasses
+    .filter((pass) => pass.result.truncated || !pass.result.data)
+    .map((pass) => pass.range);
+
+  if (failedInitialRanges.length > 0) {
+    const retryRanges = failedInitialRanges.flatMap((range) => splitWeekRange(range, 3));
+    console.warn('[ParserV4] Some chunked passes failed — retrying in smaller ranges', {
+      failedRanges: failedInitialRanges.map((range) => formatWeekRange(range)),
+      retryRanges: retryRanges.map((range) => formatWeekRange(range))
+    });
+
+    const retryPasses = await Promise.all(
+      retryRanges.map(async (range) => ({
+        range,
+        result: await runSinglePass(fullText, model, resolvedPrompt, formatWeekRange(range))
+      }))
+    );
+
+    const retrySuccesses = retryPasses
+      .filter((pass) => !pass.result.truncated && pass.result.data)
+      .map((pass) => ({ range: pass.range, data: pass.result.data! }));
+    successfulPasses.push(...retrySuccesses);
   }
 
-  // Merge weeks from all successful passes, deduplicate by week_number, sort
-  const weekMap = new Map<number, ProgramJsonV1['weeks'][number]>();
-  for (const pass of successfulPasses) {
-    for (const week of pass.data!.weeks) {
-      weekMap.set(week.week_number, week);
-    }
-  }
-  const mergedWeeks = [...weekMap.values()].sort((a, b) => a.week_number - b.week_number);
+  const mergedWeeks = mergeWeeksFromPasses(successfulPasses.map((pass) => ({ data: pass.data })));
+  const expectedWeeks = inferExpectedWeekCount(successfulPasses, mergedWeeks);
+  const missingWeeks = findMissingWeekNumbers(mergedWeeks, expectedWeeks);
+  const isLikelyComplete = expectedWeeks <= 0 || missingWeeks.length === 0;
 
   // Use program metadata from the earliest successful pass
-  const firstSuccess = successfulPasses[0].data!;
+  const firstSuccess = successfulPasses[0].data;
 
   const merged: ProgramJsonV1 = {
     program: firstSuccess.program,
@@ -285,23 +307,29 @@ export async function runParserV4(fullText: string, promptText?: string): Promis
   };
 
   const validation = ProgramJsonV1Schema.safeParse(merged);
+  const validated = validation.success && isLikelyComplete;
 
-  console.info('[ParserV4] Four-pass merge complete', {
-    weeksPass1: p1.data?.weeks.length ?? 0,
-    weeksPass2: p2.data?.weeks.length ?? 0,
-    weeksPass3: p3.data?.weeks.length ?? 0,
-    weeksPass4: p4.data?.weeks.length ?? 0,
+  console.info('[ParserV4] Chunked merge complete', {
+    initialRanges: initialRanges.length,
+    successfulPasses: successfulPasses.length,
     totalWeeks: mergedWeeks.length,
-    validated: validation.success
+    expectedWeeks,
+    missingWeeks: missingWeeks.length,
+    validated
   });
 
   return {
     parserVersion: PARSER_VERSION,
     model,
-    validated: validation.success,
-    data: validation.success ? validation.data : null,
+    validated,
+    data: validated ? validation.data! : null,
     rawJson: merged,
-    validationError: validation.success ? null : validation.error.message,
+    validationError: validated
+      ? null
+      : validation.success
+        ? `Missing weeks in merged output: ${missingWeeks.join(', ')}`
+        : validation.error.message,
+    truncated: !isLikelyComplete,
     threePass: true
   };
 }
