@@ -143,6 +143,7 @@ export type ParserV4Result = {
 };
 
 function buildInput(promptText: string, fullText: string, weekRange?: string): string {
+  // Soft advisory — used only for logging; does NOT truncate.
   const textTruncated = fullText.length > TEXT_LIMIT;
 
   const rangeInstruction = weekRange
@@ -153,9 +154,9 @@ function buildInput(promptText: string, fullText: string, weekRange?: string): s
     promptText,
     rangeInstruction,
     textTruncated
-      ? `Raw plan text (first ${TEXT_LIMIT} of ${fullText.length} characters):`
+      ? `Raw plan text (full text, ${fullText.length} characters):`
       : 'Raw plan text:',
-    fullText.slice(0, TEXT_LIMIT)
+    fullText   // ← full text, no slice
   ]
     .filter(Boolean)
     .join('\n');

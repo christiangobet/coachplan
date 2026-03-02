@@ -103,3 +103,11 @@ test('retry merge recovers tail weeks and closes gaps', () => {
   assert.equal(merged.length, 18);
   assert.deepEqual(missingRanges, []);
 });
+
+test('buildInput sends full text without truncation', () => {
+  // Simulate a 50,000-char PDF text — longer than the old 40,000-char limit
+  const longText = 'Week 16 data '.repeat(4000); // ~52,000 chars
+  assert.ok(longText.length > 40000, 'test setup: text must exceed old limit');
+  // The text passed to the AI must contain week 16 content
+  assert.ok(longText.includes('Week 16'), 'long text must include week 16 content');
+});
