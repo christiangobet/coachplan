@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { SignedIn, SignedOut, useUser } from '@clerk/nextjs';
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import AthleteSidebar from '@/components/AthleteSidebar';
 import '../dashboard/dashboard.css';
 import '../athlete-pages.css';
@@ -38,6 +39,8 @@ const CLIENT_UPLOAD_TIMEOUT_MS = 295000;
 
 export default function UploadPage() {
   const { user } = useUser();
+  const searchParams = useSearchParams();
+  const debugMode = searchParams?.get('debug') === '1';
   const [name, setName] = useState('');
   const [raceName, setRaceName] = useState('');
   const [raceDate, setRaceDate] = useState('');
@@ -128,7 +131,10 @@ export default function UploadPage() {
           const parseParams = parseWarning
             ? `&parseWarning=1&parseWarningMsg=${encodeURIComponent(parseWarning.slice(0, 220))}`
             : '';
-          window.location.href = `/plans/${data.plan.id}/review?fromUpload=1${parseParams}`;
+          const debugParams = debugMode && data?.parserPromptName
+            ? `&debug=1&parserPromptName=${encodeURIComponent(data.parserPromptName)}`
+            : '';
+          window.location.href = `/plans/${data.plan.id}/review?fromUpload=1${parseParams}${debugParams}`;
         } else {
           window.location.href = `/plans/${data.plan.id}`;
         }

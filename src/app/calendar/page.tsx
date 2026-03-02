@@ -15,6 +15,7 @@ import {
   resolveDistanceUnitFromActivity,
   type DistanceUnit
 } from "@/lib/unit-display";
+import { inferPaceBucketFromText } from "@/lib/intensity-targets";
 import AthleteSidebar from "@/components/AthleteSidebar";
 import DayLogCard from "@/components/DayLogCard";
 import { buildLogActivities } from "@/lib/log-activity";
@@ -27,6 +28,11 @@ import PlanSummarySection from "@/components/PlanSummarySection";
 import type { PlanSummary } from "@/lib/types/plan-summary";
 import "../dashboard/dashboard.css";
 import "./calendar.css";
+
+const PACE_BUCKET_SHORT: Record<string, string> = {
+  RECOVERY: 'RE', EASY: 'EZ', LONG: 'LR', RACE: 'RP',
+  TEMPO: 'TP', THRESHOLD: 'TH', INTERVAL: 'IN'
+};
 
 type CalendarSearchParams = {
   plan?: string;
@@ -56,6 +62,7 @@ type DatedActivity = {
   duration: number | null;
   distanceUnit: "MILES" | "KM" | null;
   paceTarget: string | null;
+  paceTargetBucket: string | null;
   effortTarget: string | null;
   priority: "KEY" | "MEDIUM" | "OPTIONAL" | null;
   actualDistance: number | null;
@@ -450,6 +457,7 @@ export default async function CalendarPage({
           duration: activity.duration ?? null,
           distanceUnit: activity.distanceUnit ?? null,
           paceTarget: activity.paceTarget ?? null,
+          paceTargetBucket: activity.paceTargetBucket ?? null,
           effortTarget: activity.effortTarget ?? null,
           priority: (activity.priority as "KEY" | "MEDIUM" | "OPTIONAL" | null) ?? null,
           actualDistance: activity.actualDistance ?? null,
@@ -612,7 +620,7 @@ export default async function CalendarPage({
       <div className="dash-grid">
         <AthleteSidebar active="calendar" name={name} selectedPlanId={selectedPlan.id} />
 
-        <section className="dash-center">
+        <section className="dash-center" data-debug-id="TCB">
           <div className="cal-header">
             <div className="dash-page-heading">
               <h1>Training Calendar</h1>
@@ -694,7 +702,7 @@ export default async function CalendarPage({
               ))}
             </div>
 
-            <div className="cal-grid">
+            <div className="cal-grid" data-debug-id="TCG">
               {dayCells.map((date) => {
                 const key = dateKey(date);
                 const dayActivities = activitiesByDate.get(key) || [];
@@ -729,6 +737,17 @@ export default async function CalendarPage({
                   }
                 }
                 const moreCount = displayActivities.length > 3 ? displayActivities.length - 3 : 0;
+                // Sum planned distances across all activities for the day
+                let totalDayDist = 0;
+                for (const act of dayActivities) {
+                  if (act.distance && act.distance > 0) {
+                    const conv = convertDistanceForDisplay(act.distance, act.distanceUnit, viewerUnits);
+                    if (conv) totalDayDist += conv.value;
+                  }
+                }
+                const totalDayDistLabel = totalDayDist > 0
+                  ? `${formatDistanceNumber(totalDayDist)}${distanceUnitLabel(viewerUnits)}`
+                  : null;
                 const dayHref = `${buildCalendarHref(monthStart, selectedPlan.id, key, returnToParam)}#day-details-card`;
                 return (
                   <div
@@ -743,6 +762,7 @@ export default async function CalendarPage({
                       dayPartial ? "day-partial" : "",
                       inPlan ? "in-plan" : ""
                     ].join(" ").trim()}
+                    data-debug-id="TCD"
                   >
                     <Link className="cal-day-hit" href={dayHref} aria-label={`Open ${key}`} />
                     <div className="cal-day-head">
@@ -751,10 +771,11 @@ export default async function CalendarPage({
                         {dayDone && <span className="cal-day-check" title="Day completed">✓</span>}
                         {dayMissed && <span className="cal-day-check missed" title="Day closed as missed">○</span>}
                         {dayPartial && <span className="cal-day-check partial" title="Day partially completed">✓</span>}
+                        {totalDayDistLabel && <span className="cal-day-dist">{totalDayDistLabel}</span>}
                       </div>
                     </div>
 
-                    <div className="cal-day-list">
+                    <div className="cal-day-list" data-debug-id="TAL">
                       {displayActivities.slice(0, 3).map(({ activity, sessionCount }) => {
                         const sessionMembers = sessionCount
                           ? dayActivities.filter(a => a.sessionGroupId === activity.sessionGroupId)
@@ -773,6 +794,22 @@ export default async function CalendarPage({
                               </span>
                               {isCompleted && <span className="cal-activity-done-dot" />}
                             </span>
+                            {activity.type === "RUN" && (() => {
+                              const bucket = activity.paceTargetBucket || inferPaceBucketFromText(activity.paceTarget);
+                              const bucketShort = bucket ? (PACE_BUCKET_SHORT[bucket] ?? null) : null;
+                              const paceDisplay = bucketShort
+                                ? null
+                                : (activity.paceTarget ? convertPaceForDisplay(activity.paceTarget, viewerUnits) : null);
+                              if (!bucketShort && !paceDisplay) return null;
+                              return (
+                                <span
+                                  className={`cal-pace-badge${bucketShort ? ' cal-pace-badge--bucket' : ''}`}
+                                  title={activity.paceTarget ?? undefined}
+                                >
+                                  {bucketShort ?? paceDisplay}
+                                </span>
+                              );
+                            })()}
                           </div>
                         );
                       })}
@@ -826,8 +863,8 @@ export default async function CalendarPage({
           </div>
         </section>
 
-        <aside className="dash-right">
-          {hasSelectedDate && <div id="day-details-card" className="dash-card cal-info-card cal-day-details-card">
+        <aside className="dash-right" data-debug-id="TSB">
+          {hasSelectedDate && <div id="day-details-card" className="dash-card cal-info-card cal-day-details-card" data-debug-id="TDL">
 
             {/* Header: date + status */}
             <div className="cal-detail-header">

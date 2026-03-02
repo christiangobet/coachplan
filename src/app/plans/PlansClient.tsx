@@ -38,6 +38,14 @@ function formatRaceDate(value: string | null | undefined) {
   return parsed.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+function calcTemplateStartHint(raceDateStr: string, weekCount: number): string {
+  const race = new Date(raceDateStr);
+  race.setHours(0, 0, 0, 0);
+  const start = new Date(race);
+  start.setDate(start.getDate() - weekCount * 7);
+  return start.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
 export default function PlansClient() {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [myTemplates, setMyTemplates] = useState<MyTemplate[]>([]);
@@ -233,11 +241,9 @@ export default function PlansClient() {
         body: JSON.stringify({})
       });
       if (!res.ok) throw new Error('Failed');
-      const pRes = await fetch('/api/plans');
-      if (pRes.ok) {
-        const pData = await pRes.json().catch(() => null);
-        setPlans(Array.isArray(pData?.plans) ? pData.plans : []);
-        setMyTemplates(Array.isArray(pData?.myTemplates) ? pData.myTemplates : []);
+      const data = await res.json().catch(() => null);
+      if (data?.template) {
+        setMyTemplates((prev) => [data.template, ...prev]);
       }
     } catch {
       // silent
@@ -257,10 +263,9 @@ export default function PlansClient() {
       if (!res.ok) return;
       setMyTemplates((prev) => prev.map((t) => t.id === tplId ? { ...t, isPublic: !currentIsPublic } : t));
       if (!currentIsPublic) {
-        const tRes = await fetch('/api/templates');
-        if (tRes.ok) {
-          const tData = await tRes.json().catch(() => null);
-          setPublicTemplates(Array.isArray(tData?.templates) ? tData.templates : []);
+        const tpl = myTemplates.find((t) => t.id === tplId);
+        if (tpl) {
+          setPublicTemplates((prev) => [...prev, { id: tpl.id, name: tpl.name, weekCount: tpl.weekCount, planGuide: tpl.planGuide, planSummary: tpl.planSummary }]);
         }
       } else {
         setPublicTemplates((prev) => prev.filter((t) => t.id !== tplId));
@@ -347,6 +352,7 @@ export default function PlansClient() {
       if (!res.ok) throw new Error(data?.error || 'Failed to delete plan');
       setPlans((prev) => prev.filter((plan) => plan.id !== planId));
       setMyTemplates((prev) => prev.filter((tpl) => tpl.id !== planId));
+      setPublicTemplates((prev) => prev.filter((t) => t.id !== planId));
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to delete plan');
     } finally {
@@ -363,6 +369,10 @@ export default function PlansClient() {
   );
   const focusedPlanId = focusedPlan?.id || null;
   const plansOverviewUnavailable = Boolean(plansLoadError);
+  const communityTemplates = useMemo(() => {
+    const myIds = new Set(myTemplates.map((t) => t.id));
+    return publicTemplates.filter((t) => !myIds.has(t.id));
+  }, [myTemplates, publicTemplates]);
 
   if (initialLoading) {
     return (
@@ -792,16 +802,11 @@ export default function PlansClient() {
                           autoFocus
                         />
                       </label>
-                      {templateRaceDate && tpl.weekCount && (() => {
-                        const race = new Date(templateRaceDate);
-                        const start = new Date(race);
-                        start.setDate(start.getDate() - tpl.weekCount * 7);
-                        return (
-                          <p className="plan-template-start-hint">
-                            Starts {start.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                          </p>
-                        );
-                      })()}
+                      {templateRaceDate && tpl.weekCount && (
+                        <p className="plan-template-start-hint">
+                          Starts {calcTemplateStartHint(templateRaceDate, tpl.weekCount)}
+                        </p>
+                      )}
                       <div className="plan-card-actions">
                         <button
                           className="dash-btn-primary plan-card-cta"
@@ -868,14 +873,9 @@ export default function PlansClient() {
           </section>
           )}
 
-          {(() => {
-            const myIds = new Set(myTemplates.map((t) => t.id));
-            const communityTemplates = publicTemplates.filter((t) => !myIds.has(t.id));
-            if (communityTemplates.length === 0 && !templatesLoadError) return null;
-            return (
+          {(communityTemplates.length > 0 || Boolean(templatesLoadError)) && (
               <section className="plans-section plans-shell-section">
                 <h2 className="plans-section-title">Public Templates</h2>
-                {error && <p style={{ color: 'var(--d-red)', fontSize: 14, marginBottom: 12 }}>{error}</p>}
                 {templatesLoadError ? (
                   <p className="plans-empty-text" style={{ color: 'var(--d-red)' }}>{templatesLoadError}</p>
                 ) : (
@@ -961,8 +961,7 @@ export default function PlansClient() {
                   </div>
                 )}
               </section>
-            );
-          })()}
+          )}
         </section>
 
         <aside className="dash-right">

@@ -523,6 +523,35 @@
   border-color: rgba(107, 107, 118, 0.22);
 }
 
+.cal-day-dist {
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--d-muted);
+  letter-spacing: 0.02em;
+}
+
+.cal-pace-badge {
+  display: inline-block;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--d-orange);
+  line-height: 1;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.cal-pace-badge--bucket {
+  background: rgba(252, 76, 2, 0.12);
+  border-radius: 999px;
+  padding: 1px 5px;
+  display: inline-flex;
+  align-items: center;
+}
+
 .cal-more {
   font-size: 11px;
   font-weight: 700;

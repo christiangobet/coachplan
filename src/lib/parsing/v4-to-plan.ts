@@ -5,7 +5,7 @@
  * Server-side only. Safe to call after V4 returns validated === true.
  */
 import { prisma } from '@/lib/prisma';
-import { ActivityType, Units } from '@prisma/client';
+import { ActivityType, ActivityPriority, Units } from '@prisma/client';
 import type { ProgramJsonV1 } from '@/lib/schemas/program-json-v1';
 import type { ProgramDocumentProfile } from '@/lib/plan-document-profile';
 import {
@@ -25,6 +25,9 @@ const ACTIVITY_TYPE_MAP: Record<string, ActivityType> = {
   Strength: ActivityType.STRENGTH,
   Rest: ActivityType.REST,
   Race: ActivityType.RUN,
+  Mobility: ActivityType.MOBILITY,
+  Yoga: ActivityType.YOGA,
+  Hike: ActivityType.HIKE,
   Other: ActivityType.OTHER
 };
 
@@ -37,6 +40,9 @@ function deriveTitle(session: ProgramJsonV1['weeks'][number]['sessions'][number]
     case 'Strength': return 'Strength';
     case 'Rest': return 'Rest';
     case 'Race': return 'Race';
+    case 'Mobility': return 'Mobility';
+    case 'Yoga': return 'Yoga';
+    case 'Hike': return 'Hike';
     default: return 'Workout';
   }
 }
@@ -125,6 +131,16 @@ export async function populatePlanFromV4(
             fallbackUnit: distanceUnit
           });
 
+          const priorityLevel = (() => {
+            if (session.priority_level === 'KEY')      return ActivityPriority.KEY;
+            if (session.priority_level === 'MEDIUM')   return ActivityPriority.MEDIUM;
+            if (session.priority_level === 'OPTIONAL') return ActivityPriority.OPTIONAL;
+            // fallback from legacy bool fields
+            if (session.priority === true)  return ActivityPriority.KEY;
+            if (session.optional === true)  return ActivityPriority.OPTIONAL;
+            return ActivityPriority.MEDIUM;
+          })();
+
           return {
             planId,
             dayId: planDay.id,
@@ -138,8 +154,9 @@ export async function populatePlanFromV4(
             paceTarget,
             effortTarget,
             ...structuredTargets,
-            mustDo: session.priority === true,
-            bailAllowed: session.optional === true
+            priority: priorityLevel,
+            mustDo: priorityLevel === ActivityPriority.KEY,
+            bailAllowed: priorityLevel === ActivityPriority.OPTIONAL
           };
         });
 

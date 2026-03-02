@@ -20,11 +20,15 @@ export const SessionV1Schema = z.object({
     'Strength',
     'Rest',
     'Race',
+    'Mobility',
+    'Yoga',
+    'Hike',
     'Other'
   ]),
 
   priority: z.boolean().optional().default(false),
   optional: z.boolean().optional().default(false),
+  priority_level: z.enum(['KEY', 'MEDIUM', 'OPTIONAL']).nullable().optional(),
 
   distance_km: z.number().nullable().optional(),
   distance_miles: z.number().nullable().optional(),

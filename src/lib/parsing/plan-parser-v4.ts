@@ -130,6 +130,7 @@ export type ParserV4Result = {
   validationError: string | null;
   truncated?: boolean;
   twoPass?: boolean;
+  threePass?: boolean;
 };
 
 function buildInput(promptText: string, fullText: string, weekRange?: string): string {
@@ -231,37 +232,50 @@ export async function runParserV4(fullText: string, promptText?: string): Promis
     return single;
   }
 
-  // ── Pass 2: two-pass fallback ───────────────────────────────────────────────
-  console.info('[ParserV4] Single pass truncated — falling back to two-pass (weeks 1-8, 9-16)');
+  // ── Multi-pass fallback (4 parallel passes, 5-week chunks) ─────────────────
+  // Single-pass truncates at ~5 weeks for verbose prompts (v5+).
+  // 5-week chunks give a safe margin; 4 passes cover plans up to 22 weeks.
+  console.info('[ParserV4] Single pass truncated — falling back to four-pass (wks 1-5, 6-10, 11-15, 16-22)');
 
-  const [p1, p2] = await Promise.all([
-    runSinglePass(fullText, model, resolvedPrompt, '1 through 8'),
-    runSinglePass(fullText, model, resolvedPrompt, '9 through 16')
+  const [p1, p2, p3, p4] = await Promise.all([
+    runSinglePass(fullText, model, resolvedPrompt, '1 through 5'),
+    runSinglePass(fullText, model, resolvedPrompt, '6 through 10'),
+    runSinglePass(fullText, model, resolvedPrompt, '11 through 15'),
+    runSinglePass(fullText, model, resolvedPrompt, '16 through 22')
   ]);
 
-  // If both truncated, return the original truncated single-pass artifact
-  if (p1.truncated && p2.truncated) {
-    console.error('[ParserV4] Both two-pass halves truncated — returning single-pass artifact');
+  const passes = [p1, p2, p3, p4];
+  const successfulPasses = passes.filter((p) => !p.truncated && p.data);
+
+  if (successfulPasses.length === 0) {
+    console.error('[ParserV4] All four passes truncated — returning single-pass artifact');
     return single;
   }
 
-  // If only one half succeeded, return it as partial result
-  if (p1.truncated || !p1.data) {
-    console.warn('[ParserV4] Pass 1 (wks 1-8) failed — returning pass 2 only');
-    return { ...p2, twoPass: true };
-  }
-  if (p2.truncated || !p2.data) {
-    console.warn('[ParserV4] Pass 2 (wks 9-16) failed — returning pass 1 only');
-    return { ...p1, twoPass: true };
+  if (successfulPasses.length < passes.length) {
+    const failedRanges = [
+      !p1.data && '1-5',
+      !p2.data && '6-10',
+      !p3.data && '11-15',
+      !p4.data && '16-22'
+    ].filter(Boolean);
+    console.warn('[ParserV4] Some passes failed — merging successful passes only', { failedRanges });
   }
 
-  // Both passes succeeded — merge weeks arrays
-  const mergedWeeks = [...p1.data.weeks, ...p2.data.weeks].sort(
-    (a, b) => a.week_number - b.week_number
-  );
+  // Merge weeks from all successful passes, deduplicate by week_number, sort
+  const weekMap = new Map<number, ProgramJsonV1['weeks'][number]>();
+  for (const pass of successfulPasses) {
+    for (const week of pass.data!.weeks) {
+      weekMap.set(week.week_number, week);
+    }
+  }
+  const mergedWeeks = [...weekMap.values()].sort((a, b) => a.week_number - b.week_number);
+
+  // Use program metadata from the earliest successful pass
+  const firstSuccess = successfulPasses[0].data!;
 
   const merged: ProgramJsonV1 = {
-    program: p1.data.program, // use program metadata from pass 1
+    program: firstSuccess.program,
     weeks: mergedWeeks,
     quality_checks: {
       weeks_detected: mergedWeeks.length,
@@ -272,9 +286,11 @@ export async function runParserV4(fullText: string, promptText?: string): Promis
 
   const validation = ProgramJsonV1Schema.safeParse(merged);
 
-  console.info('[ParserV4] Two-pass merge complete', {
-    weeksPass1: p1.data.weeks.length,
-    weeksPass2: p2.data.weeks.length,
+  console.info('[ParserV4] Four-pass merge complete', {
+    weeksPass1: p1.data?.weeks.length ?? 0,
+    weeksPass2: p2.data?.weeks.length ?? 0,
+    weeksPass3: p3.data?.weeks.length ?? 0,
+    weeksPass4: p4.data?.weeks.length ?? 0,
     totalWeeks: mergedWeeks.length,
     validated: validation.success
   });
@@ -286,6 +302,6 @@ export async function runParserV4(fullText: string, promptText?: string): Promis
     data: validation.success ? validation.data : null,
     rawJson: merged,
     validationError: validation.success ? null : validation.error.message,
-    twoPass: true
+    threePass: true
   };
 }

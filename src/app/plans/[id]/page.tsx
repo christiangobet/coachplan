@@ -1215,7 +1215,7 @@ export default function PlanDetailPage() {
       <div className={`pcal-layout${showDesktopSourcePane ? ' pdf-open' : ''}`} data-debug-id="PLD">
         <AthleteSidebar
           name={user?.fullName || user?.firstName || 'Athlete'}
-          active="plans"
+          active="plan-view"
           selectedPlanId={planId || null}
         />
 
@@ -1810,9 +1810,19 @@ export default function PlanDetailPage() {
                                 }}
                               >
                                 {cellView === 'compact' ? (
-                                  <span className={`pcal-activity-abbr type-${String(a.type || 'OTHER').toLowerCase()}`}>
-                                    {activityTypeAbbr}{sessionCount && sessionCount > 1 ? ` ×${sessionCount}` : ''}{compactDistLabel ? ` · ${compactDistLabel}` : ''}
-                                  </span>
+                                  <>
+                                    <span className={`pcal-activity-abbr type-${String(a.type || 'OTHER').toLowerCase()}`}>
+                                      {activityTypeAbbr}{sessionCount && sessionCount > 1 ? ` ×${sessionCount}` : ''}{compactDistLabel ? ` · ${compactDistLabel}` : ''}
+                                    </span>
+                                    {String(a.type || '').toUpperCase() === 'RUN' && paceShort && (
+                                      <span
+                                        className="review-pace-chip active pcal-pace-chip-sm"
+                                        title={a.paceTarget ?? undefined}
+                                      >
+                                        {paceShort}
+                                      </span>
+                                    )}
+                                  </>
                                 ) : (
                                   <div className="pcal-activity-content">
                                     <div className="pcal-detail-row">

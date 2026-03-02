@@ -217,8 +217,8 @@ export async function parseWeekWithAI(args: {
 export async function maybeRunParserV4(
   pdfBuffer: Buffer,
   planId?: string
-): Promise<import('./schemas/program-json-v1').ProgramJsonV1 | null> {
-  if (!FLAGS.PARSER_V4) return null;
+): Promise<{ data: import('./schemas/program-json-v1').ProgramJsonV1 | null; promptName: string | null }> {
+  if (!FLAGS.PARSER_V4) return { data: null, promptName: null };
   let jobId: string | null = null;
 
   const fail = async (err: unknown, phase: string) => {
@@ -243,7 +243,7 @@ export async function maybeRunParserV4(
     console.info('[ParserV4] Text extracted', { planId, chars: fullText.length });
   } catch (err) {
     await fail(err, 'extractPdfText');
-    return null;
+    return { data: null, promptName: null };
   }
 
   // 2. Create ParseJob
@@ -257,18 +257,22 @@ export async function maybeRunParserV4(
         planId,
         error: err instanceof Error ? err.message : String(err)
       });
-      return null;
+      return { data: null, promptName: null };
     }
   }
 
   // 3. Fetch active parser prompt from DB (fall back to hardcoded constant on error)
   let activePromptText: string | undefined;
+  let activePromptName: string | null = null;
   try {
     const active = await prisma.parserPrompt.findFirst({
       where: { isActive: true },
-      select: { text: true }
+      select: { text: true, name: true }
     });
-    if (active) activePromptText = active.text;
+    if (active) {
+      activePromptText = active.text;
+      activePromptName = active.name;
+    }
   } catch { /* silently use hardcoded fallback */ }
 
   // 4. Run V4 AI parsing
@@ -311,5 +315,8 @@ export async function maybeRunParserV4(
     }
   }
 
-  return result?.validated && result.data ? result.data : null;
+  return {
+    data: result?.validated && result.data ? result.data : null,
+    promptName: activePromptName
+  };
 }

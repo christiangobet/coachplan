@@ -1897,15 +1897,30 @@ export async function GET(req: Request) {
   const user = await currentUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const plans = await prisma.trainingPlan.findMany({
-    where: { athleteId: user.id, isTemplate: false },
-    orderBy: { createdAt: 'desc' },
-    include: {
-      activities: {
-        select: { completed: true }
+  const [plans, myTemplates] = await Promise.all([
+    prisma.trainingPlan.findMany({
+      where: { athleteId: user.id, isTemplate: false },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        activities: {
+          select: { completed: true }
+        }
       }
-    }
-  });
+    }),
+    prisma.trainingPlan.findMany({
+      where: { isTemplate: true, ownerId: user.id },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        name: true,
+        weekCount: true,
+        isPublic: true,
+        planGuide: true,
+        planSummary: true,
+        createdAt: true,
+      }
+    }),
+  ]);
 
   const plansWithProgress = plans.map((plan) => {
     const total = plan.activities.length;
@@ -1915,20 +1930,6 @@ export async function GET(req: Request) {
     // Remove activities from the response to keep it clean, we only need the progress
     const { activities, ...rest } = plan;
     return { ...rest, progress };
-  });
-
-  const myTemplates = await prisma.trainingPlan.findMany({
-    where: { isTemplate: true, OR: [{ ownerId: user.id }, { athleteId: user.id }] },
-    orderBy: { createdAt: 'desc' },
-    select: {
-      id: true,
-      name: true,
-      weekCount: true,
-      isPublic: true,
-      planGuide: true,
-      planSummary: true,
-      createdAt: true,
-    }
   });
 
   return NextResponse.json({ plans: plansWithProgress, myTemplates });
@@ -2086,6 +2087,7 @@ export async function POST(req: Request) {
   });
 
   let parseWarning: string | null = null;
+  let v4PromptName: string | null = null;
   if (file && file.size > 0) {
     const uploadDir = path.join(os.tmpdir(), 'coachplan', 'uploads');
 
@@ -2115,7 +2117,8 @@ export async function POST(req: Request) {
       await fs.writeFile(pdfPath, buffer);
 
       // Parser V4: run first, always awaited.
-      const v4Data = await maybeRunParserV4(buffer, plan.id);
+      const { data: v4Data, promptName: v4PromptNameResult } = await maybeRunParserV4(buffer, plan.id);
+      v4PromptName = v4PromptNameResult;
 
       // When V4 is primary and returned validated data, use it to populate the plan
       // and skip the legacy per-week parser entirely.
@@ -2373,6 +2376,7 @@ export async function POST(req: Request) {
 
   return NextResponse.json({
     plan: latestPlan || plan,
-    parseWarning
+    parseWarning,
+    parserPromptName: v4PromptName
   });
 }

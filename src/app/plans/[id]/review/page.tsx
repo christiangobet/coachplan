@@ -359,6 +359,8 @@ export default function PlanReviewPage() {
   const arrivedFromUpload = searchParams?.get('fromUpload') === '1';
   const parseWarningMsg = searchParams?.get('parseWarningMsg');
   const hasParseWarning = searchParams?.get('parseWarning') === '1';
+  const debugMode = searchParams?.get('debug') === '1';
+  const parserPromptName = searchParams?.get('parserPromptName') ?? null;
 
   const [plan, setPlan] = useState<ReviewPlan | null>(null);
   const [loading, setLoading] = useState(true);
@@ -1474,6 +1476,11 @@ export default function PlanReviewPage() {
               Plan: <strong>{plan.name}</strong>
               {!isActivated && <> · Status: <strong>{plan.status}</strong></>}
             </p>
+            {debugMode && parserPromptName && (
+              <p style={{ margin: '4px 0 0', fontSize: 12, color: '#888' }}>
+                Parser prompt: <code style={{ background: 'rgba(0,0,0,0.06)', borderRadius: 3, padding: '1px 5px' }}>{parserPromptName}</code>
+              </p>
+            )}
             {!isActivated && arrivedFromUpload && (
               <p className="review-publish-copy">
                 You are one step away. Confirm this parsed plan, then activate it to unlock Today and Training Calendar.

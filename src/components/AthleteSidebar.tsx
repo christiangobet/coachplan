@@ -11,15 +11,17 @@ type AthleteNavItem =
   | "calendar"
   | "strava"
   | "plans"
+  | "plan-view"
   | "progress"
   | "coach"
   | "admin"
   | "profile"
   | "guide";
 
-const NAV_ITEMS: Array<{ id: AthleteNavItem; href: string; label: string }> = [
+const NAV_ITEMS: Array<{ id: AthleteNavItem; href: string; label: string; planOnly?: boolean }> = [
   { id: "dashboard", href: "/dashboard", label: "Today" },
   { id: "calendar", href: "/calendar", label: "Training Calendar" },
+  { id: "plan-view", href: "/plans/:planId", label: "Plan View", planOnly: true },
   { id: "strava", href: "/strava", label: "Import Strava" },
   { id: "plans", href: "/plans", label: "Plans Management" },
   { id: "progress", href: "/progress", label: "Progress" },
@@ -81,16 +83,22 @@ export default function AthleteSidebar({
       </Link>
 
       <nav className="dash-nav">
-        {NAV_ITEMS.map((item) => (
-          <Link
-            key={item.id}
-            className={`dash-nav-item${isActive(item.id) ? " active" : ""}`}
-            href={appendPlanQueryToHref(item.href, contextualPlanId)}
-          >
-            <span className="dash-nav-dot" />
-            {item.label}
-          </Link>
-        ))}
+        {NAV_ITEMS.flatMap((item) => {
+          if (item.planOnly && !contextualPlanId) return [];
+          const href = item.planOnly
+            ? `/plans/${contextualPlanId}`
+            : appendPlanQueryToHref(item.href, contextualPlanId);
+          return [(
+            <Link
+              key={item.id}
+              className={`dash-nav-item${isActive(item.id) ? " active" : ""}`}
+              href={href}
+            >
+              <span className="dash-nav-dot" />
+              {item.label}
+            </Link>
+          )];
+        })}
       </nav>
 
       {showQuickActions && (

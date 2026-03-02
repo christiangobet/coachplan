@@ -69,5 +69,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     data: { notes: null }
   });
 
-  return NextResponse.json({ template: { id: template.id } });
+  return NextResponse.json({
+    template: {
+      id: template.id,
+      name: template.name,
+      weekCount: template.weekCount,
+      isPublic: template.isPublic,
+      planGuide: template.planGuide ?? null,
+      planSummary: template.planSummary ?? null,
+    }
+  });
 }
