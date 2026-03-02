@@ -97,7 +97,7 @@ const PROGRAM_JSON_V1_SCHEMA = {
                   session_role: { type: ['string', 'null'] },
                   activity_type: {
                     type: 'string',
-                    enum: ['Run', 'Walk', 'CrossTraining', 'Strength', 'Rest', 'Race', 'Other']
+                    enum: ['Run', 'Walk', 'CrossTraining', 'Strength', 'Rest', 'Race', 'Mobility', 'Yoga', 'Hike', 'Other']
                   },
                   priority: { type: 'boolean' },
                   optional: { type: 'boolean' },
