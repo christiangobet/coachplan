@@ -349,7 +349,9 @@ export async function runParserV4(
   };
 
   const validation = ProgramJsonV1Schema.safeParse(merged);
-  const validated = validation.success && isLikelyComplete;
+  // Accept partial results — missing weeks are surfaced as a warning, not a hard failure.
+  // Schema must pass; completeness is advisory.
+  const validated = validation.success;
 
   console.info('[ParserV4] Chunked merge complete', {
     initialRanges: initialRanges.length,
@@ -357,7 +359,8 @@ export async function runParserV4(
     totalWeeks: mergedWeeks.length,
     expectedWeeks,
     missingWeeks: missingWeeks.length,
-    validated
+    validated,
+    complete: isLikelyComplete
   });
 
   return {
@@ -367,10 +370,10 @@ export async function runParserV4(
     data: validated ? validation.data! : null,
     rawJson: merged,
     validationError: validated
-      ? null
-      : validation.success
-        ? `Missing weeks in merged output: ${missingWeeks.join(', ')}`
-        : validation.error.message,
+      ? (missingWeeks.length > 0
+          ? `Parsed ${mergedWeeks.length}/${expectedWeeks} weeks — missing: ${missingWeeks.join(', ')}`
+          : null)
+      : validation.error.message,
     truncated: !isLikelyComplete,
     threePass: true
   };

@@ -2127,8 +2127,9 @@ export async function POST(req: Request) {
       } catch { /* non-fatal */ }
 
       // Parser V4: run with guide context so the AI knows total week count and abbreviations.
-      const { data: v4Data, promptName: v4PromptNameResult } = await maybeRunParserV4(buffer, plan.id, planGuide);
+      const { data: v4Data, promptName: v4PromptNameResult, parseWarning: v4ParseWarning } = await maybeRunParserV4(buffer, plan.id, planGuide);
       v4PromptName = v4PromptNameResult;
+      if (v4ParseWarning) parseWarning = v4ParseWarning;
 
       // When V4 is primary and returned validated data, use it to populate the plan
       // and skip the legacy per-week parser entirely.

@@ -219,8 +219,8 @@ export async function maybeRunParserV4(
   pdfBuffer: Buffer,
   planId?: string,
   planGuide?: string
-): Promise<{ data: import('./schemas/program-json-v1').ProgramJsonV1 | null; promptName: string | null }> {
-  if (!FLAGS.PARSER_V4) return { data: null, promptName: null };
+): Promise<{ data: import('./schemas/program-json-v1').ProgramJsonV1 | null; promptName: string | null; parseWarning: string | null }> {
+  if (!FLAGS.PARSER_V4) return { data: null, promptName: null, parseWarning: null };
   let jobId: string | null = null;
 
   const fail = async (err: unknown, phase: string) => {
@@ -245,7 +245,7 @@ export async function maybeRunParserV4(
     console.info('[ParserV4] Text extracted', { planId, chars: fullText.length });
   } catch (err) {
     await fail(err, 'extractPdfText');
-    return { data: null, promptName: null };
+    return { data: null, promptName: null, parseWarning: null };
   }
 
   // 2. Create ParseJob
@@ -259,7 +259,7 @@ export async function maybeRunParserV4(
         planId,
         error: err instanceof Error ? err.message : String(err)
       });
-      return { data: null, promptName: null };
+      return { data: null, promptName: null, parseWarning: null };
     }
   }
 
@@ -320,6 +320,7 @@ export async function maybeRunParserV4(
 
   return {
     data: result?.validated && result.data ? result.data : null,
-    promptName: activePromptName
+    promptName: activePromptName,
+    parseWarning: result?.validationError ?? null
   };
 }
