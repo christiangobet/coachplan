@@ -8,6 +8,7 @@ import {
   updateParseJobStatus,
   saveParseArtifact
 } from "./parsing/parse-artifacts";
+import { prisma } from "./prisma";
 
 const WEEK_SCHEMA = {
   name: "week_plan",
@@ -260,11 +261,21 @@ export async function maybeRunParserV4(
     }
   }
 
-  // 3. Run V4 AI parsing
+  // 3. Fetch active parser prompt from DB (fall back to hardcoded constant on error)
+  let activePromptText: string | undefined;
+  try {
+    const active = await prisma.parserPrompt.findFirst({
+      where: { isActive: true },
+      select: { text: true }
+    });
+    if (active) activePromptText = active.text;
+  } catch { /* silently use hardcoded fallback */ }
+
+  // 4. Run V4 AI parsing
   let result: Awaited<ReturnType<typeof runParserV4>> | null = null;
   let rawParseError: string | null = null;
   try {
-    result = await runParserV4(fullText);
+    result = await runParserV4(fullText, activePromptText);
     console.info('[ParserV4] AI parse complete', {
       planId,
       jobId,
@@ -276,7 +287,7 @@ export async function maybeRunParserV4(
     console.error('[ParserV4] runParserV4 failed (non-fatal)', { planId, error: rawParseError });
   }
 
-  // 4. Save artifact + update status
+  // 5. Save artifact + update status
   // Always save something — even on parse failure — so the truncated/raw
   // response is visible in /admin/parse-debug.
   if (FLAGS.PARSE_DUAL_WRITE && jobId) {

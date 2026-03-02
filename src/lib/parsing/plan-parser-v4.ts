@@ -132,7 +132,7 @@ export type ParserV4Result = {
   twoPass?: boolean;
 };
 
-function buildInput(fullText: string, weekRange?: string): string {
+function buildInput(promptText: string, fullText: string, weekRange?: string): string {
   const textTruncated = fullText.length > TEXT_LIMIT;
 
   const rangeInstruction = weekRange
@@ -140,7 +140,7 @@ function buildInput(fullText: string, weekRange?: string): string {
     : '';
 
   return [
-    V4_MASTER_PROMPT,
+    promptText,
     rangeInstruction,
     textTruncated
       ? `Raw plan text (first ${TEXT_LIMIT} of ${fullText.length} characters):`
@@ -154,9 +154,10 @@ function buildInput(fullText: string, weekRange?: string): string {
 async function runSinglePass(
   fullText: string,
   model: string,
+  promptText: string,
   weekRange?: string
 ): Promise<ParserV4Result> {
-  const input = buildInput(fullText, weekRange);
+  const input = buildInput(promptText, fullText, weekRange);
 
   let rawJson: unknown;
   try {
@@ -209,9 +210,12 @@ async function runSinglePass(
  * Attempts a single-pass parse; if truncated, falls back to two parallel
  * passes (weeks 1–8 and weeks 9–16) and merges the results.
  * Returns the structured result (validated or not) — never throws.
+ *
+ * @param promptText  Optional prompt text override. Falls back to V4_MASTER_PROMPT constant.
  */
-export async function runParserV4(fullText: string): Promise<ParserV4Result> {
+export async function runParserV4(fullText: string, promptText?: string): Promise<ParserV4Result> {
   const model = getDefaultAiModel();
+  const resolvedPrompt = promptText ?? V4_MASTER_PROMPT;
 
   const textTruncated = fullText.length > TEXT_LIMIT;
   console.info('[ParserV4] Input text', {
@@ -221,7 +225,7 @@ export async function runParserV4(fullText: string): Promise<ParserV4Result> {
   });
 
   // ── Pass 1: try parsing everything in one shot ──────────────────────────────
-  const single = await runSinglePass(fullText, model);
+  const single = await runSinglePass(fullText, model, resolvedPrompt);
 
   if (!single.truncated) {
     return single;
@@ -231,8 +235,8 @@ export async function runParserV4(fullText: string): Promise<ParserV4Result> {
   console.info('[ParserV4] Single pass truncated — falling back to two-pass (weeks 1-8, 9-16)');
 
   const [p1, p2] = await Promise.all([
-    runSinglePass(fullText, model, '1 through 8'),
-    runSinglePass(fullText, model, '9 through 16')
+    runSinglePass(fullText, model, resolvedPrompt, '1 through 8'),
+    runSinglePass(fullText, model, resolvedPrompt, '9 through 16')
   ]);
 
   // If both truncated, return the original truncated single-pass artifact

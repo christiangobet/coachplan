@@ -65,7 +65,7 @@ export default async function AdminPage() {
         <h3>Next Admin Modules</h3>
         <div className="admin-links">
           <span className="admin-link-placeholder">User Management</span>
-          <span className="admin-link-placeholder">Plan Moderation</span>
+          <Link className="admin-link" href="/admin/parser-prompts">Prompt Manager</Link>
           <Link className="admin-link" href="/admin/parse-debug">Upload/Parse Monitor</Link>
           <Link className="admin-link" href="/dashboard">Back to Athlete Dashboard</Link>
         </div>
