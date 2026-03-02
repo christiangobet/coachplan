@@ -1,9 +1,10 @@
 /**
- * Universal master prompt for Parser V4.
+ * Fallback default prompt for Parser V4.
+ * Used when no active prompt is found in the DB (admin panel).
  * Stored as a TypeScript constant so it is guaranteed to be bundled by Next.js
  * in both local dev and Vercel serverless deployments.
  */
-export const V4_MASTER_PROMPT = `You are an expert document parser specialized in endurance training plans.
+export const FALLBACK_DEFAULT_PROMPT = `You are an expert document parser specialized in endurance training plans.
 
 Your task is to convert running training plan PDFs into structured, normalized JSON suitable for ingestion into a training application.
 
@@ -208,20 +209,36 @@ duration_max_minutes=75
 STEP 6 — MULTI-STEP WORKOUTS
 --------------------------------------------------
 
-If session contains semicolons or structured intervals:
+When a session has a warm-up, quality segment, and/or cool-down, OR
+when it has structured intervals (repeats, sets), populate the "steps" array.
 
-Example:
-"1 mile WU; 4 x 1min fast w/ 1min recovery; CD"
+Create ONE activity. Use the quality segment to classify session_type.
+Set metrics.distance and pace_target to the quality segment only.
 
-Create:
+Step types:
+  WarmUp     — warm-up segment (e.g. "1 mi WU", "10 min easy")
+  CoolDown   — cool-down segment (e.g. "0.5 mi CD", "5 min walk")
+  Interval   — repeated effort (use repeat field for count)
+  Tempo      — sustained tempo segment
+  Easy       — easy running segment
+  Distance   — a specific distance to cover at stated pace
+  Note       — free-form coaching note with no distance/time
 
-steps = [
-  {"type":"WarmUp"},
-  {"type":"Interval","repeat":4},
-  {"type":"CoolDown"}
+Example for "1 mi WU; 4 × 1 min fast w/ 1 min jog; 1 mi CD":
+steps: [
+  { "type": "WarmUp",   "distance_miles": 1 },
+  { "type": "Interval", "repeat": 4, "duration_minutes": 1, "effort": "fast", "description": "1 min fast / 1 min jog recovery" },
+  { "type": "CoolDown", "distance_miles": 1 }
 ]
 
-WARMUP/COOLDOWN RULE: When a session is structured as Warmup + quality effort + Cooldown (e.g. "1mi WU, 4-5mi Tempo, 1mi CD"), keep it as ONE session. Set distance_miles/distance_km to the quality segment distance only (NOT total distance). Set intensity and session_role to reflect the quality effort (e.g. session_role="Tempo Run"). Put the full structure in steps. Example: "1mi WU, 4-5mi Tempo, 1mi CD" → distance_miles=5, session_role="Tempo Run", intensity="Tempo pace".
+Example for "3 mi easy + 4 mi at marathon pace + 1 mi easy":
+steps: [
+  { "type": "Easy",  "distance_miles": 3 },
+  { "type": "Tempo", "distance_miles": 4, "pace_target": "marathon pace" },
+  { "type": "Easy",  "distance_miles": 1 }
+]
+
+If no structured steps, leave steps as [].
 
 --------------------------------------------------
 STEP 7 — GLOBAL RULE EXTRACTION

@@ -1,6 +1,6 @@
 // Server-side only — calls AI APIs and DB.
 import { openaiJsonSchema, getDefaultAiModel, JsonParseError } from '@/lib/openai';
-import { V4_MASTER_PROMPT } from '@/lib/prompts/plan-parser/v4_master';
+import { FALLBACK_DEFAULT_PROMPT } from '@/lib/prompts/plan-parser/fallback-default-prompt';
 import { ProgramJsonV1Schema, type ProgramJsonV1 } from '@/lib/schemas/program-json-v1';
 import {
   buildWeekRanges,
@@ -266,7 +266,7 @@ export async function runParserV4(
   planGuide?: string
 ): Promise<ParserV4Result> {
   const model = getDefaultAiModel();
-  const resolvedPrompt = promptText ?? V4_MASTER_PROMPT;
+  const resolvedPrompt = promptText ?? FALLBACK_DEFAULT_PROMPT;
 
   const textTruncated = fullText.length > TEXT_LIMIT;
   console.info('[ParserV4] Input text', {
