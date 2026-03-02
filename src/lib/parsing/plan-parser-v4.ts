@@ -278,15 +278,25 @@ export async function runParserV4(
   // ── Pass 1: try parsing everything in one shot ──────────────────────────────
   const single = await runSinglePass(fullText, model, resolvedPrompt, undefined, planLengthWeeks, planGuide);
 
-  if (!single.truncated) {
+  // Check if single pass result is complete — not just whether the JSON was cut off.
+  // Before the 40k-truncation removal, `truncated` was always true for long plans,
+  // which reliably triggered multi-pass. Now we must also check for missing weeks.
+  const singleIsIncomplete = (() => {
+    if (single.truncated) return true; // JSON parse error / output cut
+    if (!single.validated || !single.data) return false; // validation failed — multi-pass won't help
+    const expectedFromMeta = single.data.program?.plan_length_weeks ?? planLengthWeeks ?? 0;
+    return expectedFromMeta > 0 && findMissingWeekNumbers(single.data.weeks, expectedFromMeta).length > 0;
+  })();
+
+  if (!singleIsIncomplete) {
     return single;
   }
 
   // ── Multi-pass fallback (strict 5-week chunks + targeted retries) ──────────
-  // Single-pass truncates for verbose prompts; strict chunking keeps each call bounded.
+  // Single-pass either truncated or returned incomplete weeks; chunking keeps each call bounded.
   const maxWeek = planLengthWeeks ? planLengthWeeks + 2 : 25; // +2 buffer for taper/race
   const initialRanges = buildWeekRanges(maxWeek, 5);
-  console.info('[ParserV4] Single pass truncated — falling back to chunked passes', {
+  console.info('[ParserV4] Single pass incomplete — falling back to chunked passes', {
     ranges: initialRanges.map((range) => formatWeekRange(range))
   });
 
