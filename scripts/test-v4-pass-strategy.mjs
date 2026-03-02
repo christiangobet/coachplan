@@ -104,6 +104,13 @@ test('retry merge recovers tail weeks and closes gaps', () => {
   assert.deepEqual(missingRanges, []);
 });
 
+test('buildInput includes plan length hint in range instruction', () => {
+  const hint = 'The plan has 18 weeks total';
+  const rangeInstruction = `Output ONLY weeks 16 through 18 in the "weeks" array. Skip all other weeks. ${hint}`;
+  assert.ok(rangeInstruction.includes('18 weeks total'));
+  assert.ok(rangeInstruction.includes('16 through 18'));
+});
+
 test('buildInput sends full text without truncation', () => {
   // Simulate a 50,000-char PDF text — longer than the old 40,000-char limit
   const longText = 'Week 16 data '.repeat(4000); // ~52,000 chars

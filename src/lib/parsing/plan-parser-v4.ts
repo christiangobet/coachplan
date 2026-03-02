@@ -142,12 +142,22 @@ export type ParserV4Result = {
   threePass?: boolean;
 };
 
-function buildInput(promptText: string, fullText: string, weekRange?: string): string {
+function buildInput(
+  promptText: string,
+  fullText: string,
+  weekRange?: string,
+  planLengthWeeks?: number
+): string {
   // Soft advisory — used only for logging; does NOT truncate.
   const textTruncated = fullText.length > TEXT_LIMIT;
 
   const rangeInstruction = weekRange
-    ? `\nIMPORTANT: Output ONLY weeks ${weekRange} in the "weeks" array. Skip all other weeks.\n`
+    ? [
+        `\nIMPORTANT: Output ONLY weeks ${weekRange} in the "weeks" array. Skip all other weeks.`,
+        planLengthWeeks
+          ? `The plan has ${planLengthWeeks} weeks total — do not invent weeks beyond this.`
+          : ''
+      ].filter(Boolean).join(' ') + '\n'
     : '';
 
   return [
@@ -166,9 +176,10 @@ async function runSinglePass(
   fullText: string,
   model: string,
   promptText: string,
-  weekRange?: string
+  weekRange?: string,
+  planLengthWeeks?: number
 ): Promise<ParserV4Result> {
-  const input = buildInput(promptText, fullText, weekRange);
+  const input = buildInput(promptText, fullText, weekRange, planLengthWeeks);
 
   let rawJson: unknown;
   try {
@@ -224,7 +235,11 @@ async function runSinglePass(
  *
  * @param promptText  Optional prompt text override. Falls back to V4_MASTER_PROMPT constant.
  */
-export async function runParserV4(fullText: string, promptText?: string): Promise<ParserV4Result> {
+export async function runParserV4(
+  fullText: string,
+  promptText?: string,
+  planLengthWeeks?: number
+): Promise<ParserV4Result> {
   const model = getDefaultAiModel();
   const resolvedPrompt = promptText ?? V4_MASTER_PROMPT;
 
@@ -236,7 +251,7 @@ export async function runParserV4(fullText: string, promptText?: string): Promis
   });
 
   // ── Pass 1: try parsing everything in one shot ──────────────────────────────
-  const single = await runSinglePass(fullText, model, resolvedPrompt);
+  const single = await runSinglePass(fullText, model, resolvedPrompt, undefined, planLengthWeeks);
 
   if (!single.truncated) {
     return single;
@@ -244,7 +259,8 @@ export async function runParserV4(fullText: string, promptText?: string): Promis
 
   // ── Multi-pass fallback (strict 5-week chunks + targeted retries) ──────────
   // Single-pass truncates for verbose prompts; strict chunking keeps each call bounded.
-  const initialRanges = buildWeekRanges(25, 5);
+  const maxWeek = planLengthWeeks ? planLengthWeeks + 2 : 25; // +2 buffer for taper/race
+  const initialRanges = buildWeekRanges(maxWeek, 5);
   console.info('[ParserV4] Single pass truncated — falling back to chunked passes', {
     ranges: initialRanges.map((range) => formatWeekRange(range))
   });
@@ -252,7 +268,7 @@ export async function runParserV4(fullText: string, promptText?: string): Promis
   const initialPasses = await Promise.all(
     initialRanges.map(async (range) => ({
       range,
-      result: await runSinglePass(fullText, model, resolvedPrompt, formatWeekRange(range))
+      result: await runSinglePass(fullText, model, resolvedPrompt, formatWeekRange(range), planLengthWeeks)
     }))
   );
 
@@ -279,7 +295,7 @@ export async function runParserV4(fullText: string, promptText?: string): Promis
     const retryPasses = await Promise.all(
       retryRanges.map(async (range) => ({
         range,
-        result: await runSinglePass(fullText, model, resolvedPrompt, formatWeekRange(range))
+        result: await runSinglePass(fullText, model, resolvedPrompt, formatWeekRange(range), planLengthWeeks)
       }))
     );
 
