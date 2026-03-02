@@ -107,7 +107,24 @@ const PROGRAM_JSON_V1_SCHEMA = {
                   duration_min_minutes: { type: 'integer' },
                   duration_max_minutes: { type: 'integer' },
                   intensity: { type: 'string' },
-                  steps: { type: 'array', items: { type: 'object', additionalProperties: true } },
+                  steps: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      additionalProperties: false,
+                      required: ['type'],
+                      properties: {
+                        type: { type: 'string', enum: ['WarmUp', 'CoolDown', 'Interval', 'Tempo', 'Easy', 'Distance', 'Note'] },
+                        repeat: { type: 'integer' },
+                        duration_minutes: { type: 'number' },
+                        distance_km: { type: 'number' },
+                        distance_miles: { type: 'number' },
+                        pace_target: { type: ['string', 'null'] },
+                        effort: { type: ['string', 'null'] },
+                        description: { type: 'string' }
+                      }
+                    }
+                  },
                   optional_alternatives: { type: 'array', items: {} },
                   raw_text: { type: 'string' }
                 }

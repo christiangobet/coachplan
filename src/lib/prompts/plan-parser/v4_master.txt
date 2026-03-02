@@ -194,18 +194,36 @@ store both km and miles when available.
 STEP 6 — MULTI-STEP WORKOUTS
 --------------------------------------------------
 
-If session contains semicolons or structured intervals:
+When a session has a warm-up, quality segment, and/or cool-down, OR
+when it has structured intervals (repeats, sets), populate the "steps" array.
 
-Example:
-"1 mile WU; 4 x 1min fast w/ 1min recovery; CD"
+Create ONE activity. Use the quality segment to classify session_type.
+Set metrics.distance and pace_target to the quality segment only.
 
-Create:
+Step types:
+  WarmUp     — warm-up segment (e.g. "1 mi WU", "10 min easy")
+  CoolDown   — cool-down segment (e.g. "0.5 mi CD", "5 min walk")
+  Interval   — repeated effort (use repeat field for count)
+  Tempo      — sustained tempo segment
+  Easy       — easy running segment
+  Distance   — a specific distance to cover at stated pace
+  Note       — free-form coaching note with no distance/time
 
-steps = [
-  {"type":"WarmUp"},
-  {"type":"Interval","repeat":4},
-  {"type":"CoolDown"}
+Example for "1 mi WU; 4 × 1 min fast w/ 1 min jog; 1 mi CD":
+steps: [
+  { "type": "WarmUp",   "distance_miles": 1 },
+  { "type": "Interval", "repeat": 4, "duration_minutes": 1, "effort": "fast", "description": "1 min fast / 1 min jog recovery" },
+  { "type": "CoolDown", "distance_miles": 1 }
 ]
+
+Example for "3 mi easy + 4 mi at marathon pace + 1 mi easy":
+steps: [
+  { "type": "Easy",  "distance_miles": 3 },
+  { "type": "Tempo", "distance_miles": 4, "pace_target": "marathon pace" },
+  { "type": "Easy",  "distance_miles": 1 }
+]
+
+If no structured steps, leave steps as [].
 
 --------------------------------------------------
 STEP 7 — GLOBAL RULE EXTRACTION

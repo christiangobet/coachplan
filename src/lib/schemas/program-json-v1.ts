@@ -1,7 +1,16 @@
 import { z } from 'zod';
 
 // ── Steps inside a session (e.g. WarmUp / Interval / CoolDown) ───────────────
-export const SessionStepSchema = z.record(z.string(), z.unknown());
+export const SessionStepSchema = z.object({
+  type: z.enum(['WarmUp', 'CoolDown', 'Interval', 'Tempo', 'Easy', 'Distance', 'Note']),
+  repeat: z.number().int().optional(),
+  duration_minutes: z.number().optional(),
+  distance_km: z.number().optional(),
+  distance_miles: z.number().optional(),
+  pace_target: z.string().nullable().optional(),
+  effort: z.string().nullable().optional(),
+  description: z.string().optional()
+});
 export type SessionStep = z.infer<typeof SessionStepSchema>;
 
 // ── Individual training session ───────────────────────────────────────────────
