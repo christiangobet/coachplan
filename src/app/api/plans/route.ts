@@ -2116,8 +2116,18 @@ export async function POST(req: Request) {
       const pdfPath = path.join(uploadDir, `${plan.id}.pdf`);
       await fs.writeFile(pdfPath, buffer);
 
-      // Parser V4: run first, always awaited.
-      const { data: v4Data, promptName: v4PromptNameResult } = await maybeRunParserV4(buffer, plan.id);
+      // Extract guide FIRST — gives v4 parser full plan context (abbreviations, week count, etc.)
+      let planGuide = '';
+      try {
+        const { fullText: pdfFullText } = await extractPdfText(buffer);
+        planGuide = await extractPlanGuide(pdfFullText);
+        if (planGuide) {
+          await prisma.trainingPlan.update({ where: { id: plan.id }, data: { planGuide } });
+        }
+      } catch { /* non-fatal */ }
+
+      // Parser V4: run with guide context so the AI knows total week count and abbreviations.
+      const { data: v4Data, promptName: v4PromptNameResult } = await maybeRunParserV4(buffer, plan.id, planGuide);
       v4PromptName = v4PromptNameResult;
 
       // When V4 is primary and returned validated data, use it to populate the plan
@@ -2133,28 +2143,6 @@ export async function POST(req: Request) {
           const parsedRaceDate = new Date(raceDate);
           if (!Number.isNaN(parsedRaceDate.getTime())) {
             await alignWeeksToRaceDate(plan.id, weeksCreated, parsedRaceDate);
-          }
-        }
-      }
-
-      // Pass 1: Extract plan guide from full PDF text for context-aware week parsing.
-      // This runs async and never blocks the upload — failures are swallowed inside extractPlanGuide.
-      let planGuide = '';
-      if (ENABLE_AI_WEEK_PARSE) {
-        try {
-          const { fullText: pdfFullText } = await extractPdfText(buffer);
-          planGuide = await extractPlanGuide(pdfFullText);
-        } catch {
-          planGuide = '';
-        }
-        if (planGuide) {
-          try {
-            await prisma.trainingPlan.update({
-              where: { id: plan.id },
-              data: { planGuide }
-            });
-          } catch (guideErr) {
-            console.error('[extractPlanGuide] Failed to save planGuide (non-fatal):', guideErr instanceof Error ? guideErr.message : String(guideErr));
           }
         }
       }

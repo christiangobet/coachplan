@@ -111,6 +111,13 @@ test('buildInput includes plan length hint in range instruction', () => {
   assert.ok(rangeInstruction.includes('16 through 18'));
 });
 
+test('planGuide is injected into buildInput when provided', () => {
+  const guide = 'PLAN OVERVIEW\n- 18 weeks total\nGLOSSARY\nE = Easy run';
+  const input = `PROMPT\n\nPLAN CONTEXT GUIDE (use to resolve abbreviations and understand session types):\n${guide}\n\nRaw plan text:\nWeek 1 data`;
+  assert.ok(input.includes('18 weeks total'), 'guide content must appear in input');
+  assert.ok(input.includes('E = Easy run'), 'glossary must appear in input');
+});
+
 test('buildInput sends full text without truncation', () => {
   // Simulate a 50,000-char PDF text — longer than the old 40,000-char limit
   const longText = 'Week 16 data '.repeat(4000); // ~52,000 chars

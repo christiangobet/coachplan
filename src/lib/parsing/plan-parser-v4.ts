@@ -146,7 +146,8 @@ function buildInput(
   promptText: string,
   fullText: string,
   weekRange?: string,
-  planLengthWeeks?: number
+  planLengthWeeks?: number,
+  planGuide?: string
 ): string {
   // Soft advisory — used only for logging; does NOT truncate.
   const textTruncated = fullText.length > TEXT_LIMIT;
@@ -160,8 +161,13 @@ function buildInput(
       ].filter(Boolean).join(' ') + '\n'
     : '';
 
+  const guideSection = planGuide
+    ? `\nPLAN CONTEXT GUIDE (use to resolve abbreviations and understand session types):\n${planGuide}\n`
+    : '';
+
   return [
     promptText,
+    guideSection,
     rangeInstruction,
     textTruncated
       ? `Raw plan text (full text, ${fullText.length} characters):`
@@ -177,9 +183,10 @@ async function runSinglePass(
   model: string,
   promptText: string,
   weekRange?: string,
-  planLengthWeeks?: number
+  planLengthWeeks?: number,
+  planGuide?: string
 ): Promise<ParserV4Result> {
-  const input = buildInput(promptText, fullText, weekRange, planLengthWeeks);
+  const input = buildInput(promptText, fullText, weekRange, planLengthWeeks, planGuide);
 
   let rawJson: unknown;
   try {
@@ -238,7 +245,8 @@ async function runSinglePass(
 export async function runParserV4(
   fullText: string,
   promptText?: string,
-  planLengthWeeks?: number
+  planLengthWeeks?: number,
+  planGuide?: string
 ): Promise<ParserV4Result> {
   const model = getDefaultAiModel();
   const resolvedPrompt = promptText ?? V4_MASTER_PROMPT;
@@ -251,7 +259,7 @@ export async function runParserV4(
   });
 
   // ── Pass 1: try parsing everything in one shot ──────────────────────────────
-  const single = await runSinglePass(fullText, model, resolvedPrompt, undefined, planLengthWeeks);
+  const single = await runSinglePass(fullText, model, resolvedPrompt, undefined, planLengthWeeks, planGuide);
 
   if (!single.truncated) {
     return single;
@@ -268,7 +276,7 @@ export async function runParserV4(
   const initialPasses = await Promise.all(
     initialRanges.map(async (range) => ({
       range,
-      result: await runSinglePass(fullText, model, resolvedPrompt, formatWeekRange(range), planLengthWeeks)
+      result: await runSinglePass(fullText, model, resolvedPrompt, formatWeekRange(range), planLengthWeeks, planGuide)
     }))
   );
 
@@ -295,7 +303,7 @@ export async function runParserV4(
     const retryPasses = await Promise.all(
       retryRanges.map(async (range) => ({
         range,
-        result: await runSinglePass(fullText, model, resolvedPrompt, formatWeekRange(range), planLengthWeeks)
+        result: await runSinglePass(fullText, model, resolvedPrompt, formatWeekRange(range), planLengthWeeks, planGuide)
       }))
     );
 

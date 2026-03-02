@@ -216,7 +216,8 @@ export async function parseWeekWithAI(args: {
  */
 export async function maybeRunParserV4(
   pdfBuffer: Buffer,
-  planId?: string
+  planId?: string,
+  planGuide?: string
 ): Promise<{ data: import('./schemas/program-json-v1').ProgramJsonV1 | null; promptName: string | null }> {
   if (!FLAGS.PARSER_V4) return { data: null, promptName: null };
   let jobId: string | null = null;
@@ -279,7 +280,7 @@ export async function maybeRunParserV4(
   let result: Awaited<ReturnType<typeof runParserV4>> | null = null;
   let rawParseError: string | null = null;
   try {
-    result = await runParserV4(fullText, activePromptText);
+    result = await runParserV4(fullText, activePromptText, undefined, planGuide);
     console.info('[ParserV4] AI parse complete', {
       planId,
       jobId,
