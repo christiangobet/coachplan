@@ -6,7 +6,7 @@
  */
 import { prisma } from '@/lib/prisma';
 import { ActivityType, ActivityPriority, Units } from '@prisma/client';
-import type { ProgramJsonV1 } from '@/lib/schemas/program-json-v1';
+import type { ProgramJsonV1, SessionStep } from '@/lib/schemas/program-json-v1';
 import type { ProgramDocumentProfile } from '@/lib/plan-document-profile';
 import {
   deriveStructuredIntensityTargets,
@@ -30,6 +30,35 @@ const ACTIVITY_TYPE_MAP: Record<string, ActivityType> = {
   Hike: ActivityType.HIKE,
   Other: ActivityType.OTHER
 };
+
+function formatStepsAsInstructions(steps: SessionStep[]): string | null {
+  if (!steps || steps.length === 0) return null;
+
+  const lines = steps.map((step) => {
+    const parts: string[] = [];
+
+    switch (step.type) {
+      case 'WarmUp':   parts.push('Warm-up'); break;
+      case 'CoolDown': parts.push('Cool-down'); break;
+      case 'Interval': parts.push(step.repeat ? `${step.repeat} × interval` : 'Interval'); break;
+      case 'Tempo':    parts.push('Tempo'); break;
+      case 'Easy':     parts.push('Easy'); break;
+      case 'Distance': parts.push('Run'); break;
+      case 'Note':     return step.description ?? '';
+    }
+
+    if (step.distance_miles) parts.push(`${step.distance_miles} mi`);
+    else if (step.distance_km) parts.push(`${step.distance_km} km`);
+    if (step.duration_minutes) parts.push(`${step.duration_minutes} min`);
+    if (step.pace_target) parts.push(`@ ${step.pace_target}`);
+    if (step.effort) parts.push(`(${step.effort})`);
+    if (step.description && step.type === 'Interval') parts.push(`— ${step.description}`);
+
+    return parts.join(' ');
+  });
+
+  return lines.filter(Boolean).join('\n') || null;
+}
 
 function deriveTitle(session: ProgramJsonV1['weeks'][number]['sessions'][number]): string {
   if (session.session_role) return session.session_role;
@@ -141,6 +170,10 @@ export async function populatePlanFromV4(
             return ActivityPriority.MEDIUM;
           })();
 
+          const stepsInstructions = session.steps && session.steps.length > 0
+            ? formatStepsAsInstructions(session.steps as SessionStep[])
+            : null;
+
           return {
             planId,
             dayId: planDay.id,
@@ -148,6 +181,7 @@ export async function populatePlanFromV4(
             subtype: session.activity_type === 'Race' ? 'race' : null,
             title,
             rawText: session.raw_text || null,
+            sessionInstructions: stepsInstructions,
             distance,
             distanceUnit,
             duration,
