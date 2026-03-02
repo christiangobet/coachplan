@@ -1,16 +1,12 @@
 import { redirect } from 'next/navigation';
-import { requireAdminAccess } from '@/lib/admin';
+import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
 import ParserPromptsClient from './ParserPromptsClient';
 import '../admin.css';
 
 export default async function ParserPromptsPage() {
-  const access = await requireAdminAccess();
-
-  if (!access.ok) {
-    if (access.reason === 'unauthorized') redirect('/sign-in');
-    redirect('/auth/resolve-role');
-  }
+  const { userId } = await auth();
+  if (!userId) redirect('/sign-in');
 
   const prompts = await prisma.parserPrompt.findMany({
     orderBy: { createdAt: 'asc' },
@@ -34,7 +30,7 @@ export default async function ParserPromptsPage() {
           <h1>Prompt Manager</h1>
           <p>Create, edit, and activate AI parser prompt versions without redeploying.</p>
         </div>
-        <div className="admin-hero-badge">Admin Access</div>
+        <div className="admin-hero-badge">Prompt Manager</div>
       </section>
 
       <ParserPromptsClient initialPrompts={promptsWithMeta} />

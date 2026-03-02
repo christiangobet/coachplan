@@ -1,13 +1,11 @@
 import { NextResponse } from 'next/server';
-import { requireAdminAccess } from '@/lib/admin';
+import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
 
 // PATCH /api/admin/parser-prompts/[id] — update name/text, or activate
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const access = await requireAdminAccess();
-  if (!access.ok) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: access.reason === 'unauthorized' ? 401 : 403 });
-  }
+  const { userId } = await auth();
+  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { id } = await params;
   const body = await req.json();
@@ -30,10 +28,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
 // DELETE /api/admin/parser-prompts/[id] — reject if active or only remaining
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const access = await requireAdminAccess();
-  if (!access.ok) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: access.reason === 'unauthorized' ? 401 : 403 });
-  }
+  const { userId } = await auth();
+  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { id } = await params;
   const prompt = await prisma.parserPrompt.findUnique({ where: { id } });

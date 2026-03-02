@@ -1,13 +1,11 @@
 import { NextResponse } from 'next/server';
-import { requireAdminAccess } from '@/lib/admin';
+import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
 
 // GET /api/admin/parser-prompts — list all prompts
 export async function GET() {
-  const access = await requireAdminAccess();
-  if (!access.ok) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: access.reason === 'unauthorized' ? 401 : 403 });
-  }
+  const { userId } = await auth();
+  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const prompts = await prisma.parserPrompt.findMany({
     orderBy: { createdAt: 'asc' },
@@ -29,10 +27,8 @@ export async function GET() {
 
 // POST /api/admin/parser-prompts — create a new prompt
 export async function POST(req: Request) {
-  const access = await requireAdminAccess();
-  if (!access.ok) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: access.reason === 'unauthorized' ? 401 : 403 });
-  }
+  const { userId } = await auth();
+  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const body = await req.json();
   const { name, text, activate } = body as { name: string; text: string; activate?: boolean };
