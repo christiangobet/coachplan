@@ -6,6 +6,7 @@ import {
   formatWeekRange,
   inferExpectedWeekCount,
   mergeWeeksFromPasses,
+  parsePlanLengthFromGuide,
   splitWeekRange
 } from '../src/lib/parsing/v4-pass-strategy.ts';
 
@@ -102,6 +103,14 @@ test('retry merge recovers tail weeks and closes gaps', () => {
 
   assert.equal(merged.length, 18);
   assert.deepEqual(missingRanges, []);
+});
+
+test('parsePlanLengthFromGuide extracts week count from guide text', () => {
+  assert.equal(parsePlanLengthFromGuide('PLAN OVERVIEW\n- 18 weeks total'), 18);
+  assert.equal(parsePlanLengthFromGuide('Total number of weeks: 16'), 16);
+  assert.equal(parsePlanLengthFromGuide('This is a 20-week training plan'), 20);
+  assert.equal(parsePlanLengthFromGuide(''), null);
+  assert.equal(parsePlanLengthFromGuide('No number here'), null);
 });
 
 test('buildInput includes plan length hint in range instruction', () => {

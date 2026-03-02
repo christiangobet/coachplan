@@ -3,6 +3,7 @@ import type { ProgramDocumentProfile } from "./plan-document-profile";
 import { FLAGS } from "./feature-flags";
 import { extractPdfText } from "./pdf/extract-text";
 import { runParserV4 } from "./parsing/plan-parser-v4";
+import { parsePlanLengthFromGuide } from "./parsing/v4-pass-strategy";
 import {
   createParseJob,
   updateParseJobStatus,
@@ -280,7 +281,8 @@ export async function maybeRunParserV4(
   let result: Awaited<ReturnType<typeof runParserV4>> | null = null;
   let rawParseError: string | null = null;
   try {
-    result = await runParserV4(fullText, activePromptText, undefined, planGuide);
+    const planLengthWeeks = planGuide ? parsePlanLengthFromGuide(planGuide) ?? undefined : undefined;
+    result = await runParserV4(fullText, activePromptText, planLengthWeeks, planGuide);
     console.info('[ParserV4] AI parse complete', {
       planId,
       jobId,

@@ -60,6 +60,23 @@ export function findMissingWeekNumbers(weeks: ProgramJsonV1['weeks'], expectedWe
   return missing;
 }
 
+/**
+ * Extract total week count from a planGuide string.
+ * Looks for patterns like "18 weeks total", "Total number of weeks: 18", etc.
+ * Returns null if no clear number found.
+ */
+export function parsePlanLengthFromGuide(guide: string): number | null {
+  if (!guide) return null;
+  // Pattern 1: "18 weeks total", "18-week training plan"
+  const beforeMatch = guide.match(/(\d+)\s*[-\s]?weeks?\b/i);
+  // Pattern 2: "Total number of weeks: 18", "number of weeks: 18"
+  const afterMatch = guide.match(/\bweeks?\s*[:\-]\s*(\d+)/i);
+  const candidates = [beforeMatch?.[1], afterMatch?.[1]]
+    .map((s) => (s ? parseInt(s, 10) : null))
+    .filter((n): n is number => n !== null && n > 0 && n <= 52);
+  return candidates.length > 0 ? Math.max(...candidates) : null;
+}
+
 export function findMissingWeekRanges(weeks: ProgramJsonV1['weeks'], expectedWeekCount: number): WeekRange[] {
   const missing = findMissingWeekNumbers(weeks, expectedWeekCount);
   if (missing.length === 0) return [];
