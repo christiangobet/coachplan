@@ -1918,7 +1918,7 @@ export async function GET(req: Request) {
   });
 
   const myTemplates = await prisma.trainingPlan.findMany({
-    where: { ownerId: user.id, isTemplate: true },
+    where: { isTemplate: true, OR: [{ ownerId: user.id }, { athleteId: user.id }] },
     orderBy: { createdAt: 'desc' },
     select: {
       id: true,
