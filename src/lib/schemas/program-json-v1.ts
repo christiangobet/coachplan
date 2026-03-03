@@ -41,6 +41,13 @@ export const SessionV1Schema = z.object({
 
   distance_km: z.number().nullable().optional(),
   distance_miles: z.number().nullable().optional(),
+
+  // V5 dual-distance: quality segment only vs. full session (incl. WU/CD)
+  quality_distance_km: z.number().nullable().optional(),
+  quality_distance_miles: z.number().nullable().optional(),
+  total_distance_km: z.number().nullable().optional(),
+  total_distance_miles: z.number().nullable().optional(),
+
   duration_minutes: z.number().int().nullable().optional(),
   duration_min_minutes: z.number().int().nullable().optional(),
   duration_max_minutes: z.number().int().nullable().optional(),

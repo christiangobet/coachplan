@@ -7,7 +7,7 @@ import os from 'os';
 import { createHash, randomUUID } from 'crypto';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
-import { parseWeekWithAI, maybeRunParserV4 } from '@/lib/ai-plan-parser';
+import { parseWeekWithAI, maybeRunParserV4, maybeRunParserV5 } from '@/lib/ai-plan-parser';
 import { extractPlanGuide } from '@/lib/ai-guide-extractor';
 import { extractPdfText } from '@/lib/pdf/extract-text';
 import { FLAGS } from '@/lib/feature-flags';
@@ -2126,10 +2126,35 @@ export async function POST(req: Request) {
         }
       } catch { /* non-fatal */ }
 
+      // Parser V5: context-primed 2-phase parser (survey + parallel week extraction).
+      // V5 supersedes V4 when PARSER_V5_PRIMARY is set.
+      let v5Data: import('@/lib/schemas/program-json-v1').ProgramJsonV1 | null = null;
+      if (FLAGS.PARSER_V5) {
+        const { data: v5Result, parseWarning: v5ParseWarning } = await maybeRunParserV5(buffer, plan.id);
+        v5Data = v5Result;
+        if (v5ParseWarning) parseWarning = v5ParseWarning;
+      }
+
+      if (FLAGS.PARSER_V5_PRIMARY && v5Data) {
+        const { weeksCreated, activitiesCreated } = await populatePlanFromV4(plan.id, v5Data);
+        console.info('[ParserV5] Primary mode: populated plan from V5', {
+          planId: plan.id,
+          weeksCreated,
+          activitiesCreated
+        });
+        if (raceDate && weeksCreated > 0) {
+          const parsedRaceDate = new Date(raceDate);
+          if (!Number.isNaN(parsedRaceDate.getTime())) {
+            await alignWeeksToRaceDate(plan.id, weeksCreated, parsedRaceDate);
+          }
+        }
+      }
+
       // Parser V4: run with guide context so the AI knows total week count and abbreviations.
+      // Skipped when V5 is primary and returned data.
       const { data: v4Data, promptName: v4PromptNameResult, parseWarning: v4ParseWarning } = await maybeRunParserV4(buffer, plan.id, planGuide);
       v4PromptName = v4PromptNameResult;
-      if (v4ParseWarning) parseWarning = v4ParseWarning;
+      if (v4ParseWarning && !parseWarning) parseWarning = v4ParseWarning;
 
       // When V4 is primary and returned validated data, use it to populate the plan
       // and skip the legacy per-week parser entirely.
@@ -2148,7 +2173,7 @@ export async function POST(req: Request) {
         }
       }
 
-      if (!(FLAGS.PARSER_V4_PRIMARY && v4Data)) {
+      if (!((FLAGS.PARSER_V5_PRIMARY && v5Data) || (FLAGS.PARSER_V4_PRIMARY && v4Data))) {
 
       const parsed = await withTimeout(
         parsePdfToJson(plan.id, pdfPath, name),
@@ -2322,7 +2347,7 @@ export async function POST(req: Request) {
           budgetMs: AI_WEEK_PARSE_TOTAL_BUDGET_MS
         });
       }
-      } // end if (legacy parser path)
+      } // end if (legacy parser path — skipped when V5 or V4 is primary)
     } catch (error) {
       const reason = (error as Error).message || 'Unknown parser error';
       parseWarning = reason;

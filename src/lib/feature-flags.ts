@@ -23,5 +23,19 @@ export const FLAGS = {
    * weeks/days/activities in the DB and the old per-week AI parser is skipped.
    * Requires PARSER_V4=true. Set PARSER_V4_PRIMARY=true to enable.
    */
-  PARSER_V4_PRIMARY: process.env.PARSER_V4_PRIMARY === 'true'
+  PARSER_V4_PRIMARY: process.env.PARSER_V4_PRIMARY === 'true',
+
+  /**
+   * Enables the V5 context-primed 2-phase parser (survey + parallel week extraction).
+   * When true, uploads will run V5 parsing (dual-write artifacts).
+   * Set PARSER_V5=true to enable.
+   */
+  PARSER_V5: process.env.PARSER_V5 === 'true',
+
+  /**
+   * When true, V5 becomes the PRIMARY parser: its output populates the plan's
+   * weeks/days/activities in the DB. Requires PARSER_V5=true.
+   * Set PARSER_V5_PRIMARY=true to enable.
+   */
+  PARSER_V5_PRIMARY: process.env.PARSER_V5_PRIMARY === 'true'
 } as const;

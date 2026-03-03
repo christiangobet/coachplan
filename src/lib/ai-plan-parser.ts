@@ -3,6 +3,7 @@ import type { ProgramDocumentProfile } from "./plan-document-profile";
 import { FLAGS } from "./feature-flags";
 import { extractPdfText } from "./pdf/extract-text";
 import { runParserV4 } from "./parsing/plan-parser-v4";
+import { runParserV5 } from "./parsing/plan-parser-v5";
 import { parsePlanLengthFromGuide } from "./parsing/v4-pass-strategy";
 import {
   createParseJob,
@@ -322,5 +323,122 @@ export async function maybeRunParserV4(
     data: result?.validated && result.data ? result.data : null,
     promptName: activePromptName,
     parseWarning: result?.validationError ?? null
+  };
+}
+
+/**
+ * Bridge: run Parser V5 on the PDF buffer.
+ * Always resolves — never throws.
+ * Returns the validated ProgramJsonV1 data if parsing succeeded, or null.
+ *
+ * @param pdfBuffer  Raw PDF bytes from the upload
+ * @param planId     Optional plan ID for linking the ParseJob record
+ */
+export async function maybeRunParserV5(
+  pdfBuffer: Buffer,
+  planId?: string
+): Promise<{ data: import('./schemas/program-json-v1').ProgramJsonV1 | null; parseWarning: string | null; survey: import('./parsing/v5-survey-schema').SurveyJsonV1 | null }> {
+  if (!FLAGS.PARSER_V5) return { data: null, parseWarning: null, survey: null };
+  let jobId: string | null = null;
+
+  const fail = async (err: unknown, phase: string) => {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[ParserV5] ${phase} failed (non-fatal)`, { planId, error: msg });
+    if (FLAGS.PARSE_DUAL_WRITE && jobId) {
+      try {
+        await updateParseJobStatus(jobId, 'FAILED', `[${phase}] ${msg}`);
+      } catch (dbErr) {
+        console.error('[ParserV5] Could not update job status to FAILED', {
+          jobId,
+          error: dbErr instanceof Error ? dbErr.message : String(dbErr)
+        });
+      }
+    }
+  };
+
+  // 1. Extract text
+  let fullText: string;
+  try {
+    ({ fullText } = await extractPdfText(pdfBuffer));
+    console.info('[ParserV5] Text extracted', { planId, chars: fullText.length });
+  } catch (err) {
+    await fail(err, 'extractPdfText');
+    return { data: null, parseWarning: null, survey: null };
+  }
+
+  // 2. Create ParseJob
+  if (FLAGS.PARSE_DUAL_WRITE) {
+    try {
+      const job = await createParseJob({ planId, parserVersion: 'v5' });
+      jobId = job.id;
+      console.info('[ParserV5] ParseJob created', { jobId, planId });
+    } catch (err) {
+      console.error('[ParserV5] createParseJob failed (non-fatal)', {
+        planId,
+        error: err instanceof Error ? err.message : String(err)
+      });
+      return { data: null, parseWarning: null, survey: null };
+    }
+  }
+
+  // 3. Run V5 AI parsing
+  let result: Awaited<ReturnType<typeof runParserV5>> | null = null;
+  let rawParseError: string | null = null;
+  try {
+    result = await runParserV5(fullText);
+    console.info('[ParserV5] AI parse complete', {
+      planId,
+      jobId,
+      validated: result.validated,
+      weeksExtracted: result.weeksExtracted,
+      weeksMissing: result.weeksMissing.length,
+      missingWeekRetries: result.missingWeekRetries
+    });
+  } catch (err) {
+    rawParseError = err instanceof Error ? err.message : String(err);
+    console.error('[ParserV5] runParserV5 failed (non-fatal)', { planId, error: rawParseError });
+  }
+
+  // 4. Save survey artifact
+  if (FLAGS.PARSE_DUAL_WRITE && jobId && result?.survey) {
+    try {
+      await saveParseArtifact({
+        parseJobId: jobId,
+        artifactType: 'survey_json',
+        schemaVersion: 'v1',
+        json: result.survey,
+        validationOk: true
+      });
+    } catch (err) {
+      await fail(err, 'saveSurveyArtifact');
+    }
+  }
+
+  // 5. Save program artifact + update status
+  if (FLAGS.PARSE_DUAL_WRITE && jobId) {
+    try {
+      const artifactJson = result?.rawJson ?? { error: rawParseError };
+      await saveParseArtifact({
+        parseJobId: jobId,
+        artifactType: 'program_json',
+        schemaVersion: 'v1',
+        json: artifactJson,
+        validationOk: result?.validated ?? false
+      });
+      await updateParseJobStatus(
+        jobId,
+        result?.validated ? 'SUCCESS' : 'FAILED',
+        result?.validated ? undefined : (result?.validationError ?? rawParseError ?? undefined)
+      );
+      console.info('[ParserV5] Artifact saved', { jobId, validationOk: result?.validated ?? false });
+    } catch (err) {
+      await fail(err, 'saveArtifact');
+    }
+  }
+
+  return {
+    data: result?.validated && result.data ? result.data : null,
+    parseWarning: result?.validationError ?? null,
+    survey: result?.survey ?? null
   };
 }
