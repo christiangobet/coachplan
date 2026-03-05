@@ -1479,3 +1479,58 @@
     align-items: flex-start;
   }
 }
+
+/* ── Step strip ─────────────────────────────────────── */
+.step-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 0 6px;
+  font-size: 11px;
+  color: var(--d-text-mid);
+}
+
+.step-chip {
+  padding: 2px 7px;
+  border-radius: 10px;
+  background: var(--d-bg);
+  border: 1px solid var(--d-border-light);
+  white-space: nowrap;
+}
+
+.step-chip--warmup,
+.step-chip--cooldown,
+.step-chip--easy { color: var(--d-text-mid); }
+
+.step-chip--tempo,
+.step-chip--interval { color: var(--d-orange); border-color: rgba(252,76,2,.3); }
+
+.step-chip--recovery { color: var(--d-green); }
+
+.step-chip--child {
+  font-size: 10px;
+  padding: 1px 5px;
+}
+
+.step-sep {
+  color: var(--d-border);
+  font-size: 10px;
+  user-select: none;
+}
+
+.step-repeat {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  background: rgba(252,76,2,.06);
+  border: 1px solid rgba(252,76,2,.2);
+}
+
+.step-repeat-count {
+  font-weight: 700;
+  color: var(--d-orange);
+  margin-right: 2px;
+}

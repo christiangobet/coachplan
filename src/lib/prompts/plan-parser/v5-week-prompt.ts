@@ -39,23 +39,30 @@ When a day shows "Rest or XT", "Rest; or XT", "Rest or Cross-Training", or any s
 Never emit only Rest and drop the XT. Both must always be present.
 
 SESSION DECOMPOSITION:
-Decompose any structured workout into steps[]. Use these step types:
-- WarmUp: warm-up segment (capture distance_miles or duration_minutes)
-- CoolDown: cool-down segment (capture distance_miles or duration_minutes)
-- Interval: repeats (set repeat count, distance_miles or distance_km per rep, pace_target)
-- Tempo: sustained threshold/tempo effort (capture distance_miles, pace_target)
-- Easy: easy running segment (capture distance_miles)
-- Distance: simple distance run without specific intensity (capture distance_miles)
-- Note: coaching instruction or note (no distance/duration)
+Decompose any structured workout into steps[]. Emit ONE session per structured workout — do NOT split WU/quality/CD into separate sessions. Use these step types (all lowercase):
+- warmup: warm-up segment (capture distance_miles or duration_minutes)
+- cooldown: cool-down segment (capture distance_miles or duration_minutes)
+- interval: single interval rep — use inside a repeat block (capture distance_miles or distance_km per rep, pace_target)
+- recovery: easy/jog recovery between reps — use inside a repeat block
+- tempo: sustained threshold/tempo effort (capture distance_miles, pace_target)
+- easy: easy running segment (capture distance_miles)
+- distance: simple distance run without specific intensity (capture distance_miles)
+- note: coaching instruction or note (no distance/duration)
+- repeat: CONTAINER — { "type": "repeat", "repetitions": N, "steps": [...child steps...] }
 
 TWO FORMATS to handle:
-1. Single-block: "1-2 mile WU; T: 1.5 miles @ HMP; 1-2 mile CD" → split by semicolons into WarmUp, Tempo, CoolDown steps
+1. Single-block: "1-2 mile WU; T: 1.5 miles @ HMP; 1-2 mile CD" → ONE session with steps: [warmup, tempo, cooldown]
 2. Multi-row: WU on row 1, main on row 2, CD on row 3 → group into ONE session with steps[]
+
+REPEAT BLOCKS: When a set repeats N times, wrap it as:
+{ "type": "repeat", "repetitions": N, "steps": [ ...child steps... ] }
+Example — "4×400m @ 5K pace": { "type": "repeat", "repetitions": 4, "steps": [{ "type": "interval", "distance_miles": 0.25, "pace_target": "5K pace" }] }
 
 DISTANCE RULE FOR STRUCTURED SESSIONS:
 When steps[] is non-empty:
+- Recurse through repeat blocks: multiply child step distances by repetitions
 - Sum all step distances to get total_distance_miles
-- quality_distance_miles = sum of Interval + Tempo + Distance steps only
+- quality_distance_miles = sum of interval + tempo + distance steps only (multiply by repetitions for repeat blocks)
 - distance_miles = total_distance_miles
 - Always convert and emit both _km and _miles
 

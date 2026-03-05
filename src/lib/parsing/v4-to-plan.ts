@@ -5,7 +5,7 @@
  * Server-side only. Safe to call after V4 returns validated === true.
  */
 import { prisma } from '@/lib/prisma';
-import { ActivityType, ActivityPriority, Units } from '@prisma/client';
+import { ActivityType, ActivityPriority, Units, Prisma } from '@prisma/client';
 import type { ProgramJsonV1, SessionStep } from '@/lib/schemas/program-json-v1';
 import type { ProgramDocumentProfile } from '@/lib/plan-document-profile';
 import {
@@ -31,33 +31,50 @@ const ACTIVITY_TYPE_MAP: Record<string, ActivityType> = {
   Other: ActivityType.OTHER
 };
 
-function formatStepsAsInstructions(steps: SessionStep[]): string | null {
+function formatStepsAsInstructions(steps: SessionStep[], indent = ''): string | null {
   if (!steps || steps.length === 0) return null;
-
-  const lines = steps.map((step) => {
-    const parts: string[] = [];
-
-    switch (step.type) {
-      case 'WarmUp':   parts.push('Warm-up'); break;
-      case 'CoolDown': parts.push('Cool-down'); break;
-      case 'Interval': parts.push(step.repeat ? `${step.repeat} × interval` : 'Interval'); break;
-      case 'Tempo':    parts.push('Tempo'); break;
-      case 'Easy':     parts.push('Easy'); break;
-      case 'Distance': parts.push('Run'); break;
-      case 'Note':     return step.description ?? '';
+  const lines: string[] = [];
+  for (const step of steps) {
+    if (step.type === 'repeat') {
+      const inner = formatStepsAsInstructions(step.steps || [], '  ');
+      lines.push(`${indent}${step.repetitions || 2}×`);
+      if (inner) inner.split('\n').forEach(l => lines.push(`  ${l}`));
+    } else {
+      const parts: string[] = [];
+      switch (step.type) {
+        case 'warmup':   parts.push('Warm-up'); break;
+        case 'cooldown': parts.push('Cool-down'); break;
+        case 'interval': parts.push('Interval'); break;
+        case 'tempo':    parts.push('Tempo'); break;
+        case 'recovery': parts.push('Recovery'); break;
+        case 'easy':     parts.push('Easy'); break;
+        case 'distance': parts.push('Run'); break;
+        case 'note':     lines.push(step.description ?? ''); continue;
+      }
+      if (step.distance_miles) parts.push(`${step.distance_miles} mi`);
+      else if (step.distance_km) parts.push(`${step.distance_km} km`);
+      if (step.duration_minutes) parts.push(`${step.duration_minutes} min`);
+      if (step.pace_target) parts.push(`@ ${step.pace_target}`);
+      if (step.effort) parts.push(`(${step.effort})`);
+      lines.push(`${indent}${parts.join(' ')}`);
     }
-
-    if (step.distance_miles) parts.push(`${step.distance_miles} mi`);
-    else if (step.distance_km) parts.push(`${step.distance_km} km`);
-    if (step.duration_minutes) parts.push(`${step.duration_minutes} min`);
-    if (step.pace_target) parts.push(`@ ${step.pace_target}`);
-    if (step.effort) parts.push(`(${step.effort})`);
-    if (step.description && step.type === 'Interval') parts.push(`— ${step.description}`);
-
-    return parts.join(' ');
-  });
-
+  }
   return lines.filter(Boolean).join('\n') || null;
+}
+
+function computeTotalDistanceMiles(steps: SessionStep[]): number | null {
+  if (!steps?.length) return null;
+  let total = 0; let hasAny = false;
+  for (const step of steps) {
+    if (step.type === 'repeat') {
+      const inner = computeTotalDistanceMiles(step.steps || []);
+      if (inner != null) { total += inner * (step.repetitions || 1); hasAny = true; }
+    } else {
+      const d = step.distance_miles ?? (step.distance_km ? step.distance_km / 1.60934 : null);
+      if (d != null) { total += d; hasAny = true; }
+    }
+  }
+  return hasAny ? Math.round(total * 100) / 100 : null;
 }
 
 function deriveTitle(session: ProgramJsonV1['weeks'][number]['sessions'][number]): string {
@@ -174,6 +191,13 @@ export async function populatePlanFromV4(
             ? formatStepsAsInstructions(session.steps as SessionStep[])
             : null;
 
+          const stepsStructure = session.steps?.length ? session.steps : null;
+
+          // Use parser-provided distance if available, else compute from steps
+          const computedTotal = (!session.distance_miles && !session.distance_km && stepsStructure)
+            ? computeTotalDistanceMiles(session.steps as SessionStep[])
+            : null;
+
           return {
             planId,
             dayId: planDay.id,
@@ -182,15 +206,16 @@ export async function populatePlanFromV4(
             title,
             rawText: session.raw_text || null,
             sessionInstructions: stepsInstructions,
-            distance,
-            distanceUnit,
+            distance: computedTotal != null && distance == null ? computedTotal : distance,
+            distanceUnit: computedTotal != null && distance == null ? Units.MILES : distanceUnit,
             duration,
             paceTarget,
             effortTarget,
             ...structuredTargets,
             priority: priorityLevel,
             mustDo: priorityLevel === ActivityPriority.KEY,
-            bailAllowed: priorityLevel === ActivityPriority.OPTIONAL
+            bailAllowed: priorityLevel === ActivityPriority.OPTIONAL,
+            structure: stepsStructure ?? Prisma.JsonNull
           };
         });
 

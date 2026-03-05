@@ -1,17 +1,37 @@
 import { z } from 'zod';
 
 // ── Steps inside a session (e.g. WarmUp / Interval / CoolDown) ───────────────
-export const SessionStepSchema = z.object({
-  type: z.enum(['WarmUp', 'CoolDown', 'Interval', 'Tempo', 'Easy', 'Distance', 'Note']).catch('Note'),
-  repeat: z.coerce.number().int().optional(),
-  duration_minutes: z.coerce.number().optional(),
-  distance_km: z.coerce.number().optional(),
-  distance_miles: z.coerce.number().optional(),
-  pace_target: z.string().nullable().optional(),
-  effort: z.string().nullable().optional(),
-  description: z.string().optional()
-});
-export type SessionStep = z.infer<typeof SessionStepSchema>;
+export type SessionStep = {
+  type: 'warmup' | 'cooldown' | 'tempo' | 'interval' | 'recovery' | 'easy' | 'distance' | 'note' | 'repeat';
+  repetitions?: number;      // 'repeat' only
+  steps?: SessionStep[];     // 'repeat' only — child steps
+  distance_miles?: number;
+  distance_km?: number;
+  duration_minutes?: number;
+  pace_target?: string | null;
+  effort?: string | null;
+  description?: string;
+};
+
+export const SessionStepSchema: z.ZodType<SessionStep> = z.lazy(() =>
+  z.object({
+    type: z.preprocess(
+      (v) => (typeof v === 'string' ? v.toLowerCase() : v),
+      z.enum([
+        'warmup', 'cooldown', 'tempo', 'interval', 'recovery',
+        'easy', 'distance', 'note', 'repeat'
+      ]).catch('note')
+    ) as z.ZodType<SessionStep['type']>,
+    repetitions: z.coerce.number().int().optional(),
+    steps: z.array(SessionStepSchema).optional(),
+    distance_miles: z.coerce.number().optional(),
+    distance_km: z.coerce.number().optional(),
+    duration_minutes: z.coerce.number().optional(),
+    pace_target: z.string().nullable().optional(),
+    effort: z.string().nullable().optional(),
+    description: z.string().optional(),
+  })
+);
 
 // ── Individual training session ───────────────────────────────────────────────
 export const SessionV1Schema = z.object({

@@ -19,6 +19,40 @@ const TEXT_LIMIT = 40000;
  * JSON Schema sent to the AI response_format.
  * Must stay aligned with ProgramJsonV1Schema and v4_master.ts.
  */
+// Inline step schema — not recursive (OpenAI response_format does not support $ref).
+// Outer steps can contain a 'repeat' container with child steps one level deep.
+const CHILD_STEP_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['type'],
+  properties: {
+    type: { type: 'string', enum: ['warmup', 'cooldown', 'tempo', 'interval', 'recovery', 'easy', 'distance', 'note'] },
+    distance_km: { type: 'number' },
+    distance_miles: { type: 'number' },
+    duration_minutes: { type: 'number' },
+    pace_target: { type: ['string', 'null'] },
+    effort: { type: ['string', 'null'] },
+    description: { type: 'string' }
+  }
+};
+
+const OUTER_STEP_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['type'],
+  properties: {
+    type: { type: 'string', enum: ['warmup', 'cooldown', 'tempo', 'interval', 'recovery', 'easy', 'distance', 'note', 'repeat'] },
+    repetitions: { type: 'integer' },
+    steps: { type: 'array', items: CHILD_STEP_SCHEMA },
+    distance_km: { type: 'number' },
+    distance_miles: { type: 'number' },
+    duration_minutes: { type: 'number' },
+    pace_target: { type: ['string', 'null'] },
+    effort: { type: ['string', 'null'] },
+    description: { type: 'string' }
+  }
+};
+
 const PROGRAM_JSON_V1_SCHEMA = {
   name: 'program_json_v1',
   // strict: false because the program object contains open-ended fields
@@ -107,24 +141,7 @@ const PROGRAM_JSON_V1_SCHEMA = {
                   duration_min_minutes: { type: 'integer' },
                   duration_max_minutes: { type: 'integer' },
                   intensity: { type: 'string' },
-                  steps: {
-                    type: 'array',
-                    items: {
-                      type: 'object',
-                      additionalProperties: false,
-                      required: ['type'],
-                      properties: {
-                        type: { type: 'string', enum: ['WarmUp', 'CoolDown', 'Interval', 'Tempo', 'Easy', 'Distance', 'Note'] },
-                        repeat: { type: 'integer' },
-                        duration_minutes: { type: 'number' },
-                        distance_km: { type: 'number' },
-                        distance_miles: { type: 'number' },
-                        pace_target: { type: ['string', 'null'] },
-                        effort: { type: ['string', 'null'] },
-                        description: { type: 'string' }
-                      }
-                    }
-                  },
+                  steps: { type: 'array', items: OUTER_STEP_SCHEMA },
                   optional_alternatives: { type: 'array', items: {} },
                   raw_text: { type: 'string' }
                 }
@@ -338,6 +355,39 @@ export async function runParserV4(
       .filter((pass) => !pass.result.truncated && pass.result.data)
       .map((pass) => ({ range: pass.range, data: pass.result.data! }));
     successfulPasses.push(...retrySuccesses);
+  }
+
+  // ── Pass 3: single-week targeted retry for any still-missing weeks ──────────
+  const afterRetryMerged = mergeWeeksFromPasses(successfulPasses.map((pass) => ({ data: pass.data })));
+  const afterRetryExpected = inferExpectedWeekCount(successfulPasses, afterRetryMerged);
+  const stillMissing = findMissingWeekNumbers(afterRetryMerged, afterRetryExpected);
+
+  if (stillMissing.length > 0) {
+    console.warn('[ParserV4] Still missing weeks after retry — running single-week passes', {
+      missingWeeks: stillMissing
+    });
+
+    const singleWeekPasses = await Promise.all(
+      stillMissing.map(async (weekNum) => ({
+        range: { start: weekNum, end: weekNum },
+        result: await runSinglePass(
+          fullText, model, resolvedPrompt,
+          `${weekNum} through ${weekNum}`,
+          planLengthWeeks, planGuide
+        )
+      }))
+    );
+
+    const singleWeekSuccesses = singleWeekPasses
+      .filter((pass) => !pass.result.truncated && pass.result.data)
+      .map((pass) => ({ range: pass.range, data: pass.result.data! }));
+
+    console.info('[ParserV4] Single-week pass results', {
+      attempted: stillMissing.length,
+      succeeded: singleWeekSuccesses.length
+    });
+
+    successfulPasses.push(...singleWeekSuccesses);
   }
 
   const mergedWeeks = mergeWeeksFromPasses(successfulPasses.map((pass) => ({ data: pass.data })));

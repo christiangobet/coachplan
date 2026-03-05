@@ -217,33 +217,39 @@ DURATIONS:
 2.20 = 140 minutes
 
 --------------------------------------------------
-STEP 6 — MULTI-STEP WORKOUTS
+STEP 6 — STRUCTURED WORKOUTS
 --------------------------------------------------
 
-When a session has a warm-up, quality segment, and/or cool-down, OR
-when it has structured intervals (repeats, sets), populate the "steps" array.
+When a session has a warm-up, quality segment(s), cool-down, and/or repeats,
+emit ONE session with all components in "steps[]". Do NOT split into separate sessions.
 
-When a session contains a Warm-Up + quality segment + Cool-Down, emit THREE separate session
-objects for that day (same day_of_week). Do NOT collapse them into one activity with steps[].
+Step types (all lowercase):
+  warmup    — warm-up segment
+  cooldown  — cool-down segment
+  tempo     — sustained threshold/tempo effort
+  interval  — single interval rep (use inside a repeat block)
+  recovery  — easy/jog recovery between reps
+  easy      — easy running segment
+  distance  — simple distance run, no specific intensity
+  note      — coaching text, no distance
+  repeat    — CONTAINER: wraps repeating steps with { "repetitions": N, "steps": [...] }
 
-Each component gets its own session entry:
-  WU  → session_role="Warm Up",   activity_type="Run", distance from WU text, intensity if stated
-  Quality → session_role matches type (e.g. "Tempo Run", "Interval Session", "Easy Run"),
-            activity_type="Run", distance and intensity from that segment only
-  CD  → session_role="Cool Down", activity_type="Run", distance from CD text, intensity if stated
+REPEAT BLOCKS: When a set repeats N times, wrap it as:
+  { "type": "repeat", "repetitions": N, "steps": [ ...child steps... ] }
 
-Example — "1-2 mi WU; 1.5 mi Tempo @ HMP; 1-2 mi CD" on Tuesday:
-  {"day_of_week":"Tue","activity_type":"Run","session_role":"Warm Up","distance_miles":2,"distance_km":3.22,"raw_text":"1-2 mi WU"}
-  {"day_of_week":"Tue","activity_type":"Run","session_role":"Tempo Run","distance_miles":1.5,"distance_km":2.41,"intensity":"HMP","raw_text":"1.5 mi Tempo @ HMP"}
-  {"day_of_week":"Tue","activity_type":"Run","session_role":"Cool Down","distance_miles":2,"distance_km":3.22,"raw_text":"1-2 mi CD"}
+Set session-level fields:
+  - session_role: e.g. "Tempo Run", "Interval Session"
+  - distance_miles / distance_km: set to total_distance (sum all steps, multiply repeats)
+  - total_distance_miles / total_distance_km: same as distance_miles/km
+  - intensity: pace/effort of the quality segment
 
-Example — "1 mi WU; 4 × 400m @ 5K pace; 1 mi CD" on Thursday:
-  {"day_of_week":"Thu","activity_type":"Run","session_role":"Warm Up","distance_miles":1,"distance_km":1.61,"raw_text":"1 mi WU"}
-  {"day_of_week":"Thu","activity_type":"Run","session_role":"Interval Session","distance_miles":1,"distance_km":1.61,"intensity":"5K pace","steps":[{"type":"Interval","repeat":4,"distance_miles":0.25,"pace_target":"5K pace"}],"raw_text":"4 × 400m @ 5K pace"}
-  {"day_of_week":"Thu","activity_type":"Run","session_role":"Cool Down","distance_miles":1,"distance_km":1.61,"raw_text":"1 mi CD"}
+Example — "1 mi WU; 2×(1.5 mi Tempo + 0.5 mi recovery); 1 mi CD":
+{"day_of_week":"Tue","activity_type":"Run","session_role":"Tempo Run","distance_miles":6.0,"total_distance_miles":6.0,"intensity":"Tempo","steps":[{"type":"warmup","distance_miles":1.0},{"type":"repeat","repetitions":2,"steps":[{"type":"tempo","distance_miles":1.5},{"type":"recovery","distance_miles":0.5}]},{"type":"cooldown","distance_miles":1.0}],"raw_text":"1 mi WU; 2×1.5 mi Tempo + 0.5 mi rec; 1 mi CD"}
 
-Use steps[] only inside the quality segment session when it has structured repeats (Interval type).
-If a session has no WU/CD and no repeats, leave steps as [].
+Example — "1 mi WU; 4×400m @ 5K pace; 1 mi CD":
+{"day_of_week":"Thu","activity_type":"Run","session_role":"Interval Session","distance_miles":3.0,"total_distance_miles":3.0,"intensity":"5K pace","steps":[{"type":"warmup","distance_miles":1.0},{"type":"repeat","repetitions":4,"steps":[{"type":"interval","distance_miles":0.25,"pace_target":"5K pace"}]},{"type":"cooldown","distance_miles":1.0}],"raw_text":"1 mi WU; 4×400m @ 5K pace; 1 mi CD"}
+
+Simple runs with no structure: leave steps as [].
 
 --------------------------------------------------
 STEP 7 — GLOBAL RULE EXTRACTION

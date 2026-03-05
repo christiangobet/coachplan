@@ -78,6 +78,7 @@ type ReviewActivity = {
   rawText: string | null;
   notes: string | null;
   sessionInstructions: string | null;
+  structure?: unknown;
 };
 
 type ReviewDay = {
@@ -166,6 +167,56 @@ type ActivityDraft = {
   rawText: string;
   sessionInstructions: string;
 };
+
+type StepNode = {
+  type: string;
+  repetitions?: number;
+  steps?: StepNode[];
+  distance_miles?: number;
+  distance_km?: number;
+  duration_minutes?: number;
+  pace_target?: string | null;
+};
+
+function stepLabel(step: StepNode): string {
+  const parts: string[] = [];
+  const label: Record<string, string> = {
+    warmup: 'Warm-up', cooldown: 'Cool-down', tempo: 'Tempo',
+    interval: 'Interval', recovery: 'Recovery', easy: 'Easy',
+    distance: 'Run', note: ''
+  };
+  parts.push(label[step.type] ?? step.type);
+  if (step.distance_miles) parts.push(`${step.distance_miles}mi`);
+  else if (step.distance_km) parts.push(`${step.distance_km}km`);
+  if (step.duration_minutes) parts.push(`${step.duration_minutes}min`);
+  if (step.pace_target) parts.push(`@ ${step.pace_target}`);
+  return parts.filter(Boolean).join(' ');
+}
+
+function renderStepStrip(structure: unknown): React.ReactNode {
+  if (!Array.isArray(structure) || structure.length === 0) return null;
+  const chips: React.ReactNode[] = [];
+  (structure as StepNode[]).forEach((step, i) => {
+    if (i > 0) chips.push(<span key={`sep-${i}`} className="step-sep">›</span>);
+    if (step.type === 'repeat') {
+      const children = (step.steps ?? []).map((child, j) => (
+        <span key={j} className="step-chip step-chip--child">{stepLabel(child)}</span>
+      ));
+      chips.push(
+        <span key={i} className="step-repeat">
+          <span className="step-repeat-count">{step.repetitions ?? 2}×</span>
+          {children}
+        </span>
+      );
+    } else {
+      const lbl = stepLabel(step);
+      if (lbl) chips.push(
+        <span key={i} className={`step-chip step-chip--${step.type}`}>{lbl}</span>
+      );
+    }
+  });
+  return <div className="step-strip">{chips}</div>;
+}
 
 type ProfilePaceMap = Partial<Record<PaceBucketValue, string>>;
 
@@ -2223,6 +2274,7 @@ export default function PlanReviewPage() {
                                     setActivityDraftField(activity.id, 'title', event.target.value)
                                   }
                                 />
+                                {renderStepStrip(activity.structure)}
                               </label>
 
                               <label className="review-field review-col-type review-field-inline">
