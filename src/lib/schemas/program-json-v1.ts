@@ -2,11 +2,11 @@ import { z } from 'zod';
 
 // ── Steps inside a session (e.g. WarmUp / Interval / CoolDown) ───────────────
 export const SessionStepSchema = z.object({
-  type: z.enum(['WarmUp', 'CoolDown', 'Interval', 'Tempo', 'Easy', 'Distance', 'Note']),
-  repeat: z.number().int().optional(),
-  duration_minutes: z.number().optional(),
-  distance_km: z.number().optional(),
-  distance_miles: z.number().optional(),
+  type: z.enum(['WarmUp', 'CoolDown', 'Interval', 'Tempo', 'Easy', 'Distance', 'Note']).catch('Note'),
+  repeat: z.coerce.number().int().optional(),
+  duration_minutes: z.coerce.number().optional(),
+  distance_km: z.coerce.number().optional(),
+  distance_miles: z.coerce.number().optional(),
   pace_target: z.string().nullable().optional(),
   effort: z.string().nullable().optional(),
   description: z.string().optional()
@@ -18,7 +18,8 @@ export const SessionV1Schema = z.object({
   day_of_week: z
     .enum(['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'])
     .nullable()
-    .optional(),
+    .optional()
+    .catch(null), // silently coerce invalid values (e.g. "Total" column) to null
 
   session_role: z.string().nullable().optional(),
 
@@ -33,24 +34,24 @@ export const SessionV1Schema = z.object({
     'Yoga',
     'Hike',
     'Other'
-  ]),
+  ]).catch('Other'), // coerce unrecognised values (e.g. "Cross Training", "XT") to Other
 
   priority: z.boolean().optional().default(false),
   optional: z.boolean().optional().default(false),
   priority_level: z.enum(['KEY', 'MEDIUM', 'OPTIONAL']).nullable().optional(),
 
-  distance_km: z.number().nullable().optional(),
-  distance_miles: z.number().nullable().optional(),
+  distance_km: z.coerce.number().nullable().optional(),
+  distance_miles: z.coerce.number().nullable().optional(),
 
   // V5 dual-distance: quality segment only vs. full session (incl. WU/CD)
-  quality_distance_km: z.number().nullable().optional(),
-  quality_distance_miles: z.number().nullable().optional(),
-  total_distance_km: z.number().nullable().optional(),
-  total_distance_miles: z.number().nullable().optional(),
+  quality_distance_km: z.coerce.number().nullable().optional(),
+  quality_distance_miles: z.coerce.number().nullable().optional(),
+  total_distance_km: z.coerce.number().nullable().optional(),
+  total_distance_miles: z.coerce.number().nullable().optional(),
 
-  duration_minutes: z.number().int().nullable().optional(),
-  duration_min_minutes: z.number().int().nullable().optional(),
-  duration_max_minutes: z.number().int().nullable().optional(),
+  duration_minutes: z.coerce.number().int().nullable().optional(),
+  duration_min_minutes: z.coerce.number().int().nullable().optional(),
+  duration_max_minutes: z.coerce.number().int().nullable().optional(),
 
   intensity: z.string().nullable().optional(),
 
@@ -58,7 +59,7 @@ export const SessionV1Schema = z.object({
   optional_alternatives: z.array(z.unknown()).optional().default([]),
 
   notes: z.string().nullable().optional(),
-  raw_text: z.string()
+  raw_text: z.string().catch('')
 });
 
 export type SessionV1 = z.infer<typeof SessionV1Schema>;
@@ -69,10 +70,11 @@ export const WeekV1Schema = z.object({
   week_type: z
     .enum(['normal', 'cutback', 'taper', 'race'])
     .nullable()
-    .optional(),
+    .optional()
+    .catch(null),
 
-  total_weekly_mileage_min: z.number().nullable().optional(),
-  total_weekly_mileage_max: z.number().nullable().optional(),
+  total_weekly_mileage_min: z.coerce.number().nullable().optional(),
+  total_weekly_mileage_max: z.coerce.number().nullable().optional(),
 
   sessions: z.array(SessionV1Schema)
 });

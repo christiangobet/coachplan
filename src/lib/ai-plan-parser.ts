@@ -381,25 +381,37 @@ export async function maybeRunParserV5(
     }
   }
 
-  // 3. Run V5 AI parsing
+  // 3. Fetch active parser prompt from DB (fall back to hardcoded constant on error)
+  let activePromptText: string | undefined;
+  try {
+    const active = await prisma.parserPrompt.findFirst({
+      where: { isActive: true },
+      select: { text: true, name: true }
+    });
+    if (active) {
+      activePromptText = active.text;
+    }
+  } catch { /* silently use hardcoded fallback */ }
+
+  // 4. Run V5 AI parsing (survey → V4 extraction with survey context)
   let result: Awaited<ReturnType<typeof runParserV5>> | null = null;
   let rawParseError: string | null = null;
   try {
-    result = await runParserV5(fullText);
+    result = await runParserV5(fullText, activePromptText);
     console.info('[ParserV5] AI parse complete', {
       planId,
       jobId,
       validated: result.validated,
-      weeksExtracted: result.weeksExtracted,
-      weeksMissing: result.weeksMissing.length,
-      missingWeekRetries: result.missingWeekRetries
+      weeks: result.data?.weeks.length ?? 0,
+      truncated: result.truncated,
+      threePass: result.threePass
     });
   } catch (err) {
     rawParseError = err instanceof Error ? err.message : String(err);
     console.error('[ParserV5] runParserV5 failed (non-fatal)', { planId, error: rawParseError });
   }
 
-  // 4. Save survey artifact
+  // 5. Save survey artifact
   if (FLAGS.PARSE_DUAL_WRITE && jobId && result?.survey) {
     try {
       await saveParseArtifact({
@@ -414,7 +426,7 @@ export async function maybeRunParserV5(
     }
   }
 
-  // 5. Save program artifact + update status
+  // 6. Save program artifact + update status
   if (FLAGS.PARSE_DUAL_WRITE && jobId) {
     try {
       const artifactJson = result?.rawJson ?? { error: rawParseError };

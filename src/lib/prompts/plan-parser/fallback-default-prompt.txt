@@ -140,6 +140,8 @@ Walk → walk
 Rest → rest
 Race → race/event/26.2/10K finish
 
+Some plans include per-week commentary after the main table, marked with → symbols (e.g. →4, →5, →6). IGNORE these sections entirely. Extract sessions ONLY from the main training schedule table, not from explanatory prose.
+
 --------------------------------------------------
 STEP 4 — SPECIAL PARSING MODES
 --------------------------------------------------
@@ -174,18 +176,27 @@ Infer rest_days_per_week but DO NOT assign calendar days.
 STEP 5 — DISTANCE & TIME NORMALIZATION
 --------------------------------------------------
 
-Parse:
+RANGE RULE — applies to ALL range values (distance, duration, pace):
+Use the UPPER bound as the primary numeric value.
 
+Distance ranges → upper bound:
+  "4-5 miles"  → distance_miles=5, distance_km=8.05
+  "8-10 km"    → distance_km=10, distance_miles=6.21
+
+Duration ranges → upper bound for duration_minutes; also store both bounds:
+  "60-75 min"  → duration_minutes=75, duration_min_minutes=60, duration_max_minutes=75
+  "40-50 min"  → duration_minutes=50, duration_min_minutes=40, duration_max_minutes=50
+
+Pace/intensity ranges → upper bound (larger number = slower pace):
+  "8:00-8:30/mile" → intensity="8:30/mile"
+  "4:45-5:00/km"   → intensity="5:00/km"
+
+Other values:
 "40 mins" → duration_minutes=40
 
 "H.MM" format:
 1.05 = 65 minutes
 2.20 = 140 minutes
-
-Ranges:
-60–75 minutes →
-duration_min_minutes=60
-duration_max_minutes=75
 
 Distances:
 store both km and miles when available.
@@ -194,36 +205,27 @@ store both km and miles when available.
 STEP 6 — MULTI-STEP WORKOUTS
 --------------------------------------------------
 
-When a session has a warm-up, quality segment, and/or cool-down, OR
-when it has structured intervals (repeats, sets), populate the "steps" array.
+When a session contains a Warm-Up + quality segment + Cool-Down, emit THREE separate session
+objects for that day (same day_of_week). Do NOT collapse them into one activity with steps[].
 
-Create ONE activity. Use the quality segment to classify session_type.
-Set metrics.distance and pace_target to the quality segment only.
+Each component gets its own session entry:
+  WU  → session_role="Warm Up",   activity_type="Run", distance from WU text, intensity if stated
+  Quality → session_role matches type (e.g. "Tempo Run", "Interval Session", "Easy Run"),
+            activity_type="Run", distance and intensity from that segment only
+  CD  → session_role="Cool Down", activity_type="Run", distance from CD text, intensity if stated
 
-Step types:
-  WarmUp     — warm-up segment (e.g. "1 mi WU", "10 min easy")
-  CoolDown   — cool-down segment (e.g. "0.5 mi CD", "5 min walk")
-  Interval   — repeated effort (use repeat field for count)
-  Tempo      — sustained tempo segment
-  Easy       — easy running segment
-  Distance   — a specific distance to cover at stated pace
-  Note       — free-form coaching note with no distance/time
+Example — "1-2 mi WU; 1.5 mi Tempo @ HMP; 1-2 mi CD" on Tuesday:
+  {"day_of_week":"Tue","activity_type":"Run","session_role":"Warm Up","distance_miles":2,"distance_km":3.22,"raw_text":"1-2 mi WU"}
+  {"day_of_week":"Tue","activity_type":"Run","session_role":"Tempo Run","distance_miles":1.5,"distance_km":2.41,"intensity":"HMP","raw_text":"1.5 mi Tempo @ HMP"}
+  {"day_of_week":"Tue","activity_type":"Run","session_role":"Cool Down","distance_miles":2,"distance_km":3.22,"raw_text":"1-2 mi CD"}
 
-Example for "1 mi WU; 4 × 1 min fast w/ 1 min jog; 1 mi CD":
-steps: [
-  { "type": "WarmUp",   "distance_miles": 1 },
-  { "type": "Interval", "repeat": 4, "duration_minutes": 1, "effort": "fast", "description": "1 min fast / 1 min jog recovery" },
-  { "type": "CoolDown", "distance_miles": 1 }
-]
+Example — "1 mi WU; 4 × 400m @ 5K pace; 1 mi CD" on Thursday:
+  {"day_of_week":"Thu","activity_type":"Run","session_role":"Warm Up","distance_miles":1,"distance_km":1.61,"raw_text":"1 mi WU"}
+  {"day_of_week":"Thu","activity_type":"Run","session_role":"Interval Session","distance_miles":1,"distance_km":1.61,"intensity":"5K pace","steps":[{"type":"Interval","repeat":4,"distance_miles":0.25,"pace_target":"5K pace"}],"raw_text":"4 × 400m @ 5K pace"}
+  {"day_of_week":"Thu","activity_type":"Run","session_role":"Cool Down","distance_miles":1,"distance_km":1.61,"raw_text":"1 mi CD"}
 
-Example for "3 mi easy + 4 mi at marathon pace + 1 mi easy":
-steps: [
-  { "type": "Easy",  "distance_miles": 3 },
-  { "type": "Tempo", "distance_miles": 4, "pace_target": "marathon pace" },
-  { "type": "Easy",  "distance_miles": 1 }
-]
-
-If no structured steps, leave steps as [].
+Use steps[] only inside the quality segment session when it has structured repeats (Interval type).
+If a session has no WU/CD and no repeats, leave steps as [].
 
 --------------------------------------------------
 STEP 7 — GLOBAL RULE EXTRACTION
