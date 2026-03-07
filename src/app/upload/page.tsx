@@ -5,6 +5,7 @@ import { SignedIn, SignedOut, useUser } from '@clerk/nextjs';
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import AthleteSidebar from '@/components/AthleteSidebar';
+import UploadFlowStepper from '@/components/UploadFlowStepper';
 import '../dashboard/dashboard.css';
 import '../athlete-pages.css';
 
@@ -36,6 +37,28 @@ const UPLOAD_STAGES = [
   }
 ] as const;
 const CLIENT_UPLOAD_TIMEOUT_MS = 295000;
+const UPLOAD_FLOW_STEPS = [
+  {
+    title: 'Upload PDF',
+    detail: 'Submit your source plan file to create a draft.'
+  },
+  {
+    title: 'Parse Draft',
+    detail: 'CoachPlan extracts weeks, days, and sessions.'
+  },
+  {
+    title: 'Review and Correct',
+    detail: 'Validate details and adjust activities before activation.'
+  },
+  {
+    title: 'Activate Schedule',
+    detail: 'Choose race-date alignment or a training start date (Week 1).'
+  },
+  {
+    title: 'Start Logging',
+    detail: 'Calendar dates are applied and day-by-day tracking starts.'
+  }
+] as const;
 
 export default function UploadPage() {
   const { user } = useUser();
@@ -81,6 +104,7 @@ export default function UploadPage() {
   const stageProgress = Math.min(92, Math.round(((stageIndex + 1) / UPLOAD_STAGES.length) * 100));
   const isFinalStage = stageIndex >= UPLOAD_STAGES.length - 1;
   const progressLabel = isFinalStage ? 'Final step' : `${stageProgress}%`;
+  const flowActiveStep = status === 'saving' ? 2 : 1;
   const timeHint = useMemo(() => {
     if (elapsedSec >= 90) return 'Still working. Complex PDFs can take up to 4 minutes.';
     if (elapsedSec >= 30) return 'Still parsing. Thanks for waiting.';
@@ -193,7 +217,7 @@ export default function UploadPage() {
                       value={raceDate}
                       onChange={(e) => setRaceDate(e.target.value)}
                     />
-                    <span className="muted">
+                    <span className="upload-field-hint">
                       Used to prefill activation scheduling if you choose race-date alignment.
                     </span>
                   </label>
@@ -274,10 +298,7 @@ export default function UploadPage() {
                 <div className="section-title">
                   <h3>How it works</h3>
                 </div>
-                <p className="muted">1. Upload PDF</p>
-                <p className="muted">2. Review and correct parsed weeks/workouts</p>
-                <p className="muted">3. Activate plan and choose scheduling mode</p>
-                <p className="muted">4. Calendar dates are applied, then start logging</p>
+                <UploadFlowStepper steps={UPLOAD_FLOW_STEPS} activeStep={flowActiveStep} />
               </div>
             </div>
           </SignedIn>

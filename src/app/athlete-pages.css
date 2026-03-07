@@ -308,6 +308,13 @@
   gap: 8px;
 }
 
+.upload-field-hint {
+  margin-top: -2px;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--d-muted);
+}
+
 .upload-main-card .cal-race-editor-anchor-toggle {
   display: flex;
   flex-wrap: wrap;
