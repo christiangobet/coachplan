@@ -49,3 +49,20 @@
     display: block;
   }
 }
+
+@media (max-width: 640px) {
+  .strava-secondary-grid {
+    margin-top: 8px;
+  }
+}
+
+@media (max-width: 480px) {
+  .strava-info-card {
+    padding-top: 12px;
+  }
+
+  .strava-steps {
+    font-size: 12px;
+    padding-left: 14px;
+  }
+}
