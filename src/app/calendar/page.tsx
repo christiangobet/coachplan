@@ -264,6 +264,27 @@ function formatDistanceMeters(value: number | null | undefined, viewerUnit: Dist
   return `${formatDistanceNumber(converted.value)} ${distanceUnitLabel(converted.unit)}`;
 }
 
+function trimUnitFromValue(value: string, unit: string) {
+  if (!unit) return value;
+  if (value.endsWith(` ${unit}`)) return value.slice(0, -(unit.length + 1));
+  if (value.endsWith(unit)) return value.slice(0, -unit.length);
+  return value;
+}
+
+function buildDistanceProgressLabel(planned: string | null, logged: string | null, unit?: string) {
+  if (planned && logged) {
+    const plannedCompact = unit ? trimUnitFromValue(planned, unit) : planned;
+    return `${plannedCompact} \u2192 ${logged}`;
+  }
+  if (logged) return logged;
+  if (planned) return `P: ${planned}`;
+  return null;
+}
+
+function formatDistanceOneDecimal(value: number) {
+  return value.toFixed(1);
+}
+
 type MatchLevel = 'FULL' | 'PARTIAL' | 'NONE' | null;
 
 function resolveMatchLevel(log: DayExternalLog): MatchLevel {
@@ -759,6 +780,7 @@ export default async function CalendarPage({
                 </Link>
               </div>
             </div>
+            <div className="cal-month-scroll">
             <div className="cal-weekdays">
               {WEEKDAY_LABELS.map((label) => (
                 <div key={label} className="cal-weekday">{label}</div>
@@ -845,6 +867,68 @@ export default async function CalendarPage({
                           : null;
                         const sessionAllDone = sessionMembers?.every(a => a.completed) ?? false;
                         const isCompleted = sessionCount ? sessionAllDone : activity.completed;
+                        const isRun = String(activity.type || "").toUpperCase() === "RUN";
+                        const plannedDistanceLabel = (() => {
+                          if (sessionMembers && sessionMembers.length > 1) {
+                            let total = 0;
+                            let hasAny = false;
+                            for (const member of sessionMembers) {
+                              const sourceUnit = resolveDistanceUnitFromActivity({
+                                distanceUnit: member.distanceUnit,
+                                paceTarget: member.paceTarget,
+                                actualPace: member.actualPace,
+                                fallbackUnit: viewerUnits
+                              }) || viewerUnits;
+                              const converted = convertDistanceForDisplay(member.distance, sourceUnit, viewerUnits);
+                              if (converted) {
+                                total += converted.value;
+                                hasAny = true;
+                              }
+                            }
+                            return hasAny ? `${formatDistanceOneDecimal(total)}${distanceUnitLabel(viewerUnits)}` : null;
+                          }
+                          const sourceUnit = resolveDistanceUnitFromActivity({
+                            distanceUnit: activity.distanceUnit,
+                            paceTarget: activity.paceTarget,
+                            actualPace: activity.actualPace,
+                            fallbackUnit: viewerUnits
+                          }) || viewerUnits;
+                          const converted = convertDistanceForDisplay(activity.distance, sourceUnit, viewerUnits);
+                          return converted ? `${formatDistanceOneDecimal(converted.value)}${distanceUnitLabel(converted.unit)}` : null;
+                        })();
+                        const loggedDistanceLabel = (() => {
+                          if (sessionMembers && sessionMembers.length > 1) {
+                            let total = 0;
+                            let hasAny = false;
+                            for (const member of sessionMembers) {
+                              const sourceUnit = resolveDistanceUnitFromActivity({
+                                distanceUnit: member.distanceUnit,
+                                paceTarget: member.paceTarget,
+                                actualPace: member.actualPace,
+                                fallbackUnit: viewerUnits,
+                                preferActualPace: true
+                              }) || viewerUnits;
+                              const converted = convertDistanceForDisplay(member.actualDistance, sourceUnit, viewerUnits);
+                              if (converted) {
+                                total += converted.value;
+                                hasAny = true;
+                              }
+                            }
+                            return hasAny ? `${formatDistanceOneDecimal(total)}${distanceUnitLabel(viewerUnits)}` : null;
+                          }
+                          const sourceUnit = resolveDistanceUnitFromActivity({
+                            distanceUnit: activity.distanceUnit,
+                            paceTarget: activity.paceTarget,
+                            actualPace: activity.actualPace,
+                            fallbackUnit: viewerUnits,
+                            preferActualPace: true
+                          }) || viewerUnits;
+                          const converted = convertDistanceForDisplay(activity.actualDistance, sourceUnit, viewerUnits);
+                          return converted ? `${formatDistanceOneDecimal(converted.value)}${distanceUnitLabel(converted.unit)}` : null;
+                        })();
+                        const runDistanceLabel = isRun
+                          ? buildDistanceProgressLabel(plannedDistanceLabel, loggedDistanceLabel, distanceUnitLabel(viewerUnits))
+                          : null;
                         return (
                           <div
                             key={activity.id}
@@ -857,6 +941,9 @@ export default async function CalendarPage({
                               </span>
                               {isCompleted && <span className="cal-activity-done-dot" />}
                             </span>
+                            {runDistanceLabel && (
+                              <span className="cal-run-distance">{runDistanceLabel}</span>
+                            )}
                             {activity.type === "RUN" && (() => {
                               const bucket = activity.paceTargetBucket || inferPaceBucketFromText(activity.paceTarget);
                               const bucketShort = bucket ? (PACE_BUCKET_SHORT[bucket] ?? null) : null;
@@ -908,6 +995,7 @@ export default async function CalendarPage({
                 );
               })}
             </div>
+            </div>{/* cal-month-scroll */}
           </div>
 
           <div className="dash-card cal-type-glossary" aria-label="Activity type glossary">

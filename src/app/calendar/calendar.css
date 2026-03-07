@@ -165,6 +165,14 @@
     align-items: flex-start;
     gap: 4px;
   }
+
+  .cal-page .dash-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .cal-page .dash-left-col {
+    display: none;
+  }
 }
 
 .cal-plan-switch {
@@ -272,6 +280,12 @@
 .cal-month-card {
   display: grid;
   gap: 10px;
+}
+
+.cal-month-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
 }
 
 .cal-month-nav-row {
@@ -1536,18 +1550,13 @@
     flex: 1;
   }
 
-  .cal-month-card {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-  }
-
   .cal-weekdays,
   .cal-grid {
-    min-width: 700px;
+    min-width: 640px;
   }
 
   .cal-grid {
-    grid-template-columns: repeat(7, minmax(92px, 1fr));
+    grid-template-columns: repeat(7, minmax(84px, 1fr));
   }
 }
 
@@ -1600,7 +1609,7 @@
 @media (max-width: 640px) {
   .cal-weekdays,
   .cal-grid {
-    min-width: 630px;
+    min-width: 560px;
   }
 
   .cal-day {
@@ -1673,7 +1682,7 @@
 @media (max-width: 480px) {
   .cal-weekdays,
   .cal-grid {
-    min-width: 560px;
+    min-width: 490px;
   }
 
   .cal-day {
