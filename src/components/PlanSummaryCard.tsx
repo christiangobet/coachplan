@@ -229,7 +229,7 @@ export default function PlanSummaryCard({
   if (!summary) {
     return (
       <div>
-        {hasChart && <WeeklyRunChart points={weeklyRuns!} unit={weeklyRunUnit} />}
+        {hasChart && <WeeklyRunChart points={weeklyRuns!} unit={weeklyRunUnit} currentWeekIndex={currentWeekIndex} />}
         <div className={s.emptyState}>
           <p className={s.emptyText}>No plan summary generated yet.</p>
           {onExtract && (

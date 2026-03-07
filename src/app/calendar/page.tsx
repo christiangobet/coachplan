@@ -413,6 +413,32 @@ export default async function CalendarPage({
   const weekOneStartDate = toDateInputValue(weekOne?.startDate ?? null);
   const initialWeekDateAnchor = selectedPlan.raceDate ? 'RACE_DATE' : weekOneStartDate ? 'START_DATE' : 'RACE_DATE';
   const allWeekIndexes = weeks.map((week) => week.weekIndex);
+  const toDisplayDistance = (value: number | null | undefined, sourceUnit: string | null | undefined) =>
+    convertDistanceForDisplay(value, sourceUnit, viewerUnits);
+  const weeklyRunData = weeks.map((week) => {
+    const runs = (week.days || [])
+      .flatMap((day) => day.activities || [])
+      .filter((activity) => String(activity.type).toUpperCase() === "RUN");
+    let total = 0;
+    let longRun = 0;
+    for (const run of runs) {
+      const sourceUnit = resolveDistanceUnitFromActivity({
+        distanceUnit: run.distanceUnit,
+        paceTarget: run.paceTarget,
+        actualPace: run.actualPace,
+        fallbackUnit: viewerUnits
+      }) || viewerUnits;
+      const converted = toDisplayDistance(run.distance, sourceUnit);
+      const value = converted?.value ?? 0;
+      total += value;
+      if (value > longRun) longRun = value;
+    }
+    return {
+      weekIndex: week.weekIndex,
+      total: Math.round(total * 10) / 10,
+      longRun: Math.round(longRun * 10) / 10
+    };
+  });
 
   const activitiesByDate = new Map<string, DatedActivity[]>();
   const dayInfoByDate = new Map<string, DayInfo>();
@@ -494,6 +520,23 @@ export default async function CalendarPage({
   const planEndDate = alignedDates.length > 0 ? alignedDates[alignedDates.length - 1] : null;
 
   const today = normalizeDate(new Date());
+  const activeCurrentWeekIndex = (() => {
+    if (selectedPlan.status !== "ACTIVE") return null;
+    for (const week of weeks) {
+      const bounds = resolveWeekBounds({
+        weekIndex: week.weekIndex,
+        weekStartDate: week.startDate,
+        weekEndDate: week.endDate,
+        raceDate: selectedPlan.raceDate,
+        weekCount: selectedPlan.weekCount,
+        allWeekIndexes
+      });
+      if (bounds.startDate && bounds.endDate && today >= bounds.startDate && today <= bounds.endDate) {
+        return week.weekIndex;
+      }
+    }
+    return null;
+  })();
   const requestedMonthDate = parseMonthParam(requestedMonth);
   const defaultMonth =
     requestedMonthDate
@@ -685,6 +728,9 @@ export default async function CalendarPage({
               <PlanSummarySection
                 summary={selectedPlan.planSummary as PlanSummary | null}
                 planId={selectedPlan.id}
+                weeklyRuns={weeklyRunData}
+                weeklyRunUnit={distanceUnitLabel(viewerUnits)}
+                currentWeekIndex={activeCurrentWeekIndex}
               />
             </div>
           </details>

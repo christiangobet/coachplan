@@ -21,7 +21,7 @@ import ActivityForm, { ActivityFormData } from '@/components/PlanEditor/Activity
 import DayLogCard from '@/components/DayLogCard';
 import PlanSourcePdfPane from '@/components/PlanSourcePdfPane';
 import PlanGuidePanel from '@/components/PlanGuidePanel';
-import PlanSummaryCard from '@/components/PlanSummaryCard';
+import PlanSummarySection from '@/components/PlanSummarySection';
 import type { PlanSummary } from '@/lib/types/plan-summary';
 import { buildLogActivities, type LogActivity } from '@/lib/log-activity';
 import '../plans.css';
@@ -1411,7 +1411,7 @@ export default function PlanDetailPage() {
             <details className="pcal-inline-panel">
               <summary className="pcal-inline-panel-summary">📋 Plan Guide</summary>
               <div className="pcal-inline-panel-body pcal-guide-panel">
-                <PlanSummaryCard
+                <PlanSummarySection
                   summary={plan?.planSummary as PlanSummary | null ?? null}
                   planId={planId as string}
                   weeklyRuns={weeklyRunData}
