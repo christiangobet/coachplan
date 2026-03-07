@@ -658,6 +658,17 @@ export default function PlanDetailPage() {
   }, [loadPlan]);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!selectedDay) return;
+    if (!window.matchMedia('(max-width: 900px)').matches) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [selectedDay]);
+
+  useEffect(() => {
     fetch('/api/integrations/accounts')
       .then(r => r.json())
       .then(data => {
