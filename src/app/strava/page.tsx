@@ -51,35 +51,36 @@ export default async function StravaPage({
             <StravaSyncPanel />
           </div>
 
-          <StravaActivityMatchTable />
+          <div className="strava-table-scroll">
+            <StravaActivityMatchTable />
+          </div>
+          <div className="strava-secondary-grid">
+            <div className="dash-card strava-info-card">
+              <div className="dash-card-header">
+                <span className="dash-card-title">How It Works</span>
+              </div>
+              <ol className="strava-steps">
+                <li>Connect Strava and run sync.</li>
+                <li>Compare each day and import only the rows you want.</li>
+                <li>Use re-import when you update workouts in Strava.</li>
+              </ol>
+            </div>
+
+            <div className="dash-card strava-info-card">
+              <div className="dash-card-header">
+                <span className="dash-card-title">Shortcuts</span>
+              </div>
+              <div className="strava-links">
+                <Link className="dash-connect-btn" href={appendPlanQueryToHref("/calendar", selectedPlanId)}>
+                  Open Training Calendar
+                </Link>
+                <Link className="dash-connect-btn" href={appendPlanQueryToHref("/progress", selectedPlanId)}>
+                  Open Progress
+                </Link>
+              </div>
+            </div>
+          </div>
         </section>
-
-        <aside className="dash-right strava-right">
-          <div className="dash-card strava-info-card">
-            <div className="dash-card-header">
-              <span className="dash-card-title">How It Works</span>
-            </div>
-            <ol className="strava-steps">
-              <li>Connect Strava and run sync.</li>
-              <li>Compare each day and import only the rows you want.</li>
-              <li>Use re-import when you update workouts in Strava.</li>
-            </ol>
-          </div>
-
-          <div className="dash-card strava-info-card">
-            <div className="dash-card-header">
-              <span className="dash-card-title">Shortcuts</span>
-            </div>
-            <div className="strava-links">
-              <Link className="dash-connect-btn" href={appendPlanQueryToHref("/calendar", selectedPlanId)}>
-                Open Training Calendar
-              </Link>
-              <Link className="dash-connect-btn" href={appendPlanQueryToHref("/progress", selectedPlanId)}>
-                Open Progress
-              </Link>
-            </div>
-          </div>
-        </aside>
       </div>
     </main>
   );

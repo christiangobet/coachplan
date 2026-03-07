@@ -2,6 +2,19 @@
   display: none;
 }
 
+.strava-table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+}
+
+.strava-secondary-grid {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
 .strava-info-card {
   padding-top: 18px;
 }
@@ -26,6 +39,12 @@
 }
 
 @media (max-width: 1080px) {
+  .strava-secondary-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
   .strava-mobile-sync {
     display: block;
   }
