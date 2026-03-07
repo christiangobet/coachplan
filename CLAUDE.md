@@ -1,45 +1,59 @@
-# CoachPlan
+# MyTrainingPlan — Developer Quick Context
 
-Training plan management app for endurance athletes and coaches. Upload PDF training plans, align to race dates, track workouts, and monitor progress.
+Training plan management app for endurance athletes and coaches.
 
-## Tech Stack
+## Core architecture
 
-- **Framework:** Next.js 16 (App Router) with TypeScript
-- **Auth:** Clerk (`@clerk/nextjs`)
-- **Database:** PostgreSQL with Prisma ORM
-- **AI:** OpenAI API (gpt-4o-mini) for PDF plan parsing
-- **PDF Parsing:** Python 3 with pdfplumber
-- **Path alias:** `@/*` → `./src/*`
+- Frontend: Next.js 16 + React 19 + TypeScript
+- DB: Prisma + PostgreSQL
+- Auth: Clerk (`@clerk/nextjs`)
+- Middleware/proxy: `src/proxy.ts`
+- Parsing pipeline:
+  - PDF text extraction (Python-first locally, Node fallback)
+  - v4/v5 parser paths
+  - structured persistence into `TrainingPlan -> PlanWeek -> PlanDay -> PlanActivity`
+
+## Core user flows
+
+- Upload PDF -> draft parse -> review/correct -> activate
+- Activation requires scheduling mode for active plans:
+  - `RACE_DATE` or `START_DATE`
+- Daily execution/logging on dashboard/calendar/plan-day panels
+- Strava connect -> sync -> review/match -> import
 
 ## Commands
 
-- `npm run dev` — Start dev server (http://localhost:3001)
-- `npm run build` — Production build
-- `npm run lint` — ESLint
-- `npx prisma migrate dev` — Run database migrations
-- `npx prisma generate` — Regenerate Prisma client after schema changes
+- `npm run dev`
+- `npm run typecheck`
+- `npm run lint`
+- `npm run build`
+- `npm run verify`
+- `npm run test:parser-i18n`
+- `npm run make-admin -- <email>`
 
-## Project Structure
+## File map
 
-- `src/app/` — Next.js App Router pages and API routes
-- `src/components/` — React components
-- `src/lib/` — Shared utilities (Prisma client, OpenAI, AI parser schema)
-- `src/middleware.ts` — Clerk auth middleware
-- `prisma/schema.prisma` — Database schema
-- `scripts/parse_plan_pdf.py` — PDF text extraction script
+- `src/app/` — pages/routes
+- `src/app/api/` — API routes
+- `src/components/` — shared UI
+- `src/lib/` — domain logic (roles, parsing, integrations)
+- `prisma/schema.prisma` — source of truth for data model
+- `scripts/` — parser/testing/admin utilities
 
-## Key Patterns
+## Operational notes
 
-- API routes live under `src/app/api/`
-- Use `@/lib/prisma` for database access (singleton pattern)
-- Clerk handles auth; use `auth()` in API routes, `currentUser()` in server components
-- Two user roles: ATHLETE and COACH
-- Plans have statuses: DRAFT → ACTIVE → ARCHIVED
-- UI follows Strava-inspired aesthetic: Figtree font, orange accent (#fc4c02), light gray background, white cards
-- See `CONVENTIONS.md` for full UI patterns, component conventions, and page-specific decisions
+- Keep `.env.local` aligned with `.env.example`.
+- Garmin routes currently return `501 NOT_CONFIGURED` until partner credentials are available.
+- Use `PROJECT_PLAN.md` as the current handover/status document.
+- For visual changes, follow `AI_DESIGN_RULES.md` and `CONVENTIONS.md`.
 
-## Project Plan
+## End-of-session handover
 
-See `PROJECT_PLAN.md` for full project status, stages, checklist, and progress tracking.
+Before handoff, update docs and push:
 
-**At the end of every session, update `PROJECT_PLAN.md`** — refresh progress %, check off completed items, and set next actions.
+```bash
+git status --short -- '*.md'
+git add ':(glob)**/*.md'
+git commit -m "docs: handover update"
+git push origin main
+```
