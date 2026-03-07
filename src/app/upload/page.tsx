@@ -88,11 +88,6 @@ export default function UploadPage() {
   }, [elapsedSec]);
 
   const handleSubmit = async () => {
-    if (!raceDate) {
-      setStatus('error');
-      setMessage('Please set a race date — it anchors all week numbers to calendar dates.');
-      return;
-    }
     if (!name.trim()) {
       setStatus('error');
       setMessage('Please add a plan name.');
@@ -164,7 +159,8 @@ export default function UploadPage() {
           <section className="dash-card athlete-page-header upload-header">
             <h1>Upload Training Plan</h1>
             <p className="muted">
-              Upload a PDF and align it to your race weekend. We&apos;ll parse weeks and workouts automatically.
+              Upload a PDF to create a draft. You will choose scheduling mode at activation:
+              race date alignment or training start date (Week 1).
             </p>
           </section>
 
@@ -191,13 +187,15 @@ export default function UploadPage() {
                     Signed in as: {user?.primaryEmailAddress?.emailAddress || 'Unknown'}
                   </div>
                   <label>
-                    <span>Race date <span className="upload-required">*</span></span>
+                    <span>Race date (optional)</span>
                     <input
                       type="date"
-                      required
                       value={raceDate}
                       onChange={(e) => setRaceDate(e.target.value)}
                     />
+                    <span className="muted">
+                      Used to prefill activation scheduling if you choose race-date alignment.
+                    </span>
                   </label>
                   <label>
                     Race name
@@ -277,8 +275,9 @@ export default function UploadPage() {
                   <h3>How it works</h3>
                 </div>
                 <p className="muted">1. Upload PDF</p>
-                <p className="muted">2. Review weeks and workouts</p>
-                <p className="muted">3. Publish and start logging</p>
+                <p className="muted">2. Review and correct parsed weeks/workouts</p>
+                <p className="muted">3. Activate plan and choose scheduling mode</p>
+                <p className="muted">4. Calendar dates are applied, then start logging</p>
               </div>
             </div>
           </SignedIn>
@@ -290,9 +289,9 @@ export default function UploadPage() {
               <span className="dash-card-title">Next Steps</span>
             </div>
             <div className="athlete-link-list">
-              <Link href="/plans"><span>Review assigned plans</span><span className="athlete-link-arrow">→</span></Link>
+              <Link href="/plans"><span>Open parsed drafts</span><span className="athlete-link-arrow">→</span></Link>
+              <Link href="/plans"><span>Activate and set schedule mode</span><span className="athlete-link-arrow">→</span></Link>
               <Link href="/dashboard"><span>Start today workout</span><span className="athlete-link-arrow">→</span></Link>
-              <Link href="/profile"><span>Set pace targets</span><span className="athlete-link-arrow">→</span></Link>
             </div>
           </div>
 
@@ -311,7 +310,7 @@ export default function UploadPage() {
               </div>
               <div>
                 <strong>After upload</strong>
-                <span>Review and confirm parsed workouts before publishing.</span>
+                <span>Review and correct the draft, then activate to apply calendar dates.</span>
               </div>
             </div>
           </div>
