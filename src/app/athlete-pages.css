@@ -1,5 +1,20 @@
 .athlete-page-shell .dash-grid {
-  grid-template-columns: 200px minmax(0, 1fr) 280px;
+  grid-template-columns: minmax(216px, 228px) minmax(0, 1fr) minmax(248px, 280px);
+}
+
+.athlete-page-shell .dash-right {
+  min-width: 0;
+  width: 100%;
+}
+
+@media (max-width: 1380px) {
+  .athlete-page-shell .dash-grid {
+    grid-template-columns: minmax(216px, 228px) minmax(0, 1fr);
+  }
+
+  .athlete-page-shell .dash-right {
+    display: none;
+  }
 }
 
 .athlete-page-header h1 {
@@ -15,6 +30,18 @@
 
 .athlete-form-grid {
   align-items: start;
+}
+
+/* Prevent intrinsic input/select width from expanding grid cells */
+.athlete-form-grid > *,
+.athlete-page-card {
+  min-width: 0;
+}
+
+.athlete-page-card input,
+.athlete-page-card select {
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .athlete-page-card .section-title h3 {
@@ -446,15 +473,66 @@
     grid-template-columns: 1fr;
   }
 
-  .athlete-save-row {
-    flex-direction: column;
-    align-items: flex-start;
+  /* Sidebar hidden — MobileNav replaces nav */
+  .athlete-page-shell .dash-left-col {
+    display: none;
   }
 
+  /* Header */
+  .athlete-page-header p {
+    font-size: 13px;
+    overflow-wrap: break-word;
+  }
+
+  /* Save row */
+  .athlete-save-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .athlete-save-row .cta {
+    width: 100%;
+    justify-content: center;
+    text-align: center;
+  }
+
+  /* Integration cards — single column, fix badge clipping */
   .athlete-integration-grid {
     grid-template-columns: 1fr;
   }
 
+  /* Integration head — wrap badge below name if it clips */
+  .athlete-integration-head {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .athlete-integration-head strong {
+    flex: 1 1 auto;
+  }
+
+  .athlete-integration-head .on,
+  .athlete-integration-head .off {
+    flex-shrink: 0;
+  }
+
+  /* Integration action buttons full-width */
+  .athlete-integration-actions {
+    flex-direction: column;
+  }
+
+  .athlete-integration-actions .cta,
+  .athlete-integration-actions .strava-connect-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .athlete-reconnect-btn {
+    align-self: flex-start;
+    width: auto !important;
+  }
+
+  /* Upload */
   .upload-form-grid {
     grid-template-columns: 1fr;
   }
@@ -465,5 +543,38 @@
 
   .upload-dropzone {
     padding: 20px 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  /* Tighter card padding */
+  .athlete-page-shell .dash-card {
+    padding: 14px;
+  }
+
+  .athlete-page-header h1 {
+    font-size: 20px;
+  }
+
+  /* Pace zone rows — tighter label */
+  .pace-zone-label {
+    width: 68px;
+    font-size: 11px;
+  }
+
+  /* Race goal calculator row — stack on very small */
+  .pace-race-goal-inputs {
+    flex-direction: column;
+  }
+
+  .pace-race-goal-inputs select,
+  .pace-race-goal-inputs input {
+    width: 100%;
+    flex: none;
+  }
+
+  .pace-calc-btn {
+    width: 100% !important;
+    justify-content: center;
   }
 }
