@@ -308,6 +308,29 @@
   gap: 8px;
 }
 
+.upload-main-card .cal-race-editor-anchor-toggle {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.upload-main-card .cal-race-editor-anchor-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--d-border);
+  border-radius: 999px;
+  padding: 6px 10px;
+  background: #fff;
+  color: var(--d-text-mid);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.upload-main-card .cal-race-editor-anchor-option input {
+  margin: 0;
+}
+
 .upload-dropzone {
   position: relative;
   border: 2px dashed var(--d-border);

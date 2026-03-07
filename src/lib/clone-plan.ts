@@ -154,3 +154,29 @@ export async function alignWeeksToRaceDate(
     });
   }
 }
+
+/**
+ * Align week dates forward from a training start date.
+ * Week 1 starts on the provided date and each subsequent week spans 7 days.
+ */
+export async function alignWeeksToStartDate(
+  planId: string,
+  totalWeeks: number,
+  startDate: Date
+): Promise<void> {
+  const normalizedStart = new Date(startDate);
+  normalizedStart.setHours(0, 0, 0, 0);
+
+  for (let i = 1; i <= totalWeeks; i++) {
+    const weekStart = new Date(normalizedStart);
+    weekStart.setDate(weekStart.getDate() + (i - 1) * 7);
+
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekEnd.getDate() + 6);
+
+    await prisma.planWeek.updateMany({
+      where: { planId, weekIndex: i },
+      data: { startDate: weekStart, endDate: weekEnd },
+    });
+  }
+}

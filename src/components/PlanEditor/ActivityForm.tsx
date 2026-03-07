@@ -25,9 +25,11 @@ type ActivityFormProps = {
     title?: string;
     dayId?: string; // Optional context
     sessionInstructions?: string | null;
+    dayOptions?: Array<{ id: string; label: string }>;
 };
 
 export type ActivityFormData = {
+    dayId?: string;
     type: ActivityType;
     title: string;
     duration?: number;
@@ -44,7 +46,16 @@ const ACTIVITY_TYPES: ActivityType[] = [
     'RUN', 'STRENGTH', 'CROSS_TRAIN', 'REST', 'MOBILITY', 'YOGA', 'HIKE', 'OTHER'
 ];
 
-export default function ActivityForm({ isOpen, onClose, onSubmit, onDelete, initialData, title, sessionInstructions }: ActivityFormProps) {
+export default function ActivityForm({
+    isOpen,
+    onClose,
+    onSubmit,
+    onDelete,
+    initialData,
+    title,
+    sessionInstructions,
+    dayOptions = []
+}: ActivityFormProps) {
     const [formData, setFormData] = useState<ActivityFormData>({
         type: 'RUN',
         title: '',
@@ -53,12 +64,15 @@ export default function ActivityForm({ isOpen, onClose, onSubmit, onDelete, init
         mustDo: false,
         ...initialData
     });
-    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [busyAction, setBusyAction] = useState<'save' | 'delete' | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const instructionText = typeof sessionInstructions === 'string' ? sessionInstructions.trim() : '';
+    const isSubmitting = busyAction !== null;
 
     useEffect(() => {
         if (isOpen) {
             setFormData({
+                dayId: initialData?.dayId,
                 type: initialData?.type || 'RUN',
                 title: initialData?.title || '',
                 duration: initialData?.duration,
@@ -77,14 +91,14 @@ export default function ActivityForm({ isOpen, onClose, onSubmit, onDelete, init
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError(null);
-        setIsSubmitting(true);
+        setBusyAction('save');
         try {
             await onSubmit(formData);
             onClose();
         } catch (err: any) {
             setError(err.message || 'Failed to save activity');
         } finally {
-            setIsSubmitting(false);
+            setBusyAction(null);
         }
     };
 
@@ -92,13 +106,14 @@ export default function ActivityForm({ isOpen, onClose, onSubmit, onDelete, init
         if (!onDelete || !initialData?.id) return;
         if (!confirm('Delete this activity permanently?')) return;
 
-        setIsSubmitting(true);
+        setBusyAction('delete');
         try {
             await onDelete(initialData.id);
             onClose();
         } catch (err: any) {
             setError(err.message || 'Failed to delete');
-            setIsSubmitting(false);
+        } finally {
+            setBusyAction(null);
         }
     };
 
@@ -128,10 +143,25 @@ export default function ActivityForm({ isOpen, onClose, onSubmit, onDelete, init
                     />
                 </label>
 
-                {sessionInstructions && (
+                {initialData?.id && dayOptions.length > 0 && (
+                    <label>
+                        Move to Day
+                        <select
+                            value={formData.dayId || ''}
+                            onChange={(e) => setFormData({ ...formData, dayId: e.target.value || undefined })}
+                        >
+                            <option value="">Current day</option>
+                            {dayOptions.map((option) => (
+                                <option key={option.id} value={option.id}>{option.label}</option>
+                            ))}
+                        </select>
+                    </label>
+                )}
+
+                {instructionText && (
                     <div style={{ background: 'var(--d-bg,#f3f3f3)', borderRadius: 8, padding: '8px 12px', fontSize: 12, color: 'var(--d-text-mid)', lineHeight: 1.5 }}>
                         <div style={{ fontWeight: 700, fontSize: 11, marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--d-muted)' }}>How to execute</div>
-                        {sessionInstructions}
+                        {instructionText}
                     </div>
                 )}
 
@@ -260,14 +290,14 @@ export default function ActivityForm({ isOpen, onClose, onSubmit, onDelete, init
                             onClick={handleDelete}
                             disabled={isSubmitting}
                         >
-                            Delete
+                            {busyAction === 'delete' ? 'Deleting...' : 'Delete'}
                         </button>
                     )}
                     <button type="button" className="btn-ghost" onClick={onClose} disabled={isSubmitting}>
                         Cancel
                     </button>
                     <button type="submit" className="cta" disabled={isSubmitting}>
-                        {isSubmitting ? 'Saving...' : 'Save Activity'}
+                        {busyAction === 'delete' ? 'Deleting...' : busyAction === 'save' ? 'Saving...' : 'Save Activity'}
                     </button>
                 </div>
             </form>

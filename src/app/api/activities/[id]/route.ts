@@ -3,7 +3,13 @@ import { NextResponse } from 'next/server';
 import { currentUser } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
 import { ensureUserFromAuth } from '@/lib/user-sync';
-import { applyAdjustmentProposal, PlanAdjustmentProposal, EditActivityChange, DeleteActivityChange } from '@/lib/plan-editor';
+import {
+    applyAdjustmentProposal,
+    PlanAdjustmentProposal,
+    EditActivityChange,
+    DeleteActivityChange,
+    MoveActivityChange
+} from '@/lib/plan-editor';
 import { ActivityType, Units, ActivityPriority } from '@prisma/client';
 
 type UpdateActivityBody = {
@@ -18,6 +24,8 @@ type UpdateActivityBody = {
     mustDo?: boolean;
     bailAllowed?: boolean;
     priority?: ActivityPriority;
+    targetDayId?: string;
+    targetIndex?: number;
 };
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -52,19 +60,63 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     }
 
     const body = await req.json() as UpdateActivityBody;
+    const changes: PlanAdjustmentProposal['changes'] = [];
 
-    const change: EditActivityChange = {
-        op: 'edit_activity',
-        activityId: activityId,
-        reason: 'Manual edit by user',
-        ...body
+    if (body.targetDayId !== undefined) {
+        if (typeof body.targetDayId !== 'string' || !body.targetDayId.trim()) {
+            return NextResponse.json({ error: 'targetDayId must be a non-empty string' }, { status: 400 });
+        }
+        if (body.targetIndex !== undefined) {
+            if (!Number.isInteger(body.targetIndex) || body.targetIndex < 0) {
+                return NextResponse.json({ error: 'targetIndex must be a non-negative integer' }, { status: 400 });
+            }
+        }
+
+        const moveChange: MoveActivityChange = {
+            op: 'move_activity',
+            activityId,
+            targetDayId: body.targetDayId.trim(),
+            targetIndex: body.targetIndex,
+            reason: 'Manual move by user'
+        };
+        changes.push(moveChange);
+    } else if (body.targetIndex !== undefined) {
+        return NextResponse.json({ error: 'targetDayId is required when targetIndex is provided' }, { status: 400 });
+    }
+
+    const editPayload: UpdateActivityBody = {
+        type: body.type,
+        title: body.title,
+        duration: body.duration,
+        distance: body.distance,
+        distanceUnit: body.distanceUnit,
+        paceTarget: body.paceTarget,
+        effortTarget: body.effortTarget,
+        notes: body.notes,
+        mustDo: body.mustDo,
+        bailAllowed: body.bailAllowed,
+        priority: body.priority
     };
+    const hasEditFields = Object.values(editPayload).some((value) => value !== undefined);
+    if (hasEditFields) {
+        const editChange: EditActivityChange = {
+            op: 'edit_activity',
+            activityId,
+            reason: 'Manual edit by user',
+            ...editPayload
+        };
+        changes.push(editChange);
+    }
+
+    if (changes.length === 0) {
+        return NextResponse.json({ error: 'No supported update fields provided' }, { status: 400 });
+    }
 
     const proposal: PlanAdjustmentProposal = {
         coachReply: 'Manual edit',
         summary: 'Manual edit',
         confidence: 'high',
-        changes: [change]
+        changes
     };
 
     try {

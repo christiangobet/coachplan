@@ -1,4 +1,4 @@
-import { ActivityType, Units } from '@prisma/client';
+import { ActivityType, Prisma, Units } from '@prisma/client';
 import { NextResponse } from 'next/server';
 import { currentUser } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
@@ -103,6 +103,7 @@ export async function PATCH(
     effortTarget?: unknown;
     notes?: unknown;
     sessionInstructions?: unknown;
+    structure?: Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput;
   };
 
   const updates: {
@@ -128,6 +129,7 @@ export async function PATCH(
     effortTargetBpmMax?: number | null;
     notes?: string | null;
     sessionInstructions?: string | null;
+    structure?: Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput;
   } = {};
 
   if (raw.title !== undefined) {
@@ -214,6 +216,16 @@ export async function PATCH(
 
   const sessionInstructions = normalizeOptionalText(raw.sessionInstructions);
   if (sessionInstructions !== undefined) updates.sessionInstructions = sessionInstructions;
+
+  if (raw.structure !== undefined) {
+    if (raw.structure === null) {
+      updates.structure = Prisma.DbNull;
+    } else if (Array.isArray(raw.structure)) {
+      updates.structure = raw.structure as Prisma.InputJsonValue;
+    } else {
+      return NextResponse.json({ error: 'structure must be an array or null' }, { status: 400 });
+    }
+  }
 
   if (Object.keys(updates).length === 0 && !paceTargetBucketProvided) {
     return NextResponse.json({ error: 'No editable fields provided' }, { status: 400 });

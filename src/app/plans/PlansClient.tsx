@@ -24,6 +24,7 @@ type Plan = {
 };
 type Template = { id: string; name: string; weekCount?: number | null; planGuide?: string | null; planSummary?: PlanSummary | null };
 type MyTemplate = { id: string; name: string; weekCount?: number | null; isPublic: boolean; planGuide?: string | null; planSummary?: PlanSummary | null };
+type WeekDateAnchor = 'RACE_DATE' | 'START_DATE';
 
 function statusColor(status: string) {
   if (status === 'ACTIVE') return 'var(--d-green)';
@@ -40,10 +41,21 @@ function formatRaceDate(value: string | null | undefined) {
 
 function calcTemplateStartHint(raceDateStr: string, weekCount: number): string {
   const race = new Date(raceDateStr);
-  race.setHours(0, 0, 0, 0);
-  const start = new Date(race);
-  start.setDate(start.getDate() - weekCount * 7);
+  const raceSunday = new Date(race);
+  raceSunday.setHours(0, 0, 0, 0);
+  const day = raceSunday.getDay();
+  if (day !== 0) raceSunday.setDate(raceSunday.getDate() + (7 - day));
+  const start = new Date(raceSunday);
+  start.setDate(start.getDate() - ((weekCount - 1) * 7 + 6));
   return start.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function calcTemplateEndHint(startDateStr: string, weekCount: number): string {
+  const start = new Date(startDateStr);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setDate(end.getDate() + weekCount * 7 - 1);
+  return end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 export default function PlansClient() {
@@ -62,7 +74,9 @@ export default function PlansClient() {
   const [cookieSelectedPlanId, setCookieSelectedPlanId] = useState<string | null>(null);
   const [expandedMenuId, setExpandedMenuId] = useState<string | null>(null);
   const [useTemplateId, setUseTemplateId] = useState<string | null>(null);
+  const [templateWeekDateAnchor, setTemplateWeekDateAnchor] = useState<WeekDateAnchor>('RACE_DATE');
   const [templateRaceDate, setTemplateRaceDate] = useState('');
+  const [templateStartDate, setTemplateStartDate] = useState('');
   const [savingAsTemplate, setSavingAsTemplate] = useState<string | null>(null);
   const [expandedGuideId, setExpandedGuideId] = useState<string | null>(null);
   const [renamingTemplateId, setRenamingTemplateId] = useState<string | null>(null);
@@ -186,14 +200,18 @@ export default function PlansClient() {
   }, []);
 
   const handleUseTemplate = async (templateId: string) => {
-    if (!userId || !templateRaceDate) return;
+    const anchorDate = templateWeekDateAnchor === 'RACE_DATE' ? templateRaceDate : templateStartDate;
+    if (!userId || !anchorDate) return;
     setAssigning(templateId);
     setError(null);
     try {
+      const payload: Record<string, string> = { templateId, weekDateAnchor: templateWeekDateAnchor };
+      if (templateWeekDateAnchor === 'RACE_DATE' && templateRaceDate) payload.raceDate = templateRaceDate;
+      if (templateWeekDateAnchor === 'START_DATE' && templateStartDate) payload.startDate = templateStartDate;
       const res = await fetch('/api/plans/from-template', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ templateId, raceDate: templateRaceDate })
+        body: JSON.stringify(payload)
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || 'Failed to create plan from template');
@@ -794,31 +812,72 @@ export default function PlansClient() {
                   {useTemplateId === tpl.id ? (
                     <div className="plan-template-setup">
                       <label className="plan-template-setup-label">
-                        <span>Race date <span className="plan-template-required">*</span></span>
+                        <span>Calendar alignment</span>
+                        <div className="plan-template-anchor-toggle">
+                          <label className="plan-template-anchor-option">
+                            <input
+                              type="radio"
+                              name={`template-anchor-${tpl.id}`}
+                              value="RACE_DATE"
+                              checked={templateWeekDateAnchor === 'RACE_DATE'}
+                              onChange={() => setTemplateWeekDateAnchor('RACE_DATE')}
+                            />
+                            <span>Race date</span>
+                          </label>
+                          <label className="plan-template-anchor-option">
+                            <input
+                              type="radio"
+                              name={`template-anchor-${tpl.id}`}
+                              value="START_DATE"
+                              checked={templateWeekDateAnchor === 'START_DATE'}
+                              onChange={() => setTemplateWeekDateAnchor('START_DATE')}
+                            />
+                            <span>Training start date (W1)</span>
+                          </label>
+                        </div>
+                      </label>
+                      <label className="plan-template-setup-label">
+                        <span>
+                          {templateWeekDateAnchor === 'RACE_DATE' ? 'Race date' : 'Training start date (W1)'}
+                          <span className="plan-template-required"> *</span>
+                        </span>
                         <input
                           type="date"
-                          value={templateRaceDate}
-                          onChange={(e) => setTemplateRaceDate(e.target.value)}
+                          value={templateWeekDateAnchor === 'RACE_DATE' ? templateRaceDate : templateStartDate}
+                          onChange={(e) => {
+                            if (templateWeekDateAnchor === 'RACE_DATE') setTemplateRaceDate(e.target.value);
+                            else setTemplateStartDate(e.target.value);
+                          }}
                           autoFocus
                         />
                       </label>
-                      {templateRaceDate && tpl.weekCount && (
+                      {templateWeekDateAnchor === 'RACE_DATE' && templateRaceDate && tpl.weekCount && (
                         <p className="plan-template-start-hint">
                           Starts {calcTemplateStartHint(templateRaceDate, tpl.weekCount)}
+                        </p>
+                      )}
+                      {templateWeekDateAnchor === 'START_DATE' && templateStartDate && tpl.weekCount && (
+                        <p className="plan-template-start-hint">
+                          Ends {calcTemplateEndHint(templateStartDate, tpl.weekCount)}
                         </p>
                       )}
                       <div className="plan-card-actions">
                         <button
                           className="dash-btn-primary plan-card-cta"
                           onClick={() => handleUseTemplate(tpl.id)}
-                          disabled={!templateRaceDate || assigning === tpl.id}
+                          disabled={!(templateWeekDateAnchor === 'RACE_DATE' ? templateRaceDate : templateStartDate) || assigning === tpl.id}
                         >
                           {assigning === tpl.id ? 'Creating...' : 'Create plan'}
                         </button>
                         <button
                           className="plan-template-cancel"
                           type="button"
-                          onClick={() => { setUseTemplateId(null); setTemplateRaceDate(''); }}
+                          onClick={() => {
+                            setUseTemplateId(null);
+                            setTemplateWeekDateAnchor('RACE_DATE');
+                            setTemplateRaceDate('');
+                            setTemplateStartDate('');
+                          }}
                         >
                           Cancel
                         </button>
@@ -828,7 +887,12 @@ export default function PlansClient() {
                     <div className="plan-card-actions">
                       <button
                         className="dash-btn-primary plan-card-cta"
-                        onClick={() => { setUseTemplateId(tpl.id); setTemplateRaceDate(''); }}
+                        onClick={() => {
+                          setUseTemplateId(tpl.id);
+                          setTemplateWeekDateAnchor('RACE_DATE');
+                          setTemplateRaceDate('');
+                          setTemplateStartDate('');
+                        }}
                         disabled={!userId}
                       >
                         Use template
@@ -902,36 +966,72 @@ export default function PlansClient() {
                         {useTemplateId === tpl.id ? (
                           <div className="plan-template-setup">
                             <label className="plan-template-setup-label">
-                              <span>Race date <span className="plan-template-required">*</span></span>
+                              <span>Calendar alignment</span>
+                              <div className="plan-template-anchor-toggle">
+                                <label className="plan-template-anchor-option">
+                                  <input
+                                    type="radio"
+                                    name={`template-anchor-${tpl.id}`}
+                                    value="RACE_DATE"
+                                    checked={templateWeekDateAnchor === 'RACE_DATE'}
+                                    onChange={() => setTemplateWeekDateAnchor('RACE_DATE')}
+                                  />
+                                  <span>Race date</span>
+                                </label>
+                                <label className="plan-template-anchor-option">
+                                  <input
+                                    type="radio"
+                                    name={`template-anchor-${tpl.id}`}
+                                    value="START_DATE"
+                                    checked={templateWeekDateAnchor === 'START_DATE'}
+                                    onChange={() => setTemplateWeekDateAnchor('START_DATE')}
+                                  />
+                                  <span>Training start date (W1)</span>
+                                </label>
+                              </div>
+                            </label>
+                            <label className="plan-template-setup-label">
+                              <span>
+                                {templateWeekDateAnchor === 'RACE_DATE' ? 'Race date' : 'Training start date (W1)'}
+                                <span className="plan-template-required"> *</span>
+                              </span>
                               <input
                                 type="date"
-                                value={templateRaceDate}
-                                onChange={(e) => setTemplateRaceDate(e.target.value)}
+                                value={templateWeekDateAnchor === 'RACE_DATE' ? templateRaceDate : templateStartDate}
+                                onChange={(e) => {
+                                  if (templateWeekDateAnchor === 'RACE_DATE') setTemplateRaceDate(e.target.value);
+                                  else setTemplateStartDate(e.target.value);
+                                }}
                                 autoFocus
                               />
                             </label>
-                            {templateRaceDate && tpl.weekCount && (() => {
-                              const race = new Date(templateRaceDate);
-                              const start = new Date(race);
-                              start.setDate(start.getDate() - tpl.weekCount * 7);
-                              return (
-                                <p className="plan-template-start-hint">
-                                  Starts {start.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                                </p>
-                              );
-                            })()}
+                            {templateWeekDateAnchor === 'RACE_DATE' && templateRaceDate && tpl.weekCount && (
+                              <p className="plan-template-start-hint">
+                                Starts {calcTemplateStartHint(templateRaceDate, tpl.weekCount)}
+                              </p>
+                            )}
+                            {templateWeekDateAnchor === 'START_DATE' && templateStartDate && tpl.weekCount && (
+                              <p className="plan-template-start-hint">
+                                Ends {calcTemplateEndHint(templateStartDate, tpl.weekCount)}
+                              </p>
+                            )}
                             <div className="plan-card-actions">
                               <button
                                 className="dash-btn-primary plan-card-cta"
                                 onClick={() => handleUseTemplate(tpl.id)}
-                                disabled={!templateRaceDate || assigning === tpl.id}
+                                disabled={!(templateWeekDateAnchor === 'RACE_DATE' ? templateRaceDate : templateStartDate) || assigning === tpl.id}
                               >
                                 {assigning === tpl.id ? 'Creating...' : 'Create plan'}
                               </button>
                               <button
                                 className="plan-template-cancel"
                                 type="button"
-                                onClick={() => { setUseTemplateId(null); setTemplateRaceDate(''); }}
+                                onClick={() => {
+                                  setUseTemplateId(null);
+                                  setTemplateWeekDateAnchor('RACE_DATE');
+                                  setTemplateRaceDate('');
+                                  setTemplateStartDate('');
+                                }}
                               >
                                 Cancel
                               </button>
@@ -941,7 +1041,12 @@ export default function PlansClient() {
                           <div className="plan-card-actions">
                             <button
                               className="dash-btn-primary plan-card-cta"
-                              onClick={() => { setUseTemplateId(tpl.id); setTemplateRaceDate(''); }}
+                              onClick={() => {
+                                setUseTemplateId(tpl.id);
+                                setTemplateWeekDateAnchor('RACE_DATE');
+                                setTemplateRaceDate('');
+                                setTemplateStartDate('');
+                              }}
                               disabled={!userId}
                             >
                               Use template

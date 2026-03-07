@@ -276,6 +276,16 @@
   font-size: 14px;
 }
 
+.review-activation-schedule {
+  margin-top: 8px;
+  display: grid;
+  gap: 8px;
+}
+
+.review-activation-date-field {
+  max-width: 280px;
+}
+
 .review-hero-actions {
   display: flex;
   gap: 10px;
@@ -662,6 +672,7 @@
 .review-field input,
 .review-field select,
 .review-field textarea {
+  box-sizing: border-box;
   border: 1px solid #cbd8ef;
   background: #fcfdff;
   border-radius: 8px;
@@ -716,12 +727,17 @@
 
 .review-activity-head-row {
   display: grid;
-  grid-template-columns: minmax(260px, 2.6fr) minmax(170px, 1.2fr) minmax(180px, 1.1fr) minmax(150px, 1fr) auto;
-  gap: 10px;
-  padding: 0 8px;
+  grid-template-columns: minmax(300px, 2.6fr) minmax(220px, 1.35fr) minmax(180px, 1fr) minmax(150px, 0.9fr) minmax(260px, 1.5fr);
+  gap: 12px;
+  padding: 0 10px;
+  align-items: end;
 }
 
 .review-activity-head-row span {
+  display: block;
+  width: 100%;
+  justify-self: start;
+  text-align: left;
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.06em;
@@ -799,8 +815,9 @@
 
 .review-activity-actions-compact {
   display: inline-flex;
-  align-items: center;
-  justify-content: flex-end;
+  align-items: flex-start;
+  justify-content: flex-start;
+  flex-wrap: wrap;
   gap: 8px;
   min-height: 36px;
 }
@@ -862,11 +879,11 @@
 
 .review-activity-quick-grid {
   display: grid;
-  grid-template-columns: minmax(260px, 2.6fr) minmax(170px, 1.2fr) minmax(180px, 1.1fr) minmax(150px, 1fr) auto;
+  grid-template-columns: minmax(300px, 2.6fr) minmax(220px, 1.35fr) minmax(180px, 1fr) minmax(150px, 0.9fr) minmax(260px, 1.5fr);
   grid-template-areas:
     "activity type distance duration actions";
-  gap: 10px;
-  align-items: center;
+  gap: 12px;
+  align-items: start;
 }
 
 .review-activity-details {
@@ -888,6 +905,78 @@
 
 .review-col-activity {
   grid-area: activity;
+}
+
+.review-col-activity-stack {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+
+.review-flow-editor {
+  border: 1px solid #d7e2f3;
+  border-radius: 10px;
+  background: #f8fbff;
+  padding: 10px;
+  display: grid;
+  gap: 10px;
+}
+
+.review-flow-editor-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.review-flow-editor-head span {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #5d7092;
+}
+
+.review-flow-editor-close {
+  border: 0;
+  background: transparent;
+  color: #60708d;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+}
+
+.review-flow-editor-close:hover {
+  color: #3f5578;
+}
+
+.review-flow-editor-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.review-flow-editor-field {
+  gap: 4px;
+}
+
+.review-flow-editor-field-full {
+  grid-column: 1 / -1;
+}
+
+.review-flow-editor-field input,
+.review-flow-editor-field select {
+  height: 32px;
+  min-height: 32px;
+  line-height: 1.2;
+  font-size: 12px;
+}
+
+.review-flow-editor-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .review-col-type {
@@ -926,6 +1015,8 @@
 
 .review-col-actions {
   grid-area: actions;
+  align-self: start;
+  justify-self: start;
 }
 
 .review-col-pace {
@@ -968,12 +1059,15 @@
 }
 
 .review-field-inline {
-  gap: 0;
+  gap: 6px;
+  align-content: start;
 }
 
 .review-field-inline input,
 .review-field-inline select {
+  height: 36px;
   min-height: 36px;
+  line-height: 1.2;
   font-size: 13px;
   padding: 7px 10px;
   border-color: #d2ddf0;
@@ -1454,6 +1548,10 @@
     grid-template-columns: 1fr;
   }
 
+  .review-flow-editor-grid {
+    grid-template-columns: 1fr;
+  }
+
   .review-time-input-row {
     grid-template-columns: 1fr;
   }
@@ -1478,59 +1576,4 @@
     flex-direction: column;
     align-items: flex-start;
   }
-}
-
-/* ── Step strip ─────────────────────────────────────── */
-.step-strip {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 0 6px;
-  font-size: 11px;
-  color: var(--d-text-mid);
-}
-
-.step-chip {
-  padding: 2px 7px;
-  border-radius: 10px;
-  background: var(--d-bg);
-  border: 1px solid var(--d-border-light);
-  white-space: nowrap;
-}
-
-.step-chip--warmup,
-.step-chip--cooldown,
-.step-chip--easy { color: var(--d-text-mid); }
-
-.step-chip--tempo,
-.step-chip--interval { color: var(--d-orange); border-color: rgba(252,76,2,.3); }
-
-.step-chip--recovery { color: var(--d-green); }
-
-.step-chip--child {
-  font-size: 10px;
-  padding: 1px 5px;
-}
-
-.step-sep {
-  color: var(--d-border);
-  font-size: 10px;
-  user-select: none;
-}
-
-.step-repeat {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  padding: 2px 6px;
-  border-radius: 10px;
-  background: rgba(252,76,2,.06);
-  border: 1px solid rgba(252,76,2,.2);
-}
-
-.step-repeat-count {
-  font-weight: 700;
-  color: var(--d-orange);
-  margin-right: 2px;
 }

@@ -407,6 +407,9 @@ export default async function CalendarPage({
     : "Not set";
 
   const weeks = [...selectedPlan.weeks].sort((a, b) => a.weekIndex - b.weekIndex);
+  const weekOne = weeks.find((week) => week.weekIndex === 1) || weeks[0] || null;
+  const weekOneStartDate = toDateInputValue(weekOne?.startDate ?? null);
+  const initialWeekDateAnchor = selectedPlan.raceDate ? 'RACE_DATE' : weekOneStartDate ? 'START_DATE' : 'RACE_DATE';
   const allWeekIndexes = weeks.map((week) => week.weekIndex);
 
   const activitiesByDate = new Map<string, DatedActivity[]>();
@@ -1027,6 +1030,8 @@ export default async function CalendarPage({
                   planId={selectedPlan.id}
                   initialRaceName={selectedPlan.raceName || ""}
                   initialRaceDate={toDateInputValue(selectedPlan.raceDate)}
+                  initialStartDate={weekOneStartDate}
+                  initialWeekDateAnchor={initialWeekDateAnchor}
                 />
               </div>
             </details>

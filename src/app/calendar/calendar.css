@@ -928,6 +928,29 @@
   color: var(--d-text-mid);
 }
 
+.cal-race-editor-anchor-toggle {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.cal-race-editor-anchor-option {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--d-border);
+  border-radius: 999px;
+  padding: 6px 10px;
+  background: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--d-text-mid);
+}
+
+.cal-race-editor-anchor-option input {
+  margin: 0;
+}
+
 .cal-race-editor-form input {
   height: 36px;
   border: 1px solid var(--d-border);

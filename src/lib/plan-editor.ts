@@ -14,6 +14,7 @@ export type MoveActivityChange = {
     op: 'move_activity';
     activityId: string;
     targetDayId: string;
+    targetIndex?: number;
     reason: string;
 };
 
@@ -296,6 +297,43 @@ function activityMatchesSubtype(
     return subtype === target || title.includes(target.replace(/-/g, ' '));
 }
 
+const ACTIVITY_ORDER = [
+    { sessionOrder: 'asc' as const },
+    { id: 'asc' as const }
+];
+
+function clampIndex(index: number, min: number, max: number) {
+    return Math.max(min, Math.min(max, index));
+}
+
+async function orderedActivityIdsForDay(
+    tx: Parameters<typeof prisma.$transaction>[0] extends (arg: infer T) => Promise<unknown> ? T : never,
+    dayId: string
+) {
+    const activities = await tx.planActivity.findMany({
+        where: { dayId },
+        select: { id: true },
+        orderBy: ACTIVITY_ORDER
+    });
+    return activities.map((activity) => activity.id);
+}
+
+async function applyDaySessionOrder(
+    tx: Parameters<typeof prisma.$transaction>[0] extends (arg: infer T) => Promise<unknown> ? T : never,
+    dayId: string,
+    activityIds: string[]
+) {
+    for (let i = 0; i < activityIds.length; i += 1) {
+        await tx.planActivity.update({
+            where: { id: activityIds[i] },
+            data: {
+                dayId,
+                sessionOrder: i + 1
+            }
+        });
+    }
+}
+
 // Core application logic
 export async function applyAdjustmentProposal(planId: string, proposal: PlanAdjustmentProposal) {
     const planMeta = await prisma.trainingPlan.findUnique({
@@ -427,6 +465,11 @@ export async function applyAdjustmentProposal(planId: string, proposal: PlanAdju
                 if (!dayIdSet.has(change.targetDayId)) {
                     throw new Error(`Target day not found in plan: ${change.targetDayId}`);
                 }
+                if (change.targetIndex !== undefined) {
+                    if (!Number.isInteger(change.targetIndex) || change.targetIndex < 0) {
+                        throw new Error('targetIndex must be a non-negative integer when provided.');
+                    }
+                }
                 const activity = activityById.get(change.activityId);
                 if (!activity) {
                     throw new Error(`Activity not found in plan: ${change.activityId}`);
@@ -437,10 +480,31 @@ export async function applyAdjustmentProposal(planId: string, proposal: PlanAdju
                 if (lockedDayIdSet.has(change.targetDayId)) {
                     throw new Error('Cannot move activities into completed days.');
                 }
-                await tx.planActivity.update({
-                    where: { id: change.activityId },
-                    data: { dayId: change.targetDayId }
-                });
+
+                const sourceDayId = activity.dayId;
+                const sameDay = sourceDayId === change.targetDayId;
+
+                const sourceIds = await orderedActivityIdsForDay(tx, sourceDayId);
+                const sourceWithoutMoved = sourceIds.filter((id) => id !== change.activityId);
+                if (sourceWithoutMoved.length === sourceIds.length) {
+                    throw new Error(`Activity not found in source day ordering: ${change.activityId}`);
+                }
+
+                const destinationBase = sameDay
+                    ? sourceWithoutMoved
+                    : await orderedActivityIdsForDay(tx, change.targetDayId);
+                const requestedIndex = change.targetIndex ?? destinationBase.length;
+                const targetIndex = clampIndex(requestedIndex, 0, destinationBase.length);
+                const destinationIds = [...destinationBase];
+                destinationIds.splice(targetIndex, 0, change.activityId);
+
+                if (sameDay) {
+                    await applyDaySessionOrder(tx, sourceDayId, destinationIds);
+                } else {
+                    await applyDaySessionOrder(tx, sourceDayId, sourceWithoutMoved);
+                    await applyDaySessionOrder(tx, change.targetDayId, destinationIds);
+                }
+
                 activityById.set(change.activityId, {
                     ...activity,
                     dayId: change.targetDayId
@@ -689,6 +753,19 @@ export async function applyAdjustmentProposal(planId: string, proposal: PlanAdju
                     fallbackUnit: storedDistanceUnit ?? resolvedDistanceUnit
                 });
 
+                const existingDayActivities = await tx.planActivity.findMany({
+                    where: { dayId: change.dayId },
+                    select: { sessionOrder: true },
+                    orderBy: ACTIVITY_ORDER
+                });
+                const maxSessionOrder = existingDayActivities.reduce((max, activity) => {
+                    const current = activity.sessionOrder ?? 0;
+                    return current > max ? current : max;
+                }, 0);
+                const sessionOrder = maxSessionOrder > 0
+                    ? maxSessionOrder + 1
+                    : existingDayActivities.length + 1;
+
                 await tx.planActivity.create({
                     data: {
                         planId: planId,
@@ -705,6 +782,7 @@ export async function applyAdjustmentProposal(planId: string, proposal: PlanAdju
                         mustDo: change.mustDo ?? false,
                         bailAllowed: change.bailAllowed ?? false,
                         priority: change.priority ?? null,
+                        sessionOrder,
                         completed: false
                     }
                 });

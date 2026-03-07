@@ -8,6 +8,7 @@ import {
   extractEffortTargetFromText,
   deriveStructuredIntensityTargets
 } from '@/lib/intensity-targets';
+import { deriveSmartActivityTitle } from '@/lib/activity-title';
 
 const PARSED_TYPE_MAP: Record<string, ActivityType> = {
   run: ActivityType.RUN,
@@ -178,14 +179,22 @@ export async function POST(
         } = {};
 
         if (mappedType) updateData.type = mappedType;
-        if (parsed.title && parsed.title.trim()) {
-          updateData.title = parsed.title.trim();
-        }
         if (parsed.raw_text && parsed.raw_text.trim()) {
           updateData.rawText = parsed.raw_text.trim();
         }
 
         updateData.sessionInstructions = parsed.instruction_text ?? null;
+        const smartTitle = deriveSmartActivityTitle({
+          currentTitle: parsed.title ?? existing.title,
+          activityType: mappedType ?? existing.type,
+          subtype: parsed.subtype ?? null,
+          sessionType: parsed.session_type ?? null,
+          structure: parsed.structure ?? null,
+          sessionInstructions: parsed.instruction_text ?? existing.sessionInstructions ?? null,
+          rawText: parsed.raw_text ?? existing.rawText ?? null,
+          fallbackTitle: existing.title
+        });
+        if (smartTitle) updateData.title = smartTitle;
         updateData.paceTarget = paceTarget;
         updateData.effortTarget = effortTarget;
 

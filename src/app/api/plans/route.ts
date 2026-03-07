@@ -12,7 +12,6 @@ import { extractPlanGuide } from '@/lib/ai-guide-extractor';
 import { extractPdfText } from '@/lib/pdf/extract-text';
 import { FLAGS } from '@/lib/feature-flags';
 import { populatePlanFromV4 } from '@/lib/parsing/v4-to-plan';
-import { alignWeeksToRaceDate } from '@/lib/clone-plan';
 import { canonicalizeTableLabel, extractWeekNumber, normalizePlanText } from '@/lib/plan-parser-i18n.mjs';
 import { hasConfiguredAiProvider } from '@/lib/openai';
 import { buildProgramDocumentProfile, type ProgramDocumentProfile } from '@/lib/plan-document-profile';
@@ -26,6 +25,7 @@ import {
   type PaceBucket
 } from '@/lib/intensity-targets';
 import { normalizePaceForStorage } from '@/lib/unit-display';
+import { deriveSmartActivityTitle, isGenericActivityTitle } from '@/lib/activity-title';
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { pathToFileURL } from 'url';
 
@@ -1030,21 +1030,37 @@ function scoreActivityMatch(base: ActivityDraft, ai: ActivityDraft) {
 
 function mergeActivityDraft(base: ActivityDraft, ai: ActivityDraft): ActivityDraft {
   const preferBaseSubtype = Boolean(base.subtype && base.subtype !== 'unknown');
-  const baseIsGenericTitle = base.title === 'Workout';
+  const mergedType = base.type === 'OTHER' ? (ai.type || base.type) : base.type;
+  const mergedSubtype = preferBaseSubtype ? base.subtype : (ai.subtype ?? base.subtype);
+  const baseIsGenericTitle = isGenericActivityTitle(base.title, mergedType);
   const baseIsOtherType = base.type === 'OTHER';
+  const mergedRawText = chooseActivityRawText(base.rawText, ai.rawText);
+  const mergedStructure = base.structure || ai.structure || null;
+  const mergedSessionInstructions = ai.sessionInstructions ?? base.sessionInstructions ?? null;
+  const preferredTitle = baseIsGenericTitle && ai.title ? ai.title : base.title;
+  const mergedTitle = deriveSmartActivityTitle({
+    currentTitle: preferredTitle,
+    activityType: mergedType,
+    subtype: mergedSubtype,
+    structure: mergedStructure,
+    sessionInstructions: mergedSessionInstructions,
+    rawText: mergedRawText,
+    fallbackTitle: preferredTitle
+  });
 
   return ensureDistanceConsistency({
     ...base,
     type: baseIsOtherType ? (ai.type || base.type) : base.type,
-    subtype: preferBaseSubtype ? base.subtype : (ai.subtype ?? base.subtype),
-    title: baseIsGenericTitle && ai.title ? ai.title : base.title,
-    rawText: chooseActivityRawText(base.rawText, ai.rawText),
+    subtype: mergedSubtype,
+    title: mergedTitle,
+    rawText: mergedRawText,
+    sessionInstructions: mergedSessionInstructions,
     distance: base.distance ?? ai.distance,
     distanceUnit: base.distanceUnit ?? ai.distanceUnit,
     duration: base.duration ?? ai.duration,
     paceTarget: choosePaceTarget(base.paceTarget, ai.paceTarget),
     effortTarget: chooseEffortTarget(base.effortTarget, ai.effortTarget),
-    structure: base.structure || ai.structure || null,
+    structure: mergedStructure,
     tags: base.tags || ai.tags || null,
     priority: base.priority ?? ai.priority ?? null,
     bailAllowed: base.bailAllowed || ai.bailAllowed,
@@ -1143,6 +1159,15 @@ function buildDeterministicActivities(args: {
         activityType === 'REST'
           ? 'Rest Day'
           : SUBTYPE_TITLES[subtype] || titleCase(subtype === 'unknown' ? 'Workout' : subtype);
+      const rawText = decodedText || cleanText || originalText;
+      const smartTitle = deriveSmartActivityTitle({
+        currentTitle: title,
+        activityType,
+        subtype,
+        structure: structure || null,
+        rawText,
+        fallbackTitle: title
+      });
       const intensityTargets = deriveDeterministicIntensityTargets({
         rawText: decodedText || originalText,
         metrics,
@@ -1155,8 +1180,8 @@ function buildDeterministicActivities(args: {
         dayId,
         type: activityType,
         subtype,
-        title,
-        rawText: decodedText || cleanText || originalText,
+        title: smartTitle,
+        rawText,
         distance: storageDistance.distance,
         distanceUnit: storageDistance.distanceUnit,
         duration,
@@ -1239,6 +1264,16 @@ function buildAiActivities(args: {
     const fallbackTitle = effectiveSubtype
       ? SUBTYPE_TITLES[effectiveSubtype] || titleCase(effectiveSubtype)
       : 'Workout';
+    const smartTitle = deriveSmartActivityTitle({
+      currentTitle: normalizedTitle || fallbackTitle,
+      activityType: effectiveType,
+      subtype: effectiveSubtype,
+      sessionType: a.session_type || null,
+      structure: a.structure || null,
+      sessionInstructions,
+      rawText: displayRawText,
+      fallbackTitle
+    });
     const textPaceTarget = extractPaceTargetFromText(displayRawText || decodedRawText || dayRawText || '');
     const textEffortTarget = extractEffortTargetFromText(displayRawText || decodedRawText || dayRawText || '');
     drafts.push(ensureDistanceConsistency({
@@ -1246,7 +1281,7 @@ function buildAiActivities(args: {
       dayId,
       type: effectiveType,
       subtype: effectiveSubtype,
-      title: normalizedTitle || fallbackTitle,
+      title: smartTitle,
       rawText: displayRawText,
       sessionInstructions,
       distance: storageDistance.distance,
@@ -2040,6 +2075,20 @@ async function parsePdfToJson(planId: string, pdfPath: string, name: string): Pr
   };
 }
 
+function parseOptionalDateInput(input: unknown): { ok: true; value: Date | null } | { ok: false } {
+  if (input === null || input === undefined || input === '') {
+    return { ok: true, value: null };
+  }
+  if (typeof input !== 'string') {
+    return { ok: false };
+  }
+  const parsed = new Date(input);
+  if (Number.isNaN(parsed.getTime())) {
+    return { ok: false };
+  }
+  return { ok: true, value: parsed };
+}
+
 export async function POST(req: Request) {
   const user = await currentUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -2052,14 +2101,14 @@ export async function POST(req: Request) {
   const contentType = req.headers.get('content-type') || '';
   let name = '';
   let raceName: string | null = null;
-  let raceDate: string | null = null;
+  let raceDateInput: unknown = null;
   let file: File | null = null;
 
   if (contentType.includes('multipart/form-data')) {
     const form = await req.formData();
     name = String(form.get('name') || '').trim();
     raceName = form.get('raceName') ? String(form.get('raceName')).trim() : null;
-    raceDate = form.get('raceDate') ? String(form.get('raceDate')) : null;
+    raceDateInput = form.get('raceDate');
     const maybeFile = form.get('file');
     if (maybeFile instanceof File) file = maybeFile;
     if (file && file.size > 0 && file.name) {
@@ -2069,16 +2118,23 @@ export async function POST(req: Request) {
     const body = await req.json();
     name = String(body?.name || '').trim();
     raceName = body?.raceName ? String(body.raceName).trim() : null;
-    raceDate = body?.raceDate ? String(body.raceDate) : null;
+    raceDateInput = body?.raceDate ?? null;
   }
 
   if (!name) return NextResponse.json({ error: 'Name required' }, { status: 400 });
+
+  const parsedRaceDate = parseOptionalDateInput(raceDateInput);
+  if (!parsedRaceDate.ok) {
+    return NextResponse.json({ error: 'raceDate must be an ISO date string or null' }, { status: 400 });
+  }
+
+  const raceDate = parsedRaceDate.value;
 
   const plan = await prisma.trainingPlan.create({
     data: {
       name,
       raceName: raceName || null,
-      raceDate: raceDate ? new Date(raceDate) : null,
+      raceDate: raceDate,
       isTemplate: false,
       status: 'DRAFT',
       ownerId: user.id,
@@ -2142,12 +2198,7 @@ export async function POST(req: Request) {
           weeksCreated,
           activitiesCreated
         });
-        if (raceDate && weeksCreated > 0) {
-          const parsedRaceDate = new Date(raceDate);
-          if (!Number.isNaN(parsedRaceDate.getTime())) {
-            await alignWeeksToRaceDate(plan.id, weeksCreated, parsedRaceDate);
-          }
-        }
+        // Draft upload/review mode: defer calendar date materialization until activation.
       }
 
       // Parser V4: run with guide context so the AI knows total week count and abbreviations.
@@ -2165,12 +2216,7 @@ export async function POST(req: Request) {
           weeksCreated,
           activitiesCreated
         });
-        if (raceDate && weeksCreated > 0) {
-          const parsedRaceDate = new Date(raceDate);
-          if (!Number.isNaN(parsedRaceDate.getTime())) {
-            await alignWeeksToRaceDate(plan.id, weeksCreated, parsedRaceDate);
-          }
-        }
+        // Draft upload/review mode: defer calendar date materialization until activation.
       }
 
       if (!((FLAGS.PARSER_V5_PRIMARY && v5Data) || (FLAGS.PARSER_V4_PRIMARY && v4Data))) {
@@ -2335,12 +2381,7 @@ export async function POST(req: Request) {
         }
       });
 
-      if (raceDate && weeks.length > 0) {
-        const parsedRaceDate = new Date(raceDate);
-        if (!Number.isNaN(parsedRaceDate.getTime())) {
-          await alignWeeksToRaceDate(plan.id, weeks.length, parsedRaceDate);
-        }
-      }
+      // Draft upload/review mode: defer calendar date materialization until activation.
       if (aiBudgetExceeded) {
         console.info('AI enrichment budget reached; remaining weeks will use deterministic parser only.', {
           planId: plan.id,

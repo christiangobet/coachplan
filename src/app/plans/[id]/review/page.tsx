@@ -13,6 +13,7 @@ import {
 import { inferPaceBucketFromText } from '@/lib/intensity-targets';
 import { normalizePaceForStorage, resolveDistanceUnitFromActivity } from '@/lib/unit-display';
 import PlanSourcePdfPane from '@/components/PlanSourcePdfPane';
+import SessionFlowStrip, { type SessionStepNode } from '@/components/SessionFlowStrip';
 
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const ACTIVITY_TYPES = ['RUN', 'STRENGTH', 'CROSS_TRAIN', 'REST', 'MOBILITY', 'YOGA', 'HIKE', 'OTHER'] as const;
@@ -45,6 +46,7 @@ type ActivityTypeValue = (typeof ACTIVITY_TYPES)[number];
 type DistanceUnitValue = (typeof DISTANCE_UNITS)[number];
 type PaceSourceMode = 'TARGET_TIME' | 'PAST_RESULT' | 'STRAVA';
 type PaceBucketValue = (typeof PACE_BUCKET_OPTIONS)[number]['value'];
+type WeekDateAnchor = 'RACE_DATE' | 'START_DATE';
 
 type StravaPaceCandidate = {
   id: string;
@@ -100,6 +102,7 @@ type ReviewPlan = {
   id: string;
   name: string;
   status: string;
+  raceDate?: string | null;
   parseProfile?: unknown;
   planGuide?: string | null;
   weeks: ReviewWeek[];
@@ -166,59 +169,141 @@ type ActivityDraft = {
   effortTarget: string;
   rawText: string;
   sessionInstructions: string;
+  structure: unknown;
 };
-
-type StepNode = {
-  type: string;
-  repetitions?: number;
-  steps?: StepNode[];
-  distance_miles?: number;
-  distance_km?: number;
-  duration_minutes?: number;
-  pace_target?: string | null;
-};
-
-function stepLabel(step: StepNode): string {
-  const parts: string[] = [];
-  const label: Record<string, string> = {
-    warmup: 'Warm-up', cooldown: 'Cool-down', tempo: 'Tempo',
-    interval: 'Interval', recovery: 'Recovery', easy: 'Easy',
-    distance: 'Run', note: ''
-  };
-  parts.push(label[step.type] ?? step.type);
-  if (step.distance_miles) parts.push(`${step.distance_miles}mi`);
-  else if (step.distance_km) parts.push(`${step.distance_km}km`);
-  if (step.duration_minutes) parts.push(`${step.duration_minutes}min`);
-  if (step.pace_target) parts.push(`@ ${step.pace_target}`);
-  return parts.filter(Boolean).join(' ');
-}
-
-function renderStepStrip(structure: unknown): React.ReactNode {
-  if (!Array.isArray(structure) || structure.length === 0) return null;
-  const chips: React.ReactNode[] = [];
-  (structure as StepNode[]).forEach((step, i) => {
-    if (i > 0) chips.push(<span key={`sep-${i}`} className="step-sep">›</span>);
-    if (step.type === 'repeat') {
-      const children = (step.steps ?? []).map((child, j) => (
-        <span key={j} className="step-chip step-chip--child">{stepLabel(child)}</span>
-      ));
-      chips.push(
-        <span key={i} className="step-repeat">
-          <span className="step-repeat-count">{step.repetitions ?? 2}×</span>
-          {children}
-        </span>
-      );
-    } else {
-      const lbl = stepLabel(step);
-      if (lbl) chips.push(
-        <span key={i} className={`step-chip step-chip--${step.type}`}>{lbl}</span>
-      );
-    }
-  });
-  return <div className="step-strip">{chips}</div>;
-}
 
 type ProfilePaceMap = Partial<Record<PaceBucketValue, string>>;
+
+const GENERIC_TITLES_BY_TYPE: Record<ActivityTypeValue, string[]> = {
+  RUN: ['run', 'running', 'workout', 'session', 'training'],
+  STRENGTH: ['strength', 'strength training', 'gym', 'workout', 'session', 'training'],
+  CROSS_TRAIN: ['cross train', 'cross training', 'xt', 'workout', 'session', 'training'],
+  REST: ['rest', 'rest day', 'off', 'off day'],
+  MOBILITY: ['mobility', 'mobility work', 'workout', 'session', 'training'],
+  YOGA: ['yoga', 'workout', 'session', 'training'],
+  HIKE: ['hike', 'hiking', 'workout', 'session', 'training'],
+  OTHER: ['workout', 'session', 'training']
+};
+
+const STEP_LABEL_BY_TYPE: Record<string, string> = {
+  interval: 'Intervals',
+  tempo: 'Tempo Run',
+  threshold: 'Threshold Run',
+  recovery: 'Recovery Run',
+  easy: 'Easy Run',
+  distance: 'Run',
+  warmup: 'Warm-up',
+  cooldown: 'Cool-down',
+  note: 'Run'
+};
+
+const STEP_PRIORITY: Record<string, number> = {
+  interval: 0,
+  tempo: 1,
+  threshold: 2,
+  distance: 3,
+  easy: 4,
+  recovery: 5,
+  warmup: 6,
+  cooldown: 7,
+  note: 8
+};
+
+function normalizeTitleToken(value: string): string {
+  return value.toLowerCase().replace(/[_-]+/g, ' ').replace(/[^a-z0-9 ]+/g, '').trim();
+}
+
+function formatStepNumber(value: number): string {
+  const rounded = Math.round(value * 10) / 10;
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+}
+
+function isGenericActivityTitle(title: string | null | undefined, type: ActivityTypeValue): boolean {
+  const normalized = normalizeTitleToken(title || '');
+  if (!normalized) return true;
+  const generic = new Set([
+    ...(GENERIC_TITLES_BY_TYPE[type] || []),
+    type.toLowerCase().replace(/_/g, ' '),
+    'activity'
+  ]);
+  return generic.has(normalized);
+}
+
+function compactTextSnippet(input: string | null | undefined, maxLength = 40): string | null {
+  if (!input) return null;
+  let text = input
+    .replace(/\s+/g, ' ')
+    .replace(/^[\-–—•*:\s]+/, '')
+    .trim();
+  if (!text) return null;
+  const sentence = text.split(/[.;!?]/)[0]?.trim() || text;
+  text = sentence.split(/\s*[-–—:]\s*/)[0]?.trim() || sentence;
+  if (!text) return null;
+  if (text.length <= maxLength) return text;
+  const clipped = text.slice(0, maxLength);
+  const safe = clipped.slice(0, clipped.lastIndexOf(' ')).trim();
+  return `${(safe || clipped).trim()}...`;
+}
+
+function pickPrimaryStep(structure: unknown): SessionStepNode | null {
+  if (!Array.isArray(structure) || structure.length === 0) return null;
+  const topSteps = (structure as SessionStepNode[]).filter((step) => step && typeof step.type === 'string');
+  if (topSteps.length === 0) return null;
+
+  const flattened = topSteps.flatMap((step) => {
+    const type = String(step.type || '').toLowerCase();
+    if (type !== 'repeat') return [step];
+    const children = Array.isArray(step.steps)
+      ? step.steps.filter((child) => child && typeof child.type === 'string')
+      : [];
+    return children.length > 0 ? children : [step];
+  });
+
+  return flattened
+    .sort((a, b) => {
+      const aPriority = STEP_PRIORITY[String(a.type || '').toLowerCase()] ?? 99;
+      const bPriority = STEP_PRIORITY[String(b.type || '').toLowerCase()] ?? 99;
+      return aPriority - bPriority;
+    })[0] || null;
+}
+
+function structureTitle(structure: unknown): string | null {
+  const primary = pickPrimaryStep(structure);
+  if (!primary) return null;
+  const type = String(primary.type || '').toLowerCase();
+  const label = STEP_LABEL_BY_TYPE[type] || 'Run';
+  const metric =
+    typeof primary.distance_miles === 'number' && Number.isFinite(primary.distance_miles)
+      ? `${formatStepNumber(primary.distance_miles)} mi`
+      : typeof primary.distance_km === 'number' && Number.isFinite(primary.distance_km)
+        ? `${formatStepNumber(primary.distance_km)} km`
+        : typeof primary.duration_minutes === 'number' && Number.isFinite(primary.duration_minutes)
+          ? `${formatStepNumber(primary.duration_minutes)} min`
+          : null;
+  return metric ? `${label} ${metric}` : label;
+}
+
+function fallbackTypeTitle(type: ActivityTypeValue): string {
+  if (type === 'CROSS_TRAIN') return 'Cross Train';
+  if (type === 'REST') return 'Rest Day';
+  return type.replace(/_/g, ' ').toLowerCase().replace(/\b[a-z]/g, (char) => char.toUpperCase());
+}
+
+function deriveSmartActivityTitle(activity: ReviewActivity): string {
+  const currentTitle = (activity.title || '').trim();
+  if (!isGenericActivityTitle(currentTitle, activity.type)) return currentTitle;
+
+  const fromStructure = structureTitle(activity.structure);
+  if (fromStructure && !isGenericActivityTitle(fromStructure, activity.type)) return fromStructure;
+
+  const fromInstructions = compactTextSnippet(activity.sessionInstructions);
+  if (fromInstructions && !isGenericActivityTitle(fromInstructions, activity.type)) return fromInstructions;
+
+  const fromRawText = compactTextSnippet(activity.rawText);
+  if (fromRawText && !isGenericActivityTitle(fromRawText, activity.type)) return fromRawText;
+
+  return fallbackTypeTitle(activity.type);
+}
 
 function isPaceBucketValue(value: unknown): value is PaceBucketValue {
   return PACE_BUCKET_OPTIONS.some((option) => option.value === value);
@@ -255,7 +340,7 @@ function toActivityDraft(activity: ReviewActivity, fallbackUnit: DistanceUnitVal
       )
     : null;
   return {
-    title: activity.title || '',
+    title: deriveSmartActivityTitle(activity),
     type: activity.type || 'OTHER',
     distance: activity.distance === null || activity.distance === undefined ? '' : String(activity.distance),
     distanceUnit: resolvedDistanceUnit || fallbackUnit,
@@ -264,12 +349,46 @@ function toActivityDraft(activity: ReviewActivity, fallbackUnit: DistanceUnitVal
     paceTarget: activity.paceTarget || '',
     effortTarget: activity.effortTarget || '',
     rawText: activity.rawText || '',
-    sessionInstructions: activity.sessionInstructions || ''
+    sessionInstructions: activity.sessionInstructions || '',
+    structure: activity.structure ?? null
   };
 }
 
 function sortDays(days: ReviewDay[]) {
   return [...days].sort((a, b) => a.dayOfWeek - b.dayOfWeek);
+}
+
+function cloneStructureSteps(structure: unknown): SessionStepNode[] {
+  if (!Array.isArray(structure)) return [];
+  return JSON.parse(JSON.stringify(structure)) as SessionStepNode[];
+}
+
+function getStepContainerAtPath(
+  steps: SessionStepNode[],
+  path: number[],
+): { container: SessionStepNode[]; index: number } | null {
+  if (!Array.isArray(steps) || path.length === 0) return null;
+  if (path.length === 1) {
+    const index = path[0];
+    if (!Number.isInteger(index) || index < 0 || index >= steps.length) return null;
+    return { container: steps, index };
+  }
+  if (path.length === 2) {
+    const [parentIndex, childIndex] = path;
+    if (!Number.isInteger(parentIndex) || parentIndex < 0 || parentIndex >= steps.length) return null;
+    const parent = steps[parentIndex];
+    if (!parent || parent.type !== 'repeat' || !Array.isArray(parent.steps)) return null;
+    if (!Number.isInteger(childIndex) || childIndex < 0 || childIndex >= parent.steps.length) return null;
+    return { container: parent.steps, index: childIndex };
+  }
+  return null;
+}
+
+function getStepAtPath(structure: unknown, path: number[]): SessionStepNode | null {
+  const cloned = cloneStructureSteps(structure);
+  const target = getStepContainerAtPath(cloned, path);
+  if (!target) return null;
+  return target.container[target.index] || null;
 }
 
 function applyActivityUpdateToPlan(
@@ -402,6 +521,13 @@ function formatPace(goalTimeSec: number, raceDistanceKm: number, multiplier: num
   return `${minutes}:${String(seconds).padStart(2, '0')} ${units === 'KM' ? '/km' : '/mi'}`;
 }
 
+function toDateInputValue(value: string | Date | null | undefined) {
+  if (!value) return '';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return '';
+  return parsed.toISOString().slice(0, 10);
+}
+
 export default function PlanReviewPage() {
   const params = useParams<{ id: string }>();
   const searchParams = useSearchParams();
@@ -418,6 +544,9 @@ export default function PlanReviewPage() {
   const [publishing, setPublishing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [activationWeekDateAnchor, setActivationWeekDateAnchor] = useState<WeekDateAnchor>('RACE_DATE');
+  const [activationRaceDate, setActivationRaceDate] = useState('');
+  const [activationStartDate, setActivationStartDate] = useState('');
 
   const [dayDrafts, setDayDrafts] = useState<Record<string, string>>({});
   const [expandedDayNotes, setExpandedDayNotes] = useState<Record<string, boolean>>({});
@@ -478,6 +607,7 @@ export default function PlanReviewPage() {
   const [reparseResult, setReparseResult] = useState<{ weeksProcessed: number; activitiesUpdated: number } | null>(null);
   const [reparseError, setReparseError] = useState<string | null>(null);
   const [expandedSessionInstructions, setExpandedSessionInstructions] = useState<Record<string, boolean>>({});
+  const [activeFlowEditor, setActiveFlowEditor] = useState<{ activityId: string; path: number[] } | null>(null);
   const [recheckingDayId, setRecheckingDayId] = useState<string | null>(null);
   const [recheckErrors, setRecheckErrors] = useState<Record<string, string>>({});
 
@@ -536,6 +666,10 @@ export default function PlanReviewPage() {
       setViewerUnits(units);
       setPlan(fetchedPlan);
       setPlanGuide(fetchedPlan.planGuide ?? '');
+      const nextRaceDate = toDateInputValue(fetchedPlan?.raceDate ?? null);
+      setActivationRaceDate(nextRaceDate);
+      setActivationStartDate('');
+      setActivationWeekDateAnchor(nextRaceDate ? 'RACE_DATE' : 'START_DATE');
       initializeDrafts(fetchedPlan, units);
       return fetchedPlan;
     } catch {
@@ -684,6 +818,17 @@ export default function PlanReviewPage() {
       setDiagnosticsOpen(true);
     }
   }, [hasParseWarning, sourceDocument.error]);
+
+  useEffect(() => {
+    if (!activeFlowEditor) return;
+    const draft = activityDrafts[activeFlowEditor.activityId];
+    if (!draft) {
+      setActiveFlowEditor(null);
+      return;
+    }
+    const selected = getStepAtPath(draft.structure, activeFlowEditor.path);
+    if (!selected) setActiveFlowEditor(null);
+  }, [activeFlowEditor, activityDrafts]);
 
   const goToDashboard = useCallback(() => {
     if (!planId) {
@@ -972,7 +1117,8 @@ export default function PlanReviewPage() {
             paceTarget: draft.paceTarget.trim() || null,
             effortTarget: draft.effortTarget.trim() || null,
             rawText: draft.rawText.trim() || null,
-            sessionInstructions: draft.sessionInstructions.trim() || null
+            sessionInstructions: draft.sessionInstructions.trim() || null,
+            structure: Array.isArray(draft.structure) ? draft.structure : null
           })
         });
         const data = await res.json().catch(() => null);
@@ -1009,7 +1155,11 @@ export default function PlanReviewPage() {
   );
 
   const setActivityDraftField = useCallback(
-    (activityId: string, field: keyof ActivityDraft, value: string) => {
+    (
+      activityId: string,
+      field: Exclude<keyof ActivityDraft, 'structure'>,
+      value: string
+    ) => {
       setActivityDrafts((prev) => {
         const current = prev[activityId];
         if (!current) return prev;
@@ -1026,6 +1176,98 @@ export default function PlanReviewPage() {
     },
     [queueActivityAutosave]
   );
+
+  const updateFlowStep = useCallback((
+    activityId: string,
+    path: number[],
+    updater: (step: SessionStepNode) => SessionStepNode,
+  ) => {
+    setActivityDrafts((prev) => {
+      const current = prev[activityId];
+      if (!current) return prev;
+      const nextSteps = cloneStructureSteps(current.structure);
+      const target = getStepContainerAtPath(nextSteps, path);
+      if (!target) return prev;
+      const nextStep = updater(target.container[target.index]);
+      target.container[target.index] = nextStep;
+      const nextDraft: ActivityDraft = { ...current, structure: nextSteps };
+      queueActivityAutosave(activityId, nextDraft);
+      return {
+        ...prev,
+        [activityId]: nextDraft
+      };
+    });
+  }, [queueActivityAutosave]);
+
+  const moveFlowStep = useCallback((
+    activityId: string,
+    path: number[],
+    direction: -1 | 1,
+  ) => {
+    let nextEditorPath: number[] | null = null;
+    setActivityDrafts((prev) => {
+      const current = prev[activityId];
+      if (!current) return prev;
+      const nextSteps = cloneStructureSteps(current.structure);
+      const target = getStepContainerAtPath(nextSteps, path);
+      if (!target) return prev;
+      const nextIndex = target.index + direction;
+      if (nextIndex < 0 || nextIndex >= target.container.length) return prev;
+      const moved = target.container[target.index];
+      target.container[target.index] = target.container[nextIndex];
+      target.container[nextIndex] = moved;
+      const nextPath = [...path];
+      nextPath[nextPath.length - 1] = nextIndex;
+      nextEditorPath = nextPath;
+      const nextDraft: ActivityDraft = { ...current, structure: nextSteps };
+      queueActivityAutosave(activityId, nextDraft);
+      return {
+        ...prev,
+        [activityId]: nextDraft
+      };
+    });
+    if (nextEditorPath) {
+      setActiveFlowEditor({ activityId, path: nextEditorPath });
+    }
+  }, [queueActivityAutosave]);
+
+  const deleteFlowStep = useCallback((activityId: string, path: number[]) => {
+    setActivityDrafts((prev) => {
+      const current = prev[activityId];
+      if (!current) return prev;
+      const nextSteps = cloneStructureSteps(current.structure);
+      const target = getStepContainerAtPath(nextSteps, path);
+      if (!target) return prev;
+      target.container.splice(target.index, 1);
+      const nextDraft: ActivityDraft = { ...current, structure: nextSteps };
+      queueActivityAutosave(activityId, nextDraft);
+      return {
+        ...prev,
+        [activityId]: nextDraft
+      };
+    });
+    setActiveFlowEditor(null);
+  }, [queueActivityAutosave]);
+
+  const addFlowStep = useCallback((activityId: string) => {
+    let createdPath: number[] | null = null;
+    setActivityDrafts((prev) => {
+      const current = prev[activityId];
+      if (!current) return prev;
+      const nextSteps = cloneStructureSteps(current.structure);
+      nextSteps.push({ type: 'distance' });
+      createdPath = [nextSteps.length - 1];
+      const nextDraft: ActivityDraft = { ...current, structure: nextSteps };
+      queueActivityAutosave(activityId, nextDraft);
+      return {
+        ...prev,
+        [activityId]: nextDraft
+      };
+    });
+    if (createdPath) {
+      setActiveFlowEditor({ activityId, path: createdPath });
+    }
+  }, [queueActivityAutosave]);
 
   const persistPlanGuide = useCallback(
     async (value: string) => {
@@ -1288,6 +1530,14 @@ export default function PlanReviewPage() {
       setError('Please wait until all autosave changes are complete before publishing.');
       return;
     }
+    if (activationWeekDateAnchor === 'RACE_DATE' && !activationRaceDate) {
+      setError('Race date is required to activate with race-date scheduling.');
+      return;
+    }
+    if (activationWeekDateAnchor === 'START_DATE' && !activationStartDate) {
+      setError('Training start date is required to activate with Week 1 scheduling.');
+      return;
+    }
     setPublishing(true);
     setError(null);
     setNotice(null);
@@ -1300,7 +1550,18 @@ export default function PlanReviewPage() {
     setQueuedActivityIds({});
 
     try {
-      const res = await fetch(`/api/plans/${planId}/publish`, { method: 'POST' });
+      const payload: Record<string, string> = { weekDateAnchor: activationWeekDateAnchor };
+      if (activationWeekDateAnchor === 'RACE_DATE' && activationRaceDate) {
+        payload.raceDate = activationRaceDate;
+      }
+      if (activationWeekDateAnchor === 'START_DATE' && activationStartDate) {
+        payload.startDate = activationStartDate;
+      }
+      const res = await fetch(`/api/plans/${planId}/publish`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
       const data = await res.json().catch(() => null);
       if (!res.ok) throw new Error(data?.error || 'Publish failed');
       const runCount = Number(data?.runActivityCount || 0);
@@ -1320,7 +1581,7 @@ export default function PlanReviewPage() {
     } finally {
       setPublishing(false);
     }
-  }, [autosaveState.busy, goToDashboard, planId]);
+  }, [activationRaceDate, activationStartDate, activationWeekDateAnchor, autosaveState.busy, goToDashboard, planId]);
 
   const setManualField = useCallback((id: string, field: keyof ManualResultDraft, value: string) => {
     setManualResults((prev) => prev.map((item) => (
@@ -1536,6 +1797,40 @@ export default function PlanReviewPage() {
               <p className="review-publish-copy">
                 You are one step away. Confirm this parsed plan, then activate it to unlock Today and Training Calendar.
               </p>
+            )}
+            {!isActivated && (
+              <div className="review-activation-schedule">
+                <p className="review-publish-copy">
+                  Scheduling is applied at activation. Choose how calendar week dates should be anchored.
+                </p>
+                <div className="review-source-row">
+                  <button
+                    type="button"
+                    className={`review-source-chip${activationWeekDateAnchor === 'RACE_DATE' ? ' active' : ''}`}
+                    onClick={() => setActivationWeekDateAnchor('RACE_DATE')}
+                  >
+                    Race date
+                  </button>
+                  <button
+                    type="button"
+                    className={`review-source-chip${activationWeekDateAnchor === 'START_DATE' ? ' active' : ''}`}
+                    onClick={() => setActivationWeekDateAnchor('START_DATE')}
+                  >
+                    Training start date (W1)
+                  </button>
+                </div>
+                <label className="review-field review-activation-date-field">
+                  <span>{activationWeekDateAnchor === 'RACE_DATE' ? 'Race date' : 'Training start date (Week 1)'}</span>
+                  <input
+                    type="date"
+                    value={activationWeekDateAnchor === 'RACE_DATE' ? activationRaceDate : activationStartDate}
+                    onChange={(event) => {
+                      if (activationWeekDateAnchor === 'RACE_DATE') setActivationRaceDate(event.target.value);
+                      else setActivationStartDate(event.target.value);
+                    }}
+                  />
+                </label>
+              </div>
             )}
             {isActivated && (
               <p className="review-publish-copy">
@@ -2252,6 +2547,16 @@ export default function PlanReviewPage() {
                       )}
                       {(day.activities || []).map((activity) => {
                         const draft = activityDrafts[activity.id] || toActivityDraft(activity, viewerUnits);
+                        const flowStructure = draft.structure;
+                        const flowEditorPath = activeFlowEditor?.activityId === activity.id ? activeFlowEditor.path : null;
+                        const selectedFlowStep = flowEditorPath ? getStepAtPath(flowStructure, flowEditorPath) : null;
+                        const flowTarget = flowEditorPath
+                          ? getStepContainerAtPath(cloneStructureSteps(flowStructure), flowEditorPath)
+                          : null;
+                        const canMoveFlowStepLeft = Boolean(flowTarget && flowTarget.index > 0);
+                        const canMoveFlowStepRight = Boolean(
+                          flowTarget && flowTarget.index < flowTarget.container.length - 1
+                        );
                         const paceUnitLabel = (draft.distanceUnit || viewerUnits) === 'KM' ? 'km' : 'mi';
                         const hasDistance = draft.distance.trim() !== '';
                         const isRunActivity = draft.type === 'RUN';
@@ -2264,18 +2569,221 @@ export default function PlanReviewPage() {
                         return (
                           <div key={activity.id} className="review-activity-item review-activity-item-compact">
                             <div className="review-activity-quick-grid">
-                              <label className="review-field review-col-activity review-field-inline">
-                                <span className="review-visually-hidden">Activity</span>
-                                <input
-                                  type="text"
-                                  value={draft.title}
-                                  placeholder={activityDisplayType}
-                                  onChange={(event) =>
-                                    setActivityDraftField(activity.id, 'title', event.target.value)
-                                  }
+                              <div className="review-col-activity review-col-activity-stack">
+                                <label className="review-field review-field-inline">
+                                  <span className="review-visually-hidden">Activity</span>
+                                  <input
+                                    type="text"
+                                    value={draft.title}
+                                    placeholder={activityDisplayType}
+                                    onChange={(event) =>
+                                      setActivityDraftField(activity.id, 'title', event.target.value)
+                                    }
+                                  />
+                                </label>
+                                <SessionFlowStrip
+                                  structure={flowStructure}
+                                  size="compact"
+                                  activePath={flowEditorPath}
+                                  onStepDoubleClick={(path) => {
+                                    setActiveFlowEditor({ activityId: activity.id, path });
+                                  }}
+                                  onAddStep={() => addFlowStep(activity.id)}
                                 />
-                                {renderStepStrip(activity.structure)}
-                              </label>
+                                {flowEditorPath && selectedFlowStep && (
+                                  <div className="review-flow-editor">
+                                    <div className="review-flow-editor-head">
+                                      <span>Edit Flow Step</span>
+                                      <button
+                                        type="button"
+                                        className="review-flow-editor-close"
+                                        onClick={() => setActiveFlowEditor(null)}
+                                      >
+                                        Close
+                                      </button>
+                                    </div>
+                                    <div className="review-flow-editor-grid">
+                                      <label className="review-field review-flow-editor-field">
+                                        <span>Type</span>
+                                        <select
+                                          value={selectedFlowStep.type || 'distance'}
+                                          onChange={(event) =>
+                                            updateFlowStep(activity.id, flowEditorPath, (step) => ({
+                                              ...step,
+                                              type: event.target.value
+                                            }))
+                                          }
+                                        >
+                                          <option value="warmup">Warm-up</option>
+                                          <option value="distance">Run</option>
+                                          <option value="tempo">Tempo</option>
+                                          <option value="interval">Interval</option>
+                                          <option value="recovery">Recovery</option>
+                                          <option value="easy">Easy</option>
+                                          <option value="cooldown">Cool-down</option>
+                                          <option value="repeat">Repeat</option>
+                                          <option value="note">Note</option>
+                                        </select>
+                                      </label>
+                                      <label className="review-field review-flow-editor-field">
+                                        <span>Distance (mi)</span>
+                                        <input
+                                          type="number"
+                                          min={0}
+                                          step="0.1"
+                                          value={selectedFlowStep.distance_miles ?? ''}
+                                          onChange={(event) =>
+                                            updateFlowStep(activity.id, flowEditorPath, (step) => {
+                                              const value = event.target.value.trim();
+                                              const next = { ...step };
+                                              if (!value) delete next.distance_miles;
+                                              else {
+                                                const parsed = Number(value);
+                                                if (Number.isFinite(parsed) && parsed >= 0) {
+                                                  next.distance_miles = parsed;
+                                                }
+                                              }
+                                              return next;
+                                            })
+                                          }
+                                        />
+                                      </label>
+                                      <label className="review-field review-flow-editor-field">
+                                        <span>Distance (km)</span>
+                                        <input
+                                          type="number"
+                                          min={0}
+                                          step="0.1"
+                                          value={selectedFlowStep.distance_km ?? ''}
+                                          onChange={(event) =>
+                                            updateFlowStep(activity.id, flowEditorPath, (step) => {
+                                              const value = event.target.value.trim();
+                                              const next = { ...step };
+                                              if (!value) delete next.distance_km;
+                                              else {
+                                                const parsed = Number(value);
+                                                if (Number.isFinite(parsed) && parsed >= 0) {
+                                                  next.distance_km = parsed;
+                                                }
+                                              }
+                                              return next;
+                                            })
+                                          }
+                                        />
+                                      </label>
+                                      <label className="review-field review-flow-editor-field">
+                                        <span>Duration (min)</span>
+                                        <input
+                                          type="number"
+                                          min={0}
+                                          step="0.1"
+                                          value={selectedFlowStep.duration_minutes ?? ''}
+                                          onChange={(event) =>
+                                            updateFlowStep(activity.id, flowEditorPath, (step) => {
+                                              const value = event.target.value.trim();
+                                              const next = { ...step };
+                                              if (!value) delete next.duration_minutes;
+                                              else {
+                                                const parsed = Number(value);
+                                                if (Number.isFinite(parsed) && parsed >= 0) {
+                                                  next.duration_minutes = parsed;
+                                                }
+                                              }
+                                              return next;
+                                            })
+                                          }
+                                        />
+                                      </label>
+                                      <label className="review-field review-flow-editor-field">
+                                        <span>Pace</span>
+                                        <input
+                                          type="text"
+                                          value={selectedFlowStep.pace_target ?? ''}
+                                          onChange={(event) =>
+                                            updateFlowStep(activity.id, flowEditorPath, (step) => ({
+                                              ...step,
+                                              pace_target: event.target.value.trim() || null
+                                            }))
+                                          }
+                                        />
+                                      </label>
+                                      <label className="review-field review-flow-editor-field">
+                                        <span>Effort</span>
+                                        <input
+                                          type="text"
+                                          value={selectedFlowStep.effort ?? ''}
+                                          onChange={(event) =>
+                                            updateFlowStep(activity.id, flowEditorPath, (step) => ({
+                                              ...step,
+                                              effort: event.target.value.trim() || null
+                                            }))
+                                          }
+                                        />
+                                      </label>
+                                      <label className="review-field review-flow-editor-field review-flow-editor-field-full">
+                                        <span>Description</span>
+                                        <input
+                                          type="text"
+                                          value={selectedFlowStep.description ?? ''}
+                                          onChange={(event) =>
+                                            updateFlowStep(activity.id, flowEditorPath, (step) => ({
+                                              ...step,
+                                              description: event.target.value.trim() || null
+                                            }))
+                                          }
+                                        />
+                                      </label>
+                                      {selectedFlowStep.type === 'repeat' && (
+                                        <label className="review-field review-flow-editor-field">
+                                          <span>Repetitions</span>
+                                          <input
+                                            type="number"
+                                            min={1}
+                                            step={1}
+                                            value={selectedFlowStep.repetitions ?? 2}
+                                            onChange={(event) =>
+                                              updateFlowStep(activity.id, flowEditorPath, (step) => {
+                                                const parsed = Number(event.target.value);
+                                                return {
+                                                  ...step,
+                                                  repetitions: Number.isFinite(parsed) && parsed > 0
+                                                    ? Math.floor(parsed)
+                                                    : 2
+                                                };
+                                              })
+                                            }
+                                          />
+                                        </label>
+                                      )}
+                                    </div>
+                                    <div className="review-flow-editor-actions">
+                                      <button
+                                        type="button"
+                                        className="review-save-btn secondary"
+                                        onClick={() => moveFlowStep(activity.id, flowEditorPath, -1)}
+                                        disabled={!canMoveFlowStepLeft}
+                                      >
+                                        Move Left
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="review-save-btn secondary"
+                                        onClick={() => moveFlowStep(activity.id, flowEditorPath, 1)}
+                                        disabled={!canMoveFlowStepRight}
+                                      >
+                                        Move Right
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="review-delete-btn ghost"
+                                        onClick={() => deleteFlowStep(activity.id, flowEditorPath)}
+                                      >
+                                        Delete Step
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
 
                               <label className="review-field review-col-type review-field-inline">
                                 <span className="review-visually-hidden">Workout type</span>

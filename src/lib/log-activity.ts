@@ -24,6 +24,7 @@ export type LogActivity = {
   distanceUnit: 'MILES' | 'KM' | null;
   paceTarget: string | null;
   sessionInstructions: string | null;
+  structure: unknown;
   sessionGroupId: string | null;
   sessionOrder: number | null;
 };
@@ -100,6 +101,7 @@ export function buildLogActivities(rawActivities: any[], viewerUnits: DistanceUn
         sessionInstructions: typeof activity.sessionInstructions === 'string' && activity.sessionInstructions.trim()
           ? activity.sessionInstructions.trim()
           : null,
+        structure: activity.structure ?? null,
         sessionGroupId: activity.sessionGroupId ?? null,
         sessionOrder: activity.sessionOrder ?? null,
       };

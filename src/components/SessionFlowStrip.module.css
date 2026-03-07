@@ -1,0 +1,191 @@
+.strip {
+  display: grid;
+  gap: 6px;
+  padding: 2px 0 1px;
+}
+
+.label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #73839d;
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.stepChip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid #d8e1f0;
+  background: #f4f7fc;
+  color: #3f5578;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.interactive {
+  cursor: pointer;
+  transition: border-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+}
+
+.interactive:hover {
+  border-color: #bccae5;
+  transform: translateY(-1px);
+}
+
+.active {
+  border-color: #fc4c02 !important;
+  box-shadow: 0 0 0 2px rgba(252, 76, 2, 0.14);
+}
+
+.stepChip[data-tone='warmup'],
+.stepChip[data-tone='cooldown'] {
+  border-color: #d3ddec;
+  color: #60708d;
+}
+
+.stepChip[data-tone='easy'],
+.stepChip[data-tone='distance'] {
+  border-color: #c9dfeb;
+  color: #246382;
+  background: #eef8fd;
+}
+
+.stepChip[data-tone='tempo'],
+.stepChip[data-tone='interval'],
+.stepChip[data-tone='threshold'] {
+  color: #b45309;
+  border-color: rgba(180, 83, 9, 0.32);
+  background: rgba(251, 191, 36, 0.14);
+}
+
+.stepChip[data-tone='recovery'] {
+  color: #0f8a47;
+  border-color: rgba(15, 138, 71, 0.3);
+  background: rgba(15, 138, 71, 0.12);
+}
+
+.stepChip[data-tone='note'] {
+  color: #475467;
+  border-style: dashed;
+  background: #f8fafc;
+}
+
+.stepChipChild {
+  min-height: 20px;
+  padding: 2px 7px;
+  font-size: 10px;
+}
+
+.repeatItem {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 7px;
+  border-radius: 999px;
+  border: 1px solid rgba(252, 76, 2, 0.25);
+  background: rgba(252, 76, 2, 0.08);
+}
+
+.repeatCount {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #fc4c02;
+}
+
+.repeatList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.addStepButton {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  border: 1px solid #b8c8e3;
+  background: #ffffff;
+  color: #5f7397;
+  font-size: 16px;
+  line-height: 1;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: border-color 120ms ease, color 120ms ease, box-shadow 120ms ease;
+}
+
+.addStepButton:hover {
+  border-color: #fc4c02;
+  color: #fc4c02;
+  box-shadow: 0 0 0 2px rgba(252, 76, 2, 0.12);
+}
+
+.addStepButton:focus-visible {
+  outline: none;
+  border-color: #fc4c02;
+  box-shadow: 0 0 0 3px rgba(252, 76, 2, 0.16);
+}
+
+.compact {
+  gap: 5px;
+}
+
+.compact .list {
+  gap: 5px;
+}
+
+.compact .stepChip {
+  min-height: 22px;
+  font-size: 10px;
+  padding: 2px 8px;
+}
+
+.compact .stepChipChild {
+  min-height: 18px;
+  font-size: 10px;
+  padding: 1px 6px;
+}
+
+.compact .repeatItem {
+  padding: 2px 6px;
+}
+
+.compact .addStepButton {
+  width: 22px;
+  height: 22px;
+  font-size: 14px;
+}
+
+@media (max-width: 780px) {
+  .repeatItem {
+    border-radius: 10px;
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+
+  .repeatList {
+    display: flex;
+  }
+}

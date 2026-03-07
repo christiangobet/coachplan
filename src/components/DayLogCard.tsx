@@ -12,6 +12,7 @@ import {
   resolveDistanceUnitFromActivity,
   type DistanceUnit,
 } from '@/lib/unit-display';
+import SessionFlowStrip from '@/components/SessionFlowStrip';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -112,6 +113,16 @@ function buildDisplayDetails(activity: LogActivity, viewerUnits: DistanceUnit): 
     return parts;
   }
   return activity.plannedDetails;
+}
+
+function resolveInstructionText(activity: LogActivity): string | null {
+  if (typeof activity.sessionInstructions === 'string' && activity.sessionInstructions.trim()) {
+    return activity.sessionInstructions.trim();
+  }
+  if (typeof activity.plannedNotes === 'string' && activity.plannedNotes.trim()) {
+    return activity.plannedNotes.trim();
+  }
+  return null;
 }
 
 // ── ActivityRow ───────────────────────────────────────────────────────────────
@@ -696,6 +707,7 @@ export default function DayLogCard({
         return displayItems.map((item, idx) => {
           if (item.kind === 'standalone') {
             const activity = item.activity;
+            const instructionText = resolveInstructionText(activity);
             const f = forms[activity.id] ?? {
               actualDistance: '', actualDuration: '', actualPace: '',
               distancePrefilled: false, durationPrefilled: false,
@@ -720,10 +732,15 @@ export default function DayLogCard({
                     )}
                   </div>
                 </div>
-                {activity.sessionInstructions && activity.sessionInstructions !== activity.plannedNotes && (
+                <SessionFlowStrip
+                  structure={activity.structure}
+                  size="compact"
+                  className="day-log-session-flow"
+                />
+                {instructionText && (
                   <details className="day-log-instructions" open>
                     <summary className="day-log-instructions-toggle">How to execute</summary>
-                    <p className="day-log-instructions-text">{activity.sessionInstructions}</p>
+                    <p className="day-log-instructions-text">{instructionText}</p>
                   </details>
                 )}
                 {showForm && !planView && (
@@ -766,6 +783,7 @@ export default function DayLogCard({
               </summary>
               <div className="cal-session-group-members">
                 {members.map((activity, mIdx) => {
+                  const instructionText = resolveInstructionText(activity);
                   const f = forms[activity.id] ?? {
                     actualDistance: '', actualDuration: '', actualPace: '',
                     distancePrefilled: false, durationPrefilled: false,
@@ -791,10 +809,15 @@ export default function DayLogCard({
                           )}
                         </div>
                       </div>
-                      {activity.sessionInstructions && activity.sessionInstructions !== activity.plannedNotes && (
+                      <SessionFlowStrip
+                        structure={activity.structure}
+                        size="compact"
+                        className="day-log-session-flow"
+                      />
+                      {instructionText && (
                         <details className="day-log-instructions" open>
                           <summary className="day-log-instructions-toggle">How to execute</summary>
-                          <p className="day-log-instructions-text">{activity.sessionInstructions}</p>
+                          <p className="day-log-instructions-text">{instructionText}</p>
                         </details>
                       )}
                       {showForm && !planView && (

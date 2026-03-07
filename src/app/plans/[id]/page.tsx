@@ -480,6 +480,20 @@ export default function PlanDetailPage() {
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingActivity, setEditingActivity] = useState<any>(null);
   const [addingToDayId, setAddingToDayId] = useState<string | null>(null);
+  const [movingActivityId, setMovingActivityId] = useState<string | null>(null);
+  const [draggingActivity, setDraggingActivity] = useState<{
+    activityId: string;
+    sourceDayId: string;
+    sourceIndex: number;
+  } | null>(null);
+  const [dropTarget, setDropTarget] = useState<{
+    dayId: string;
+    rawIndex: number;
+    position: 'before' | 'after' | 'append';
+    valid: boolean;
+  } | null>(null);
+  const dragMovedRef = useRef(false);
+  const suppressClickActivityIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (searchParams && searchParams.get('mode') === 'edit') {
@@ -495,14 +509,32 @@ export default function PlanDetailPage() {
     }
   }, [aiPromptParam, aiPromptSource]);
 
+  const emitPlanEditEvent = useCallback((event: string, detail: Record<string, unknown> = {}) => {
+    if (typeof window === 'undefined') return;
+    window.dispatchEvent(
+      new CustomEvent('coachplan:analytics', {
+        detail: {
+          event,
+          planId,
+          ...detail
+        }
+      })
+    );
+  }, [planId]);
+
   const handleSaveActivity = async (data: ActivityFormData) => {
     try {
       if (editingActivity) {
+        const payload: Record<string, unknown> = { ...data };
+        if (typeof data.dayId === 'string' && data.dayId !== editingActivity.dayId) {
+          payload.targetDayId = data.dayId;
+        }
+        delete payload.dayId;
         // Edit existing
         const res = await fetch(`/api/activities/${editingActivity.id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(data)
+          body: JSON.stringify(payload)
         });
         if (!res.ok) {
           const body = await res.json().catch(() => ({}));
@@ -530,17 +562,15 @@ export default function PlanDetailPage() {
   };
 
   const handleDeleteActivity = async (activityId: string) => {
-    if (!confirm('Are you sure you want to delete this activity?')) return;
-    try {
-      const res = await fetch(`/api/activities/${activityId}`, {
-        method: 'DELETE'
-      });
-      if (!res.ok) throw new Error('Failed to delete');
-      await loadPlan();
-      setEditingActivity(null); // Close form if it was open (though usually delete is from form or list)
-    } catch (err: any) {
-      alert(err.message);
+    const res = await fetch(`/api/activities/${activityId}`, {
+      method: 'DELETE'
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body?.error || 'Failed to delete');
     }
+    await loadPlan();
+    setEditingActivity(null);
   };
 
   const loadPlan = useCallback(async () => {
@@ -575,6 +605,53 @@ export default function PlanDetailPage() {
       setError(err?.message || 'Failed to load plan.');
     }
   }, [planId]);
+
+  const moveActivity = useCallback(async (args: {
+    activityId: string;
+    sourceDayId: string;
+    sourceIndex: number;
+    targetDayId: string;
+    rawTargetIndex: number;
+  }) => {
+    const { activityId, sourceDayId, sourceIndex, targetDayId, rawTargetIndex } = args;
+    const sameDay = sourceDayId === targetDayId;
+    const normalizedIndex = sameDay && rawTargetIndex > sourceIndex ? rawTargetIndex - 1 : rawTargetIndex;
+    if (sameDay && normalizedIndex === sourceIndex) return;
+
+    setMovingActivityId(activityId);
+    setError(null);
+    try {
+      const res = await fetch(`/api/activities/${activityId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          targetDayId,
+          targetIndex: Math.max(0, normalizedIndex)
+        })
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error || 'Failed to move activity');
+      }
+      emitPlanEditEvent(sameDay ? 'plan_activity_reordered' : 'plan_activity_moved', {
+        activityId,
+        sourceDayId,
+        targetDayId
+      });
+      await loadPlan();
+    } catch (err: any) {
+      emitPlanEditEvent('plan_activity_move_failed', {
+        activityId,
+        sourceDayId,
+        targetDayId
+      });
+      setError(err?.message || 'Failed to move activity');
+    } finally {
+      setMovingActivityId(null);
+      setDropTarget(null);
+      setDraggingActivity(null);
+    }
+  }, [emitPlanEditEvent, loadPlan]);
 
   useEffect(() => {
     loadPlan();
@@ -1120,6 +1197,7 @@ export default function PlanDetailPage() {
   const totalMinutes = allActivities.reduce((acc: number, a: any) => acc + (a.duration || 0), 0);
   const completionPct = totalActivities > 0 ? Math.round((completedActivities / totalActivities) * 100) : 0;
   const viewerUnitLabel = distanceUnitLabel(viewerUnits);
+  const desktopDndEnabled = isEditMode && isWideScreen;
   const toDisplayDistance = (value: number | null | undefined, sourceUnit: string | null | undefined) =>
     convertDistanceForDisplay(value, sourceUnit, viewerUnits);
 
@@ -1162,6 +1240,26 @@ export default function PlanDetailPage() {
   const selectedActivityDateLabel = selectedActivity
     ? formatLocalDateKey(selectedActivity.dayDateISO)
     : null;
+  const dayOptions = weeks.flatMap((week: any) =>
+    (week.days || []).map((day: any) => {
+      const bounds = resolveWeekBounds({
+        weekIndex: week.weekIndex,
+        weekStartDate: week.startDate,
+        weekEndDate: week.endDate,
+        raceDate: plan.raceDate,
+        weekCount: plan.weekCount,
+        allWeekIndexes
+      });
+      const dayDate = getDayDateFromWeekStart(bounds.startDate, day.dayOfWeek);
+      const dayLabel = DAY_LABELS[Math.max(0, day.dayOfWeek - 1)] || `Day ${day.dayOfWeek}`;
+      return {
+        id: day.id,
+        label: dayDate
+          ? `Week ${week.weekIndex} · ${dayLabel} ${dayDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+          : `Week ${week.weekIndex} · ${dayLabel}`
+      };
+    })
+  );
 
   const sourcePaneAvailable = isWideScreen && sourceDocument.available;
   const showDesktopSourcePane = sourcePaneAvailable && showSourcePdf;
@@ -1674,13 +1772,52 @@ export default function PlanDetailPage() {
                       const primaryType = primaryActivity
                         ? String(primaryActivity.type || 'OTHER').toLowerCase()
                         : activities.length === 0 && dayDate ? 'rest' : null;
+                      const dayLockedForMove = dayDone || dayAutoCompleted;
+                      const isDropTargetDay = Boolean(day?.id && dropTarget?.dayId === day.id);
+                      const displayedActivities = (
+                        cellView === 'compact' && !isEditMode
+                          ? (() => {
+                            const seen = new Set<string>();
+                            return activities.flatMap((activity: any) => {
+                              if (!activity.sessionGroupId) return [{ activity, sessionCount: undefined }];
+                              if (seen.has(activity.sessionGroupId)) return [];
+                              seen.add(activity.sessionGroupId);
+                              const count = activities.filter((x: any) => x.sessionGroupId === activity.sessionGroupId).length;
+                              return [{ activity, sessionCount: count }];
+                            });
+                          })()
+                          : activities.map((activity: any) => ({ activity, sessionCount: undefined }))
+                      );
 
                       return (
                         <div
-                          className={`pcal-cell${isToday ? ' pcal-cell-today' : ''}${isPast ? ' pcal-cell-past' : ''}${dayDone ? ' pcal-cell-day-done' : ''}${dayMissed ? ' pcal-cell-day-missed' : ''}${dayPartial ? ' pcal-cell-day-partial' : ''}${primaryType ? ` pcal-cell--type-${primaryType}` : ''}${dayDate ? ' pcal-cell-clickable' : ''}`}
+                          className={`pcal-cell${isToday ? ' pcal-cell-today' : ''}${isPast ? ' pcal-cell-past' : ''}${dayDone ? ' pcal-cell-day-done' : ''}${dayMissed ? ' pcal-cell-day-missed' : ''}${dayPartial ? ' pcal-cell-day-partial' : ''}${primaryType ? ` pcal-cell--type-${primaryType}` : ''}${dayDate ? ' pcal-cell-clickable' : ''}${isDropTargetDay && dropTarget?.valid ? ' pcal-cell-drop-target' : ''}${isDropTargetDay && dropTarget && !dropTarget.valid ? ' pcal-cell-drop-target-invalid' : ''}`}
                           data-debug-id="PDC"
                           key={dow}
                           onClick={dayDate ? openDayLog : undefined}
+                          onDragOver={(event) => {
+                            if (!desktopDndEnabled || !draggingActivity || !day?.id) return;
+                            event.preventDefault();
+                            dragMovedRef.current = true;
+                            setDropTarget({
+                              dayId: day.id,
+                              rawIndex: activities.length,
+                              position: 'append',
+                              valid: !dayLockedForMove
+                            });
+                          }}
+                          onDrop={(event) => {
+                            if (!desktopDndEnabled || !draggingActivity || !day?.id) return;
+                            event.preventDefault();
+                            if (dayLockedForMove) return;
+                            void moveActivity({
+                              activityId: draggingActivity.activityId,
+                              sourceDayId: draggingActivity.sourceDayId,
+                              sourceIndex: draggingActivity.sourceIndex,
+                              targetDayId: day.id,
+                              rawTargetIndex: activities.length
+                            });
+                          }}
                         >
                           {dayDate && (
                             <span className="pcal-cell-date">
@@ -1708,17 +1845,7 @@ export default function PlanDetailPage() {
                               + Add
                             </button>
                           )}
-                          {(cellView === 'compact' ? (() => {
-                            // In compact mode collapse session groups into one chip
-                            const seen = new Set<string>();
-                            return activities.flatMap((a: any) => {
-                              if (!a.sessionGroupId) return [{ a, sessionCount: undefined }];
-                              if (seen.has(a.sessionGroupId)) return [];
-                              seen.add(a.sessionGroupId);
-                              const count = activities.filter((x: any) => x.sessionGroupId === a.sessionGroupId).length;
-                              return [{ a, sessionCount: count }];
-                            });
-                          })() : activities.map((a: any) => ({ a, sessionCount: undefined }))).map(({ a, sessionCount }: { a: any; sessionCount: number | undefined }) => {
+                          {displayedActivities.map(({ activity: a, sessionCount }: { activity: any; sessionCount: number | undefined }, activityIndex: number) => {
                             const plannedSourceUnit = resolveActivityDistanceSourceUnit(a, viewerUnits);
                             const actualSourceUnit = resolveActivityDistanceSourceUnit(
                               a,
@@ -1796,19 +1923,101 @@ export default function PlanDetailPage() {
                               }
                             }
 
+                            const activityDragDisabled = !desktopDndEnabled || !day?.id || dayLockedForMove || a.completed;
+                            const showDropBefore = Boolean(
+                              dropTarget
+                              && dropTarget.valid
+                              && day?.id
+                              && dropTarget.dayId === day.id
+                              && dropTarget.rawIndex === activityIndex
+                            );
+                            const showDropAfter = Boolean(
+                              dropTarget
+                              && dropTarget.valid
+                              && day?.id
+                              && dropTarget.dayId === day.id
+                              && dropTarget.rawIndex === activityIndex + 1
+                            );
+
                             return (
                               <div
-                                className={`pcal-activity pcal-activity-clickable${a.completed ? ' pcal-activity-done' : ''}${a.mustDo || a.priority === 'KEY' ? ' pcal-activity-key' : ''}${longRun && a.id === longRun.id ? ' pcal-activity-long-run' : ''}${cellView === 'compact' ? ' pcal-activity-compact' : ''}`}
+                                className={`pcal-activity-wrap${showDropBefore ? ' pcal-activity-wrap-drop-before' : ''}${showDropAfter ? ' pcal-activity-wrap-drop-after' : ''}`}
                                 key={a.id}
-                                title={cellView === 'compact' ? a.title : undefined}
-                                onClick={(e) => {
-                                  if (isEditMode) {
-                                    e.stopPropagation();
-                                    setEditingActivity(a);
-                                  }
-                                  // non-edit: let click bubble up to cell → opens day log
-                                }}
                               >
+                                <div
+                                  className={`pcal-activity pcal-activity-clickable${a.completed ? ' pcal-activity-done' : ''}${a.mustDo || a.priority === 'KEY' ? ' pcal-activity-key' : ''}${longRun && a.id === longRun.id ? ' pcal-activity-long-run' : ''}${cellView === 'compact' ? ' pcal-activity-compact' : ''}${movingActivityId === a.id ? ' pcal-activity-moving' : ''}${draggingActivity?.activityId === a.id ? ' pcal-activity-dragging' : ''}`}
+                                  title={cellView === 'compact' ? a.title : undefined}
+                                  draggable={!activityDragDisabled}
+                                  onDragStart={(event) => {
+                                    if (activityDragDisabled || !day?.id) return;
+                                    event.stopPropagation();
+                                    dragMovedRef.current = false;
+                                    setDraggingActivity({
+                                      activityId: a.id,
+                                      sourceDayId: day.id,
+                                      sourceIndex: activityIndex
+                                    });
+                                    setDropTarget({
+                                      dayId: day.id,
+                                      rawIndex: activityIndex,
+                                      position: 'before',
+                                      valid: !dayLockedForMove
+                                    });
+                                    emitPlanEditEvent('plan_activity_drag_started', {
+                                      activityId: a.id,
+                                      sourceDayId: day.id
+                                    });
+                                    event.dataTransfer.effectAllowed = 'move';
+                                    event.dataTransfer.setData('text/plain', a.id);
+                                  }}
+                                  onDragEnd={() => {
+                                    if (dragMovedRef.current) {
+                                      suppressClickActivityIdRef.current = a.id;
+                                    }
+                                    setDraggingActivity(null);
+                                    setDropTarget(null);
+                                  }}
+                                  onDragOver={(event) => {
+                                    if (!desktopDndEnabled || !draggingActivity || !day?.id) return;
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                    dragMovedRef.current = true;
+                                    const rect = event.currentTarget.getBoundingClientRect();
+                                    const before = event.clientY <= rect.top + rect.height / 2;
+                                    setDropTarget({
+                                      dayId: day.id,
+                                      rawIndex: before ? activityIndex : activityIndex + 1,
+                                      position: before ? 'before' : 'after',
+                                      valid: !dayLockedForMove
+                                    });
+                                  }}
+                                  onDrop={(event) => {
+                                    if (!desktopDndEnabled || !draggingActivity || !day?.id) return;
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                    if (dayLockedForMove) return;
+                                    const rect = event.currentTarget.getBoundingClientRect();
+                                    const before = event.clientY <= rect.top + rect.height / 2;
+                                    void moveActivity({
+                                      activityId: draggingActivity.activityId,
+                                      sourceDayId: draggingActivity.sourceDayId,
+                                      sourceIndex: draggingActivity.sourceIndex,
+                                      targetDayId: day.id,
+                                      rawTargetIndex: before ? activityIndex : activityIndex + 1
+                                    });
+                                  }}
+                                  onClick={(e) => {
+                                    if (suppressClickActivityIdRef.current === a.id) {
+                                      suppressClickActivityIdRef.current = null;
+                                      return;
+                                    }
+                                    if (isEditMode) {
+                                      e.stopPropagation();
+                                      setEditingActivity(a);
+                                    }
+                                    // non-edit: let click bubble up to cell → opens day log
+                                  }}
+                                >
                                 {cellView === 'compact' ? (
                                   <>
                                     <span className={`pcal-activity-abbr type-${String(a.type || 'OTHER').toLowerCase()}`}>
@@ -1820,6 +2029,46 @@ export default function PlanDetailPage() {
                                         title={a.paceTarget ?? undefined}
                                       >
                                         {paceShort}
+                                      </span>
+                                    )}
+                                    {isEditMode && !isWideScreen && day?.id && (
+                                      <span className="pcal-activity-move-controls">
+                                        <button
+                                          type="button"
+                                          className="pcal-activity-move-btn"
+                                          onClick={(event) => {
+                                            event.stopPropagation();
+                                            void moveActivity({
+                                              activityId: a.id,
+                                              sourceDayId: day.id,
+                                              sourceIndex: activityIndex,
+                                              targetDayId: day.id,
+                                              rawTargetIndex: Math.max(0, activityIndex - 1)
+                                            });
+                                          }}
+                                          disabled={activityIndex === 0 || movingActivityId === a.id}
+                                          aria-label="Move activity up"
+                                        >
+                                          ↑
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className="pcal-activity-move-btn"
+                                          onClick={(event) => {
+                                            event.stopPropagation();
+                                            void moveActivity({
+                                              activityId: a.id,
+                                              sourceDayId: day.id,
+                                              sourceIndex: activityIndex,
+                                              targetDayId: day.id,
+                                              rawTargetIndex: activityIndex + 2
+                                            });
+                                          }}
+                                          disabled={activityIndex === activities.length - 1 || movingActivityId === a.id}
+                                          aria-label="Move activity down"
+                                        >
+                                          ↓
+                                        </button>
                                       </span>
                                     )}
                                   </>
@@ -1855,11 +2104,55 @@ export default function PlanDetailPage() {
                                         ))}
                                       </span>
                                     )}
+                                    {isEditMode && !isWideScreen && day?.id && (
+                                      <span className="pcal-activity-move-controls">
+                                        <button
+                                          type="button"
+                                          className="pcal-activity-move-btn"
+                                          onClick={(event) => {
+                                            event.stopPropagation();
+                                            void moveActivity({
+                                              activityId: a.id,
+                                              sourceDayId: day.id,
+                                              sourceIndex: activityIndex,
+                                              targetDayId: day.id,
+                                              rawTargetIndex: Math.max(0, activityIndex - 1)
+                                            });
+                                          }}
+                                          disabled={activityIndex === 0 || movingActivityId === a.id}
+                                          aria-label="Move activity up"
+                                        >
+                                          ↑
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className="pcal-activity-move-btn"
+                                          onClick={(event) => {
+                                            event.stopPropagation();
+                                            void moveActivity({
+                                              activityId: a.id,
+                                              sourceDayId: day.id,
+                                              sourceIndex: activityIndex,
+                                              targetDayId: day.id,
+                                              rawTargetIndex: activityIndex + 2
+                                            });
+                                          }}
+                                          disabled={activityIndex === activities.length - 1 || movingActivityId === a.id}
+                                          aria-label="Move activity down"
+                                        >
+                                          ↓
+                                        </button>
+                                      </span>
+                                    )}
                                   </div>
                                 )}
+                                </div>
                               </div>
                             );
                           })}
+                          {dropTarget && dropTarget.valid && day?.id && dropTarget.dayId === day.id && dropTarget.rawIndex === activities.length && (
+                            <div className="pcal-drop-indicator" aria-hidden="true" />
+                          )}
                         </div>
                       );
                     })}
@@ -2130,7 +2423,19 @@ export default function PlanDetailPage() {
         initialData={editingActivity || {}}
         title={editingActivity ? 'Edit Activity' : 'Add Activity'}
         dayId={addingToDayId || undefined}
-        sessionInstructions={(editingActivity as any)?.sessionInstructions ?? null}
+        sessionInstructions={
+          (() => {
+            const sessionText = typeof (editingActivity as any)?.sessionInstructions === 'string'
+              ? (editingActivity as any).sessionInstructions.trim()
+              : '';
+            if (sessionText) return sessionText;
+            const rawText = typeof (editingActivity as any)?.rawText === 'string'
+              ? (editingActivity as any).rawText.trim()
+              : '';
+            return rawText || null;
+          })()
+        }
+        dayOptions={dayOptions}
       />
 
 
