@@ -1582,7 +1582,12 @@ export async function importStravaDayForUser(args: {
 
     if (record.matchedPlanActivityId) {
       matched += 1;
-      if (shouldAutoApplyActuals(record.equivalence, record.equivalenceOverride, record.equivalenceConfidence)) {
+      const matchedActualType = mapStravaSportTypeToPlanType(activity.sportType);
+      const isRunDaySyncMatch = matchedCandidate?.type === 'RUN' && matchedActualType === 'RUN';
+      const shouldApplyActuals =
+        shouldAutoApplyActuals(record.equivalence, record.equivalenceOverride, record.equivalenceConfidence)
+        || isRunDaySyncMatch;
+      if (shouldApplyActuals) {
         const sessionMemberIds = decision?.sessionMemberIds;
         if (sessionMemberIds && sessionMemberIds.length > 0) {
           // Session match: distribute actuals proportionally across all session members
