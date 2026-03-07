@@ -3001,8 +3001,23 @@
   }
 
   .pcal-cell {
-    min-height: 64px;
-    padding: 10px;
+    min-height: 58px;
+    padding: 6px;
+  }
+
+  .pcal-cell-date {
+    font-size: 10px;
+  }
+
+  .pcal-activity-title {
+    font-size: 11px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .pcal-activity-meta {
+    display: none;
   }
 
   .pcal-header h1 {
