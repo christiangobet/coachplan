@@ -106,13 +106,51 @@ function buildPlannedSummary(activity: LogActivity): string | null {
   return activity.plannedDetails.join(' · ');
 }
 
-function buildEffectiveActualSummary(activity: LogActivity, viewerUnits: DistanceUnit): string | null {
-  if (activity.type !== 'RUN') return null;
-  if (activity.actualDistance == null && activity.actualDuration == null) return null;
-  const parts: string[] = [];
-  if (activity.actualDistance != null) {
-    parts.push(`${formatDistanceNumber(activity.actualDistance)} ${distanceUnitLabel(viewerUnits)}`);
+function trimUnitFromValue(value: string, unit: string) {
+  if (!unit) return value;
+  if (value.endsWith(` ${unit}`)) return value.slice(0, -(unit.length + 1));
+  if (value.endsWith(unit)) return value.slice(0, -unit.length);
+  return value;
+}
+
+function buildDistanceProgressLabel(planned: string | null, logged: string | null, unit?: string) {
+  if (planned && logged) {
+    const plannedCompact = unit ? trimUnitFromValue(planned, unit) : planned;
+    return `${plannedCompact} \u2192 ${logged}`;
   }
+  if (logged) return logged;
+  if (planned) return planned;
+  return null;
+}
+
+function formatDistanceOneDecimal(value: number) {
+  return value.toFixed(1);
+}
+
+function distanceProgressTone(planned: string | null, logged: string | null) {
+  if (planned && logged) return 'mix';
+  if (logged) return 'logged';
+  return 'planned';
+}
+
+function buildRunDistanceProgress(activity: LogActivity, viewerUnits: DistanceUnit) {
+  if (activity.type !== 'RUN') return null;
+  const unit = distanceUnitLabel(viewerUnits);
+  const planned = activity.plannedDistance != null ? `${formatDistanceOneDecimal(activity.plannedDistance)} ${unit}` : null;
+  const logged = activity.actualDistance != null ? `${formatDistanceOneDecimal(activity.actualDistance)} ${unit}` : null;
+  const text = buildDistanceProgressLabel(planned, logged, unit);
+  if (!text) return null;
+  return {
+    text,
+    tone: distanceProgressTone(planned, logged)
+  };
+}
+
+function buildEffectiveActualSummary(activity: LogActivity): string | null {
+  if (activity.type !== 'RUN') return null;
+  if (activity.actualDistance == null && activity.actualDuration == null && !activity.actualPace) return null;
+  const parts: string[] = [];
+  // Distance is shown in the compact planned/logged pill.
   if (activity.actualDuration != null) {
     parts.push(`${activity.actualDuration} min`);
   }
@@ -737,7 +775,8 @@ export default function DayLogCard({
             };
             const showForm = enabled && !isClosed && !activity.completed;
             const plannedSummary = buildPlannedSummary(activity);
-            const effectiveActualSummary = buildEffectiveActualSummary(activity, viewerUnits);
+            const runDistanceProgress = buildRunDistanceProgress(activity, viewerUnits);
+            const effectiveActualSummary = buildEffectiveActualSummary(activity);
             return (
               <div key={activity.id} className="cal-activity-section">
                 <div className="cal-activity-workout-row">
@@ -750,14 +789,15 @@ export default function DayLogCard({
                       {activity.completed && <span className="cal-activity-done-chip">✓</span>}
                     </span>
                     {plannedSummary && (
-                      <span className="cal-activity-metrics">
-                        <strong>Planned:</strong> {plannedSummary}
+                      <span className="cal-activity-metrics">{plannedSummary}</span>
+                    )}
+                    {runDistanceProgress && (
+                      <span className={`cal-activity-distance-progress ${runDistanceProgress.tone}`}>
+                        {runDistanceProgress.text}
                       </span>
                     )}
                     {effectiveActualSummary && (
-                      <span className="cal-activity-effective-distance">
-                        <strong>Logged:</strong> {effectiveActualSummary}
-                      </span>
+                      <span className="cal-activity-effective-distance">{effectiveActualSummary}</span>
                     )}
                   </div>
                 </div>
@@ -798,28 +838,25 @@ export default function DayLogCard({
             ? members.reduce((s, m) => s + (m.actualDuration ?? 0), 0)
             : null;
           const distUnit = distanceUnitLabel(viewerUnits);
+          const plannedDistText = totalPlannedDist > 0 ? `${formatDistanceOneDecimal(totalPlannedDist)} ${distUnit}` : null;
+          const loggedDistText = totalActualDist != null ? `${formatDistanceOneDecimal(totalActualDist)} ${distUnit}` : null;
+          const distanceProgress = buildDistanceProgressLabel(plannedDistText, loggedDistText, distUnit);
+          const durationProgress = buildDistanceProgressLabel(
+            totalPlannedDur > 0 ? `~${totalPlannedDur} min` : null,
+            totalActualDur != null ? `${totalActualDur} min` : null
+          );
 
           return (
             <details key={`session-${item.group.sessionGroupId}-${idx}`} className="cal-session-group">
               <summary className="cal-session-group-header">
                 <span className="cal-session-group-label">Session</span>
-                {(totalPlannedDist > 0 || totalPlannedDur > 0 || totalActualDist != null || totalActualDur != null) && (
+                {(distanceProgress || durationProgress) && (
                   <span className="cal-session-group-meta">
                     <span className="cal-session-group-planned">
-                      Planned:
-                      {totalPlannedDist > 0 ? ` ${formatDistanceNumber(totalPlannedDist)} ${distUnit}` : ''}
-                      {totalPlannedDur > 0 ? ` · ~${totalPlannedDur} min` : ''}
+                      {distanceProgress || ''}
+                      {distanceProgress && durationProgress ? ' · ' : ''}
+                      {durationProgress || ''}
                     </span>
-                    {(totalActualDist != null || totalActualDur != null) && (
-                      <>
-                        {' · '}
-                        <span className="cal-session-actual">
-                          Logged:
-                          {totalActualDist != null ? ` ${formatDistanceNumber(totalActualDist)} ${distUnit}` : ''}
-                          {totalActualDur != null ? ` · ${totalActualDur} min` : ''}
-                        </span>
-                      </>
-                    )}
                   </span>
                 )}
               </summary>
@@ -835,7 +872,8 @@ export default function DayLogCard({
                   const showForm = enabled && !isClosed && !activity.completed;
                   const isLast = mIdx === members.length - 1;
                   const plannedSummary = buildPlannedSummary(activity);
-                  const effectiveActualSummary = buildEffectiveActualSummary(activity, viewerUnits);
+                  const runDistanceProgress = buildRunDistanceProgress(activity, viewerUnits);
+                  const effectiveActualSummary = buildEffectiveActualSummary(activity);
                   return (
                     <div key={activity.id} className={`cal-activity-section cal-session-member${isLast ? ' cal-session-member--last' : ''}`}>
                       <div className="cal-activity-workout-row">
@@ -848,14 +886,15 @@ export default function DayLogCard({
                             {activity.completed && <span className="cal-activity-done-chip">✓</span>}
                           </span>
                           {plannedSummary && (
-                            <span className="cal-activity-metrics">
-                              <strong>Planned:</strong> {plannedSummary}
+                            <span className="cal-activity-metrics">{plannedSummary}</span>
+                          )}
+                          {runDistanceProgress && (
+                            <span className={`cal-activity-distance-progress ${runDistanceProgress.tone}`}>
+                              {runDistanceProgress.text}
                             </span>
                           )}
                           {effectiveActualSummary && (
-                            <span className="cal-activity-effective-distance">
-                              <strong>Logged:</strong> {effectiveActualSummary}
-                            </span>
+                            <span className="cal-activity-effective-distance">{effectiveActualSummary}</span>
                           )}
                         </div>
                       </div>

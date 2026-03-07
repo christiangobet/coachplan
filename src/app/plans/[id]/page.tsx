@@ -22,6 +22,8 @@ import DayLogCard from '@/components/DayLogCard';
 import PlanSourcePdfPane from '@/components/PlanSourcePdfPane';
 import PlanGuidePanel from '@/components/PlanGuidePanel';
 import PlanSummarySection from '@/components/PlanSummarySection';
+import ExternalSportIcon from '@/components/ExternalSportIcon';
+import StravaIcon from '@/components/StravaIcon';
 import type { PlanSummary } from '@/lib/types/plan-summary';
 import { buildLogActivities, type LogActivity } from '@/lib/log-activity';
 import '../plans.css';
@@ -47,6 +49,33 @@ const PACE_BUCKET_SHORT: Record<string, string> = {
 
 function formatType(type: string) {
   return type.replace(/_/g, ' ').toLowerCase().replace(/^\w/, (c) => c.toUpperCase());
+}
+
+function trimUnitFromValue(value: string, unit: string) {
+  if (!unit) return value;
+  if (value.endsWith(` ${unit}`)) return value.slice(0, -(unit.length + 1));
+  if (value.endsWith(unit)) return value.slice(0, -unit.length);
+  return value;
+}
+
+function buildDistanceProgressLabel(planned: string | null, logged: string | null, unit?: string) {
+  if (planned && logged) {
+    const plannedCompact = unit ? trimUnitFromValue(planned, unit) : planned;
+    return `${plannedCompact} \u2192 ${logged}`;
+  }
+  if (logged) return logged;
+  if (planned) return planned;
+  return null;
+}
+
+function distanceProgressVariant(planned: string | null, logged: string | null) {
+  if (planned && logged) return 'mix';
+  if (logged) return 'logged';
+  return 'planned';
+}
+
+function formatDistanceOneDecimal(value: number) {
+  return value.toFixed(1);
 }
 
 
@@ -78,6 +107,11 @@ type SelectedDayState = {
   activities: LogActivity[];
   dayStatus: DayStatus;
   missedReason: string | null;
+};
+
+type DayStravaMarker = {
+  id: string;
+  sportType: string | null;
 };
 
 
@@ -434,6 +468,7 @@ export default function PlanDetailPage() {
   const [cellView, setCellView] = useState<'compact' | 'detail'>('detail');
   const [selectedDay, setSelectedDay] = useState<SelectedDayState | null>(null);
   const [stravaConnected, setStravaConnected] = useState(false);
+  const [stravaMarkersByDate, setStravaMarkersByDate] = useState<Record<string, DayStravaMarker[]>>({});
   const [aiTrainerInput, setAiTrainerInput] = useState('');
   const [aiChatTurns, setAiChatTurns] = useState<AiChatTurn[]>(() => [
     createAiGreetingTurn()
@@ -573,6 +608,34 @@ export default function PlanDetailPage() {
     setEditingActivity(null);
   };
 
+  const loadStravaMarkers = useCallback(async (targetPlanId: string) => {
+    if (!targetPlanId) {
+      setStravaMarkersByDate({});
+      return;
+    }
+    try {
+      const res = await fetch(`/api/integrations/strava/review?plan=${encodeURIComponent(targetPlanId)}`, {
+        cache: 'no-store'
+      });
+      const payload = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(payload?.error || 'Failed to load Strava markers');
+
+      const next: Record<string, DayStravaMarker[]> = {};
+      for (const day of payload?.days || []) {
+        if (!day || typeof day.date !== 'string' || !Array.isArray(day.stravaActivities)) continue;
+        next[day.date] = day.stravaActivities
+          .map((activity: any) => ({
+            id: String(activity?.id || ''),
+            sportType: typeof activity?.sportType === 'string' ? activity.sportType : null
+          }))
+          .filter((activity: DayStravaMarker) => activity.id.length > 0);
+      }
+      setStravaMarkersByDate(next);
+    } catch {
+      setStravaMarkersByDate({});
+    }
+  }, []);
+
   const loadPlan = useCallback(async () => {
     if (!planId) return;
     try {
@@ -591,6 +654,7 @@ export default function PlanDetailPage() {
       }
       setViewerUnits(data?.viewerUnits === 'KM' ? 'KM' : 'MILES');
       setPlan(data.plan);
+      await loadStravaMarkers(planId);
       setSelectedActivity((prev: any) => {
         if (!prev) return prev;
         const located = locateActivityInPlan(data.plan, prev.id);
@@ -604,7 +668,7 @@ export default function PlanDetailPage() {
     } catch (err: any) {
       setError(err?.message || 'Failed to load plan.');
     }
-  }, [planId]);
+  }, [loadStravaMarkers, planId]);
 
   const moveActivity = useCallback(async (args: {
     activityId: string;
@@ -667,6 +731,24 @@ export default function PlanDetailPage() {
       document.body.style.overflow = previousOverflow;
     };
   }, [selectedDay]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!selectedDay) return;
+    if (!window.matchMedia('(min-width: 901px)').matches) return;
+
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (!target) return;
+      if (target.closest('.pcal-chat-panel')) return;
+      if (target.closest('.pcal-cell')) return;
+      setSelectedDay(null);
+      void loadPlan();
+    };
+
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => document.removeEventListener('pointerdown', onPointerDown);
+  }, [loadPlan, selectedDay]);
 
   useEffect(() => {
     fetch('/api/integrations/accounts')
@@ -887,6 +969,11 @@ export default function PlanDetailPage() {
       setSavingActuals(false);
     }
   }, [selectedActivity, savingActuals, actualDistance, actualDuration, actualPace, viewerUnits, applyActivityUpdate]);
+
+  const closeSelectedDayPanel = useCallback(() => {
+    setSelectedDay(null);
+    void loadPlan();
+  }, [loadPlan]);
 
   const generateAiAdjustment = useCallback(async () => {
     if (!planId) return;
@@ -1258,7 +1345,7 @@ export default function PlanDetailPage() {
   const formatDisplayDistance = (value: number | null | undefined, sourceUnit: string | null | undefined) => {
     const converted = toDisplayDistance(value, sourceUnit);
     if (!converted) return null;
-    return `${formatDistanceNumber(converted.value)}${distanceUnitLabel(converted.unit)}`;
+    return `${formatDistanceOneDecimal(converted.value)}${distanceUnitLabel(converted.unit)}`;
   };
   const formatDisplayPace = (pace: string | null | undefined, sourceUnit: string | null | undefined) =>
     convertPaceForDisplay(pace, viewerUnits, sourceUnit || viewerUnits);
@@ -1348,7 +1435,7 @@ export default function PlanDetailPage() {
       )}
 
       <div className={showDesktopSourcePane ? 'pcal-main-column' : undefined}>
-      <div className={`pcal-layout${showDesktopSourcePane ? ' pdf-open' : ''}`} data-debug-id="PLD">
+      <div className={`pcal-layout${showDesktopSourcePane ? ' pdf-open' : ''}${selectedDay ? ' day-open' : ''}`} data-debug-id="PLD">
         <AthleteSidebar
           name={user?.fullName || user?.firstName || 'Athlete'}
           active="plan-view"
@@ -1787,6 +1874,10 @@ export default function PlanDetailPage() {
                       const isToday = dayDate && dayDate.getTime() === today.getTime();
                       const isPast = dayDate && dayDate.getTime() < today.getTime();
                       const showMonthInDate = !!dayDate && (dow === 1 || dayDate.getDate() === 1);
+                      const dayDateKey = dayDate ? toLocalDateKey(dayDate) : null;
+                      const dayStravaLogs = dayDateKey ? (stravaMarkersByDate[dayDateKey] || []) : [];
+                      const stravaMarkerLogs = dayStravaLogs.slice(0, 3);
+                      const stravaOverflow = Math.max(0, dayStravaLogs.length - stravaMarkerLogs.length);
 
                       const openDayLog = () => {
                         if (!dayDate) return;
@@ -1894,17 +1985,19 @@ export default function PlanDetailPage() {
                             );
                             const details: string[] = [];
                             const isRun = String(a.type || '').toUpperCase() === 'RUN';
-                            let runDistanceLabel: 'Logged' | 'To do' | null = null;
-                            let runDistanceValue: string | null = null;
+                            const plannedDistanceLabel = formatDisplayDistance(a.distance, plannedSourceUnit);
+                            const loggedDistanceLabel = formatDisplayDistance(a.actualDistance, actualSourceUnit);
+                            const runDistanceValue = isRun
+                              ? buildDistanceProgressLabel(plannedDistanceLabel, loggedDistanceLabel, viewerUnitLabel)
+                              : null;
+                            const runDistanceTone = distanceProgressVariant(plannedDistanceLabel, loggedDistanceLabel);
                             let targetBadges: string[] = [];
                             let paceShort: string | null = null;
                             let displayPaceTarget: string | null = null;
 
                             if (viewMode === 'plan') {
-                              const plannedDistanceLabel = formatDisplayDistance(a.distance, plannedSourceUnit);
                               if (isRun) {
-                                runDistanceLabel = 'To do';
-                                runDistanceValue = plannedDistanceLabel || 'Not set';
+                                // Run distance is rendered in the compact progress pill below.
                               } else if (plannedDistanceLabel) {
                                 details.push(plannedDistanceLabel);
                               }
@@ -1934,25 +2027,23 @@ export default function PlanDetailPage() {
                                 }
                               }
 
-                              if (a.effortTarget) targetBadges = [`Effort ${a.effortTarget}`];
+                              if (a.effortTarget && cellView !== 'compact') {
+                                targetBadges = [`Effort ${a.effortTarget}`];
+                              }
                             } else {
                               // Log view: actuals for completed, planned for upcoming
                               if (a.completed) {
-                                const actualDistanceLabel = formatDisplayDistance(a.actualDistance, actualSourceUnit);
                                 if (isRun) {
-                                  runDistanceLabel = 'Logged';
-                                  runDistanceValue = actualDistanceLabel || 'Not entered';
-                                } else if (actualDistanceLabel) {
-                                  details.push(actualDistanceLabel);
+                                  // Run distance is rendered in the compact progress pill below.
+                                } else if (loggedDistanceLabel) {
+                                  details.push(loggedDistanceLabel);
                                 }
                                 if (a.actualDuration) details.push(`${a.actualDuration}m`);
                                 const displayActualPace = formatDisplayPace(a.actualPace, actualSourceUnit);
                                 if (displayActualPace) details.push(displayActualPace);
                               } else {
-                                const plannedDistanceLabel = formatDisplayDistance(a.distance, plannedSourceUnit);
                                 if (isRun) {
-                                  runDistanceLabel = 'To do';
-                                  runDistanceValue = plannedDistanceLabel || 'Not set';
+                                  // Run distance is rendered in the compact progress pill below.
                                 } else if (plannedDistanceLabel) {
                                   details.push(plannedDistanceLabel);
                                 }
@@ -1967,24 +2058,50 @@ export default function PlanDetailPage() {
                             if (cellView === 'compact') {
                               if (sessionCount && sessionCount > 1) {
                                 const members = activities.filter((x: any) => x.sessionGroupId === a.sessionGroupId);
-                                let total = 0;
-                                let hasAny = false;
+                                let totalPlanned = 0;
+                                let totalLogged = 0;
+                                let hasPlanned = false;
+                                let hasLogged = false;
                                 for (const m of members) {
-                                  const srcUnit = resolveActivityDistanceSourceUnit(
+                                  const plannedMemberSource = resolveActivityDistanceSourceUnit(
                                     m,
                                     viewerUnits,
-                                    viewMode === 'log' && m.completed,
+                                    false,
                                     plannedSourceUnit
                                   );
-                                  const rawDistance = viewMode === 'log' && m.completed ? m.actualDistance : m.distance;
-                                  const converted = toDisplayDistance(rawDistance, srcUnit);
-                                  if (converted) { total += converted.value; hasAny = true; }
+                                  const loggedMemberSource = resolveActivityDistanceSourceUnit(
+                                    m,
+                                    viewerUnits,
+                                    true,
+                                    plannedSourceUnit
+                                  );
+                                  const plannedConverted = toDisplayDistance(m.distance, plannedMemberSource);
+                                  const loggedConverted = toDisplayDistance(m.actualDistance, loggedMemberSource);
+                                  if (plannedConverted) {
+                                    totalPlanned += plannedConverted.value;
+                                    hasPlanned = true;
+                                  }
+                                  if (loggedConverted) {
+                                    totalLogged += loggedConverted.value;
+                                    hasLogged = true;
+                                  }
                                 }
-                                if (hasAny) compactDistLabel = `${formatDistanceNumber(total)}${viewerUnitLabel}`;
+                                if (isRun) {
+                                  const plannedText = hasPlanned ? `${formatDistanceOneDecimal(totalPlanned)}${viewerUnitLabel}` : null;
+                                  const loggedText = hasLogged ? `${formatDistanceOneDecimal(totalLogged)}${viewerUnitLabel}` : null;
+                                  compactDistLabel = buildDistanceProgressLabel(plannedText, loggedText, viewerUnitLabel);
+                                } else if (hasPlanned || hasLogged) {
+                                  const value = viewMode === 'log' && hasLogged ? totalLogged : totalPlanned;
+                                  compactDistLabel = `${formatDistanceOneDecimal(value)}${viewerUnitLabel}`;
+                                }
                               } else {
-                                const compactSourceUnit = viewMode === 'log' && a.completed ? actualSourceUnit : plannedSourceUnit;
-                                const compactRawDistance = viewMode === 'log' && a.completed ? a.actualDistance : a.distance;
-                                compactDistLabel = formatDisplayDistance(compactRawDistance, compactSourceUnit);
+                                if (isRun) {
+                                  compactDistLabel = buildDistanceProgressLabel(plannedDistanceLabel, loggedDistanceLabel, viewerUnitLabel);
+                                } else {
+                                  const compactSourceUnit = viewMode === 'log' && a.completed ? actualSourceUnit : plannedSourceUnit;
+                                  const compactRawDistance = viewMode === 'log' && a.completed ? a.actualDistance : a.distance;
+                                  compactDistLabel = formatDisplayDistance(compactRawDistance, compactSourceUnit);
+                                }
                               }
                             }
 
@@ -2150,9 +2267,9 @@ export default function PlanDetailPage() {
                                         {details.join(' · ')}
                                       </span>
                                     )}
-                                    {runDistanceLabel && runDistanceValue && (
-                                      <span className={`pcal-run-distance-line ${runDistanceLabel === 'Logged' ? 'logged' : 'planned'}`}>
-                                        <strong>{runDistanceLabel}:</strong> {runDistanceValue}
+                                    {runDistanceValue && (
+                                      <span className={`pcal-run-distance-line ${runDistanceTone}`}>
+                                        {runDistanceValue}
                                       </span>
                                     )}
                                     {(paceShort || displayPaceTarget || targetBadges.length > 0) && (
@@ -2220,6 +2337,24 @@ export default function PlanDetailPage() {
                               </div>
                             );
                           })}
+                          {dayStravaLogs.length > 0 && (
+                            <span className="pcal-strava-pill">
+                              <StravaIcon size={12} className="pcal-strava-pill-logo" />
+                              <span className="pcal-strava-pill-icons">
+                                {stravaMarkerLogs.map((log) => (
+                                  <ExternalSportIcon
+                                    key={log.id}
+                                    provider="STRAVA"
+                                    sportType={log.sportType}
+                                    className="pcal-strava-icon"
+                                  />
+                                ))}
+                                {stravaOverflow > 0 && (
+                                  <span className="pcal-strava-pill-more">+{stravaOverflow}</span>
+                                )}
+                              </span>
+                            </span>
+                          )}
                           {dropTarget && dropTarget.valid && day?.id && dropTarget.dayId === day.id && dropTarget.rawIndex === activities.length && (
                             <div className="pcal-drop-indicator" aria-hidden="true" />
                           )}
@@ -2233,7 +2368,11 @@ export default function PlanDetailPage() {
           </div>
         </section>
 
-        <aside className={`pcal-chat-panel${selectedDay ? ' day-open' : ''}`} id="ai-trainer" data-debug-id="PSB">
+        <aside
+          className={`pcal-chat-panel${selectedDay ? ' day-open' : ''}`}
+          id="ai-trainer"
+          data-debug-id="PSB"
+        >
           {selectedDay && (
             <div className="pcal-day-panel" data-debug-id="PDL">
               <div className="pcal-day-modal-head">
@@ -2246,15 +2385,15 @@ export default function PlanDetailPage() {
                     const isRun = String(a.type || '').toUpperCase() === 'RUN';
                     const unitLabel = distanceUnitLabel(viewerUnits);
                     const plannedDistanceText = a.plannedDistance != null
-                      ? `${formatDistanceNumber(a.plannedDistance)} ${unitLabel}`
+                      ? `${formatDistanceOneDecimal(a.plannedDistance)} ${unitLabel}`
                       : null;
                     const loggedDistanceText = a.actualDistance != null
-                      ? `${formatDistanceNumber(a.actualDistance)} ${unitLabel}`
+                      ? `${formatDistanceOneDecimal(a.actualDistance)} ${unitLabel}`
                       : null;
-                    const distanceLabel = isRun ? (a.completed ? 'Logged' : 'To do') : null;
                     const distanceValue = isRun
-                      ? (a.completed ? (loggedDistanceText || 'Not entered') : (plannedDistanceText || 'Not set'))
+                      ? buildDistanceProgressLabel(plannedDistanceText, loggedDistanceText, unitLabel)
                       : null;
+                    const distanceTone = distanceProgressVariant(plannedDistanceText, loggedDistanceText);
 
                     return (
                       <div key={a.id} className="pcal-day-modal-activity">
@@ -2266,9 +2405,9 @@ export default function PlanDetailPage() {
                           {a.plannedDetails.length > 0 && (
                             <span className="pcal-day-modal-metrics">{a.plannedDetails.join(' · ')}</span>
                           )}
-                          {distanceLabel && distanceValue && (
-                            <span className={`pcal-day-modal-distance-line ${a.completed ? 'logged' : 'planned'}`}>
-                              <strong>{distanceLabel}:</strong> {distanceValue}
+                          {distanceValue && (
+                            <span className={`pcal-day-modal-distance-line ${distanceTone}`}>
+                              {distanceValue}
                             </span>
                           )}
                         </div>
@@ -2279,7 +2418,7 @@ export default function PlanDetailPage() {
                 <button
                   type="button"
                   className="pcal-day-modal-close"
-                  onClick={() => { setSelectedDay(null); loadPlan(); }}
+                  onClick={closeSelectedDayPanel}
                   aria-label="Close"
                 >
                   ✕
@@ -2297,7 +2436,7 @@ export default function PlanDetailPage() {
                 stravaConnected={stravaConnected}
                 enabled
                 planView={isEditMode}
-                onClose={() => { setSelectedDay(null); loadPlan(); }}
+                onClose={closeSelectedDayPanel}
               />
             </div>
           )}

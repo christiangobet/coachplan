@@ -277,7 +277,7 @@ function buildDistanceProgressLabel(planned: string | null, logged: string | nul
     return `${plannedCompact} \u2192 ${logged}`;
   }
   if (logged) return logged;
-  if (planned) return `P: ${planned}`;
+  if (planned) return planned;
   return null;
 }
 
