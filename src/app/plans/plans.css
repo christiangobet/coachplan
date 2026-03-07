@@ -2520,6 +2520,21 @@
   .pcal-chat-panel {
     position: static;
     top: auto;
+    width: 100%;
+    right: auto;
+    bottom: auto;
+    transform: none;
+    transition: none;
+    border-left: none;
+    border: 1px solid var(--d-border);
+    border-radius: var(--d-radius);
+    box-shadow: none;
+    display: none;
+    overflow: visible;
+  }
+
+  .pcal-chat-panel.day-open {
+    display: block;
   }
 
   .pcal-side {
@@ -2606,6 +2621,32 @@
 }
 
 @media (max-width: 640px) {
+  .pcal {
+    padding: 16px 12px 28px;
+  }
+
+  .pcal-header-top {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .pcal-header-actions {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .pcal-calendar-header-top {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+  }
+
+  .pcal-calendar-header-top .pcal-view-toggle {
+    width: 100%;
+    justify-content: space-between;
+  }
+
   .pcal-ai-trainer-head {
     flex-direction: column;
     align-items: stretch;
@@ -2633,11 +2674,6 @@
 
   .pcal-header {
     flex-direction: column;
-  }
-
-  .pcal-header-actions {
-    width: 100%;
-    justify-content: space-between;
   }
 
   .pcal-race-panel-head {
@@ -2797,7 +2833,7 @@
   }
 
   .pcal-week-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .pcal-cell {
@@ -2813,10 +2849,18 @@
     font-size: 11px;
     padding: 0 8px;
     min-height: 28px;
+    flex: 1;
+    min-width: 0;
   }
 
   .plan-card {
     border-radius: 8px;
+  }
+}
+
+@media (max-width: 360px) {
+  .pcal-week-grid {
+    grid-template-columns: 1fr;
   }
 }
 
