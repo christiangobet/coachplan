@@ -143,6 +143,23 @@
   color: var(--d-muted);
 }
 
+.legendCurrent {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font: 600 10px/1 'Figtree', sans-serif;
+  color: var(--d-text-mid);
+}
+
+.legendCurrentDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #fc4c02;
+  box-shadow: 0 0 0 2px rgba(252, 76, 2, 0.18);
+  flex-shrink: 0;
+}
+
 .curveSvg {
   display: block;
   width: 100%;

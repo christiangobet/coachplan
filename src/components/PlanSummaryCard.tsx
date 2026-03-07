@@ -13,6 +13,7 @@ type Props = {
   onExtract?: () => Promise<void>;
   weeklyRuns?: WeeklyRunPoint[];
   weeklyRunUnit?: string;
+  currentWeekIndex?: number | null;
 };
 
 // ── Icon components ─────────────────────────────────────────────────────────
@@ -96,7 +97,15 @@ function intensityClass(intensity?: WeekDay['intensity']): string {
 
 // ── Weekly run chart SVG ─────────────────────────────────────────────────────
 
-function WeeklyRunChart({ points, unit }: { points: WeeklyRunPoint[]; unit: string }) {
+function WeeklyRunChart({
+  points,
+  unit,
+  currentWeekIndex
+}: {
+  points: WeeklyRunPoint[];
+  unit: string;
+  currentWeekIndex?: number | null;
+}) {
   const W = 640;
   const H = 112;
   const padX = 10;
@@ -125,6 +134,10 @@ function WeeklyRunChart({ points, unit }: { points: WeeklyRunPoint[]; unit: stri
   const labelIdxSet = new Set<number>([0, n - 1]);
   points.forEach((p, i) => { if (p.weekIndex % 4 === 0) labelIdxSet.add(i); });
   const labelIdxs = [...labelIdxSet].sort((a, b) => a - b);
+  const currentIdx =
+    typeof currentWeekIndex === 'number'
+      ? points.findIndex((point) => point.weekIndex === currentWeekIndex)
+      : -1;
 
   const peakTotal = Math.round(maxVal * 10) / 10;
 
@@ -139,6 +152,12 @@ function WeeklyRunChart({ points, unit }: { points: WeeklyRunPoint[]; unit: stri
           <div className={s.curveLegend}>
             <span className={s.legendTotal}>— Total</span>
             <span className={s.legendLr}>- - Long run</span>
+            {currentIdx >= 0 && (
+              <span className={s.legendCurrent}>
+                <span className={s.legendCurrentDot} aria-hidden="true" />
+                Current week
+              </span>
+            )}
           </div>
         )}
       </div>
@@ -158,6 +177,24 @@ function WeeklyRunChart({ points, unit }: { points: WeeklyRunPoint[]; unit: stri
         {/* Long run dashed line */}
         {hasLongRun && (
           <path d={lrPath} fill="none" stroke="#aaaaaa" strokeWidth="1.8" strokeDasharray="5 3" strokeLinejoin="round" strokeLinecap="round" />
+        )}
+        {currentIdx >= 0 && (
+          <>
+            <circle
+              cx={xAt(currentIdx)}
+              cy={yAt(points[currentIdx].total)}
+              r="7"
+              fill="rgba(252, 76, 2, 0.16)"
+            />
+            <circle
+              cx={xAt(currentIdx)}
+              cy={yAt(points[currentIdx].total)}
+              r="4.5"
+              fill="#fc4c02"
+              stroke="#ffffff"
+              strokeWidth="2"
+            />
+          </>
         )}
         {/* X-axis week labels */}
         {labelIdxs.map(i => (
@@ -180,7 +217,13 @@ function WeeklyRunChart({ points, unit }: { points: WeeklyRunPoint[]; unit: stri
 
 // ── Main component ──────────────────────────────────────────────────────────
 
-export default function PlanSummaryCard({ summary, onExtract, weeklyRuns, weeklyRunUnit = 'km' }: Props) {
+export default function PlanSummaryCard({
+  summary,
+  onExtract,
+  weeklyRuns,
+  weeklyRunUnit = 'km',
+  currentWeekIndex
+}: Props) {
   const hasChart = weeklyRuns && weeklyRuns.length >= 2;
 
   if (!summary) {
@@ -231,11 +274,12 @@ export default function PlanSummaryCard({ summary, onExtract, weeklyRuns, weekly
 
         {/* Running volume chart — real data takes priority over AI loadCurve */}
         {hasChart ? (
-          <WeeklyRunChart points={weeklyRuns!} unit={weeklyRunUnit} />
+          <WeeklyRunChart points={weeklyRuns!} unit={weeklyRunUnit} currentWeekIndex={currentWeekIndex} />
         ) : summary.loadCurve?.points?.length ? (
           <WeeklyRunChart
             points={summary.loadCurve.points.map((v, i) => ({ weekIndex: i + 1, total: v, longRun: 0 }))}
             unit={weeklyRunUnit}
+            currentWeekIndex={currentWeekIndex}
           />
         ) : null}
 

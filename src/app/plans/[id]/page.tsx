@@ -1228,6 +1228,23 @@ export default function PlanDetailPage() {
     }
     return { weekIndex: week.weekIndex as number, total: Math.round(total * 10) / 10, longRun: Math.round(longRun * 10) / 10 };
   });
+  const activeCurrentWeekIndex = (() => {
+    if (plan.status !== 'ACTIVE') return null;
+    for (const week of weeks) {
+      const bounds = resolveWeekBounds({
+        weekIndex: week.weekIndex,
+        weekStartDate: week.startDate,
+        weekEndDate: week.endDate,
+        raceDate: plan.raceDate,
+        weekCount: plan.weekCount,
+        allWeekIndexes
+      });
+      if (bounds.startDate && bounds.endDate && today >= bounds.startDate && today <= bounds.endDate) {
+        return week.weekIndex as number;
+      }
+    }
+    return null;
+  })();
   const formatDisplayDistance = (value: number | null | undefined, sourceUnit: string | null | undefined) => {
     const converted = toDisplayDistance(value, sourceUnit);
     if (!converted) return null;
@@ -1399,6 +1416,7 @@ export default function PlanDetailPage() {
                   planId={planId as string}
                   weeklyRuns={weeklyRunData}
                   weeklyRunUnit={viewerUnitLabel}
+                  currentWeekIndex={activeCurrentWeekIndex}
                   onExtract={async () => {
                     await fetch(`/api/plans/${planId}/extract-guide`, { method: 'POST' });
                     await loadPlan();
