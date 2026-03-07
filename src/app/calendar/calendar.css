@@ -7,61 +7,28 @@
   min-width: 0;
 }
 
-.cal-page .cal-right {
-  display: none;
-  min-width: 0;
-  width: 100%;
-}
+/* Desktop: right pane shown as inline sidebar column when day is open */
+@media (min-width: 901px) {
+  /* Right pane column is hidden by default */
+  .cal-page .cal-right {
+    display: none;
+    min-width: 0;
+    width: 100%;
+  }
 
-.cal-page.cal-day-open .cal-right {
-  display: block;
-  position: fixed;
-  inset: 0;
-  z-index: 205;
-  width: 100vw;
-  max-width: 100vw;
-  margin: 0;
-  padding: 0;
-  pointer-events: none;
-}
+  /* When a day is open: expand to 3 columns and show the right pane */
+  .cal-page.cal-day-open .dash-grid {
+    grid-template-columns: minmax(208px, 220px) minmax(0, 1fr) minmax(280px, 320px);
+  }
 
-.cal-page.cal-day-open .cal-right > .cal-info-card:not(.cal-day-details-card) {
-  display: none;
-}
+  .cal-page.cal-day-open .cal-right {
+    display: block;
+  }
 
-.cal-page.cal-day-open .cal-day-details-card.is-open {
-  position: fixed;
-  inset: 0;
-  z-index: 210;
-  width: 100vw;
-  max-width: 100vw;
-  height: 100dvh;
-  max-height: 100dvh;
-  border-radius: 0;
-  border-left: none;
-  box-shadow: none;
-  display: flex;
-  flex-direction: column;
-  pointer-events: auto;
-}
-
-.cal-page.cal-day-open .cal-day-details-card.is-open .cal-detail-header {
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  background: #fff;
-}
-
-.cal-page.cal-day-open .cal-day-details-card.is-open .cal-day-details-body {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior: contain;
-}
-
-.cal-page.cal-day-open .cal-day-details-card.is-open .cal-detail-close {
-  display: inline-flex;
+  /* Hide close button on desktop (no full-screen overlay to close) */
+  .cal-detail-close {
+    display: none;
+  }
 }
 
 .cal-header {
