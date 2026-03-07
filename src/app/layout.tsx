@@ -1,12 +1,14 @@
 import type { Metadata, Viewport } from "next";
+import { Suspense } from "react";
 import { UserRole } from "@prisma/client";
 import { ClerkProvider } from "@clerk/nextjs";
 import { getCurrentUserRoleContext, getRoleHomePath, getRoleLabel } from "@/lib/user-roles";
 import Header from "@/components/Header";
+import MobileNav from "@/components/MobileNav";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "CoachPlan",
+  title: "MyTrainingPlan",
   description: "Upload training plans, align to race day, and track progress.",
 };
 
@@ -61,7 +63,7 @@ export default async function RootLayout({
     <html lang="en">
       <body>
         <Header
-          brand="CoachPlan"
+          brand="MyTrainingPlan"
           brandHref={signedInHome}
           roleChip={isSignedIn ? getRoleLabel(currentRole) : undefined}
           roleChipClass={isSignedIn ? `env-chip-${currentRole.toLowerCase()}` : undefined}
@@ -81,6 +83,11 @@ export default async function RootLayout({
           </main>
         ) : (
           children
+        )}
+        {!isAccountInactive && (
+          <Suspense fallback={null}>
+            <MobileNav />
+          </Suspense>
         )}
       </body>
     </html>

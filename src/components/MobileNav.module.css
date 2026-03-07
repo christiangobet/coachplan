@@ -1,0 +1,49 @@
+.nav {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .nav {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 200;
+    background: #fff;
+    border-top: 1px solid #e5e5e5;
+    padding-bottom: env(safe-area-inset-bottom);
+    box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.08);
+  }
+
+  .tab {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    padding: 8px 4px 6px;
+    color: #9b9ba3;
+    text-decoration: none;
+    font-family: 'Figtree', -apple-system, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .tab.active {
+    color: #fc4c02;
+  }
+
+  .icon {
+    font-size: 18px;
+    line-height: 1;
+  }
+
+  .label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+}

@@ -69,10 +69,9 @@ main {
 }
 
 .brand {
-  font-weight: 800;
-  font-size: 15px;
-  letter-spacing: -0.01em;
-  color: var(--accent);
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
 }
 
 .env-chip {
@@ -718,5 +717,16 @@ tbody tr:nth-child(odd) {
 
   main {
     padding: 16px 12px 40px;
+  }
+}
+
+/* ── Mobile nav bottom clearance ── */
+@media (max-width: 768px) {
+  .dash-grid {
+    padding-bottom: calc(var(--d-space-4, 32px) + 56px + env(safe-area-inset-bottom)) !important;
+  }
+
+  .plans-page {
+    padding-bottom: calc(60px + 56px + env(safe-area-inset-bottom)) !important;
   }
 }
