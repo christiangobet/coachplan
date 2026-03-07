@@ -854,7 +854,7 @@ export default async function CalendarPage({
                       <span className="cal-day-number">{date.getDate()}</span>
                       <div className="cal-day-head-badges">
                         {dayDone && <span className="cal-day-check" title="Day completed">✓</span>}
-                        {dayMissed && <span className="cal-day-check missed" title="Day closed as missed">○</span>}
+                        {dayMissed && <span className="cal-day-check missed" title="Day closed as missed">✗</span>}
                         {dayPartial && <span className="cal-day-check partial" title="Day partially completed">✓</span>}
                         {totalDayDistLabel && <span className="cal-day-dist">{totalDayDistLabel}</span>}
                       </div>
