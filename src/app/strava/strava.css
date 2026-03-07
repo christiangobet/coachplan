@@ -44,6 +44,21 @@
   }
 }
 
+/* Collapse sidebar at 900px — table gets full width, inline sync panel appears */
+@media (max-width: 900px) {
+  .strava-page .dash-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .strava-page .dash-left-col {
+    display: none;
+  }
+
+  .strava-mobile-sync {
+    display: block;
+  }
+}
+
 @media (max-width: 768px) {
   .strava-mobile-sync {
     display: block;

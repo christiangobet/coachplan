@@ -25,7 +25,7 @@ export default async function StravaPage({
   const name = user.fullName || user.firstName || "Athlete";
 
   return (
-    <main className="dash">
+    <main className="dash strava-page">
       <div className="dash-atmosphere" />
       <div className="dash-topo" />
 
