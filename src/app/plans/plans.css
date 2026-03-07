@@ -2599,6 +2599,16 @@
 /* ══════════════════════════
    Responsive
    ══════════════════════════ */
+@media (max-width: 1450px) and (min-width: 901px) {
+  .pcal-layout {
+    grid-template-columns: 212px minmax(0, 1fr);
+  }
+
+  .pcal-layout.day-open {
+    grid-template-columns: 212px minmax(0, 1fr);
+  }
+}
+
 @media (max-width: 900px) {
   .pcal-layout {
     grid-template-columns: 1fr;
@@ -2730,97 +2740,6 @@
   .pcal-ai-trainer-meta {
     flex-direction: column;
     align-items: flex-start;
-  }
-}
-
-@media (max-width: 1450px) and (min-width: 901px) {
-  .pcal-layout {
-    grid-template-columns: 212px minmax(0, 1fr);
-  }
-
-  .pcal-layout.day-open {
-    grid-template-columns: 212px minmax(0, 1fr);
-  }
-}
-
-@media (max-width: 640px) {
-  .pcal {
-    padding: 16px 12px 28px;
-  }
-
-  .pcal-header-top {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .pcal-header-actions {
-    width: 100%;
-    justify-content: flex-start;
-    flex-wrap: wrap;
-  }
-
-  .pcal-calendar-header-top {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 6px;
-  }
-
-  .pcal-calendar-header-top .pcal-view-toggle {
-    width: 100%;
-    justify-content: space-between;
-  }
-
-  .pcal-ai-trainer-head {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .pcal-ai-trainer-toggle {
-    width: fit-content;
-  }
-
-  .pcal-ai-trainer-invariant-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .pcal-side-nav {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .plans-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .plans-header {
-    flex-direction: column;
-  }
-
-  .pcal-header {
-    flex-direction: column;
-  }
-
-  .pcal-race-panel-head {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .pcal-run-distance-line,
-  .pcal-day-modal-distance-line {
-    max-width: 100%;
-    flex-wrap: wrap;
-  }
-
-  .pcal-race-actions {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .pcal-week-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-
-  .plans-overview-grid {
-    grid-template-columns: 1fr;
   }
 }
 
@@ -2965,6 +2884,87 @@
   .pcal-modal-primary,
   .pcal-modal-strava-sync {
     width: 100%;
+  }
+}
+
+@media (max-width: 640px) {
+  .pcal {
+    padding: 16px 12px 28px;
+  }
+
+  .pcal-header-top {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .pcal-header-actions {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .pcal-calendar-header-top {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+  }
+
+  .pcal-calendar-header-top .pcal-view-toggle {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .pcal-ai-trainer-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .pcal-ai-trainer-toggle {
+    width: fit-content;
+  }
+
+  .pcal-ai-trainer-invariant-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .pcal-side-nav {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .plans-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .plans-header {
+    flex-direction: column;
+  }
+
+  .pcal-header {
+    flex-direction: column;
+  }
+
+  .pcal-race-panel-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .pcal-run-distance-line,
+  .pcal-day-modal-distance-line {
+    max-width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .pcal-race-actions {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .pcal-week-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .plans-overview-grid {
+    grid-template-columns: 1fr;
   }
 }
 
