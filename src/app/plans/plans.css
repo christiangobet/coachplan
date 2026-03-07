@@ -70,7 +70,22 @@
 }
 
 .plans-page-shell .dash-grid {
-  grid-template-columns: 200px minmax(0, 1fr) 280px;
+  grid-template-columns: minmax(216px, 228px) minmax(0, 1fr) minmax(248px, 280px);
+}
+
+.plans-page-shell .dash-right {
+  min-width: 0;
+  width: 100%;
+}
+
+@media (max-width: 1380px) {
+  .plans-page-shell .dash-grid {
+    grid-template-columns: minmax(216px, 228px) minmax(0, 1fr);
+  }
+
+  .plans-page-shell .dash-right {
+    display: none;
+  }
 }
 
 .plans-shell-header {
@@ -1847,6 +1862,46 @@
   flex: 1;
 }
 
+.pcal-strava-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  width: fit-content;
+  margin-top: auto;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #fc4c02;
+  background: rgba(252, 76, 2, 0.12);
+}
+
+.pcal-strava-pill-logo {
+  display: block;
+  flex-shrink: 0;
+}
+
+.pcal-strava-pill-icons {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.pcal-strava-icon {
+  width: 14px;
+  height: 14px;
+}
+
+.pcal-strava-icon .ext-sport-icon-img {
+  width: 100%;
+  height: 100%;
+}
+
+.pcal-strava-pill-more {
+  font-size: 10px;
+  color: #fc4c02;
+}
+
 /* Activity card inside cell */
 .pcal-activity-wrap {
   position: relative;
@@ -1936,7 +1991,6 @@
 .pcal-run-distance-line {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
   width: fit-content;
   margin-top: 1px;
   margin-left: 2px;
@@ -1948,16 +2002,16 @@
   border: 1px solid var(--d-border);
 }
 
-.pcal-run-distance-line strong {
-  font-size: 9px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
 .pcal-run-distance-line.planned {
   background: #eef3fb;
   border-color: #cfd8e6;
   color: #3f5675;
+}
+
+.pcal-run-distance-line.mix {
+  background: rgba(252, 76, 2, 0.08);
+  border-color: rgba(252, 76, 2, 0.24);
+  color: #a33f07;
 }
 
 .pcal-run-distance-line.logged {
@@ -2681,7 +2735,11 @@
 
 @media (max-width: 1450px) and (min-width: 901px) {
   .pcal-layout {
-    grid-template-columns: 212px minmax(0, 1fr) 332px;
+    grid-template-columns: 212px minmax(0, 1fr);
+  }
+
+  .pcal-layout.day-open {
+    grid-template-columns: 212px minmax(0, 1fr);
   }
 }
 
@@ -2771,6 +2829,15 @@
     grid-template-columns: 1fr;
   }
 
+  /* Hide sidebar — mobile nav replaces it */
+  .pcal-layout > .dash-side {
+    display: none;
+  }
+
+  .plans-page-shell .dash-left-col {
+    display: none;
+  }
+
   .pcal-layout {
     grid-template-columns: 1fr;
     gap: 12px;
@@ -2825,6 +2892,16 @@
 
   .pcal-cell-date {
     font-size: 11px;
+  }
+
+  .pcal-strava-pill {
+    font-size: 9px;
+    padding: 1px 6px;
+  }
+
+  .pcal-strava-icon {
+    width: 12px;
+    height: 12px;
   }
 
   .pcal-activity-title {
@@ -3006,7 +3083,6 @@
   margin: 0;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
   width: fit-content;
   padding: 2px 8px;
   border-radius: 999px;
@@ -3015,16 +3091,16 @@
   font-weight: 700;
 }
 
-.pcal-day-modal-distance-line strong {
-  font-size: 10px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
 .pcal-day-modal-distance-line.planned {
   background: #eef3fb;
   border-color: #cfd8e6;
   color: #3f5675;
+}
+
+.pcal-day-modal-distance-line.mix {
+  background: rgba(252, 76, 2, 0.08);
+  border-color: rgba(252, 76, 2, 0.24);
+  color: #a33f07;
 }
 
 .pcal-day-modal-distance-line.logged {
