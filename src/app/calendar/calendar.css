@@ -1633,7 +1633,7 @@
     position: fixed;
     left: 12px;
     right: 12px;
-    bottom: 12px;
+    bottom: calc(12px + 56px + env(safe-area-inset-bottom));
     z-index: 120;
   }
 
