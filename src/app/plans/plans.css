@@ -705,6 +705,22 @@
   padding: 28px 20px 60px;
 }
 
+@media (max-width: 900px) {
+  .pcal.with-source-pane {
+    grid-template-columns: 1fr;
+    padding: 16px 12px 28px;
+  }
+
+  .pcal.with-source-pane .pcal-source-pane,
+  .pcal-source-pane-resize {
+    display: none;
+  }
+
+  .pcal.with-source-pane .pcal-main-column {
+    grid-column: 1;
+  }
+}
+
 .pcal-source-pane-head {
   display: flex;
   justify-content: space-between;
