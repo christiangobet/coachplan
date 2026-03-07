@@ -663,6 +663,12 @@
   gap: 6px;
 }
 
+.cal-detail-head-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .cal-detail-badge {
   font-size: 11px;
   font-weight: 700;
@@ -685,11 +691,35 @@
   background: rgba(245, 158, 11, 0.12);
 }
 
+.cal-detail-close {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1px solid var(--d-border);
+  background: var(--d-raised);
+  color: var(--d-text-mid);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.cal-detail-close:hover {
+  border-color: var(--d-orange);
+  color: var(--d-orange);
+}
+
 .cal-day-detail-hint {
   margin: 0;
   padding: 6px 20px;
   font-size: 11px;
   color: var(--d-muted);
+}
+
+.cal-day-details-body {
+  display: grid;
+  gap: 0;
 }
 
 /* Session group + per-activity section styles live in dashboard.css
@@ -1440,6 +1470,52 @@
 
   .cal-grid {
     grid-template-columns: repeat(7, minmax(92px, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  body:has(.cal-page.cal-day-open) {
+    overflow: hidden;
+  }
+
+  .cal-day-details-card.is-open {
+    position: fixed;
+    inset: 0;
+    z-index: 130;
+    width: 100vw;
+    max-width: 100vw;
+    height: 100dvh;
+    max-height: 100dvh;
+    border-radius: 0;
+    border-left: none;
+    box-shadow: none;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .cal-day-details-card.is-open:target {
+    animation: none;
+  }
+
+  .cal-day-details-card.is-open .cal-detail-header {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: #fff;
+    padding-top: max(12px, env(safe-area-inset-top));
+  }
+
+  .cal-day-details-card.is-open .cal-day-details-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+  }
+
+  .cal-day-details-card.is-open .cal-detail-close {
+    display: inline-flex;
   }
 }
 

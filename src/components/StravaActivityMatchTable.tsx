@@ -324,13 +324,13 @@ export default function StravaActivityMatchTable() {
                       }
                     } : undefined}
                   >
-                    <td>
+                    <td data-col="Date">
                       <div className="dash-day-date">
                         <strong>{day.label}</strong>
                         {day.isToday && <span>TODAY</span>}
                       </div>
                     </td>
-                    <td>
+                    <td data-col="Training Plan">
                       <div className="dash-day-list">
                         {day.planActivities.map((activity) => (
                           <div
@@ -360,7 +360,7 @@ export default function StravaActivityMatchTable() {
                         ))}
                       </div>
                     </td>
-                    <td>
+                    <td data-col="Strava (Same Day)">
                       {hasStrava ? (
                         <div className="dash-day-list">
                           {day.stravaActivities.map((activity) => (
@@ -398,7 +398,7 @@ export default function StravaActivityMatchTable() {
                         <span className="dash-day-empty">No Strava activity for this date</span>
                       )}
                     </td>
-                    <td>
+                    <td data-col="Action">
                       {hasStrava ? (
                         <div className="dash-day-action-stack">
                           <span className={`dash-day-status-chip ${dayLocked ? 'locked' : dayDone ? 'done' : dayPartial ? 'partial' : 'pending'}`}>

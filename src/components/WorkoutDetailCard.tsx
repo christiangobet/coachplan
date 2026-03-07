@@ -198,7 +198,7 @@ export default function WorkoutDetailCard({
       {/* ── HEADER ── */}
       <div style={{ padding: "14px 16px 12px" }}>
         {/* Type row */}
-        <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 8, flexWrap: "wrap" }}>
           {/* Icon pill */}
           <span
             style={{
@@ -225,6 +225,7 @@ export default function WorkoutDetailCard({
               fontWeight: 700,
               color: typeColor,
               letterSpacing: "0.01em",
+              minWidth: 0,
             }}
           >
             {TYPE_LABEL[type]}
@@ -246,10 +247,13 @@ export default function WorkoutDetailCard({
               color: priorityColor,
               textTransform: "uppercase" as const,
               border: `1px solid ${priorityColor}30`,
-              flexShrink: 0,
+              maxWidth: "100%",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap" as const,
             }}
           >
-            {mustDo ? "★ MUST DO" : priority === "KEY" ? "⚡ Key" : priority === "MEDIUM" ? "Medium" : "Optional"}
+            {mustDo ? "Must do" : priority === "KEY" ? "Key" : priority === "MEDIUM" ? "Medium" : "Optional"}
           </span>
         </div>
 

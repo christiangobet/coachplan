@@ -620,7 +620,7 @@ export default async function CalendarPage({
     "Adjust this week around my schedule, recovery, and available training time."
   );
   return (
-    <main className="dash cal-page" data-debug-id="TRL">
+    <main className={`dash cal-page${hasSelectedDate ? ' cal-day-open' : ''}`} data-debug-id="TRL">
       <SelectedPlanCookie planId={selectedPlan.id} />
       <div className="dash-grid">
         <AthleteSidebar active="calendar" name={name} selectedPlanId={selectedPlan.id} />
@@ -868,8 +868,8 @@ export default async function CalendarPage({
           </div>
         </section>
 
-        <aside className="dash-right" data-debug-id="TSB">
-          {hasSelectedDate && <div id="day-details-card" className="dash-card cal-info-card cal-day-details-card" data-debug-id="TDL">
+        <aside className="dash-right cal-right" data-debug-id="TSB">
+          {hasSelectedDate && <div id="day-details-card" className="dash-card cal-info-card cal-day-details-card is-open" data-debug-id="TDL">
 
             {/* Header: date + status */}
             <div className="cal-detail-header">
@@ -877,13 +877,19 @@ export default async function CalendarPage({
                 {selectedDateKey === dateKey(today) ? "TODAY · " : ""}
                 {selectedDate.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }).toUpperCase()}
               </span>
-              <div className="cal-detail-badges">
-                {selectedDayDone && <span className="cal-detail-badge status-done">✓ Done</span>}
-                {selectedDayMissed && <span className="cal-detail-badge status-missed">✗ Missed</span>}
-                {selectedDayPartial && <span className="cal-detail-badge status-partial">≈ Partial</span>}
+              <div className="cal-detail-head-actions">
+                <div className="cal-detail-badges">
+                  {selectedDayDone && <span className="cal-detail-badge status-done">✓ Done</span>}
+                  {selectedDayMissed && <span className="cal-detail-badge status-missed">✗ Missed</span>}
+                  {selectedDayPartial && <span className="cal-detail-badge status-partial">≈ Partial</span>}
+                </div>
+                <Link className="cal-detail-close" href={collapseCardHref} aria-label="Close selected day panel">
+                  ✕
+                </Link>
               </div>
             </div>
 
+            <div className="cal-day-details-body">
 
             {/* Planned activities + day log (unified DayLogCard) */}
             {selectedPlanActivities.length === 0 && (
@@ -966,6 +972,7 @@ export default async function CalendarPage({
                 <p className="cal-day-empty">Future day. Logs will appear after the activity date.</p>
               </div>
             )}
+            </div>
           </div>}
 
           <div className="dash-card cal-info-card">

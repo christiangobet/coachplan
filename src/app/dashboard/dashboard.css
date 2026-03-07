@@ -243,6 +243,7 @@
 .dash-center {
   display: grid;
   gap: 16px;
+  min-width: 0;
 }
 
 .dash-page-heading {
@@ -1792,6 +1793,7 @@ details[open] .day-log-instructions-toggle::before {
   gap: 16px;
   position: sticky;
   top: var(--d-sticky-top);
+  min-width: 0;
 }
 
 .dash-profile-card {
@@ -2201,6 +2203,7 @@ details[open] .day-log-instructions-toggle::before {
 /* Daily Import Table */
 .dash-day-import-card {
   padding: 16px;
+  min-width: 0;
 }
 
 .dash-day-import-actions {
@@ -3104,6 +3107,76 @@ details[open] .day-log-instructions-toggle::before {
 
   .dash-activity-log-item-actions {
     width: 100%;
+  }
+
+  .dash-day-table-wrap {
+    border: none;
+    overflow: visible;
+  }
+
+  .dash-day-table {
+    min-width: 0;
+    display: block;
+  }
+
+  .dash-day-table thead {
+    display: none;
+  }
+
+  .dash-day-table tbody {
+    display: grid;
+    gap: 10px;
+  }
+
+  .dash-day-table tr {
+    display: grid;
+    gap: 10px;
+    border: 1px solid var(--d-border-light);
+    border-radius: 12px;
+    background: #fff;
+    padding: 10px;
+  }
+
+  .dash-day-table tr.day-status-done {
+    background: rgba(15, 138, 71, 0.05);
+  }
+
+  .dash-day-table tr.day-status-partial {
+    background: rgba(243, 156, 18, 0.06);
+  }
+
+  .dash-day-table tr.day-status-locked {
+    background: rgba(107, 107, 118, 0.08);
+  }
+
+  .dash-day-table td {
+    display: grid;
+    gap: 6px;
+    padding: 0;
+    border-bottom: none;
+    min-width: 0;
+  }
+
+  .dash-day-table td::before {
+    content: attr(data-col);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--d-muted);
+  }
+
+  .dash-day-item,
+  .dash-day-item strong,
+  .dash-day-item span,
+  .dash-day-item em {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .dash-day-action-stack .dash-sync-btn {
+    width: 100%;
+    justify-content: center;
   }
 }
 
