@@ -1,8 +1,9 @@
 'use client';
 
 import type { ReactNode } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { usePathname, useSearchParams } from 'next/navigation';
+import { usePathname, useSearchParams, useRouter } from 'next/navigation';
 import styles from './MobileNav.module.css';
 
 type NavTab = { href: string; label: string; icon: ReactNode; match: string[] };
@@ -75,13 +76,26 @@ const TABS: NavTab[] = [
 export default function MobileNav() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const router = useRouter();
   const planId = searchParams.get('plan') ?? '';
+
+  // Optimistic: show tapped tab as active immediately, before navigation settles
+  const [pendingHref, setPendingHref] = useState<string | null>(null);
+
+  // Clear pending once pathname actually changes
+  useEffect(() => { setPendingHref(null); }, [pathname]);
+
+  // Prefetch all tab routes on mount so navigation is instant
+  useEffect(() => {
+    TABS.forEach((tab) => router.prefetch(tab.href));
+  }, [router]);
 
   function buildHref(base: string) {
     return planId ? `${base}?plan=${planId}` : base;
   }
 
   function isActive(tab: NavTab) {
+    if (pendingHref === tab.href) return true;
     return tab.match.some((m) => pathname === m || pathname.startsWith(m + '/'));
   }
 
@@ -92,6 +106,7 @@ export default function MobileNav() {
           key={tab.href}
           href={buildHref(tab.href)}
           className={`${styles.tab}${isActive(tab) ? ` ${styles.active}` : ''}`}
+          onClick={() => setPendingHref(tab.href)}
         >
           <span className={styles.icon}>{tab.icon}</span>
           <span className={styles.label}>{tab.label}</span>
