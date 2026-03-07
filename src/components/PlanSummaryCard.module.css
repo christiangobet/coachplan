@@ -138,6 +138,11 @@
   color: #fc4c02;
 }
 
+.legendLogged {
+  font: 600 10px/1 'Figtree', sans-serif;
+  color: #0ea5e9;
+}
+
 .legendLr {
   font: 400 10px/1 'Figtree', sans-serif;
   color: var(--d-muted);

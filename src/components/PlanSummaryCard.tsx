@@ -5,7 +5,7 @@ import s from './PlanSummaryCard.module.css';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
-export type WeeklyRunPoint = { weekIndex: number; total: number; longRun: number };
+export type WeeklyRunPoint = { weekIndex: number; total: number; longRun: number; loggedTotal?: number };
 
 type Props = {
   summary: PlanSummary | null;
@@ -116,8 +116,9 @@ function WeeklyRunChart({
 
   if (n < 2) return null;
 
-  const maxVal = Math.max(...points.map(p => p.total), 1);
+  const maxVal = Math.max(...points.map((p) => Math.max(p.total, p.loggedTotal ?? 0)), 1);
   const hasLongRun = points.some(p => p.longRun > 0);
+  const hasLoggedTotals = points.some((p) => (p.loggedTotal ?? 0) > 0);
 
   const xAt = (i: number) => padX + (i * (W - padX * 2)) / (n - 1);
   const yAt = (v: number) => plotBottom - (v / maxVal) * plotH;
@@ -127,6 +128,9 @@ function WeeklyRunChart({
   ).join(' ');
   const lrPath = points.map((p, i) =>
     `${i === 0 ? 'M' : 'L'} ${xAt(i).toFixed(1)} ${yAt(p.longRun).toFixed(1)}`
+  ).join(' ');
+  const loggedPath = points.map((p, i) =>
+    `${i === 0 ? 'M' : 'L'} ${xAt(i).toFixed(1)} ${yAt(p.loggedTotal ?? 0).toFixed(1)}`
   ).join(' ');
   const totalArea = `${totalPath} L ${xAt(n - 1).toFixed(1)} ${plotBottom} L ${padX} ${plotBottom} Z`;
 
@@ -148,10 +152,11 @@ function WeeklyRunChart({
           <span className={s.curveLabel}>Running Volume</span>
           <span className={s.curveSub}>weekly · runs only · peak {peakTotal} {unit}</span>
         </div>
-        {hasLongRun && (
+        {(hasLongRun || hasLoggedTotals || currentIdx >= 0) && (
           <div className={s.curveLegend}>
             <span className={s.legendTotal}>— Total</span>
-            <span className={s.legendLr}>- - Long run</span>
+            {hasLoggedTotals && <span className={s.legendLogged}>— Logged</span>}
+            {hasLongRun && <span className={s.legendLr}>- - Long run</span>}
             {currentIdx >= 0 && (
               <span className={s.legendCurrent}>
                 <span className={s.legendCurrentDot} aria-hidden="true" />
@@ -174,6 +179,17 @@ function WeeklyRunChart({
         <path d={totalArea} fill="url(#wrcAreaGrad)" />
         {/* Total line */}
         <path d={totalPath} fill="none" stroke="#fc4c02" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+        {/* Logged total line */}
+        {hasLoggedTotals && (
+          <path
+            d={loggedPath}
+            fill="none"
+            stroke="#0ea5e9"
+            strokeWidth="2.3"
+            strokeLinejoin="round"
+            strokeLinecap="round"
+          />
+        )}
         {/* Long run dashed line */}
         {hasLongRun && (
           <path d={lrPath} fill="none" stroke="#aaaaaa" strokeWidth="1.8" strokeDasharray="5 3" strokeLinejoin="round" strokeLinecap="round" />

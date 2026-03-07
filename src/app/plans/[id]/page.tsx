@@ -1218,15 +1218,25 @@ export default function PlanDetailPage() {
       .flatMap((d: any) => d.activities || [])
       .filter((a: any) => String(a.type).toUpperCase() === 'RUN');
     let total = 0;
+    let loggedTotal = 0;
     let longRun = 0;
     for (const a of runs) {
-      const src = resolveActivityDistanceSourceUnit(a, viewerUnits);
-      const dist = toDisplayDistance(a.distance, src);
-      const val = dist?.value ?? 0;
-      total += val;
-      if (val > longRun) longRun = val;
+      const plannedSourceUnit = resolveActivityDistanceSourceUnit(a, viewerUnits);
+      const plannedDistance = toDisplayDistance(a.distance, plannedSourceUnit);
+      const plannedValue = plannedDistance?.value ?? 0;
+      total += plannedValue;
+      if (plannedValue > longRun) longRun = plannedValue;
+
+      const loggedSourceUnit = resolveActivityDistanceSourceUnit(a, viewerUnits, true);
+      const loggedDistance = toDisplayDistance(a.actualDistance, loggedSourceUnit);
+      loggedTotal += loggedDistance?.value ?? 0;
     }
-    return { weekIndex: week.weekIndex as number, total: Math.round(total * 10) / 10, longRun: Math.round(longRun * 10) / 10 };
+    return {
+      weekIndex: week.weekIndex as number,
+      total: Math.round(total * 10) / 10,
+      longRun: Math.round(longRun * 10) / 10,
+      loggedTotal: Math.round(loggedTotal * 10) / 10
+    };
   });
   const activeCurrentWeekIndex = (() => {
     if (plan.status !== 'ACTIVE') return null;

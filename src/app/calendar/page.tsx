@@ -420,23 +420,35 @@ export default async function CalendarPage({
       .flatMap((day) => day.activities || [])
       .filter((activity) => String(activity.type).toUpperCase() === "RUN");
     let total = 0;
+    let loggedTotal = 0;
     let longRun = 0;
     for (const run of runs) {
-      const sourceUnit = resolveDistanceUnitFromActivity({
+      const plannedSourceUnit = resolveDistanceUnitFromActivity({
         distanceUnit: run.distanceUnit,
         paceTarget: run.paceTarget,
         actualPace: run.actualPace,
         fallbackUnit: viewerUnits
       }) || viewerUnits;
-      const converted = toDisplayDistance(run.distance, sourceUnit);
-      const value = converted?.value ?? 0;
-      total += value;
-      if (value > longRun) longRun = value;
+      const plannedDistance = toDisplayDistance(run.distance, plannedSourceUnit);
+      const plannedValue = plannedDistance?.value ?? 0;
+      total += plannedValue;
+      if (plannedValue > longRun) longRun = plannedValue;
+
+      const loggedSourceUnit = resolveDistanceUnitFromActivity({
+        distanceUnit: run.distanceUnit,
+        paceTarget: run.paceTarget,
+        actualPace: run.actualPace,
+        fallbackUnit: viewerUnits,
+        preferActualPace: true
+      }) || viewerUnits;
+      const loggedDistance = toDisplayDistance(run.actualDistance, loggedSourceUnit);
+      loggedTotal += loggedDistance?.value ?? 0;
     }
     return {
       weekIndex: week.weekIndex,
       total: Math.round(total * 10) / 10,
-      longRun: Math.round(longRun * 10) / 10
+      longRun: Math.round(longRun * 10) / 10,
+      loggedTotal: Math.round(loggedTotal * 10) / 10
     };
   });
 
