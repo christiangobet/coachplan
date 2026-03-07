@@ -122,6 +122,28 @@ function WeeklyRunChart({
 
   const xAt = (i: number) => padX + (i * (W - padX * 2)) / (n - 1);
   const yAt = (v: number) => plotBottom - (v / maxVal) * plotH;
+  const buildSegmentedPath = (values: Array<number | null>) => {
+    let path = '';
+    let previousValueWasNull = true;
+    values.forEach((value, index) => {
+      if (value == null) {
+        previousValueWasNull = true;
+        return;
+      }
+      const cmd = previousValueWasNull ? 'M' : 'L';
+      path += `${cmd} ${xAt(index).toFixed(1)} ${yAt(value).toFixed(1)} `;
+      previousValueWasNull = false;
+    });
+    return path.trim();
+  };
+  const resolvedLoggedCutoffWeekIndex =
+    typeof currentWeekIndex === 'number' && Number.isFinite(currentWeekIndex)
+      ? currentWeekIndex
+      : points.reduce<number | null>((latest, point) => {
+          if ((point.loggedTotal ?? 0) <= 0) return latest;
+          if (latest == null) return point.weekIndex;
+          return point.weekIndex > latest ? point.weekIndex : latest;
+        }, null);
 
   const totalPath = points.map((p, i) =>
     `${i === 0 ? 'M' : 'L'} ${xAt(i).toFixed(1)} ${yAt(p.total).toFixed(1)}`
@@ -129,9 +151,13 @@ function WeeklyRunChart({
   const lrPath = points.map((p, i) =>
     `${i === 0 ? 'M' : 'L'} ${xAt(i).toFixed(1)} ${yAt(p.longRun).toFixed(1)}`
   ).join(' ');
-  const loggedPath = points.map((p, i) =>
-    `${i === 0 ? 'M' : 'L'} ${xAt(i).toFixed(1)} ${yAt(p.loggedTotal ?? 0).toFixed(1)}`
-  ).join(' ');
+  const loggedPath = buildSegmentedPath(
+    points.map((point) => {
+      if (resolvedLoggedCutoffWeekIndex != null && point.weekIndex > resolvedLoggedCutoffWeekIndex) return null;
+      if (point.loggedTotal == null) return null;
+      return point.loggedTotal;
+    })
+  );
   const totalArea = `${totalPath} L ${xAt(n - 1).toFixed(1)} ${plotBottom} L ${padX} ${plotBottom} Z`;
 
   // X-axis labels: first, every 4 weeks, last
@@ -180,7 +206,7 @@ function WeeklyRunChart({
         {/* Total line */}
         <path d={totalPath} fill="none" stroke="#fc4c02" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
         {/* Logged total line */}
-        {hasLoggedTotals && (
+        {hasLoggedTotals && loggedPath && (
           <path
             d={loggedPath}
             fill="none"
