@@ -384,12 +384,14 @@ export default async function CalendarPage({
   });
 
   if (plans.length === 0) redirect("/dashboard");
+  const activePlans = plans.filter((plan) => plan.status === "ACTIVE");
+  if (activePlans.length === 0) redirect("/plans");
 
-  const selectedPlan = pickSelectedPlan(plans, {
+  const selectedPlan = pickSelectedPlan(activePlans, {
     requestedPlanId,
     cookiePlanId
   });
-  if (!selectedPlan) redirect("/dashboard");
+  if (!selectedPlan) redirect("/plans");
 
   const sourcePlanName = selectedPlan.sourceId
     ? (
@@ -656,11 +658,11 @@ export default async function CalendarPage({
             <a className="dash-greeting-edit-link" href={`/plans/${selectedPlan.id}`}>View Plan</a>
           </div>
 
-          {plans.length > 1 && (
+          {activePlans.length > 1 && (
             <div className="dash-card cal-plan-switch">
               <span>Plan:</span>
               <div className="cal-plan-pills">
-                {plans.map((plan) => {
+                {activePlans.map((plan) => {
                   const href = buildCalendarHref(monthStart, plan.id, selectedDateKey, returnToParam);
                   const isActive = plan.id === selectedPlan.id;
                   return (
