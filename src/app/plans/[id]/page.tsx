@@ -1854,13 +1854,21 @@ export default function PlanDetailPage() {
                               plannedSourceUnit
                             );
                             const details: string[] = [];
+                            const isRun = String(a.type || '').toUpperCase() === 'RUN';
+                            let runDistanceLabel: 'Logged' | 'To do' | null = null;
+                            let runDistanceValue: string | null = null;
                             let targetBadges: string[] = [];
                             let paceShort: string | null = null;
                             let displayPaceTarget: string | null = null;
 
                             if (viewMode === 'plan') {
                               const plannedDistanceLabel = formatDisplayDistance(a.distance, plannedSourceUnit);
-                              if (plannedDistanceLabel) details.push(plannedDistanceLabel);
+                              if (isRun) {
+                                runDistanceLabel = 'To do';
+                                runDistanceValue = plannedDistanceLabel || 'Not set';
+                              } else if (plannedDistanceLabel) {
+                                details.push(plannedDistanceLabel);
+                              }
                               if (a.duration) details.push(`${a.duration}m`);
 
                               // Pace badge: abbreviation for circle, fallback text
@@ -1892,13 +1900,23 @@ export default function PlanDetailPage() {
                               // Log view: actuals for completed, planned for upcoming
                               if (a.completed) {
                                 const actualDistanceLabel = formatDisplayDistance(a.actualDistance, actualSourceUnit);
-                                if (actualDistanceLabel) details.push(actualDistanceLabel);
+                                if (isRun) {
+                                  runDistanceLabel = 'Logged';
+                                  runDistanceValue = actualDistanceLabel || 'Not entered';
+                                } else if (actualDistanceLabel) {
+                                  details.push(actualDistanceLabel);
+                                }
                                 if (a.actualDuration) details.push(`${a.actualDuration}m`);
                                 const displayActualPace = formatDisplayPace(a.actualPace, actualSourceUnit);
                                 if (displayActualPace) details.push(displayActualPace);
                               } else {
                                 const plannedDistanceLabel = formatDisplayDistance(a.distance, plannedSourceUnit);
-                                if (plannedDistanceLabel) details.push(plannedDistanceLabel);
+                                if (isRun) {
+                                  runDistanceLabel = 'To do';
+                                  runDistanceValue = plannedDistanceLabel || 'Not set';
+                                } else if (plannedDistanceLabel) {
+                                  details.push(plannedDistanceLabel);
+                                }
                                 if (a.duration) details.push(`${a.duration}m`);
                               }
                             }
@@ -1913,13 +1931,21 @@ export default function PlanDetailPage() {
                                 let total = 0;
                                 let hasAny = false;
                                 for (const m of members) {
-                                  const srcUnit = resolveActivityDistanceSourceUnit(m, viewerUnits);
-                                  const converted = toDisplayDistance(m.distance, srcUnit);
+                                  const srcUnit = resolveActivityDistanceSourceUnit(
+                                    m,
+                                    viewerUnits,
+                                    viewMode === 'log' && m.completed,
+                                    plannedSourceUnit
+                                  );
+                                  const rawDistance = viewMode === 'log' && m.completed ? m.actualDistance : m.distance;
+                                  const converted = toDisplayDistance(rawDistance, srcUnit);
                                   if (converted) { total += converted.value; hasAny = true; }
                                 }
                                 if (hasAny) compactDistLabel = `${formatDistanceNumber(total)}${viewerUnitLabel}`;
                               } else {
-                                compactDistLabel = formatDisplayDistance(a.distance, plannedSourceUnit);
+                                const compactSourceUnit = viewMode === 'log' && a.completed ? actualSourceUnit : plannedSourceUnit;
+                                const compactRawDistance = viewMode === 'log' && a.completed ? a.actualDistance : a.distance;
+                                compactDistLabel = formatDisplayDistance(compactRawDistance, compactSourceUnit);
                               }
                             }
 
@@ -2085,6 +2111,11 @@ export default function PlanDetailPage() {
                                         {details.join(' · ')}
                                       </span>
                                     )}
+                                    {runDistanceLabel && runDistanceValue && (
+                                      <span className={`pcal-run-distance-line ${runDistanceLabel === 'Logged' ? 'logged' : 'planned'}`}>
+                                        <strong>{runDistanceLabel}:</strong> {runDistanceValue}
+                                      </span>
+                                    )}
                                     {(paceShort || displayPaceTarget || targetBadges.length > 0) && (
                                       <span className="pcal-activity-targets">
                                         {paceShort ? (
@@ -2172,19 +2203,39 @@ export default function PlanDetailPage() {
                   {selectedDay.activities.length === 0 && (
                     <h3 className="pcal-day-modal-title">Rest Day</h3>
                   )}
-                  {selectedDay.activities.map((a) => (
-                    <div key={a.id} className="pcal-day-modal-activity">
-                      <span className={`pcal-activity-abbr type-${String(a.type || 'OTHER').toLowerCase()}`}>
-                        {typeAbbr(a.type)}
-                      </span>
-                      <div className="pcal-day-modal-activity-copy">
-                        <span className="pcal-day-modal-title">{a.title || formatType(a.type)}</span>
-                        {a.plannedDetails.length > 0 && (
-                          <span className="pcal-day-modal-metrics">{a.plannedDetails.join(' · ')}</span>
-                        )}
+                  {selectedDay.activities.map((a) => {
+                    const isRun = String(a.type || '').toUpperCase() === 'RUN';
+                    const unitLabel = distanceUnitLabel(viewerUnits);
+                    const plannedDistanceText = a.plannedDistance != null
+                      ? `${formatDistanceNumber(a.plannedDistance)} ${unitLabel}`
+                      : null;
+                    const loggedDistanceText = a.actualDistance != null
+                      ? `${formatDistanceNumber(a.actualDistance)} ${unitLabel}`
+                      : null;
+                    const distanceLabel = isRun ? (a.completed ? 'Logged' : 'To do') : null;
+                    const distanceValue = isRun
+                      ? (a.completed ? (loggedDistanceText || 'Not entered') : (plannedDistanceText || 'Not set'))
+                      : null;
+
+                    return (
+                      <div key={a.id} className="pcal-day-modal-activity">
+                        <span className={`pcal-activity-abbr type-${String(a.type || 'OTHER').toLowerCase()}`}>
+                          {typeAbbr(a.type)}
+                        </span>
+                        <div className="pcal-day-modal-activity-copy">
+                          <span className="pcal-day-modal-title">{a.title || formatType(a.type)}</span>
+                          {a.plannedDetails.length > 0 && (
+                            <span className="pcal-day-modal-metrics">{a.plannedDetails.join(' · ')}</span>
+                          )}
+                          {distanceLabel && distanceValue && (
+                            <span className={`pcal-day-modal-distance-line ${a.completed ? 'logged' : 'planned'}`}>
+                              <strong>{distanceLabel}:</strong> {distanceValue}
+                            </span>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
                 <button
                   type="button"

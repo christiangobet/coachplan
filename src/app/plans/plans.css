@@ -1933,6 +1933,39 @@
   padding-left: 2px;
 }
 
+.pcal-run-distance-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  width: fit-content;
+  margin-top: 1px;
+  margin-left: 2px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.3;
+  border: 1px solid var(--d-border);
+}
+
+.pcal-run-distance-line strong {
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.pcal-run-distance-line.planned {
+  background: #eef3fb;
+  border-color: #cfd8e6;
+  color: #3f5675;
+}
+
+.pcal-run-distance-line.logged {
+  background: rgba(252, 76, 2, 0.12);
+  border-color: rgba(252, 76, 2, 0.3);
+  color: #a33f07;
+}
+
 .pcal-activity-targets {
   display: flex;
   flex-wrap: wrap;
@@ -2681,6 +2714,12 @@
     align-items: flex-start;
   }
 
+  .pcal-run-distance-line,
+  .pcal-day-modal-distance-line {
+    max-width: 100%;
+    flex-wrap: wrap;
+  }
+
   .pcal-race-actions {
     flex-direction: column;
     align-items: flex-start;
@@ -2929,6 +2968,37 @@
   color: var(--d-text-mid);
   font-weight: 600;
   margin: 0;
+}
+
+.pcal-day-modal-distance-line {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  width: fit-content;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--d-border);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.pcal-day-modal-distance-line strong {
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.pcal-day-modal-distance-line.planned {
+  background: #eef3fb;
+  border-color: #cfd8e6;
+  color: #3f5675;
+}
+
+.pcal-day-modal-distance-line.logged {
+  background: rgba(252, 76, 2, 0.12);
+  border-color: rgba(252, 76, 2, 0.3);
+  color: #a33f07;
 }
 
 .pcal-day-modal-close {
