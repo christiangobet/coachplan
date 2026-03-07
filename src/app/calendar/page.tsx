@@ -907,7 +907,7 @@ export default async function CalendarPage({
               <div className="cal-day-detail-section">
                 <div className="cal-day-detail-section-header">
                   <h4>Logged Activities</h4>
-                  {stravaAccount && <StravaDaySyncButton dateISO={selectedDateKey} className="cal-strava-sync-btn" />}
+                  {stravaAccount && <StravaDaySyncButton dateISO={selectedDateKey} planId={selectedPlan.id} className="cal-strava-sync-btn" />}
                 </div>
                 {selectedExternalLogs.map((log) => {
                   const matchLevel = resolveMatchLevel(log);
@@ -953,7 +953,7 @@ export default async function CalendarPage({
               <div className="cal-day-detail-section">
                 <div className="cal-day-detail-section-header">
                   <h4>Logged Activities</h4>
-                  {stravaAccount && <StravaDaySyncButton dateISO={selectedDateKey} className="cal-strava-sync-btn" />}
+                  {stravaAccount && <StravaDaySyncButton dateISO={selectedDateKey} planId={selectedPlan.id} className="cal-strava-sync-btn" />}
                 </div>
                 <p className="cal-day-empty">No synced external logs for this day.</p>
               </div>
@@ -979,7 +979,7 @@ export default async function CalendarPage({
                 <>
                   {selectedIsPastOrToday ? (
                     stravaAccount ? (
-                      <StravaDaySyncButton dateISO={selectedDateKey} className="cal-strava-sync-btn" />
+                      <StravaDaySyncButton dateISO={selectedDateKey} planId={selectedPlan.id} className="cal-strava-sync-btn" />
                     ) : (
                       <Link href="/strava">Connect Strava to Sync Selected Day</Link>
                     )

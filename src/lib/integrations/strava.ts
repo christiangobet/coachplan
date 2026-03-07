@@ -322,6 +322,52 @@ async function fetchStravaActivities(
   return { activities: [...byId.values()], truncated: true };
 }
 
+async function fetchStravaActivitiesForDate(
+  accessToken: string,
+  date: string,
+  maxPages = 6
+): Promise<StravaActivity[]> {
+  const dayStart = new Date(`${date}T00:00:00.000Z`);
+  if (Number.isNaN(dayStart.getTime())) return [];
+
+  // Expand the query window so local timezone day boundaries are captured reliably.
+  const queryStart = new Date(dayStart);
+  queryStart.setUTCDate(queryStart.getUTCDate() - 1);
+  const queryEnd = new Date(dayStart);
+  queryEnd.setUTCDate(queryEnd.getUTCDate() + 2);
+  queryEnd.setUTCMilliseconds(-1);
+
+  const afterEpoch = Math.floor(queryStart.getTime() / 1000);
+  const beforeEpoch = Math.floor(queryEnd.getTime() / 1000);
+  const byId = new Map<number, StravaActivity>();
+
+  for (let page = 1; page <= maxPages; page += 1) {
+    const query = new URLSearchParams({
+      after: String(afterEpoch),
+      before: String(beforeEpoch),
+      per_page: '100',
+      page: String(page)
+    });
+    const res = await fetch(`${STRAVA_ACTIVITIES_URL}?${query.toString()}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      cache: 'no-store'
+    });
+    if (!res.ok) {
+      const errorText = await res.text().catch(() => '');
+      throw new Error(`Strava day activities request failed (${res.status}): ${errorText || 'Unknown error'}`);
+    }
+    const batchRaw = await res.json().catch(() => []);
+    const batch = Array.isArray(batchRaw) ? (batchRaw as StravaActivity[]) : [];
+    if (batch.length === 0) break;
+    for (const activity of batch) {
+      byId.set(activity.id, activity);
+    }
+    if (batch.length < 100) break;
+  }
+
+  return [...byId.values()];
+}
+
 async function refreshStravaToken(account: ExternalAccount) {
   if (!account.refreshToken) throw new Error('No refresh token found for Strava account');
 
@@ -1439,14 +1485,79 @@ export async function importStravaDayForUser(args: {
         userId: args.userId,
         provider: 'STRAVA'
       }
-    },
-    select: { id: true }
+    }
   });
-  if (!account) throw new Error('Strava is not connected for this athlete');
+  if (!account || !account.isActive) throw new Error('Strava is not connected for this athlete');
 
   const user = await prisma.user.findUnique({
     where: { id: args.userId },
     select: { units: true }
+  });
+
+  const readyAccount = await ensureFreshStravaAccount(account);
+  const accessToken = mustGetAccessToken(readyAccount);
+
+  // Always fetch the selected day from Strava first so day-sync works even when
+  // no recent bulk sync has been run.
+  const liveActivities = await fetchStravaActivitiesForDate(accessToken, date);
+  for (const activity of liveActivities) {
+    const providerActivityId = String(activity.id);
+    const startTime = getStravaActivityStartTime(activity);
+    if (!startTime || Number.isNaN(startTime.getTime())) continue;
+    const durationSec = activity.moving_time || activity.elapsed_time || null;
+    const distanceM = activity.distance || null;
+    const elevationGainM = activity.total_elevation_gain || null;
+    await prisma.externalActivity.upsert({
+      where: {
+        provider_providerActivityId: {
+          provider: 'STRAVA',
+          providerActivityId
+        }
+      },
+      create: {
+        accountId: readyAccount.id,
+        userId: args.userId,
+        provider: 'STRAVA',
+        providerActivityId,
+        name: activity.name || null,
+        sportType: activity.sport_type || null,
+        startTime,
+        durationSec,
+        movingTimeSec: activity.moving_time || null,
+        elapsedTimeSec: activity.elapsed_time || null,
+        distanceM,
+        avgHeartRate: activity.average_heartrate ? Math.round(activity.average_heartrate) : null,
+        maxHeartRate: activity.max_heartrate ? Math.round(activity.max_heartrate) : null,
+        calories: activity.calories || null,
+        elevationGainM,
+        avgPaceSecPerKm: durationSec && distanceM && distanceM > 0
+          ? durationSec / (distanceM / 1000)
+          : null,
+        raw: activity as unknown as object
+      },
+      update: {
+        accountId: readyAccount.id,
+        name: activity.name || null,
+        sportType: activity.sport_type || null,
+        startTime,
+        durationSec,
+        movingTimeSec: activity.moving_time || null,
+        elapsedTimeSec: activity.elapsed_time || null,
+        distanceM,
+        avgHeartRate: activity.average_heartrate ? Math.round(activity.average_heartrate) : null,
+        maxHeartRate: activity.max_heartrate ? Math.round(activity.max_heartrate) : null,
+        calories: activity.calories || null,
+        elevationGainM,
+        avgPaceSecPerKm: durationSec && distanceM && distanceM > 0
+          ? durationSec / (distanceM / 1000)
+          : null,
+        raw: activity as unknown as object
+      }
+    });
+  }
+  await prisma.externalAccount.update({
+    where: { id: readyAccount.id },
+    data: { lastSyncAt: new Date(), isActive: true }
   });
 
   const plannedCandidates = await buildPlanActivityCandidates(args.userId, args.preferredPlanId, user?.units ?? null);
@@ -1506,17 +1617,34 @@ export async function importStravaDayForUser(args: {
     const remainingNonRest = dayCandidates.filter(
       (candidate) => !usedPlanActivityIds.has(candidate.id) && candidate.type !== 'REST'
     );
+    const remainingRuns = remainingNonRest.filter((candidate) => candidate.type === 'RUN');
+    const sourceType = mapStravaSportTypeToPlanType(source.sportType);
     let fallback: { candidate: PlannedActivityCandidate; score: number; reason: string } | null = null;
-    if (remainingNonRest.length === 1) {
+    if (sourceType === 'RUN' && remainingRuns.length === 1) {
+      fallback = {
+        candidate: remainingRuns[0],
+        score: 36,
+        reason: 'single remaining run candidate'
+      };
+    } else if (remainingNonRest.length === 1) {
       fallback = {
         candidate: remainingNonRest[0],
         score: 34,
         reason: 'single remaining candidate'
       };
+    } else if (sourceType === 'RUN' && totalDayExternal === 1 && remainingRuns.length > 0) {
+      fallback = pickHighestScoreCandidate({
+        candidates: remainingRuns,
+        actualType: sourceType,
+        durationSec: source.durationSec,
+        distanceM: source.distanceM,
+        blockedPlanActivityIds: usedPlanActivityIds,
+        minScore: Number.NEGATIVE_INFINITY
+      });
     } else if (totalDayExternal === 1 && remainingNonRest.length > 0) {
       fallback = pickHighestScoreCandidate({
         candidates: remainingNonRest,
-        actualType: mapStravaSportTypeToPlanType(source.sportType),
+        actualType: sourceType,
         durationSec: source.durationSec,
         distanceM: source.distanceM,
         blockedPlanActivityIds: usedPlanActivityIds,

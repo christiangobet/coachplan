@@ -7,9 +7,11 @@ type SyncState = 'idle' | 'syncing' | 'done';
 
 export default function StravaDaySyncButton({
   dateISO,
+  planId,
   className
 }: {
   dateISO: string;
+  planId?: string | null;
   className?: string;
 }) {
   const router = useRouter();
@@ -25,7 +27,7 @@ export default function StravaDaySyncButton({
       const res = await fetch('/api/integrations/strava/import-day', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ date: dateISO })
+        body: JSON.stringify({ date: dateISO, planId: planId || undefined })
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {

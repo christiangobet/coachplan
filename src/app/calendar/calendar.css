@@ -1315,9 +1315,11 @@
 }
 
 .cal-activity-log input.is-prefilled {
-  font-weight: 700;
+  font-weight: 800;
   color: var(--d-text);
-  border-color: var(--d-border-strong, var(--d-border));
+  border-color: rgba(252, 76, 2, 0.42);
+  background: linear-gradient(180deg, #fff9f5 0%, #fff 100%);
+  box-shadow: inset 0 0 0 1px rgba(252, 76, 2, 0.1);
 }
 
 .cal-activity-log input[type="number"]::-webkit-outer-spin-button,

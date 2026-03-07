@@ -3341,6 +3341,10 @@ details[open] .day-log-instructions-toggle::before {
   color: var(--d-text-mid);
 }
 
+.cal-session-group-planned {
+  color: var(--d-text-mid);
+}
+
 .cal-session-actual {
   color: var(--d-green);
   font-weight: 600;
@@ -3410,6 +3414,35 @@ details[open] .day-log-instructions-toggle::before {
 .day-log-card .cal-activity-metrics {
   font-size: 13px;
   color: var(--d-text-mid);
+}
+
+.day-log-card .cal-activity-metrics strong {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--d-muted);
+  margin-right: 4px;
+}
+
+.day-log-card .cal-activity-effective-distance {
+  margin-top: 4px;
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #b04507;
+  background: rgba(252, 76, 2, 0.12);
+  border: 1px solid rgba(252, 76, 2, 0.26);
+}
+
+.day-log-card .cal-activity-effective-distance strong {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-right: 4px;
 }
 
 .cal-activity-desc {
@@ -3546,8 +3579,16 @@ details[open] .day-log-instructions-toggle::before {
 
 /* Prefilled inputs (from Strava sync) */
 .cal-activity-log input.is-prefilled {
-  font-weight: 700;
+  font-weight: 800;
   color: var(--d-text);
+  background: linear-gradient(180deg, #fff9f5 0%, #fff 100%);
+  border-color: rgba(252, 76, 2, 0.42);
+  box-shadow: inset 0 0 0 1px rgba(252, 76, 2, 0.1);
+}
+
+.day-log-effective-callout {
+  font-weight: 700;
+  margin-bottom: 10px;
 }
 
 /* ── Debug Mode ── */

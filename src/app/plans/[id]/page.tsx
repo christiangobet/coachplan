@@ -814,7 +814,7 @@ export default function PlanDetailPage() {
       const res = await fetch('/api/integrations/strava/import-day', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ date: dateISO })
+        body: JSON.stringify({ date: dateISO, planId })
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
