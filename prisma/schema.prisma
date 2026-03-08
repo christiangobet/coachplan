@@ -372,6 +372,7 @@ model PlanImage {
   fileName  String?
   mimeType  String
   fileSize  Int
+  focusY    Float    @default(0.5)
   content   Bytes
   createdAt DateTime @default(now())
 

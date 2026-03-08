@@ -14,13 +14,26 @@ const ALLOWED_MIME = new Set(Object.values(EXTENSION_MIME));
 export type PlanBannerMeta = {
   imageId: string;
   url: string;
+  focusY: number;
 };
 
-export function buildPlanBanner(planId: string, bannerImageId: string | null | undefined): PlanBannerMeta | null {
+function normalizeFocusY(value: number | null | undefined) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return 0.5;
+  if (value < 0) return 0;
+  if (value > 1) return 1;
+  return value;
+}
+
+export function buildPlanBanner(
+  planId: string,
+  bannerImageId: string | null | undefined,
+  focusY?: number | null
+): PlanBannerMeta | null {
   if (!planId || !bannerImageId) return null;
   return {
     imageId: bannerImageId,
     url: `/api/plans/${planId}/images/${bannerImageId}/file`,
+    focusY: normalizeFocusY(focusY),
   };
 }
 

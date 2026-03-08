@@ -399,8 +399,18 @@ export default async function CalendarPage({
       })
     )?.name || null
     : null;
+  const selectedBannerImage = selectedPlan.bannerImageId
+    ? await prisma.planImage.findUnique({
+      where: { id: selectedPlan.bannerImageId },
+      select: { focusY: true }
+    })
+    : null;
   const planDisplayName = sourcePlanName || selectedPlan.name;
-  const selectedPlanBanner = buildPlanBanner(selectedPlan.id, selectedPlan.bannerImageId);
+  const selectedPlanBanner = buildPlanBanner(
+    selectedPlan.id,
+    selectedPlan.bannerImageId,
+    selectedBannerImage?.focusY ?? null
+  );
   const raceName = (selectedPlan.raceName || "").trim()
     || (selectedPlan.raceType ? formatType(selectedPlan.raceType) : "Not set");
   const raceDateStr = selectedPlan.raceDate
@@ -697,7 +707,14 @@ export default async function CalendarPage({
 
           <div
             className={`dash-card dash-plan-summary cal-plan-summary-card${selectedPlanBanner ? ' has-banner' : ''}`}
-            style={selectedPlanBanner ? ({ '--plan-banner-url': `url("${selectedPlanBanner.url}")` } as any) : undefined}
+            style={
+              selectedPlanBanner
+                ? ({
+                  '--plan-banner-url': `url("${selectedPlanBanner.url}")`,
+                  '--plan-banner-focus-y': `${Math.round((selectedPlanBanner.focusY ?? 0.5) * 100)}%`
+                } as any)
+                : undefined
+            }
           >
             <div className="dash-greeting-meta">
               <div className="dash-greeting-meta-item">

@@ -47,6 +47,7 @@ type Plan = {
   banner?: {
     imageId: string;
     url: string;
+    focusY: number;
   } | null;
 };
 
@@ -748,7 +749,10 @@ export default function PlansClient() {
       ? [nextActivityInfo.dateLabel, nextActivityInfo.distanceLabel, nextActivityInfo.durationLabel].filter(Boolean) as string[]
       : [];
     const bannerStyle = plan.banner?.url
-      ? ({ '--plan-banner-url': `url("${plan.banner.url}")` } as CSSProperties)
+      ? ({
+        '--plan-banner-url': `url("${plan.banner.url}")`,
+        '--plan-banner-focus-y': `${Math.round((plan.banner.focusY ?? 0.5) * 100)}%`
+      } as CSSProperties)
       : undefined;
 
     return (

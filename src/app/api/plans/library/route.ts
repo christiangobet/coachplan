@@ -67,6 +67,11 @@ export async function GET() {
         difficulty: true,
         createdAt: true,
         bannerImageId: true,
+        bannerImage: {
+          select: {
+            focusY: true,
+          },
+        },
         planGuide: true,
         activities: {
           select: {
@@ -163,7 +168,7 @@ export async function GET() {
       raceType: plan.raceType,
       difficulty: plan.difficulty,
       createdAt: plan.createdAt,
-      banner: buildPlanBanner(plan.id, plan.bannerImageId),
+      banner: buildPlanBanner(plan.id, plan.bannerImageId, plan.bannerImage?.focusY ?? null),
       planGuide: plan.planGuide,
       stats: {
         totalActivities,

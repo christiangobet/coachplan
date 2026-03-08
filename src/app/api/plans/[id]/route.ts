@@ -29,21 +29,25 @@ function parseWeekDateAnchor(input: unknown): WeekDateAnchor | null {
 }
 
 async function appendPlanPresentation<T extends { id: string; sourceId?: string | null; bannerImageId?: string | null }>(plan: T) {
-  if (!plan.sourceId) {
-    return {
-      ...plan,
-      sourcePlanName: null,
-      banner: buildPlanBanner(plan.id, plan.bannerImageId),
-    };
-  }
-  const sourcePlan = await prisma.trainingPlan.findUnique({
-    where: { id: plan.sourceId },
-    select: { name: true }
-  });
+  const [sourcePlan, bannerImage] = await Promise.all([
+    plan.sourceId
+      ? prisma.trainingPlan.findUnique({
+        where: { id: plan.sourceId },
+        select: { name: true }
+      })
+      : Promise.resolve(null),
+    plan.bannerImageId
+      ? prisma.planImage.findUnique({
+        where: { id: plan.bannerImageId },
+        select: { focusY: true }
+      })
+      : Promise.resolve(null)
+  ]);
+
   return {
     ...plan,
     sourcePlanName: sourcePlan?.name || null,
-    banner: buildPlanBanner(plan.id, plan.bannerImageId),
+    banner: buildPlanBanner(plan.id, plan.bannerImageId, bannerImage?.focusY ?? null),
   };
 }
 

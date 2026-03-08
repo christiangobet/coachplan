@@ -240,8 +240,18 @@ export default async function DashboardPage({
     });
     sourcePlanName = sourcePlan?.name || null;
   }
+  const activeBannerImage = activePlan.bannerImageId
+    ? await prisma.planImage.findUnique({
+      where: { id: activePlan.bannerImageId },
+      select: { focusY: true }
+    })
+    : null;
   const planDisplayName = sourcePlanName || activePlan.name;
-  const activePlanBanner = buildPlanBanner(activePlan.id, activePlan.bannerImageId);
+  const activePlanBanner = buildPlanBanner(
+    activePlan.id,
+    activePlan.bannerImageId,
+    activeBannerImage?.focusY ?? null
+  );
   const stravaAccount = await prisma.externalAccount.findFirst({
     where: { userId: user.id, provider: "STRAVA" },
     select: { id: true }
@@ -623,7 +633,14 @@ export default async function DashboardPage({
           <div
             className={`dash-card dash-plan-summary${activePlanBanner ? ' has-banner' : ''}`}
             data-debug-id="DPS"
-            style={activePlanBanner ? ({ '--plan-banner-url': `url("${activePlanBanner.url}")` } as any) : undefined}
+            style={
+              activePlanBanner
+                ? ({
+                  '--plan-banner-url': `url("${activePlanBanner.url}")`,
+                  '--plan-banner-focus-y': `${Math.round((activePlanBanner.focusY ?? 0.5) * 100)}%`
+                } as any)
+                : undefined
+            }
           >
             <div className="dash-plan-summary-layout">
               <div className="dash-plan-summary-main">

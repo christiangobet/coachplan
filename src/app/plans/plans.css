@@ -302,14 +302,22 @@
   inset: 0;
   background-image: var(--plan-banner-url);
   background-size: cover;
-  background-position: center;
+  background-position: center var(--plan-banner-focus-y, 50%);
+  -webkit-mask-image: linear-gradient(90deg, rgba(0, 0, 0, 0.1) 0%, rgba(0, 0, 0, 1) 100%);
+  mask-image: linear-gradient(90deg, rgba(0, 0, 0, 0.1) 0%, rgba(0, 0, 0, 1) 100%);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
 }
 
 .plans-lib-card-banner.has-banner::after {
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(180deg, rgba(9, 14, 22, 0.42) 0%, rgba(9, 14, 22, 0.58) 100%);
+  background:
+    linear-gradient(90deg, rgba(9, 14, 22, 0.46) 0%, rgba(9, 14, 22, 0.16) 70%, rgba(9, 14, 22, 0.04) 100%),
+    linear-gradient(180deg, rgba(9, 14, 22, 0.2) 0%, rgba(9, 14, 22, 0.34) 100%);
 }
 
 .plans-lib-card-banner.has-banner > * {
@@ -1514,7 +1522,13 @@
   inset: 0;
   background-image: var(--plan-banner-url);
   background-size: cover;
-  background-position: center;
+  background-position: center var(--plan-banner-focus-y, 50%);
+  -webkit-mask-image: linear-gradient(90deg, rgba(0, 0, 0, 0.1) 0%, rgba(0, 0, 0, 1) 100%);
+  mask-image: linear-gradient(90deg, rgba(0, 0, 0, 0.1) 0%, rgba(0, 0, 0, 1) 100%);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
 }
 
 .pcal-header.has-banner::after {
@@ -1522,8 +1536,8 @@
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(130deg, rgba(9, 20, 38, 0.72), rgba(9, 20, 38, 0.26) 56%, rgba(9, 20, 38, 0.65)),
-    linear-gradient(180deg, rgba(9, 20, 38, 0.1), rgba(9, 20, 38, 0.68));
+    linear-gradient(90deg, rgba(9, 20, 38, 0.6) 0%, rgba(9, 20, 38, 0.3) 58%, rgba(9, 20, 38, 0.08) 100%),
+    linear-gradient(180deg, rgba(9, 20, 38, 0.08), rgba(9, 20, 38, 0.42));
 }
 
 .pcal-header.has-banner > * {
@@ -1760,6 +1774,16 @@
   padding: 3px 8px;
 }
 
+.pcal-banner-focus-guide {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0;
+  border-top: 2px dashed rgba(255, 255, 255, 0.95);
+  box-shadow: 0 0 0 1px rgba(9, 20, 38, 0.35);
+  pointer-events: none;
+}
+
 .pcal-banner-card-meta {
   display: flex;
   flex-direction: column;
@@ -1790,6 +1814,24 @@
 
 .pcal-banner-delete-btn {
   color: #b9381a;
+}
+
+.pcal-banner-focus-control {
+  display: grid;
+  gap: 6px;
+  padding: 0 12px 12px;
+}
+
+.pcal-banner-focus-control label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--d-muted);
+  font-weight: 700;
+}
+
+.pcal-banner-focus-control input[type='range'] {
+  width: 100%;
 }
 
 /* Collapse sidebar + AI trainer when source PDF is open */

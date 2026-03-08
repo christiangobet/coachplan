@@ -458,6 +458,7 @@ type PlanBannerImage = {
   fileName: string | null;
   mimeType: string;
   fileSize: number;
+  focusY: number;
   createdAt: string;
   isSelected: boolean;
   url: string;
@@ -536,6 +537,7 @@ export default function PlanDetailPage() {
   const [bannerActionImageId, setBannerActionImageId] = useState<string | null>(null);
   const [bannerLibraryError, setBannerLibraryError] = useState<string | null>(null);
   const [bannerLibraryStatus, setBannerLibraryStatus] = useState<string | null>(null);
+  const [bannerFocusDraft, setBannerFocusDraft] = useState<Record<string, number>>({});
 
   // -- Edit Mode State --
   const [isEditMode, setIsEditMode] = useState(false);
@@ -707,13 +709,24 @@ export default function PlanDetailPage() {
     if (!planId) return;
     setBannerLibraryLoading(true);
     setBannerLibraryError(null);
+    setBannerLibraryStatus(null);
     try {
       const res = await fetch(`/api/plans/${planId}/images`, { cache: 'no-store' });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         throw new Error(data?.error || 'Failed to load banner library');
       }
-      setBannerImages(Array.isArray(data?.images) ? data.images : []);
+      const images = Array.isArray(data?.images) ? data.images : [];
+      setBannerImages(images);
+      setBannerFocusDraft(
+        images.reduce((acc: Record<string, number>, image: PlanBannerImage) => {
+          acc[image.id] = typeof image.focusY === 'number' ? image.focusY : 0.5;
+          return acc;
+        }, {})
+      );
+      if (data?.schemaReady === false) {
+        setBannerLibraryStatus(data?.warning || 'Banner library is unavailable until database migrations are applied.');
+      }
     } catch (err: any) {
       setBannerLibraryError(err?.message || 'Failed to load banner library');
       setBannerImages([]);
@@ -785,6 +798,31 @@ export default function PlanDetailPage() {
       await Promise.all([loadBannerLibrary(), loadPlan()]);
     } catch (err: any) {
       setBannerLibraryError(err?.message || 'Failed to delete image');
+    } finally {
+      setBannerActionImageId(null);
+    }
+  }, [loadBannerLibrary, loadPlan, planId]);
+
+  const updateBannerFocus = useCallback(async (imageId: string, focusY: number) => {
+    if (!planId) return;
+    setBannerActionImageId(imageId);
+    setBannerLibraryError(null);
+    setBannerLibraryStatus(null);
+    try {
+      const normalized = Math.max(0, Math.min(1, focusY));
+      const res = await fetch(`/api/plans/${planId}/images/${imageId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ select: false, focusY: normalized }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(payload?.error || 'Failed to save image focus');
+      }
+      setBannerLibraryStatus('Image focus saved.');
+      await Promise.all([loadBannerLibrary(), loadPlan()]);
+    } catch (err: any) {
+      setBannerLibraryError(err?.message || 'Failed to save image focus');
     } finally {
       setBannerActionImageId(null);
     }
@@ -1519,8 +1557,14 @@ export default function PlanDetailPage() {
   const sourcePaneAvailable = isWideScreen && sourceDocument.available;
   const showDesktopSourcePane = sourcePaneAvailable && showSourcePdf;
   const planBannerUrl = typeof plan?.banner?.url === 'string' ? plan.banner.url : null;
+  const planBannerFocus = typeof plan?.banner?.focusY === 'number'
+    ? Math.max(0, Math.min(1, plan.banner.focusY))
+    : 0.5;
   const planHeaderStyle = planBannerUrl
-    ? ({ '--plan-banner-url': `url("${planBannerUrl}")` } as any)
+    ? ({
+      '--plan-banner-url': `url("${planBannerUrl}")`,
+      '--plan-banner-focus-y': `${Math.round(planBannerFocus * 100)}%`
+    } as any)
     : undefined;
 
   return (
@@ -2851,6 +2895,10 @@ export default function PlanDetailPage() {
                 <div className="pcal-banner-grid">
                   {bannerImages.map((image) => {
                     const busy = bannerActionImageId === image.id;
+                    const focusY = Math.max(
+                      0,
+                      Math.min(1, typeof bannerFocusDraft[image.id] === 'number' ? bannerFocusDraft[image.id] : image.focusY)
+                    );
                     return (
                       <article
                         key={image.id}
@@ -2864,8 +2912,14 @@ export default function PlanDetailPage() {
                             sizes="(max-width: 640px) 100vw, 240px"
                             className="pcal-banner-card-image"
                             unoptimized
+                            style={{ objectPosition: `50% ${Math.round(focusY * 100)}%` }}
                           />
                           {image.isSelected && <span className="pcal-banner-selected">Selected</span>}
+                          <span
+                            className="pcal-banner-focus-guide"
+                            style={{ top: `${Math.round(focusY * 100)}%` }}
+                            aria-hidden
+                          />
                         </div>
                         <div className="pcal-banner-card-meta">
                           <strong title={image.fileName || 'Image'}>
@@ -2889,6 +2943,30 @@ export default function PlanDetailPage() {
                             onClick={() => void deleteBannerImage(image.id)}
                           >
                             {busy ? 'Deleting…' : 'Delete'}
+                          </button>
+                        </div>
+                        <div className="pcal-banner-focus-control">
+                          <label htmlFor={`banner-focus-${image.id}`}>Focus line</label>
+                          <input
+                            id={`banner-focus-${image.id}`}
+                            type="range"
+                            min={0}
+                            max={100}
+                            step={1}
+                            value={Math.round(focusY * 100)}
+                            disabled={busy}
+                            onChange={(event) => {
+                              const next = Number(event.target.value) / 100;
+                              setBannerFocusDraft((prev) => ({ ...prev, [image.id]: next }));
+                            }}
+                          />
+                          <button
+                            type="button"
+                            className="dash-btn-ghost"
+                            disabled={busy || Math.abs(focusY - image.focusY) < 0.005}
+                            onClick={() => void updateBannerFocus(image.id, focusY)}
+                          >
+                            {busy ? 'Saving…' : 'Save focus'}
                           </button>
                         </div>
                       </article>
