@@ -264,6 +264,19 @@
   gap: 10px;
 }
 
+.dash-plan-summary-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 300px);
+  gap: 14px;
+  align-items: start;
+}
+
+.dash-plan-summary-main {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
 /* Greeting */
 .dash-greeting {
   padding: 4px 0 0;
@@ -319,6 +332,87 @@
   font-size: 12px;
   font-weight: 600;
   color: var(--d-orange) !important;
+}
+
+.dash-weekly-metrics {
+  justify-self: end;
+  width: 100%;
+  max-width: 300px;
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border-radius: var(--d-radius-sm);
+  border: 1px solid var(--d-border-light);
+  background: var(--d-raised);
+}
+
+.dash-weekly-metrics-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.dash-weekly-metrics-title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--d-muted);
+}
+
+.dash-weekly-metrics-week {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--d-text-mid);
+}
+
+.dash-weekly-metrics-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--d-text-mid);
+}
+
+.dash-weekly-metrics-row strong {
+  color: var(--d-text);
+  font-size: 13px;
+  font-weight: 700;
+  text-align: right;
+}
+
+.dash-weekly-metrics-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: #e5e5ea;
+  overflow: hidden;
+}
+
+.dash-weekly-metrics-bar div {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--d-orange);
+}
+
+.dash-weekly-metrics-longrun {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dash-weekly-metrics-done {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+  background: #0f8a47;
 }
 
 /* Cards */
@@ -2889,6 +2983,16 @@ details[open] .day-log-instructions-toggle::before {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 6px;
     margin-top: 10px;
+  }
+
+  .dash-plan-summary-layout {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .dash-weekly-metrics {
+    justify-self: stretch;
+    max-width: 100%;
   }
 
   .dash-greeting-meta-item {

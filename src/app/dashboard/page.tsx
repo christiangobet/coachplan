@@ -68,6 +68,10 @@ function toDateKey(date: Date) {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+function roundToOneDecimal(value: number) {
+  return Math.round(value * 10) / 10;
+}
+
 export default async function DashboardPage({
   searchParams
 }: {
@@ -392,8 +396,6 @@ export default async function DashboardPage({
 
   const allActivities = weekDays.flatMap((d) => d.activities || []);
   const keyActivities = allActivities.filter((a) => a.mustDo || a.priority === "KEY");
-  const completedKey = keyActivities.filter((a) => a.completed).length;
-  const totalMinutes = allActivities.reduce((acc, a) => acc + (a.duration || 0), 0);
 
   const recentDayStatuses = isTodayInsideCurrentWeek
     ? weekDays
@@ -535,12 +537,54 @@ export default async function DashboardPage({
     .map((part) => part[0]?.toUpperCase())
     .slice(0, 2)
     .join("") || "CP";
-  const weekCompletionPct = allActivities.length > 0
-    ? Math.round((allActivities.filter((activity) => activity.completed).length / allActivities.length) * 100)
-    : 0;
-  const keyCompletionPct = keyActivities.length > 0 ? Math.round((completedKey / keyActivities.length) * 100) : 0;
-  const weeklyTimePct = Math.min(100, Math.round((totalMinutes / 420) * 100));
   const statusFeedItems = recentDayStatuses.length > 0 ? recentDayStatuses : statusItems.slice(0, 5);
+
+  const currentWeekRunMetrics = weekDays.flatMap((day) => {
+    const dayDate = getDayDateFromWeekStart(currentBounds?.startDate || null, day.dayOfWeek);
+    return (day.activities || [])
+      .filter((activity) => String(activity.type || "").toUpperCase() === "RUN")
+      .map((activity) => {
+        const plannedSourceUnit = resolveDistanceUnitFromActivity({
+          distanceUnit: activity.distanceUnit,
+          paceTarget: activity.paceTarget,
+          actualPace: activity.actualPace,
+          fallbackUnit: viewerUnits
+        }) || viewerUnits;
+        const plannedDistance = toDisplayDistance(activity.distance, plannedSourceUnit)?.value ?? 0;
+
+        const loggedSourceUnit = resolveDistanceUnitFromActivity({
+          distanceUnit: activity.distanceUnit,
+          paceTarget: activity.paceTarget,
+          actualPace: activity.actualPace,
+          fallbackUnit: viewerUnits,
+          preferActualPace: true
+        }) || viewerUnits;
+        const loggedDistance = toDisplayDistance(activity.actualDistance, loggedSourceUnit)?.value ?? 0;
+        const includeAchieved = Boolean(dayDate && dayDate.getTime() <= today.getTime());
+
+        return {
+          plannedDistance,
+          achievedDistance: includeAchieved ? loggedDistance : 0,
+          completed: Boolean(activity.completed),
+        };
+      });
+  });
+  const hasRunActivitiesThisWeek = currentWeekRunMetrics.length > 0;
+  const weeklyPlannedRunDistance = roundToOneDecimal(
+    currentWeekRunMetrics.reduce((total, run) => total + run.plannedDistance, 0)
+  );
+  const weeklyAchievedRunDistanceToDate = roundToOneDecimal(
+    currentWeekRunMetrics.reduce((total, run) => total + run.achievedDistance, 0)
+  );
+  const longestRunDistance = roundToOneDecimal(
+    currentWeekRunMetrics.reduce((max, run) => Math.max(max, run.plannedDistance), 0)
+  );
+  const longRunDone = hasRunActivitiesThisWeek
+    && currentWeekRunMetrics.some((run) => Math.abs(run.plannedDistance - longestRunDistance) < 0.0001 && run.completed);
+  const achievedDistanceProgressPct = weeklyPlannedRunDistance > 0
+    ? Math.min(100, Math.round((weeklyAchievedRunDistanceToDate / weeklyPlannedRunDistance) * 100))
+    : 0;
+  const formatDistanceWithUnit = (value: number) => `${value.toFixed(1)} ${viewerUnitLabel}`;
 
   return (
     <main className="dash" data-debug-id="DSH">
@@ -575,21 +619,55 @@ export default async function DashboardPage({
           )}
 
           <div className="dash-card dash-plan-summary" data-debug-id="DPS">
-            <div className="dash-greeting-meta">
-              <div className="dash-greeting-meta-item">
-                <span className="dash-greeting-meta-label">Plan</span>
-                <span className="dash-greeting-meta-value">{planDisplayName}</span>
+            <div className="dash-plan-summary-layout">
+              <div className="dash-plan-summary-main">
+                <div className="dash-greeting-meta">
+                  <div className="dash-greeting-meta-item">
+                    <span className="dash-greeting-meta-label">Plan</span>
+                    <span className="dash-greeting-meta-value">{planDisplayName}</span>
+                  </div>
+                  <div className="dash-greeting-meta-item">
+                    <span className="dash-greeting-meta-label">Race Name</span>
+                    <span className="dash-greeting-meta-value">{raceName}</span>
+                  </div>
+                  <div className="dash-greeting-meta-item">
+                    <span className="dash-greeting-meta-label">Race Date</span>
+                    <span className="dash-greeting-meta-value">{raceDateStr}</span>
+                  </div>
+                </div>
+                <a className="dash-greeting-edit-link" href={`/plans/${activePlan.id}`}>View Plan</a>
               </div>
-              <div className="dash-greeting-meta-item">
-                <span className="dash-greeting-meta-label">Race Name</span>
-                <span className="dash-greeting-meta-value">{raceName}</span>
-              </div>
-              <div className="dash-greeting-meta-item">
-                <span className="dash-greeting-meta-label">Race Date</span>
-                <span className="dash-greeting-meta-value">{raceDateStr}</span>
-              </div>
+              <aside className="dash-weekly-metrics" aria-label="Weekly Metrics">
+                <div className="dash-weekly-metrics-head">
+                  <span className="dash-weekly-metrics-title">Weekly Metrics</span>
+                  <span className="dash-weekly-metrics-week">W{currentWeekIndex}</span>
+                </div>
+                <div className="dash-weekly-metrics-row">
+                  <span>Planned</span>
+                  <strong>{formatDistanceWithUnit(weeklyPlannedRunDistance)}</strong>
+                </div>
+                <div className="dash-weekly-metrics-row">
+                  <span>Achieved</span>
+                  <strong>
+                    {weeklyAchievedRunDistanceToDate.toFixed(1)} / {weeklyPlannedRunDistance.toFixed(1)} {viewerUnitLabel}
+                  </strong>
+                </div>
+                <div className="dash-weekly-metrics-bar" aria-hidden="true">
+                  <div style={{ width: `${achievedDistanceProgressPct}%` }} />
+                </div>
+                <div className="dash-weekly-metrics-row">
+                  <span>Longest run</span>
+                  {hasRunActivitiesThisWeek ? (
+                    <strong className="dash-weekly-metrics-longrun">
+                      {formatDistanceWithUnit(longestRunDistance)}
+                      {longRunDone && <span className="dash-weekly-metrics-done">✓</span>}
+                    </strong>
+                  ) : (
+                    <strong>No run planned</strong>
+                  )}
+                </div>
+              </aside>
             </div>
-            <a className="dash-greeting-edit-link" href={`/plans/${activePlan.id}`}>View Plan</a>
           </div>
 
           {/* Today's workout hero */}
@@ -784,35 +862,6 @@ export default async function DashboardPage({
             </div>
             <DashboardTrainingLogStatus items={statusFeedItems} />
           </div>
-
-          <div className="dash-card dash-week-snapshot" data-debug-id="DWK">
-            <div className="dash-card-header">
-              <span className="dash-card-title">This Week</span>
-              <span className="dash-week-snapshot-range">Week {currentWeekIndex}</span>
-            </div>
-            <div className="dash-week-snapshot-row">
-              <span>Workouts</span>
-              <strong>{weekCompletionPct}%</strong>
-            </div>
-            <div className="dash-week-snapshot-bar">
-              <div style={{ width: `${weekCompletionPct}%` }} />
-            </div>
-            <div className="dash-week-snapshot-row">
-              <span>Key sessions</span>
-              <strong>{keyCompletionPct}%</strong>
-            </div>
-            <div className="dash-week-snapshot-bar key">
-              <div style={{ width: `${keyCompletionPct}%` }} />
-            </div>
-            <div className="dash-week-snapshot-row">
-              <span>Time logged</span>
-              <strong>{Math.floor(totalMinutes / 60)}h {totalMinutes % 60}m</strong>
-            </div>
-            <div className="dash-week-snapshot-bar time">
-              <div style={{ width: `${weeklyTimePct}%` }} />
-            </div>
-          </div>
-
 
           {/* Plan progress */}
           <div className="dash-card dash-plan-progress-card" data-debug-id="DPC">
