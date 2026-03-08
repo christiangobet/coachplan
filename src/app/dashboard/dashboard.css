@@ -264,6 +264,42 @@
   gap: 10px;
 }
 
+.dash-plan-summary.has-banner {
+  position: relative;
+  overflow: hidden;
+}
+
+.dash-plan-summary.has-banner::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: var(--plan-banner-url);
+  background-size: cover;
+  background-position: center;
+}
+
+.dash-plan-summary.has-banner::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(8, 13, 21, 0.4) 0%, rgba(8, 13, 21, 0.54) 100%);
+}
+
+.dash-plan-summary.has-banner > * {
+  position: relative;
+  z-index: 1;
+}
+
+.dash-plan-summary.has-banner .dash-greeting-meta-item {
+  background: rgba(255, 255, 255, 0.86);
+  border-color: rgba(216, 221, 230, 0.9);
+}
+
+.dash-plan-summary.has-banner .dash-weekly-metrics {
+  background: rgba(248, 249, 253, 0.9);
+  border-color: rgba(223, 227, 236, 0.95);
+}
+
 .dash-plan-summary-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(240px, 300px);

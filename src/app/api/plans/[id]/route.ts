@@ -3,6 +3,7 @@ import { currentUser } from '@clerk/nextjs/server';
 import { PlanStatus, Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { alignWeeksToRaceDate, alignWeeksToStartDate } from '@/lib/clone-plan';
+import { buildPlanBanner } from '@/lib/plan-banner';
 
 const ACTIVITY_ORDER_BY = [{ sessionOrder: 'asc' as const }, { id: 'asc' as const }];
 type WeekDateAnchor = 'RACE_DATE' | 'START_DATE';
@@ -27,15 +28,23 @@ function parseWeekDateAnchor(input: unknown): WeekDateAnchor | null {
   return null;
 }
 
-async function appendSourcePlanName<T extends { sourceId?: string | null }>(plan: T) {
+async function appendPlanPresentation<T extends { id: string; sourceId?: string | null; bannerImageId?: string | null }>(plan: T) {
   if (!plan.sourceId) {
-    return { ...plan, sourcePlanName: null };
+    return {
+      ...plan,
+      sourcePlanName: null,
+      banner: buildPlanBanner(plan.id, plan.bannerImageId),
+    };
   }
   const sourcePlan = await prisma.trainingPlan.findUnique({
     where: { id: plan.sourceId },
     select: { name: true }
   });
-  return { ...plan, sourcePlanName: sourcePlan?.name || null };
+  return {
+    ...plan,
+    sourcePlanName: sourcePlan?.name || null,
+    banner: buildPlanBanner(plan.id, plan.bannerImageId),
+  };
 }
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -82,7 +91,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  return NextResponse.json({ plan: await appendSourcePlanName(plan), viewerUnits });
+  return NextResponse.json({ plan: await appendPlanPresentation(plan), viewerUnits });
 }
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -342,7 +351,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   });
 
   if (!refreshed) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  return NextResponse.json({ plan: await appendSourcePlanName(refreshed), viewerUnits });
+  return NextResponse.json({ plan: await appendPlanPresentation(refreshed), viewerUnits });
 }
 
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {

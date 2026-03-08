@@ -274,6 +274,49 @@
   padding-top: 14px;
 }
 
+.plans-lib-card-banner {
+  position: relative;
+  overflow: hidden;
+  margin: -14px 0 0;
+  padding: 14px 16px 10px;
+  display: grid;
+  gap: 6px;
+  background: linear-gradient(135deg, #f4f5f8 0%, #e9ecf2 100%);
+}
+
+.plans-lib-card-banner.mode-active {
+  background: linear-gradient(135deg, rgba(252, 76, 2, 0.95) 0%, rgba(255, 140, 0, 0.9) 100%);
+}
+
+.plans-lib-card-banner.mode-draft {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.9) 0%, rgba(6, 182, 212, 0.85) 100%);
+}
+
+.plans-lib-card-banner.mode-archived {
+  background: linear-gradient(135deg, rgba(107, 107, 118, 0.86) 0%, rgba(155, 155, 163, 0.82) 100%);
+}
+
+.plans-lib-card-banner.has-banner::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: var(--plan-banner-url);
+  background-size: cover;
+  background-position: center;
+}
+
+.plans-lib-card-banner.has-banner::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(9, 14, 22, 0.42) 0%, rgba(9, 14, 22, 0.58) 100%);
+}
+
+.plans-lib-card-banner.has-banner > * {
+  position: relative;
+  z-index: 1;
+}
+
 .plan-card.status-active {
   border-left: 3px solid var(--d-orange);
 }
@@ -350,6 +393,13 @@
 .plan-card>.plan-card-actions {
   margin-left: 16px;
   margin-right: 16px;
+}
+
+.plans-lib-card-banner .plan-card-top,
+.plans-lib-card-banner .plan-card-name,
+.plans-lib-card-banner .plans-lib-card-meta {
+  margin-left: 0;
+  margin-right: 0;
 }
 
 .plan-status-dot {
@@ -799,6 +849,25 @@
   margin-top: 2px;
   line-height: 1.25;
   font-size: 16px;
+}
+
+.plan-card--library .plans-lib-card-banner.has-banner .plan-status-label,
+.plan-card--library .plans-lib-card-banner.has-banner .plan-card-name,
+.plan-card--library .plans-lib-card-banner.has-banner .plans-lib-card-meta,
+.plan-card--library .plans-lib-card-banner.has-banner .plans-lib-card-meta-item,
+.plan-card--library .plans-lib-card-banner.has-banner .plans-lib-card-sep {
+  color: #f7f8fc;
+}
+
+.plan-card--library .plans-lib-card-banner.has-banner .plan-card-menu-btn {
+  color: #f4f6fc;
+  border-color: rgba(255, 255, 255, 0.5);
+  background: rgba(7, 12, 20, 0.28);
+}
+
+.plan-card--library .plans-lib-card-banner.has-banner .plan-focus-badge {
+  color: #11151e;
+  background: rgba(255, 255, 255, 0.92);
 }
 
 .plan-card--library.status-active {
@@ -1428,6 +1497,38 @@
 
 .pcal-header {
   margin-bottom: 6px;
+  position: relative;
+}
+
+.pcal-header.has-banner {
+  padding: 18px 20px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(15, 36, 66, 0.2);
+  overflow: hidden;
+  background: linear-gradient(145deg, rgba(21, 36, 64, 0.9), rgba(252, 76, 2, 0.72));
+}
+
+.pcal-header.has-banner::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: var(--plan-banner-url);
+  background-size: cover;
+  background-position: center;
+}
+
+.pcal-header.has-banner::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(130deg, rgba(9, 20, 38, 0.72), rgba(9, 20, 38, 0.26) 56%, rgba(9, 20, 38, 0.65)),
+    linear-gradient(180deg, rgba(9, 20, 38, 0.1), rgba(9, 20, 38, 0.68));
+}
+
+.pcal-header.has-banner > * {
+  position: relative;
+  z-index: 1;
 }
 
 .pcal-header-top {
@@ -1436,6 +1537,47 @@
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 8px;
+}
+
+.pcal-header.has-banner h1,
+.pcal-header.has-banner .pcal-header-meta,
+.pcal-header.has-banner .pcal-header-meta-item {
+  color: #f8fafc;
+}
+
+.pcal-header.has-banner .pcal-header-meta-item::before {
+  color: rgba(248, 250, 252, 0.72);
+}
+
+.pcal-header.has-banner .dash-btn-ghost {
+  color: #f8fafc;
+  border-color: rgba(248, 250, 252, 0.5);
+  background: rgba(9, 20, 38, 0.26);
+}
+
+.pcal-header.has-banner .dash-btn-ghost:hover {
+  background: rgba(9, 20, 38, 0.46);
+}
+
+.pcal-header.has-banner .pcal-edit-btn.active {
+  background: rgba(252, 76, 2, 0.24);
+  border-color: rgba(252, 76, 2, 0.7);
+  color: #fff7f3;
+}
+
+.pcal-header.has-banner .plan-detail-status.active {
+  background: rgba(21, 189, 102, 0.2);
+  color: #c7ffe0;
+}
+
+.pcal-header.has-banner .plan-detail-status.draft {
+  background: rgba(243, 156, 18, 0.2);
+  color: #ffe8bf;
+}
+
+.pcal-header.has-banner .plan-detail-status.archived {
+  background: rgba(148, 163, 184, 0.25);
+  color: #e2e8f0;
 }
 
 .pcal-edit-btn {
@@ -1485,6 +1627,169 @@
   color: #9b3200;
   background: rgba(252, 76, 2, 0.14);
   border: 1px solid rgba(252, 76, 2, 0.28);
+}
+
+.pcal-header.has-banner .pcal-edit-mode-banner {
+  color: #fff2dd;
+  background: rgba(252, 76, 2, 0.26);
+  border-color: rgba(252, 76, 2, 0.5);
+}
+
+.pcal-banner-modal {
+  max-width: min(940px, 94vw);
+}
+
+.pcal-banner-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.pcal-banner-modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.pcal-banner-modal-head h2 {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+.pcal-banner-modal-head p {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--d-text-mid);
+}
+
+.pcal-banner-modal-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--d-border);
+  background: var(--d-bg);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--d-text-mid);
+}
+
+.pcal-banner-modal-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.pcal-banner-upload-btn {
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.pcal-banner-upload-btn input[type='file'] {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.pcal-banner-modal-help {
+  font-size: 12px;
+  color: var(--d-muted);
+}
+
+.pcal-banner-modal-empty {
+  margin: 0;
+  border: 1px dashed var(--d-border);
+  border-radius: 12px;
+  padding: 20px;
+  text-align: center;
+  color: var(--d-text-mid);
+  background: var(--d-bg);
+}
+
+.pcal-banner-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 12px;
+}
+
+.pcal-banner-card {
+  border: 1px solid var(--d-border);
+  border-radius: 12px;
+  background: var(--d-bg);
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: auto auto auto;
+}
+
+.pcal-banner-card.is-selected {
+  border-color: rgba(252, 76, 2, 0.45);
+  box-shadow: 0 0 0 1px rgba(252, 76, 2, 0.2);
+}
+
+.pcal-banner-card-image-wrap {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  background: linear-gradient(140deg, #f6f6f6, #eceff3);
+}
+
+.pcal-banner-card-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.pcal-banner-selected {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(21, 189, 102, 0.35);
+  background: rgba(21, 189, 102, 0.15);
+  color: #0f8a47;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+}
+
+.pcal-banner-card-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 12px 6px;
+}
+
+.pcal-banner-card-meta strong {
+  font-size: 13px;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pcal-banner-card-meta span {
+  font-size: 12px;
+  color: var(--d-muted);
+}
+
+.pcal-banner-card-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 12px 12px;
+}
+
+.pcal-banner-delete-btn {
+  color: #b9381a;
 }
 
 /* Collapse sidebar + AI trainer when source PDF is open */
@@ -3377,10 +3682,32 @@
     align-items: stretch;
   }
 
+  .pcal-header.has-banner {
+    padding: 14px 14px 12px;
+  }
+
   .pcal-header-actions {
     width: 100%;
     justify-content: flex-start;
     flex-wrap: wrap;
+  }
+
+  .pcal-banner-modal {
+    max-width: 100%;
+  }
+
+  .pcal-banner-modal-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .pcal-banner-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .pcal-banner-card-actions {
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .pcal-calendar-header-top {

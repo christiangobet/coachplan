@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
+import Image from 'next/image';
 import { useUser } from '@clerk/nextjs';
 import { getDayDateFromWeekStart, resolveWeekBounds } from '@/lib/plan-dates';
 import { getDayStatus, getDayMissedReason, type DayStatus } from '@/lib/day-status';
@@ -26,6 +27,7 @@ import ExternalSportIcon from '@/components/ExternalSportIcon';
 import StravaIcon from '@/components/StravaIcon';
 import type { PlanSummary } from '@/lib/types/plan-summary';
 import { buildLogActivities, type LogActivity } from '@/lib/log-activity';
+import { PLAN_IMAGE_MAX_COUNT, PLAN_IMAGE_MAX_FILE_BYTES } from '@/lib/plan-banner';
 import '../plans.css';
 import './review/review.css';
 import '../../dashboard/dashboard.css';
@@ -76,6 +78,12 @@ function distanceProgressVariant(planned: string | null, logged: string | null) 
 
 function formatDistanceOneDecimal(value: number) {
   return value.toFixed(1);
+}
+
+function formatBytes(value: number) {
+  if (value >= 1024 * 1024) return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+  if (value >= 1024) return `${Math.round(value / 1024)} KB`;
+  return `${value} B`;
 }
 
 
@@ -445,6 +453,16 @@ type SourceDocumentMeta = {
   error: string | null;
 };
 
+type PlanBannerImage = {
+  id: string;
+  fileName: string | null;
+  mimeType: string;
+  fileSize: number;
+  createdAt: string;
+  isSelected: boolean;
+  url: string;
+};
+
 export default function PlanDetailPage() {
   const params = useParams<{ id: string }>();
   const searchParams = useSearchParams();
@@ -510,6 +528,13 @@ export default function PlanDetailPage() {
   const [isDragging, setIsDragging] = useState(false);
   const dragStartXRef = useRef<number>(0);
   const dragStartWidthRef = useRef<number>(380);
+  const [bannerModalOpen, setBannerModalOpen] = useState(false);
+  const [bannerImages, setBannerImages] = useState<PlanBannerImage[]>([]);
+  const [bannerLibraryLoading, setBannerLibraryLoading] = useState(false);
+  const [bannerUploading, setBannerUploading] = useState(false);
+  const [bannerActionImageId, setBannerActionImageId] = useState<string | null>(null);
+  const [bannerLibraryError, setBannerLibraryError] = useState<string | null>(null);
+  const [bannerLibraryStatus, setBannerLibraryStatus] = useState<string | null>(null);
 
   // -- Edit Mode State --
   const [isEditMode, setIsEditMode] = useState(false);
@@ -670,6 +695,93 @@ export default function PlanDetailPage() {
     }
   }, [loadStravaMarkers, planId]);
 
+  const loadBannerLibrary = useCallback(async () => {
+    if (!planId) return;
+    setBannerLibraryLoading(true);
+    setBannerLibraryError(null);
+    try {
+      const res = await fetch(`/api/plans/${planId}/images`, { cache: 'no-store' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data?.error || 'Failed to load banner library');
+      }
+      setBannerImages(Array.isArray(data?.images) ? data.images : []);
+    } catch (err: any) {
+      setBannerLibraryError(err?.message || 'Failed to load banner library');
+      setBannerImages([]);
+    } finally {
+      setBannerLibraryLoading(false);
+    }
+  }, [planId]);
+
+  const uploadBannerFiles = useCallback(async (files: FileList | null) => {
+    if (!planId || !files || files.length === 0) return;
+    const queue = Array.from(files);
+    setBannerUploading(true);
+    setBannerLibraryError(null);
+    setBannerLibraryStatus(null);
+    try {
+      for (const file of queue) {
+        const form = new FormData();
+        form.append('file', file);
+        const res = await fetch(`/api/plans/${planId}/images`, {
+          method: 'POST',
+          body: form,
+        });
+        const payload = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(payload?.error || `Failed to upload ${file.name}`);
+        }
+      }
+      setBannerLibraryStatus(queue.length === 1 ? 'Image uploaded.' : `${queue.length} images uploaded.`);
+      await Promise.all([loadBannerLibrary(), loadPlan()]);
+    } catch (err: any) {
+      setBannerLibraryError(err?.message || 'Failed to upload image');
+    } finally {
+      setBannerUploading(false);
+    }
+  }, [loadBannerLibrary, loadPlan, planId]);
+
+  const selectBannerImage = useCallback(async (imageId: string) => {
+    if (!planId) return;
+    setBannerActionImageId(imageId);
+    setBannerLibraryError(null);
+    setBannerLibraryStatus(null);
+    try {
+      const res = await fetch(`/api/plans/${planId}/images/${imageId}`, { method: 'PATCH' });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(payload?.error || 'Failed to set banner image');
+      }
+      setBannerLibraryStatus('Banner updated.');
+      await Promise.all([loadBannerLibrary(), loadPlan()]);
+    } catch (err: any) {
+      setBannerLibraryError(err?.message || 'Failed to set banner image');
+    } finally {
+      setBannerActionImageId(null);
+    }
+  }, [loadBannerLibrary, loadPlan, planId]);
+
+  const deleteBannerImage = useCallback(async (imageId: string) => {
+    if (!planId) return;
+    setBannerActionImageId(imageId);
+    setBannerLibraryError(null);
+    setBannerLibraryStatus(null);
+    try {
+      const res = await fetch(`/api/plans/${planId}/images/${imageId}`, { method: 'DELETE' });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(payload?.error || 'Failed to delete image');
+      }
+      setBannerLibraryStatus('Image deleted.');
+      await Promise.all([loadBannerLibrary(), loadPlan()]);
+    } catch (err: any) {
+      setBannerLibraryError(err?.message || 'Failed to delete image');
+    } finally {
+      setBannerActionImageId(null);
+    }
+  }, [loadBannerLibrary, loadPlan, planId]);
+
   const moveActivity = useCallback(async (args: {
     activityId: string;
     sourceDayId: string;
@@ -720,6 +832,11 @@ export default function PlanDetailPage() {
   useEffect(() => {
     loadPlan();
   }, [loadPlan]);
+
+  useEffect(() => {
+    if (!bannerModalOpen) return;
+    void loadBannerLibrary();
+  }, [bannerModalOpen, loadBannerLibrary]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -1183,11 +1300,16 @@ export default function PlanDetailPage() {
   // Close modal on Escape
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setSelectedActivity(null);
+      if (e.key !== 'Escape') return;
+      if (bannerModalOpen) {
+        setBannerModalOpen(false);
+        return;
+      }
+      setSelectedActivity(null);
     };
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
-  }, []);
+  }, [bannerModalOpen]);
 
   useEffect(() => {
     if (!selectedActivity) return;
@@ -1388,6 +1510,10 @@ export default function PlanDetailPage() {
 
   const sourcePaneAvailable = isWideScreen && sourceDocument.available;
   const showDesktopSourcePane = sourcePaneAvailable && showSourcePdf;
+  const planBannerUrl = typeof plan?.banner?.url === 'string' ? plan.banner.url : null;
+  const planHeaderStyle = planBannerUrl
+    ? ({ '--plan-banner-url': `url("${planBannerUrl}")` } as any)
+    : undefined;
 
   return (
     <main
@@ -1444,7 +1570,11 @@ export default function PlanDetailPage() {
 
         <section className="pcal-main" data-debug-id="PCG">
           {/* Header */}
-          <div className="pcal-header" id="plan-overview">
+          <div
+            className={`pcal-header${planBannerUrl ? ' has-banner' : ''}`}
+            id="plan-overview"
+            style={planHeaderStyle}
+          >
             <div className="pcal-header-top">
               <h1>{plan.name}</h1>
               <div className="pcal-header-actions">
@@ -1466,6 +1596,17 @@ export default function PlanDetailPage() {
                         : 'No Source PDF'}
                   </button>
                 )}
+                <button
+                  type="button"
+                  className="dash-btn-ghost"
+                  onClick={() => {
+                    setBannerLibraryError(null);
+                    setBannerLibraryStatus(null);
+                    setBannerModalOpen(true);
+                  }}
+                >
+                  Banner Library
+                </button>
                 <button
                   type="button"
                   className={`dash-btn-ghost pcal-edit-btn${isEditMode ? ' active' : ''}`}
@@ -2645,6 +2786,108 @@ export default function PlanDetailPage() {
                 )}
               </div>
 
+            </div>
+          </div>
+        </div>
+      )}
+      {bannerModalOpen && (
+        <div className="pcal-modal-overlay" onClick={() => setBannerModalOpen(false)}>
+          <div className="pcal-modal pcal-banner-modal" onClick={(e) => e.stopPropagation()}>
+            <button
+              className="pcal-modal-close"
+              onClick={() => setBannerModalOpen(false)}
+              type="button"
+              aria-label="Close banner library"
+            >
+              &times;
+            </button>
+            <div className="pcal-modal-body pcal-banner-modal-body">
+              <div className="pcal-banner-modal-head">
+                <div>
+                  <h2>Banner Library</h2>
+                  <p>
+                    Upload up to {PLAN_IMAGE_MAX_COUNT} images ({Math.round(PLAN_IMAGE_MAX_FILE_BYTES / (1024 * 1024))}MB max each).
+                  </p>
+                </div>
+                <span className="pcal-banner-modal-count">
+                  {bannerImages.length}/{PLAN_IMAGE_MAX_COUNT}
+                </span>
+              </div>
+              <div className="pcal-banner-modal-toolbar">
+                <label className="dash-btn-primary pcal-banner-upload-btn">
+                  {bannerUploading ? 'Uploading…' : 'Upload images'}
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/avif"
+                    multiple
+                    disabled={bannerUploading || bannerImages.length >= PLAN_IMAGE_MAX_COUNT}
+                    onChange={(event) => {
+                      void uploadBannerFiles(event.target.files);
+                      event.currentTarget.value = '';
+                    }}
+                  />
+                </label>
+                <span className="pcal-banner-modal-help">
+                  Supported: JPG, PNG, WEBP, AVIF
+                </span>
+              </div>
+              {bannerLibraryError && <p className="pcal-modal-form-error">{bannerLibraryError}</p>}
+              {bannerLibraryStatus && <p className="pcal-modal-form-success">{bannerLibraryStatus}</p>}
+              {bannerLibraryLoading ? (
+                <p className="pcal-banner-modal-empty">Loading images…</p>
+              ) : bannerImages.length === 0 ? (
+                <p className="pcal-banner-modal-empty">
+                  No images yet. Upload one to personalize this plan.
+                </p>
+              ) : (
+                <div className="pcal-banner-grid">
+                  {bannerImages.map((image) => {
+                    const busy = bannerActionImageId === image.id;
+                    return (
+                      <article
+                        key={image.id}
+                        className={`pcal-banner-card${image.isSelected ? ' is-selected' : ''}`}
+                      >
+                        <div className="pcal-banner-card-image-wrap">
+                          <Image
+                            src={image.url}
+                            alt={image.fileName ? `Banner ${image.fileName}` : 'Plan banner image'}
+                            fill
+                            sizes="(max-width: 640px) 100vw, 240px"
+                            className="pcal-banner-card-image"
+                            unoptimized
+                          />
+                          {image.isSelected && <span className="pcal-banner-selected">Selected</span>}
+                        </div>
+                        <div className="pcal-banner-card-meta">
+                          <strong title={image.fileName || 'Image'}>
+                            {image.fileName || 'Untitled image'}
+                          </strong>
+                          <span>{formatBytes(image.fileSize)}</span>
+                        </div>
+                        <div className="pcal-banner-card-actions">
+                          <button
+                            type="button"
+                            className="dash-btn-ghost"
+                            disabled={busy || image.isSelected}
+                            onClick={() => void selectBannerImage(image.id)}
+                          >
+                            {image.isSelected ? 'Selected' : busy ? 'Saving…' : 'Set banner'}
+                          </button>
+                          <button
+                            type="button"
+                            className="dash-btn-ghost pcal-banner-delete-btn"
+                            disabled={busy}
+                            onClick={() => void deleteBannerImage(image.id)}
+                          >
+                            {busy ? 'Deleting…' : 'Delete'}
+                          </button>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         </div>

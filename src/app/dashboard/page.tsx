@@ -8,6 +8,7 @@ import { ensureUserFromAuth } from "@/lib/user-sync";
 import { getDayMissedReason, getDayStatus, type DayStatus } from "@/lib/day-status";
 import { pickSelectedPlan, SELECTED_PLAN_COOKIE } from "@/lib/plan-selection";
 import { getFirstName } from "@/lib/display-name";
+import { buildPlanBanner } from "@/lib/plan-banner";
 import {
   convertDistanceForDisplay,
   distanceUnitLabel,
@@ -240,6 +241,7 @@ export default async function DashboardPage({
     sourcePlanName = sourcePlan?.name || null;
   }
   const planDisplayName = sourcePlanName || activePlan.name;
+  const activePlanBanner = buildPlanBanner(activePlan.id, activePlan.bannerImageId);
   const stravaAccount = await prisma.externalAccount.findFirst({
     where: { userId: user.id, provider: "STRAVA" },
     select: { id: true }
@@ -618,7 +620,11 @@ export default async function DashboardPage({
             </div>
           )}
 
-          <div className="dash-card dash-plan-summary" data-debug-id="DPS">
+          <div
+            className={`dash-card dash-plan-summary${activePlanBanner ? ' has-banner' : ''}`}
+            data-debug-id="DPS"
+            style={activePlanBanner ? ({ '--plan-banner-url': `url("${activePlanBanner.url}")` } as any) : undefined}
+          >
             <div className="dash-plan-summary-layout">
               <div className="dash-plan-summary-main">
                 <div className="dash-greeting-meta">

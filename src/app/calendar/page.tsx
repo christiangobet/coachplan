@@ -8,6 +8,7 @@ import { ensureUserFromAuth } from "@/lib/user-sync";
 import { getDayMissedReason, getDayStatus, isDayExplicitlyOpen, type DayStatus } from "@/lib/day-status";
 import { pickSelectedPlan, SELECTED_PLAN_COOKIE } from "@/lib/plan-selection";
 import { getFirstName } from "@/lib/display-name";
+import { buildPlanBanner } from "@/lib/plan-banner";
 import {
   convertDistanceForDisplay,
   convertPaceForDisplay,
@@ -399,6 +400,7 @@ export default async function CalendarPage({
     )?.name || null
     : null;
   const planDisplayName = sourcePlanName || selectedPlan.name;
+  const selectedPlanBanner = buildPlanBanner(selectedPlan.id, selectedPlan.bannerImageId);
   const raceName = (selectedPlan.raceName || "").trim()
     || (selectedPlan.raceType ? formatType(selectedPlan.raceType) : "Not set");
   const raceDateStr = selectedPlan.raceDate
@@ -693,7 +695,10 @@ export default async function CalendarPage({
             </div>
           </div>
 
-          <div className="dash-card dash-plan-summary cal-plan-summary-card">
+          <div
+            className={`dash-card dash-plan-summary cal-plan-summary-card${selectedPlanBanner ? ' has-banner' : ''}`}
+            style={selectedPlanBanner ? ({ '--plan-banner-url': `url("${selectedPlanBanner.url}")` } as any) : undefined}
+          >
             <div className="dash-greeting-meta">
               <div className="dash-greeting-meta-item">
                 <span className="dash-greeting-meta-label">Plan</span>

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { currentUser } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
+import { buildPlanBanner } from '@/lib/plan-banner';
 
 type NextActivityCandidate = {
   id: string;
@@ -65,6 +66,7 @@ export async function GET() {
         raceType: true,
         difficulty: true,
         createdAt: true,
+        bannerImageId: true,
         planGuide: true,
         activities: {
           select: {
@@ -161,6 +163,7 @@ export async function GET() {
       raceType: plan.raceType,
       difficulty: plan.difficulty,
       createdAt: plan.createdAt,
+      banner: buildPlanBanner(plan.id, plan.bannerImageId),
       planGuide: plan.planGuide,
       stats: {
         totalActivities,

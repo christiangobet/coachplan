@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import AthleteSidebar from '@/components/AthleteSidebar';
 import PlanGuidePanel from '@/components/PlanGuidePanel';
 import PlanSummaryCard from '@/components/PlanSummaryCard';
@@ -43,6 +43,10 @@ type Plan = {
     weekIndex: number | null;
     dayOfWeek: number | null;
     dateISO: string | null;
+  } | null;
+  banner?: {
+    imageId: string;
+    url: string;
   } | null;
 };
 
@@ -743,50 +747,58 @@ export default function PlansClient() {
     const nextMetaParts = nextActivityInfo
       ? [nextActivityInfo.dateLabel, nextActivityInfo.distanceLabel, nextActivityInfo.durationLabel].filter(Boolean) as string[]
       : [];
+    const bannerStyle = plan.banner?.url
+      ? ({ '--plan-banner-url': `url("${plan.banner.url}")` } as CSSProperties)
+      : undefined;
 
     return (
       <div className={`plan-card plan-card--library status-${mode}${plan.id === focusedPlanId ? ' focused' : ''}`} key={plan.id} data-debug-id="PLC">
-        <div className="plan-card-top">
-          <span className="plan-status-dot" style={{ background: statusColor(plan.status) }} />
-          <span className="plan-status-label">{plan.status}</span>
-          {plan.id === focusedPlanId && <span className="plan-focus-badge">Current Plan</span>}
-          <button
-            className="plan-card-menu-btn"
-            onClick={() => toggleMenu(plan.id)}
-            aria-label="More actions"
-          >
-            ···
-          </button>
-        </div>
-
-        {renamingPlanId === plan.id ? (
-          <div className="plan-template-rename plans-lib-inline-edit">
-            <input
-              className="plan-template-rename-input"
-              value={renameValue}
-              onChange={(e) => setRenameValue(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleRenamePlan(plan.id);
-                if (e.key === 'Escape') setRenamingPlanId(null);
-              }}
-              autoFocus
-            />
-            <div className="plan-template-rename-actions">
-              <button
-                className="dash-btn-primary plan-card-cta"
-                onClick={() => handleRenamePlan(plan.id)}
-                disabled={!renameValue.trim() || processingPlanId === plan.id}
-              >
-                {processingPlanId === plan.id ? 'Saving…' : 'Save'}
-              </button>
-              <button className="plan-template-cancel" onClick={() => setRenamingPlanId(null)}>Cancel</button>
-            </div>
+        <div
+          className={`plans-lib-card-banner mode-${mode}${plan.banner?.url ? ' has-banner' : ''}`}
+          style={bannerStyle}
+        >
+          <div className="plan-card-top">
+            <span className="plan-status-dot" style={{ background: statusColor(plan.status) }} />
+            <span className="plan-status-label">{plan.status}</span>
+            {plan.id === focusedPlanId && <span className="plan-focus-badge">Current Plan</span>}
+            <button
+              className="plan-card-menu-btn"
+              onClick={() => toggleMenu(plan.id)}
+              aria-label="More actions"
+            >
+              ···
+            </button>
           </div>
-        ) : (
-          <h3 className="plan-card-name">{plan.name}</h3>
-        )}
 
-        {renderMetaRow(planMeta)}
+          {renamingPlanId === plan.id ? (
+            <div className="plan-template-rename plans-lib-inline-edit">
+              <input
+                className="plan-template-rename-input"
+                value={renameValue}
+                onChange={(e) => setRenameValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleRenamePlan(plan.id);
+                  if (e.key === 'Escape') setRenamingPlanId(null);
+                }}
+                autoFocus
+              />
+              <div className="plan-template-rename-actions">
+                <button
+                  className="dash-btn-primary plan-card-cta"
+                  onClick={() => handleRenamePlan(plan.id)}
+                  disabled={!renameValue.trim() || processingPlanId === plan.id}
+                >
+                  {processingPlanId === plan.id ? 'Saving…' : 'Save'}
+                </button>
+                <button className="plan-template-cancel" onClick={() => setRenamingPlanId(null)}>Cancel</button>
+              </div>
+            </div>
+          ) : (
+            <h3 className="plan-card-name">{plan.name}</h3>
+          )}
+
+          {renderMetaRow(planMeta)}
+        </div>
 
         {(plan.raceType || plan.difficulty) && (
           <div className="plans-lib-card-tags">

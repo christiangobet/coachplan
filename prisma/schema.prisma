@@ -145,6 +145,7 @@ model TrainingPlan {
   parseProfile Json?
   planGuide   String?
   planSummary Json?
+  bannerImageId String?
   createdAt   DateTime    @default(now())
 
   ownerId    String?
@@ -158,6 +159,8 @@ model TrainingPlan {
   activities PlanActivity[]
   parseJobs  ParseJob[]
   sourceDocument PlanSourceDocument?
+  images     PlanImage[] @relation("PlanImageLibrary")
+  bannerImage PlanImage? @relation("SelectedPlanBanner", fields: [bannerImageId], references: [id], onDelete: SetNull)
 }
 
 model PlanSourceDocument {
@@ -361,4 +364,19 @@ model ParseArtifact {
   parseJob ParseJob @relation(fields: [parseJobId], references: [id])
 
   @@index([parseJobId])
+}
+
+model PlanImage {
+  id        String   @id @default(cuid())
+  planId    String
+  fileName  String?
+  mimeType  String
+  fileSize  Int
+  content   Bytes
+  createdAt DateTime @default(now())
+
+  plan TrainingPlan @relation("PlanImageLibrary", fields: [planId], references: [id], onDelete: Cascade)
+  selectedByPlans TrainingPlan[] @relation("SelectedPlanBanner")
+
+  @@index([planId, createdAt])
 }
