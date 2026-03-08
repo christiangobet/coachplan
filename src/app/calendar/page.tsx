@@ -7,6 +7,7 @@ import { getDayDateFromWeekStart, resolveWeekBounds } from "@/lib/plan-dates";
 import { ensureUserFromAuth } from "@/lib/user-sync";
 import { getDayMissedReason, getDayStatus, isDayExplicitlyOpen, type DayStatus } from "@/lib/day-status";
 import { pickSelectedPlan, SELECTED_PLAN_COOKIE } from "@/lib/plan-selection";
+import { getFirstName } from "@/lib/display-name";
 import {
   convertDistanceForDisplay,
   convertPaceForDisplay,
@@ -342,7 +343,7 @@ export default async function CalendarPage({
   const user = await currentUser();
   if (!user) redirect("/sign-in");
 
-  const name = user.fullName || user.firstName || "Athlete";
+  const name = getFirstName(user.fullName || user.firstName || "Athlete");
 
   const syncedUser = await ensureUserFromAuth(user, {
     defaultRole: "ATHLETE",
@@ -403,6 +404,7 @@ export default async function CalendarPage({
   const raceDateStr = selectedPlan.raceDate
     ? new Date(selectedPlan.raceDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
     : "Not set";
+  const jumpToPlans = activePlans.filter((plan) => plan.id !== selectedPlan.id);
 
   const weeks = [...selectedPlan.weeks].sort((a, b) => a.weekIndex - b.weekIndex);
   const weekOne = weeks.find((week) => week.weekIndex === 1) || weeks[0] || null;
@@ -691,7 +693,7 @@ export default async function CalendarPage({
             </div>
           </div>
 
-          <div className="dash-card dash-plan-summary">
+          <div className="dash-card dash-plan-summary cal-plan-summary-card">
             <div className="dash-greeting-meta">
               <div className="dash-greeting-meta-item">
                 <span className="dash-greeting-meta-label">Plan</span>
@@ -707,24 +709,22 @@ export default async function CalendarPage({
               </div>
             </div>
             <a className="dash-greeting-edit-link" href={`/plans/${selectedPlan.id}`}>View Plan</a>
-          </div>
-
-          {activePlans.length > 1 && (
-            <div className="dash-card cal-plan-switch">
-              <span>Plan:</span>
-              <div className="cal-plan-pills">
-                {activePlans.map((plan) => {
-                  const href = buildCalendarHref(monthStart, plan.id, selectedDateKey, returnToParam);
-                  const isActive = plan.id === selectedPlan.id;
-                  return (
-                    <Link key={plan.id} href={href} className={`cal-plan-pill${isActive ? " active" : ""}`}>
-                      {plan.name}
-                    </Link>
-                  );
-                })}
+            {jumpToPlans.length > 0 && (
+              <div className="cal-plan-switch cal-plan-switch--nested">
+                <span>JUMP TO</span>
+                <div className="cal-plan-pills">
+                  {jumpToPlans.map((plan) => {
+                    const href = buildCalendarHref(monthStart, plan.id, selectedDateKey, returnToParam);
+                    return (
+                      <Link key={plan.id} href={href} className="cal-plan-pill">
+                        {plan.name}
+                      </Link>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
 
           {/* Plan Reference guide — collapsible */}
           <details className="dash-card cal-guide-details">

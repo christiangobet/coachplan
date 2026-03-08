@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { currentUser } from "@clerk/nextjs/server";
 import { ensureUserFromAuth } from "@/lib/user-sync";
+import { getFirstName } from "@/lib/display-name";
 import AthleteSidebar from "@/components/AthleteSidebar";
 import "../dashboard/dashboard.css";
 import "./guide.css";
@@ -45,7 +46,7 @@ export default async function GuidePage() {
   const user = await currentUser();
   if (!user) redirect("/sign-in");
 
-  const name = user.fullName || user.firstName || "Athlete";
+  const name = getFirstName(user.fullName || user.firstName || "Athlete");
 
   await ensureUserFromAuth(user, {
     defaultRole: "ATHLETE",

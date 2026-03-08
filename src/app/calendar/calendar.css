@@ -142,9 +142,20 @@
   }
 }
 
+.cal-plan-summary-card {
+  display: grid;
+  gap: 10px;
+}
+
 .cal-plan-switch {
   display: grid;
   gap: 8px;
+}
+
+.cal-plan-switch--nested {
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px solid var(--d-border-light);
 }
 
 .cal-plan-switch > span {
@@ -172,6 +183,11 @@
   font-size: 12px;
   font-weight: 600;
   padding: 0 12px;
+}
+
+.cal-plan-pill:hover {
+  border-color: var(--d-orange);
+  color: var(--d-orange);
 }
 
 .cal-plan-pill.active {

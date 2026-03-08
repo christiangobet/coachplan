@@ -8,6 +8,7 @@ import { ensureUserFromAuth } from "@/lib/user-sync";
 import { getDayDateFromWeekStart, resolveWeekBounds } from "@/lib/plan-dates";
 import { isDayMarkedDone } from "@/lib/day-status";
 import { pickSelectedPlan, SELECTED_PLAN_COOKIE } from "@/lib/plan-selection";
+import { getFirstName } from "@/lib/display-name";
 import {
   convertDistanceForDisplay,
   distanceUnitLabel,
@@ -161,7 +162,7 @@ export default async function ProgressPage({
   const user = await currentUser();
   if (!user) redirect("/sign-in");
 
-  const name = user.fullName || user.firstName || "Athlete";
+  const name = getFirstName(user.fullName || user.firstName || "Athlete");
   const syncedUser = await ensureUserFromAuth(user, {
     defaultRole: "ATHLETE",
     defaultCurrentRole: "ATHLETE"

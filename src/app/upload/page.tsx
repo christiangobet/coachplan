@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import AthleteSidebar from '@/components/AthleteSidebar';
 import UploadFlowStepper from '@/components/UploadFlowStepper';
+import { getFirstName } from '@/lib/display-name';
 import '../dashboard/dashboard.css';
 import '../athlete-pages.css';
 
@@ -172,7 +173,7 @@ export default function UploadPage() {
     }
   };
 
-  const sidebarName = user?.fullName || user?.firstName || 'Athlete';
+  const sidebarName = getFirstName(user?.fullName || user?.firstName || 'Athlete');
 
   return (
     <main className="dash athlete-page-shell">

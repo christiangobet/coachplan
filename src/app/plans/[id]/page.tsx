@@ -5,6 +5,7 @@ import { useParams, useSearchParams } from 'next/navigation';
 import { useUser } from '@clerk/nextjs';
 import { getDayDateFromWeekStart, resolveWeekBounds } from '@/lib/plan-dates';
 import { getDayStatus, getDayMissedReason, type DayStatus } from '@/lib/day-status';
+import { getFirstName } from '@/lib/display-name';
 import AthleteSidebar from '@/components/AthleteSidebar';
 import SelectedPlanCookie from '@/components/SelectedPlanCookie';
 import {
@@ -1436,7 +1437,7 @@ export default function PlanDetailPage() {
       <div className={showDesktopSourcePane ? 'pcal-main-column' : undefined}>
       <div className={`pcal-layout${showDesktopSourcePane ? ' pdf-open' : ''}${selectedDay ? ' day-open' : ''}${isEditMode ? ' edit-mode' : ''}`} data-debug-id="PLD">
         <AthleteSidebar
-          name={user?.fullName || user?.firstName || 'Athlete'}
+          name={getFirstName(user?.fullName || user?.firstName || 'Athlete')}
           active="plan-view"
           selectedPlanId={planId || null}
         />

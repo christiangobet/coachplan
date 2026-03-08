@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { appendPlanQueryToHref, extractPlanIdFromPathname } from "@/lib/plan-selection";
+import { getFirstName } from "@/lib/display-name";
 import BrandLogo from "@/components/BrandLogo";
 
 type AthleteNavItem =
@@ -51,6 +52,7 @@ export default function AthleteSidebar({
     selectedPlanId
     || searchParams.get("plan")
     || extractPlanIdFromPathname(pathname);
+  const displayName = getFirstName(name, "Athlete");
 
   const [debugMode, setDebugMode] = useState(() => {
     if (typeof window === 'undefined') return false;
@@ -71,12 +73,7 @@ export default function AthleteSidebar({
     document.body.classList.toggle('debug-mode', next);
   }
 
-  const initials = name
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((part) => part[0]?.toUpperCase())
-    .slice(0, 2)
-    .join("") || "CP";
+  const initials = displayName.slice(0, 2).toUpperCase() || "CP";
 
   const isActive = (id: AthleteNavItem) =>
     active === id || (id === "dashboard" && active === "today");
@@ -123,7 +120,7 @@ export default function AthleteSidebar({
       <div className="dash-side-user">
         <div className="dash-avatar">{initials}</div>
         <div>
-          <div className="dash-user-name">{name}</div>
+          <div className="dash-user-name">{displayName}</div>
           <div className="dash-user-role">Athlete</div>
         </div>
       </div>

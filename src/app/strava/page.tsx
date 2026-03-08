@@ -4,6 +4,7 @@ import { currentUser } from "@clerk/nextjs/server";
 import AthleteSidebar from "@/components/AthleteSidebar";
 import StravaSyncPanel from "@/components/StravaSyncPanel";
 import StravaActivityMatchTable from "@/components/StravaActivityMatchTable";
+import { getFirstName } from "@/lib/display-name";
 import { appendPlanQueryToHref } from "@/lib/plan-selection";
 import "../dashboard/dashboard.css";
 import "./strava.css";
@@ -22,7 +23,7 @@ export default async function StravaPage({
 
   const params = (await searchParams) || {};
   const selectedPlanId = typeof params.plan === "string" ? params.plan : "";
-  const name = user.fullName || user.firstName || "Athlete";
+  const name = getFirstName(user.fullName || user.firstName || "Athlete");
 
   return (
     <main className="dash strava-page">

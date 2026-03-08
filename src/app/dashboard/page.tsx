@@ -7,7 +7,13 @@ import { getDayDateFromWeekStart, resolveWeekBounds } from "@/lib/plan-dates";
 import { ensureUserFromAuth } from "@/lib/user-sync";
 import { getDayMissedReason, getDayStatus, type DayStatus } from "@/lib/day-status";
 import { pickSelectedPlan, SELECTED_PLAN_COOKIE } from "@/lib/plan-selection";
-import type { DistanceUnit } from "@/lib/unit-display";
+import { getFirstName } from "@/lib/display-name";
+import {
+  convertDistanceForDisplay,
+  distanceUnitLabel,
+  resolveDistanceUnitFromActivity,
+  type DistanceUnit
+} from "@/lib/unit-display";
 import AthleteSidebar from "@/components/AthleteSidebar";
 import StravaSyncPanel from "@/components/StravaSyncPanel";
 import SelectedPlanCookie from "@/components/SelectedPlanCookie";
@@ -76,7 +82,7 @@ export default async function DashboardPage({
   const cookieStore = await cookies();
   const cookiePlanId = cookieStore.get(SELECTED_PLAN_COOKIE)?.value || "";
 
-  const name = user.fullName || user.firstName || "Athlete";
+  const name = getFirstName(user.fullName || user.firstName || "Athlete");
 
   const syncedUser = await ensureUserFromAuth(user, {
     defaultRole: "ATHLETE",
@@ -250,6 +256,45 @@ export default async function DashboardPage({
 
   const weeks = [...(activePlan.weeks || [])].sort((a, b) => a.weekIndex - b.weekIndex);
   const allWeekIndexes = weeks.map((w) => w.weekIndex);
+  const viewerUnitLabel = distanceUnitLabel(viewerUnits);
+  const toDisplayDistance = (value: number | null | undefined, sourceUnit: string | null | undefined) =>
+    convertDistanceForDisplay(value, sourceUnit, viewerUnits);
+  const weeklyRunData = weeks.map((week) => {
+    const runs = (week.days || [])
+      .flatMap((day) => day.activities || [])
+      .filter((activity) => String(activity.type).toUpperCase() === "RUN");
+    let total = 0;
+    let loggedTotal = 0;
+    let longRun = 0;
+    for (const run of runs) {
+      const plannedSourceUnit = resolveDistanceUnitFromActivity({
+        distanceUnit: run.distanceUnit,
+        paceTarget: run.paceTarget,
+        actualPace: run.actualPace,
+        fallbackUnit: viewerUnits
+      }) || viewerUnits;
+      const plannedDistance = toDisplayDistance(run.distance, plannedSourceUnit);
+      const plannedValue = plannedDistance?.value ?? 0;
+      total += plannedValue;
+      if (plannedValue > longRun) longRun = plannedValue;
+
+      const loggedSourceUnit = resolveDistanceUnitFromActivity({
+        distanceUnit: run.distanceUnit,
+        paceTarget: run.paceTarget,
+        actualPace: run.actualPace,
+        fallbackUnit: viewerUnits,
+        preferActualPace: true
+      }) || viewerUnits;
+      const loggedDistance = toDisplayDistance(run.actualDistance, loggedSourceUnit);
+      loggedTotal += loggedDistance?.value ?? 0;
+    }
+    return {
+      weekIndex: week.weekIndex as number,
+      total: Math.round(total * 10) / 10,
+      longRun: Math.round(longRun * 10) / 10,
+      loggedTotal: Math.round(loggedTotal * 10) / 10
+    };
+  });
 
   const weekBoundsById = new Map<string, { startDate: Date | null; endDate: Date | null }>();
   for (const week of weeks) {
@@ -692,6 +737,9 @@ export default async function DashboardPage({
               <PlanSummarySection
                 summary={activePlan.planSummary as PlanSummary | null}
                 planId={activePlan.id}
+                weeklyRuns={weeklyRunData}
+                weeklyRunUnit={viewerUnitLabel}
+                currentWeekIndex={currentWeekIndex}
               />
             </div>
             <p className="dash-plan-reference-mobile-copy">
