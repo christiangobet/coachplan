@@ -2392,42 +2392,13 @@ export default function PlanDetailPage() {
               <div className="pcal-day-modal-head">
                 <div className="pcal-day-modal-head-left">
                   <span className="pcal-day-modal-date">{selectedDay.dateLabel}</span>
-                  {selectedDay.activities.length === 0 && (
-                    <h3 className="pcal-day-modal-title">Rest Day</h3>
+                  {selectedDay.activities.length === 0 ? (
+                    <span className="pcal-day-modal-summary">Rest day</span>
+                  ) : (
+                    <span className="pcal-day-modal-summary">
+                      {selectedDay.activities.length} planned activit{selectedDay.activities.length === 1 ? 'y' : 'ies'}
+                    </span>
                   )}
-                  {selectedDay.activities.map((a) => {
-                    const isRun = String(a.type || '').toUpperCase() === 'RUN';
-                    const unitLabel = distanceUnitLabel(viewerUnits);
-                    const plannedDistanceText = a.plannedDistance != null
-                      ? `${formatDistanceOneDecimal(a.plannedDistance)} ${unitLabel}`
-                      : null;
-                    const loggedDistanceText = a.actualDistance != null
-                      ? `${formatDistanceOneDecimal(a.actualDistance)} ${unitLabel}`
-                      : null;
-                    const distanceValue = isRun
-                      ? buildDistanceProgressLabel(plannedDistanceText, loggedDistanceText, unitLabel)
-                      : null;
-                    const distanceTone = distanceProgressVariant(plannedDistanceText, loggedDistanceText);
-
-                    return (
-                      <div key={a.id} className="pcal-day-modal-activity">
-                        <span className={`pcal-activity-abbr type-${String(a.type || 'OTHER').toLowerCase()}`}>
-                          {typeAbbr(a.type)}
-                        </span>
-                        <div className="pcal-day-modal-activity-copy">
-                          <span className="pcal-day-modal-title">{a.title || formatType(a.type)}</span>
-                          {a.plannedDetails.length > 0 && (
-                            <span className="pcal-day-modal-metrics">{a.plannedDetails.join(' · ')}</span>
-                          )}
-                          {distanceValue && (
-                            <span className={`pcal-day-modal-distance-line ${distanceTone}`}>
-                              {distanceValue}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
                 </div>
                 <button
                   type="button"
