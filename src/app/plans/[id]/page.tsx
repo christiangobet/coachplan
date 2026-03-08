@@ -470,6 +470,7 @@ export default function PlanDetailPage() {
   const planId = Array.isArray(params?.id) ? params?.id[0] : params?.id;
   const aiPromptParam = searchParams?.get('aiPrompt')?.trim() || '';
   const aiPromptSource = searchParams?.get('aiSource')?.trim() || '';
+  const bannerLibraryParam = (searchParams?.get('bannerLibrary') || '').trim().toLowerCase();
   const [plan, setPlan] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedActivity, setSelectedActivity] = useState<any>(null);
@@ -568,6 +569,13 @@ export default function PlanDetailPage() {
       setAiTrainerStatus(`Adjustment prompt loaded from ${aiPromptSource}. Review and generate recommendation.`);
     }
   }, [aiPromptParam, aiPromptSource]);
+
+  useEffect(() => {
+    if (bannerLibraryParam !== '1' && bannerLibraryParam !== 'true') return;
+    setBannerLibraryError(null);
+    setBannerLibraryStatus(null);
+    setBannerModalOpen(true);
+  }, [bannerLibraryParam]);
 
   const emitPlanEditEvent = useCallback((event: string, detail: Record<string, unknown> = {}) => {
     if (typeof window === 'undefined') return;

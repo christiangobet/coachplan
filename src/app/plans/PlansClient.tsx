@@ -933,6 +933,16 @@ export default function PlansClient() {
                 Edit plan
               </Link>
             )}
+            <Link
+              className="plan-card-overflow-item"
+              href={`/plans/${plan.id}?bannerLibrary=1`}
+              onClick={() => {
+                rememberSelectedPlan(plan.id);
+                setExpandedMenuId(null);
+              }}
+            >
+              Banner library
+            </Link>
             {plan.planGuide && (
               <button
                 className="plan-card-overflow-item"
