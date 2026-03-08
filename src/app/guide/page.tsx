@@ -60,7 +60,7 @@ export default async function GuidePage() {
         <section className="dash-center">
           <div className="dash-card guide-header-card">
             <h1>Guide</h1>
-            <p>Recommended workflows to get the most out of CoachPlan each training week.</p>
+            <p>Recommended workflows to get the most out of MyTrainingPlan each training week.</p>
           </div>
 
           <div className="guide-grid">

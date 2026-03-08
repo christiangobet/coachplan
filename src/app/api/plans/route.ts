@@ -1928,7 +1928,7 @@ async function parsePdfToJsonNode(pdfPath: string, name: string): Promise<Parsed
   };
 }
 
-export async function GET(req: Request) {
+export async function GET() {
   const user = await currentUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -1957,14 +1957,11 @@ export async function GET(req: Request) {
     }),
   ]);
 
-  const plansWithProgress = plans.map((plan) => {
-    const total = plan.activities.length;
-    const completed = plan.activities.filter((a) => a.completed).length;
+  const plansWithProgress = plans.map(({ activities, ...plan }) => {
+    const total = activities.length;
+    const completed = activities.filter((a) => a.completed).length;
     const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
-
-    // Remove activities from the response to keep it clean, we only need the progress
-    const { activities, ...rest } = plan;
-    return { ...rest, progress };
+    return { ...plan, progress };
   });
 
   return NextResponse.json({ plans: plansWithProgress, myTemplates });

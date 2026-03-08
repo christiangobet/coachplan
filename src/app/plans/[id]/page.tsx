@@ -4,8 +4,7 @@ import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import { useUser } from '@clerk/nextjs';
 import { getDayDateFromWeekStart, resolveWeekBounds } from '@/lib/plan-dates';
-import { isDayMarkedDone, getDayStatus, getDayMissedReason, type DayStatus } from '@/lib/day-status';
-import ActivityTypeIcon from '@/components/ActivityTypeIcon';
+import { getDayStatus, getDayMissedReason, type DayStatus } from '@/lib/day-status';
 import AthleteSidebar from '@/components/AthleteSidebar';
 import SelectedPlanCookie from '@/components/SelectedPlanCookie';
 import {
@@ -855,7 +854,7 @@ export default function PlanDetailPage() {
   }, []);
 
   const completeActivity = useCallback(async (withActuals: boolean) => {
-    if (!selectedActivity || savingActuals) return;
+    if (isEditMode || !selectedActivity || savingActuals) return;
     setSavingActuals(true);
     setActualsError(null);
 
@@ -887,10 +886,10 @@ export default function PlanDetailPage() {
     } finally {
       setSavingActuals(false);
     }
-  }, [selectedActivity, savingActuals, actualDistance, actualDuration, actualPace, viewerUnits, applyActivityUpdate]);
+  }, [isEditMode, selectedActivity, savingActuals, actualDistance, actualDuration, actualPace, viewerUnits, applyActivityUpdate]);
 
   const syncActivityFromStrava = useCallback(async () => {
-    if (!selectedActivity || syncingStrava) return;
+    if (isEditMode || !selectedActivity || syncingStrava) return;
 
     const dateISO = typeof selectedActivity.dayDateISO === 'string'
       ? selectedActivity.dayDateISO
@@ -926,7 +925,7 @@ export default function PlanDetailPage() {
     } finally {
       setSyncingStrava(false);
     }
-  }, [selectedActivity, syncingStrava, loadPlan]);
+  }, [isEditMode, planId, selectedActivity, syncingStrava, loadPlan]);
 
   const completeFromModal = useCallback(() => {
     const withActuals = Boolean(
@@ -938,7 +937,7 @@ export default function PlanDetailPage() {
   }, [actualDistance, actualDuration, actualPace, completeActivity]);
 
   const saveActuals = useCallback(async () => {
-    if (!selectedActivity || savingActuals) return;
+    if (isEditMode || !selectedActivity || savingActuals) return;
     setSavingActuals(true);
     setActualsError(null);
 
@@ -968,7 +967,7 @@ export default function PlanDetailPage() {
     } finally {
       setSavingActuals(false);
     }
-  }, [selectedActivity, savingActuals, actualDistance, actualDuration, actualPace, viewerUnits, applyActivityUpdate]);
+  }, [isEditMode, selectedActivity, savingActuals, actualDistance, actualDuration, actualPace, viewerUnits, applyActivityUpdate]);
 
   const closeSelectedDayPanel = useCallback(() => {
     setSelectedDay(null);
@@ -1435,7 +1434,7 @@ export default function PlanDetailPage() {
       )}
 
       <div className={showDesktopSourcePane ? 'pcal-main-column' : undefined}>
-      <div className={`pcal-layout${showDesktopSourcePane ? ' pdf-open' : ''}${selectedDay ? ' day-open' : ''}`} data-debug-id="PLD">
+      <div className={`pcal-layout${showDesktopSourcePane ? ' pdf-open' : ''}${selectedDay ? ' day-open' : ''}${isEditMode ? ' edit-mode' : ''}`} data-debug-id="PLD">
         <AthleteSidebar
           name={user?.fullName || user?.firstName || 'Athlete'}
           active="plan-view"
@@ -1469,7 +1468,16 @@ export default function PlanDetailPage() {
                 <button
                   type="button"
                   className={`dash-btn-ghost pcal-edit-btn${isEditMode ? ' active' : ''}`}
-                  onClick={() => setIsEditMode(!isEditMode)}
+                  onClick={() => {
+                    setIsEditMode((prev) => {
+                      const next = !prev;
+                      if (next) {
+                        setSelectedDay(null);
+                        setSelectedActivity(null);
+                      }
+                      return next;
+                    });
+                  }}
                 >
                   {isEditMode ? 'Done Editing' : 'Edit Plan'}
                 </button>
@@ -1482,6 +1490,11 @@ export default function PlanDetailPage() {
               {plan.raceDate && <span className="pcal-header-meta-item">{new Date(plan.raceDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>}
               {plan.sourcePlanName && <span className="pcal-header-meta-item">Source: {plan.sourcePlanName}</span>}
             </div>
+            {isEditMode && (
+              <div className="pcal-edit-mode-banner" role="status" aria-live="polite">
+                Plan editing mode is on. You can edit planned activities only. Workout logging is disabled.
+              </div>
+            )}
           </div>
 
           {/* Stats bar */}
@@ -1921,10 +1934,10 @@ export default function PlanDetailPage() {
 
                       return (
                         <div
-                          className={`pcal-cell${isToday ? ' pcal-cell-today' : ''}${isPast ? ' pcal-cell-past' : ''}${dayDone ? ' pcal-cell-day-done' : ''}${dayMissed ? ' pcal-cell-day-missed' : ''}${dayPartial ? ' pcal-cell-day-partial' : ''}${primaryType ? ` pcal-cell--type-${primaryType}` : ''}${dayDate ? ' pcal-cell-clickable' : ''}${isDropTargetDay && dropTarget?.valid ? ' pcal-cell-drop-target' : ''}${isDropTargetDay && dropTarget && !dropTarget.valid ? ' pcal-cell-drop-target-invalid' : ''}`}
+                          className={`pcal-cell${isToday ? ' pcal-cell-today' : ''}${isPast ? ' pcal-cell-past' : ''}${dayDone ? ' pcal-cell-day-done' : ''}${dayMissed ? ' pcal-cell-day-missed' : ''}${dayPartial ? ' pcal-cell-day-partial' : ''}${primaryType ? ` pcal-cell--type-${primaryType}` : ''}${dayDate && !isEditMode ? ' pcal-cell-clickable' : ''}${isDropTargetDay && dropTarget?.valid ? ' pcal-cell-drop-target' : ''}${isDropTargetDay && dropTarget && !dropTarget.valid ? ' pcal-cell-drop-target-invalid' : ''}`}
                           data-debug-id="PDC"
                           key={dow}
-                          onClick={dayDate ? openDayLog : undefined}
+                          onClick={dayDate && !isEditMode ? openDayLog : undefined}
                           onDragOver={(event) => {
                             if (!desktopDndEnabled || !draggingActivity || !day?.id) return;
                             event.preventDefault();
@@ -2515,22 +2528,24 @@ export default function PlanDetailPage() {
               <div className="pcal-modal-section">
                 <div className="pcal-modal-section-head">
                   <h3 className="pcal-modal-section-title">Instructions</h3>
-                  <button
-                    className="pcal-modal-strava-sync"
-                    onClick={syncActivityFromStrava}
-                    type="button"
-                    disabled={syncingStrava || savingActuals}
-                  >
-                    {syncingStrava ? 'Syncing…' : 'Sync with Strava'}
-                  </button>
+                  {!isEditMode && (
+                    <button
+                      className="pcal-modal-strava-sync"
+                      onClick={syncActivityFromStrava}
+                      type="button"
+                      disabled={syncingStrava || savingActuals}
+                    >
+                      {syncingStrava ? 'Syncing…' : 'Sync with Strava'}
+                    </button>
+                  )}
                 </div>
                 {selectedActivity.sessionInstructions ? (
                   <p className="pcal-modal-text">{selectedActivity.sessionInstructions}</p>
                 ) : (
                   <p className="pcal-modal-text pcal-modal-text-muted">{selectedActivity.rawText || 'No instructions for this activity.'}</p>
                 )}
-                {stravaSyncError && <p className="pcal-modal-form-error">{stravaSyncError}</p>}
-                {stravaSyncStatus && <p className="pcal-modal-form-success">{stravaSyncStatus}</p>}
+                {!isEditMode && stravaSyncError && <p className="pcal-modal-form-error">{stravaSyncError}</p>}
+                {!isEditMode && stravaSyncStatus && <p className="pcal-modal-form-success">{stravaSyncStatus}</p>}
               </div>
 
               {/* Notes */}
@@ -2542,62 +2557,71 @@ export default function PlanDetailPage() {
               )}
 
               {/* Actuals */}
-              <div className="pcal-modal-section">
-                <div className="pcal-modal-section-head">
-                  <h3 className="pcal-modal-section-title">Actuals</h3>
-                  {selectedActivityDateLabel && (
-                    <span className="pcal-modal-day-chip">{selectedActivityDateLabel}</span>
-                  )}
+              {isEditMode ? (
+                <div className="pcal-modal-section pcal-modal-edit-lockout" role="note">
+                  <h3 className="pcal-modal-section-title">Logging locked while editing plan</h3>
+                  <p className="pcal-modal-text">
+                    Exit plan editing mode to sync Strava, complete workouts, or update actual distance/time.
+                  </p>
                 </div>
-                <div className="pcal-modal-actuals-form">
-                  <label>
-                    Distance ({viewerUnitLabel})
-                    <input
-                      type="number"
-                      inputMode="decimal"
-                      min="0"
-                      step="0.01"
-                      value={actualDistance}
-                      onChange={(e) => setActualDistance(e.target.value)}
-                      placeholder={
-                        selectedDistanceDisplay?.value != null
-                          ? String(selectedDistanceDisplay.value)
-                          : 'e.g. 8'
-                      }
-                    />
-                  </label>
-                  <label>
-                    Duration (min)
-                    <input
-                      type="number"
-                      inputMode="numeric"
-                      min="0"
-                      step="1"
-                      value={actualDuration}
-                      onChange={(e) => setActualDuration(e.target.value)}
-                      placeholder={selectedActivity.duration != null ? String(selectedActivity.duration) : 'e.g. 50'}
-                    />
-                  </label>
-                  <label>
-                    Pace
-                    <input
-                      type="text"
-                      value={actualPace}
-                      onChange={(e) => setActualPace(e.target.value)}
-                      placeholder={
-                        selectedPaceDisplay
-                        || `e.g. ${viewerUnitLabel === 'km' ? '4:40 /km' : '7:30 /mi'}`
-                      }
-                    />
-                  </label>
+              ) : (
+                <div className="pcal-modal-section">
+                  <div className="pcal-modal-section-head">
+                    <h3 className="pcal-modal-section-title">Actuals</h3>
+                    {selectedActivityDateLabel && (
+                      <span className="pcal-modal-day-chip">{selectedActivityDateLabel}</span>
+                    )}
+                  </div>
+                  <div className="pcal-modal-actuals-form">
+                    <label>
+                      Distance ({viewerUnitLabel})
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        min="0"
+                        step="0.01"
+                        value={actualDistance}
+                        onChange={(e) => setActualDistance(e.target.value)}
+                        placeholder={
+                          selectedDistanceDisplay?.value != null
+                            ? String(selectedDistanceDisplay.value)
+                            : 'e.g. 8'
+                        }
+                      />
+                    </label>
+                    <label>
+                      Duration (min)
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        min="0"
+                        step="1"
+                        value={actualDuration}
+                        onChange={(e) => setActualDuration(e.target.value)}
+                        placeholder={selectedActivity.duration != null ? String(selectedActivity.duration) : 'e.g. 50'}
+                      />
+                    </label>
+                    <label>
+                      Pace
+                      <input
+                        type="text"
+                        value={actualPace}
+                        onChange={(e) => setActualPace(e.target.value)}
+                        placeholder={
+                          selectedPaceDisplay
+                          || `e.g. ${viewerUnitLabel === 'km' ? '4:40 /km' : '7:30 /mi'}`
+                        }
+                      />
+                    </label>
+                  </div>
+                  <p className="pcal-modal-text pcal-modal-actuals-hint">
+                    {selectedActivity.completed
+                      ? 'This activity is marked done. Update actuals if needed.'
+                      : 'Actuals are optional. Use Complete below to save this activity.'}
+                  </p>
+                  {actualsError && <p className="pcal-modal-form-error">{actualsError}</p>}
                 </div>
-                <p className="pcal-modal-text pcal-modal-actuals-hint">
-                  {selectedActivity.completed
-                    ? 'This activity is marked done. Update actuals if needed.'
-                    : 'Actuals are optional. Use Complete below to save this activity.'}
-                </p>
-                {actualsError && <p className="pcal-modal-form-error">{actualsError}</p>}
-              </div>
+              )}
 
               {/* Tags */}
               {selectedActivity.tags && Array.isArray(selectedActivity.tags) && selectedActivity.tags.length > 0 && (
@@ -2624,16 +2648,29 @@ export default function PlanDetailPage() {
                 >
                   Cancel
                 </button>
-                <button
-                  className="pcal-modal-primary"
-                  onClick={selectedActivity.completed ? saveActuals : completeFromModal}
-                  type="button"
-                  disabled={savingActuals || syncingStrava}
-                >
-                  {savingActuals
-                    ? 'Saving…'
-                    : (selectedActivity.completed ? 'Save' : 'Complete')}
-                </button>
+                {isEditMode ? (
+                  <button
+                    className="pcal-modal-primary"
+                    onClick={() => {
+                      setSelectedActivity(null);
+                      setEditingActivity(selectedActivity);
+                    }}
+                    type="button"
+                  >
+                    Edit activity
+                  </button>
+                ) : (
+                  <button
+                    className="pcal-modal-primary"
+                    onClick={selectedActivity.completed ? saveActuals : completeFromModal}
+                    type="button"
+                    disabled={savingActuals || syncingStrava}
+                  >
+                    {savingActuals
+                      ? 'Saving…'
+                      : (selectedActivity.completed ? 'Save' : 'Complete')}
+                  </button>
+                )}
               </div>
 
             </div>

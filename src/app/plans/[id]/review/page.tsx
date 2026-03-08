@@ -2090,7 +2090,7 @@ export default function PlanReviewPage() {
             <div className="review-publish-body">
               <p className="review-publish-copy">
                 {paceStep === 1
-                  ? `Step 1 of 2: choose your data source. CoachPlan will estimate paces in ${viewerUnits === 'KM' ? 'min/km' : 'min/mi'}.`
+                  ? `Step 1 of 2: choose your data source. MyTrainingPlan will estimate paces in ${viewerUnits === 'KM' ? 'min/km' : 'min/mi'}.`
                   : 'Step 2 of 2: review estimated target and apply pace zones to run workouts.'}
               </p>
 
@@ -2483,7 +2483,7 @@ export default function PlanReviewPage() {
               {days.length === 0 && <p className="review-muted">No days parsed for this week.</p>}
 
               {days.map((day) => {
-                const notesOpen = expandedDayNotes[day.id] ?? true;
+                const notesOpen = expandedDayNotes[day.id] ?? false;
                 return (
                   <div key={day.id} className="review-day-block">
                     <div className="review-day-head">
@@ -2496,7 +2496,7 @@ export default function PlanReviewPage() {
                             setExpandedDayNotes((prev) => ({ ...prev, [day.id]: !notesOpen }))
                           }
                         >
-                          {notesOpen ? 'Hide Notes' : 'Show Notes'}
+                          {notesOpen ? 'Hide Notes' : 'Day Notes'}
                         </button>
                         <button
                           className="review-save-btn secondary"
@@ -2524,13 +2524,14 @@ export default function PlanReviewPage() {
 
                     {notesOpen && (
                       <label className="review-field review-day-notes">
-                        <span>Day notes / source text</span>
+                        <span>Day source notes</span>
                         <textarea
                           value={dayDrafts[day.id] || ''}
                           onChange={(event) =>
                             setDayDraftField(day.id, event.target.value)
                           }
-                          rows={2}
+                          rows={1}
+                          placeholder="Short source note for this day"
                         />
                       </label>
                     )}
@@ -2878,7 +2879,7 @@ export default function PlanReviewPage() {
                                     setExpandedSessionInstructions((prev) => ({ ...prev, [activity.id]: !sessionInstructionsOpen }))
                                   }
                                 >
-                                  {sessionInstructionsOpen ? 'Hide Instructions' : 'Session Instructions'}
+                                  {sessionInstructionsOpen ? 'Hide Execution' : 'Execution'}
                                 </button>
                                 <button
                                   className="review-save-btn secondary review-details-toggle"
@@ -2903,14 +2904,14 @@ export default function PlanReviewPage() {
                             {sessionInstructionsOpen && (
                               <div className="review-session-instructions-panel">
                                 <label className="review-field">
-                                  <span>Session Instructions</span>
+                                  <span>Execution notes</span>
                                   <textarea
                                     value={draft.sessionInstructions}
                                     onChange={(event) =>
                                       setActivityDraftField(activity.id, 'sessionInstructions', event.target.value)
                                     }
-                                    rows={3}
-                                    placeholder="Generated session instructions will appear here after re-parsing."
+                                    rows={2}
+                                    placeholder="Short execution guidance for this activity."
                                   />
                                 </label>
                               </div>
@@ -2919,13 +2920,14 @@ export default function PlanReviewPage() {
                             {detailsOpen && (
                               <div className={`review-activity-details${showPaceField ? '' : ' no-pace'}`}>
                                 <label className="review-field review-col-instructions">
-                                  <span>Instructions</span>
+                                  <span>Source snippet</span>
                                   <textarea
                                     value={draft.rawText}
                                     onChange={(event) =>
                                       setActivityDraftField(activity.id, 'rawText', event.target.value)
                                     }
-                                    rows={2}
+                                    rows={1}
+                                    placeholder="Short source text used by the parser."
                                   />
                                 </label>
 

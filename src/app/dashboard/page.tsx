@@ -7,26 +7,18 @@ import { getDayDateFromWeekStart, resolveWeekBounds } from "@/lib/plan-dates";
 import { ensureUserFromAuth } from "@/lib/user-sync";
 import { getDayMissedReason, getDayStatus, type DayStatus } from "@/lib/day-status";
 import { pickSelectedPlan, SELECTED_PLAN_COOKIE } from "@/lib/plan-selection";
-import {
-  convertDistanceForDisplay,
-  convertPaceForDisplay,
-  distanceUnitLabel,
-  formatDistanceNumber,
-  resolveDistanceUnitFromActivity,
-  type DistanceUnit
-} from "@/lib/unit-display";
+import type { DistanceUnit } from "@/lib/unit-display";
 import AthleteSidebar from "@/components/AthleteSidebar";
 import StravaSyncPanel from "@/components/StravaSyncPanel";
 import SelectedPlanCookie from "@/components/SelectedPlanCookie";
 import DashboardDayLogShell from "@/components/DashboardDayLogShell";
-import { buildLogActivities, buildPlannedMetricParts, type LogActivity } from "@/lib/log-activity";
+import { buildLogActivities, buildPlannedMetricParts } from "@/lib/log-activity";
 import DashboardTrainingLogStatus, { type StatusFeedItem } from "@/components/DashboardTrainingLogStatus";
 import PlanSummarySection from "@/components/PlanSummarySection";
 import type { PlanSummary } from "@/lib/types/plan-summary";
 import "./dashboard.css";
 
 const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-const DASH_ACTIVITY_LOG_ANCHOR = "#dash-activity-log-card";
 const ACTIVITY_TYPE_ABBR: Record<string, string> = {
   RUN: "RUN",
   STRENGTH: "STR",
@@ -69,15 +61,6 @@ function toDateKey(date: Date) {
   const dd = String(date.getDate()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
 }
-
-function buildAiAdjustHref(planId: string, prompt: string) {
-  const params = new URLSearchParams();
-  params.set("aiPrompt", prompt);
-  params.set("aiSource", "dashboard");
-  return `/plans/${planId}?${params.toString()}#ai-trainer`;
-}
-
-
 
 export default async function DashboardPage({
   searchParams
@@ -488,23 +471,11 @@ export default async function DashboardPage({
 
   const isRestDay = !todayActivity || todayActivity.type === "REST";
   const todayLogDateISO = toDateKey(today);
-  const todayLogHref = DASH_ACTIVITY_LOG_ANCHOR;
   const todayDay = isTodayInsideCurrentWeek
     ? (weekDays.find((day) => day.dayOfWeek === isoDay) || null)
     : null;
   const todayDayStatus: DayStatus = todayDay ? getDayStatus(todayDay.notes) : 'OPEN';
   const todayDayMissedReason = todayDay ? getDayMissedReason(todayDay.notes) : null;
-  const heroStatusText = todayDayStatus === 'DONE'
-    ? 'Day logged'
-    : todayDayStatus === 'MISSED'
-      ? 'Day closed as missed'
-      : 'Ready to log';
-  const heroStatusClass = todayDayStatus === 'DONE'
-    ? 'dash-hero-top-status dash-hero-top-status--done'
-    : todayDayStatus === 'MISSED'
-      ? 'dash-hero-top-status dash-hero-top-status--missed'
-      : 'dash-hero-top-status dash-hero-top-status--open';
-  const logDayCtaLabel = todayDayStatus === 'OPEN' ? 'Log Day' : 'Review Day Log';
   const todayLogActivities = buildLogActivities(todayActivities, viewerUnits);
   const todayPlannedMetricParts = todayActivity
     ? buildPlannedMetricParts(todayActivity, viewerUnits)
@@ -739,7 +710,7 @@ export default async function DashboardPage({
               <div className="dash-profile-avatar">{initials}</div>
               <div>
                 <h3>{name}</h3>
-                <p>Runner · CoachPlan</p>
+                <p>Runner · MyTrainingPlan</p>
               </div>
             </div>
             <div className="dash-profile-stats">

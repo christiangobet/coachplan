@@ -23,6 +23,15 @@ function normalizeName(authUser: AuthLikeUser): string {
   return authUser.fullName?.trim() || authUser.firstName?.trim() || 'User';
 }
 
+function isUniqueConstraintError(error: unknown): boolean {
+  return (
+    typeof error === 'object'
+    && error !== null
+    && 'code' in error
+    && (error as { code?: string }).code === 'P2002'
+  );
+}
+
 export async function ensureUserFromAuth(
   authUser: AuthLikeUser,
   options?: EnsureUserOptions
@@ -32,59 +41,75 @@ export async function ensureUserFromAuth(
   const defaultRole = options?.defaultRole || 'ATHLETE';
   const defaultCurrentRole = options?.defaultCurrentRole || defaultRole;
 
-  return prisma.$transaction(async (tx) => {
-    const byId = await tx.user.findUnique({ where: { id: authUser.id } });
-    if (byId) {
-      const updateData: Prisma.UserUpdateInput = {};
-      if (byId.name !== normalizedName) {
-        updateData.name = normalizedName;
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const byId = await tx.user.findUnique({ where: { id: authUser.id } });
+      if (byId) {
+        const updateData: Prisma.UserUpdateInput = {};
+        if (byId.name !== normalizedName) {
+          updateData.name = normalizedName;
+        }
+
+        if (byId.email !== normalizedEmail) {
+          const conflicting = await tx.user.findUnique({
+            where: { email: normalizedEmail },
+            select: { id: true }
+          });
+          if (!conflicting || conflicting.id === byId.id) {
+            updateData.email = normalizedEmail;
+          }
+        }
+
+        if (Object.keys(updateData).length === 0) return byId;
+        return tx.user.update({
+          where: { id: byId.id },
+          data: updateData
+        });
       }
 
-      if (byId.email !== normalizedEmail) {
-        const conflicting = await tx.user.findUnique({
-          where: { email: normalizedEmail },
-          select: { id: true }
-        });
-        if (!conflicting || conflicting.id === byId.id) {
+      const byEmail = await tx.user.findUnique({ where: { email: normalizedEmail } });
+      if (byEmail) {
+        // Keep stable DB user id to avoid FK breakage when user already has linked records.
+        // We treat matching email as the same app user and refresh profile fields only.
+        const updateData: Prisma.UserUpdateInput = {};
+        if (byEmail.name !== normalizedName) {
+          updateData.name = normalizedName;
+        }
+
+        if (byEmail.email !== normalizedEmail) {
           updateData.email = normalizedEmail;
         }
+
+        if (Object.keys(updateData).length === 0) return byEmail;
+        return tx.user.update({
+          where: { id: byEmail.id },
+          data: updateData
+        });
       }
 
-      if (Object.keys(updateData).length === 0) return byId;
-      return tx.user.update({
-        where: { id: byId.id },
-        data: updateData
+      return tx.user.create({
+        data: {
+          id: authUser.id,
+          email: normalizedEmail,
+          name: normalizedName,
+          role: defaultRole,
+          currentRole: defaultCurrentRole
+        }
       });
-    }
-
-    const byEmail = await tx.user.findUnique({ where: { email: normalizedEmail } });
-    if (byEmail) {
-      // Keep stable DB user id to avoid FK breakage when user already has linked records.
-      // We treat matching email as the same app user and refresh profile fields only.
-      const updateData: Prisma.UserUpdateInput = {};
-      if (byEmail.name !== normalizedName) {
-        updateData.name = normalizedName;
-      }
-
-      if (byEmail.email !== normalizedEmail) {
-        updateData.email = normalizedEmail;
-      }
-
-      if (Object.keys(updateData).length === 0) return byEmail;
-      return tx.user.update({
-        where: { id: byEmail.id },
-        data: updateData
-      });
-    }
-
-    return tx.user.create({
-      data: {
-        id: authUser.id,
-        email: normalizedEmail,
-        name: normalizedName,
-        role: defaultRole,
-        currentRole: defaultCurrentRole
-      }
     });
-  });
+  } catch (error) {
+    // Concurrent first-login requests can race on user creation.
+    // If another request created the row first, fetch that row and continue.
+    if (!isUniqueConstraintError(error)) {
+      throw error;
+    }
+
+    const existingById = await prisma.user.findUnique({ where: { id: authUser.id } });
+    if (existingById) return existingById;
+
+    const existingByEmail = await prisma.user.findUnique({ where: { email: normalizedEmail } });
+    if (existingByEmail) return existingByEmail;
+
+    throw error;
+  }
 }

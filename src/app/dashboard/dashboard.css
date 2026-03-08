@@ -75,11 +75,11 @@
 
 /* ── Layout grid ── */
 .dash-grid {
-  max-width: 1280px;
+  max-width: 1680px;
   margin: 0 auto;
   padding: var(--d-space-3) var(--d-space-3) var(--d-space-7);
   display: grid;
-  grid-template-columns: 200px minmax(0, 1fr) 300px;
+  grid-template-columns: minmax(220px, 232px) minmax(0, 1fr) minmax(260px, 300px);
   gap: var(--d-space-3);
   align-items: start;
 }
@@ -90,6 +90,7 @@
   display: grid;
   gap: var(--d-space-2);
   align-self: start;
+  min-width: 0;
 }
 
 /* ══════════════════════════
@@ -105,6 +106,7 @@
   border-radius: var(--d-radius-lg, 16px);
   padding: var(--d-space-2, 16px);
   box-shadow: var(--d-shadow, 0 1px 3px rgba(0,0,0,0.04));
+  min-width: 0;
 }
 
 .dash-side.no-sticky {
@@ -113,19 +115,12 @@
 }
 
 .dash-side-brand {
-  font-weight: 800;
-  font-size: 30px;
-  letter-spacing: -0.01em;
-  color: var(--d-text);
-  padding: 0 6px;
-  line-height: 1;
   display: inline-flex;
-  gap: 6px;
-  font-style: italic;
-}
-
-.dash-side-brand span {
-  color: var(--d-orange);
+  align-items: center;
+  padding: 2px 4px 0;
+  min-width: 0;
+  width: 100%;
+  overflow: hidden;
 }
 
 .dash-nav {
@@ -1794,6 +1789,7 @@ details[open] .day-log-instructions-toggle::before {
   position: sticky;
   top: var(--d-sticky-top);
   min-width: 0;
+  width: 100%;
 }
 
 .dash-profile-card {
@@ -2875,17 +2871,20 @@ details[open] .day-log-instructions-toggle::before {
 /* ══════════════════════════
    Responsive
    ══════════════════════════ */
+@media (max-width: 1380px) {
+  .dash-grid {
+    grid-template-columns: minmax(208px, 220px) minmax(0, 1fr);
+  }
+
+  .dash-right {
+    display: none;
+  }
+}
+
 @media (max-width: 1080px) {
   .dash-grid {
-    grid-template-columns: minmax(0, 1fr) 280px;
-  }
-
-  .dash-left-col {
-    display: none;
-  }
-
-  .dash-side {
-    display: none;
+    grid-template-columns: minmax(196px, 208px) minmax(0, 1fr);
+    gap: var(--d-space-2);
   }
 }
 
@@ -2896,8 +2895,10 @@ details[open] .day-log-instructions-toggle::before {
     gap: var(--d-space-2);
   }
 
+  .dash-left-col,
+  .dash-grid > .dash-side,
   .dash-right {
-    position: static;
+    display: none;
   }
 
   .dash-page-heading h1 {
@@ -3489,14 +3490,6 @@ details[open] .day-log-instructions-toggle::before {
   color: var(--d-text-mid);
 }
 
-.day-log-card .cal-activity-metrics strong {
-  font-size: 11px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--d-muted);
-  margin-right: 4px;
-}
-
 .day-log-card .cal-activity-effective-distance {
   margin-top: 4px;
   display: inline-flex;
@@ -3511,11 +3504,34 @@ details[open] .day-log-instructions-toggle::before {
   border: 1px solid rgba(252, 76, 2, 0.26);
 }
 
-.day-log-card .cal-activity-effective-distance strong {
-  font-size: 11px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  margin-right: 4px;
+.day-log-card .cal-activity-distance-progress {
+  margin-top: 4px;
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  border: 1px solid var(--d-border);
+}
+
+.day-log-card .cal-activity-distance-progress.planned {
+  background: #eef3fb;
+  border-color: #cfd8e6;
+  color: #3f5675;
+}
+
+.day-log-card .cal-activity-distance-progress.mix {
+  background: rgba(252, 76, 2, 0.08);
+  border-color: rgba(252, 76, 2, 0.24);
+  color: #a33f07;
+}
+
+.day-log-card .cal-activity-distance-progress.logged {
+  background: rgba(252, 76, 2, 0.12);
+  border-color: rgba(252, 76, 2, 0.3);
+  color: #a33f07;
 }
 
 .cal-activity-desc {

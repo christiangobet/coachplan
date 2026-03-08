@@ -29,7 +29,7 @@ export default function SignInPage() {
           />
           <div className={styles.visualOverlay}>
             <div className={styles.brandRow}>
-              <span className={styles.brand}>CoachPlan</span>
+              <span className={styles.brand}>MyTrainingPlan</span>
               <Link href="/" className={styles.homeLink}>Back home</Link>
             </div>
             <div className={styles.visualText}>

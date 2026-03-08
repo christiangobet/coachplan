@@ -685,7 +685,7 @@
 
 .review-field textarea {
   resize: vertical;
-  min-height: 44px;
+  min-height: 38px;
   line-height: 1.35;
 }
 
@@ -727,7 +727,7 @@
 
 .review-activity-head-row {
   display: grid;
-  grid-template-columns: minmax(300px, 2.6fr) minmax(220px, 1.35fr) minmax(180px, 1fr) minmax(150px, 0.9fr) minmax(260px, 1.5fr);
+  grid-template-columns: minmax(280px, 2.55fr) minmax(150px, 0.9fr) minmax(170px, 0.95fr) minmax(118px, 0.62fr) minmax(220px, 1.15fr);
   gap: 12px;
   padding: 0 10px;
   align-items: end;
@@ -808,9 +808,10 @@
 }
 
 .review-details-toggle {
-  height: 32px;
-  padding: 0 10px;
-  font-size: 12px;
+  height: 30px;
+  padding: 0 9px;
+  font-size: 11px;
+  letter-spacing: 0.015em;
 }
 
 .review-activity-actions-compact {
@@ -818,7 +819,7 @@
   align-items: flex-start;
   justify-content: flex-start;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
   min-height: 36px;
 }
 
@@ -879,7 +880,7 @@
 
 .review-activity-quick-grid {
   display: grid;
-  grid-template-columns: minmax(300px, 2.6fr) minmax(220px, 1.35fr) minmax(180px, 1fr) minmax(150px, 0.9fr) minmax(260px, 1.5fr);
+  grid-template-columns: minmax(280px, 2.55fr) minmax(150px, 0.9fr) minmax(170px, 0.95fr) minmax(118px, 0.62fr) minmax(220px, 1.15fr);
   grid-template-areas:
     "activity type distance duration actions";
   gap: 12px;
@@ -1032,11 +1033,13 @@
 }
 
 .review-day-notes textarea {
-  min-height: 42px;
+  min-height: 34px;
+  max-height: 92px;
 }
 
 .review-col-instructions textarea {
-  min-height: 64px;
+  min-height: 40px;
+  max-height: 96px;
 }
 
 .review-field-compact {
@@ -1436,11 +1439,13 @@
 
 .review-session-instructions-panel {
   border-top: 1px solid #edf2fb;
-  padding-top: 10px;
+  padding-top: 8px;
+  margin-top: 2px;
 }
 
 .review-session-instructions-panel textarea {
-  min-height: 72px;
+  min-height: 48px;
+  max-height: 110px;
 }
 
 @media (max-width: 1099px) {
@@ -1464,7 +1469,7 @@
   }
 
   .review-activity-quick-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1.25fr) minmax(140px, 0.8fr) minmax(150px, 0.85fr) minmax(160px, 0.95fr);
     grid-template-areas:
       "activity activity type actions"
       "distance duration duration actions";

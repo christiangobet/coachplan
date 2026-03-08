@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { UserButton } from '@clerk/nextjs';
 import { usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
+import BrandLogo from '@/components/BrandLogo';
 import {
     appendPlanQueryToHref,
     extractPlanIdFromPathname,
@@ -69,7 +70,9 @@ export default function Header({
         <header className="header" data-debug-id="HDR">
             {!isSignedIn ? (
                 <>
-                    <Link className="brand" href="/">{brand}</Link>
+                    <Link className="brand" href="/" aria-label={brand}>
+                        <BrandLogo variant="app" size="header" compactOnMobile />
+                    </Link>
                     <div className="header-auth-actions">
                         <Link className="cta secondary" href="/sign-in">Sign in</Link>
                         <Link className="cta" href="/sign-up">Create account</Link>
@@ -77,7 +80,13 @@ export default function Header({
                 </>
             ) : (
                 <>
-                    <Link className="brand" href={appendPlanQueryToHref(brandHref, contextualPlanId)}>{brand}</Link>
+                    <Link
+                        className="brand"
+                        href={appendPlanQueryToHref(brandHref, contextualPlanId)}
+                        aria-label={brand}
+                    >
+                        <BrandLogo variant="app" size="header" compactOnMobile />
+                    </Link>
                     {roleChip && (
                         <span className={`env-chip ${roleChipClass || ''}`}>
                             {roleChip}

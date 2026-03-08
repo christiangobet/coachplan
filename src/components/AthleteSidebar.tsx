@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { appendPlanQueryToHref, extractPlanIdFromPathname } from "@/lib/plan-selection";
+import BrandLogo from "@/components/BrandLogo";
 
 type AthleteNavItem =
   | "dashboard"
@@ -23,7 +24,7 @@ const NAV_ITEMS: Array<{ id: AthleteNavItem; href: string; label: string; planOn
   { id: "calendar", href: "/calendar", label: "Training Calendar" },
   { id: "plan-view", href: "/plans/:planId", label: "Plan View", planOnly: true },
   { id: "strava", href: "/strava", label: "Import Strava" },
-  { id: "plans", href: "/plans", label: "Plans Management" },
+  { id: "plans", href: "/plans", label: "Plans Library" },
   { id: "progress", href: "/progress", label: "Progress" },
   { id: "coach", href: "/coach", label: "Coach" },
   { id: "admin", href: "/admin", label: "Admin" },
@@ -51,13 +52,17 @@ export default function AthleteSidebar({
     || searchParams.get("plan")
     || extractPlanIdFromPathname(pathname);
 
-  const [debugMode, setDebugMode] = useState(false);
+  const [debugMode, setDebugMode] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem('cp-debug') === '1';
+  });
 
   useEffect(() => {
-    const on = localStorage.getItem('cp-debug') === '1';
-    setDebugMode(on);
-    document.body.classList.toggle('debug-mode', on);
-  }, []);
+    document.body.classList.toggle('debug-mode', debugMode);
+    return () => {
+      document.body.classList.remove('debug-mode');
+    };
+  }, [debugMode]);
 
   function toggleDebug() {
     const next = !debugMode;
@@ -79,7 +84,7 @@ export default function AthleteSidebar({
   return (
     <aside className={`dash-side${sticky ? "" : " no-sticky"}`} data-debug-id="NAV">
       <Link className="dash-side-brand" href={appendPlanQueryToHref("/dashboard", contextualPlanId)}>
-        <span>Coach</span> Plan
+        <BrandLogo variant="app" size="sidebar" />
       </Link>
 
       <nav className="dash-nav">
@@ -107,7 +112,7 @@ export default function AthleteSidebar({
 
           <div className="dash-connect">
             <span>Quick Actions</span>
-            <Link className="dash-connect-btn" href={appendPlanQueryToHref("/plans", contextualPlanId)}>Plans Management</Link>
+            <Link className="dash-connect-btn" href={appendPlanQueryToHref("/plans", contextualPlanId)}>Plans Library</Link>
             <Link className="dash-connect-btn" href={appendPlanQueryToHref("/profile", contextualPlanId)}>Profile Settings</Link>
           </div>
         </>

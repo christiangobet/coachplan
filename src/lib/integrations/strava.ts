@@ -1565,7 +1565,6 @@ export async function importStravaDayForUser(args: {
     throw new Error('This day is marked completed and locked from Strava import.');
   }
   const dayCandidates = plannedCandidates.byDate.get(date) || [];
-  const dayCandidateIds = new Set(dayCandidates.map((candidate) => candidate.id));
 
   const dayStart = new Date(`${date}T00:00:00.000Z`);
   if (Number.isNaN(dayStart.getTime())) {

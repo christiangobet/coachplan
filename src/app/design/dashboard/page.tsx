@@ -2,8 +2,6 @@
 // ⚠️ Design sandbox — no auth, no DB, no server components
 import './../../dashboard/dashboard.css';
 
-const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-
 const MOCK = {
   name: 'Christian',
   initials: 'CG',
@@ -259,7 +257,7 @@ export default function DesignDashboard() {
               <div className="dash-profile-avatar">{initials}</div>
               <div>
                 <h3>{name}</h3>
-                <p>Runner · CoachPlan</p>
+                <p>Runner · MyTrainingPlan</p>
               </div>
             </div>
             <div className="dash-profile-stats">

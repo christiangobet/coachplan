@@ -203,18 +203,6 @@ export function buildLockStateFromPlan(plan: PlanWithStructure): PlanLockState {
     return { dayIdSet, lockedDayIdSet, activityById };
 }
 
-function normalizeNumber(value: unknown): number | null {
-    if (value === null || value === undefined || value === '') return null;
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : null;
-}
-
-function normalizeText(value: unknown): string | null {
-    if (typeof value !== 'string') return null;
-    const trimmed = value.trim();
-    return trimmed ? trimmed : null;
-}
-
 function isoDateToLocalDate(isoDate: string) {
     const [y, m, d] = isoDate.split('-').map((part) => Number(part));
     if (!y || !m || !d) return null;

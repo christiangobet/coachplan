@@ -29,7 +29,7 @@ export default function SignUpPage() {
           />
           <div className={styles.visualOverlay}>
             <div className={styles.brandRow}>
-              <span className={styles.brand}>CoachPlan</span>
+              <span className={styles.brand}>MyTrainingPlan</span>
               <Link href="/" className={styles.homeLink}>Back home</Link>
             </div>
             <div className={styles.visualText}>
@@ -47,7 +47,7 @@ export default function SignUpPage() {
         <section className={styles.formPane}>
           <div className={styles.formCard}>
             <h2>Create account</h2>
-            <p>Start your next cycle with CoachPlan.</p>
+            <p>Start your next cycle with MyTrainingPlan.</p>
             <SignUp
               routing="path"
               path="/sign-up"

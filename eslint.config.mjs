@@ -25,6 +25,7 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // Local AI tooling workspace (not part of app runtime code quality gate):
     "ai/**",
+    ".claude/**",
   ]),
 ]);
 

@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { currentUser } from "@clerk/nextjs/server";
 import Link from "next/link";
 import Image from "next/image";
+import BrandLogo from "@/components/BrandLogo";
 import styles from "./page.module.css";
 
 const featureCards = [
@@ -38,10 +39,13 @@ export default async function Home() {
     <main className={styles.landing}>
       <section className={styles.hero}>
         <div className={styles.heroCopy}>
+          <div className={styles.heroBrand}>
+            <BrandLogo variant="wordmark" size="landing" tone="light" priority />
+          </div>
           <span className={styles.eyebrow}>Built for athletes and coaches</span>
           <h1>Training plans that feel as sharp as race day.</h1>
           <p>
-            CoachPlan turns static PDFs into structured sessions, aligns your build to the big event,
+            MyTrainingPlan turns static PDFs into structured sessions, aligns your build to the big event,
             and gives you one place to track execution week by week.
           </p>
           <div className={styles.ctas}>

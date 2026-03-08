@@ -23,7 +23,6 @@ export async function extractPdfText(buffer: Buffer): Promise<PdfExtractResult> 
     'build',
     'pdf.worker.mjs'
   );
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (pdfjsLib as any).GlobalWorkerOptions.workerSrc = pathToFileURL(workerPath).href;
 
   const loadingTask = (pdfjsLib as any).getDocument({
@@ -37,7 +36,6 @@ export async function extractPdfText(buffer: Buffer): Promise<PdfExtractResult> 
   for (let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i);
     const content = await page.getTextContent();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const pageText = (content.items as any[])
       .map((item) => item.str ?? '')
       .join(' ')

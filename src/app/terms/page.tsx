@@ -2,8 +2,8 @@ import Link from "next/link";
 import styles from "../legal.module.css";
 
 export const metadata = {
-  title: "Terms of Service — CoachPlan",
-  description: "Terms governing your use of the CoachPlan application.",
+  title: "Terms of Service — MyTrainingPlan",
+  description: "Terms governing your use of the MyTrainingPlan application.",
 };
 
 export default function TermsPage() {
@@ -18,21 +18,21 @@ export default function TermsPage() {
       <div className={styles.body}>
         <div className={styles.highlight}>
           <p>
-            By using CoachPlan you agree to these terms. Please read them carefully.
-            These terms govern your access to and use of the CoachPlan application and services.
+            By using MyTrainingPlan you agree to these terms. Please read them carefully.
+            These terms govern your access to and use of the MyTrainingPlan application and services.
           </p>
         </div>
 
-        <h2>1. About CoachPlan</h2>
+        <h2>1. About MyTrainingPlan</h2>
         <p>
-          CoachPlan is a training plan management application for endurance athletes and coaches.
+          MyTrainingPlan is a training plan management application for endurance athletes and coaches.
           It allows users to upload training plans, align schedules to race dates, track workout
           completion, and optionally import activity data from Strava.
         </p>
 
         <h2>2. Acceptance of Terms</h2>
         <p>
-          By creating an account or using CoachPlan, you confirm that you are at least 16 years
+          By creating an account or using MyTrainingPlan, you confirm that you are at least 16 years
           old and agree to be bound by these Terms of Service and our{" "}
           <Link href="/privacy">Privacy Policy</Link>. If you do not agree, do not use the service.
         </p>
@@ -48,7 +48,7 @@ export default function TermsPage() {
         <h2>4. Acceptable Use</h2>
         <p>You agree not to:</p>
         <ul>
-          <li>Use CoachPlan for any unlawful purpose or in violation of any applicable regulations</li>
+          <li>Use MyTrainingPlan for any unlawful purpose or in violation of any applicable regulations</li>
           <li>Upload content you do not have the right to share (e.g. copyrighted training plans without authorisation)</li>
           <li>Attempt to access other users&apos; data or accounts</li>
           <li>Interfere with or disrupt the service or its infrastructure</li>
@@ -58,20 +58,20 @@ export default function TermsPage() {
 
         <h2>5. Coach and Athlete Relationships</h2>
         <p>
-          CoachPlan facilitates plan sharing between coaches and athletes. When a coach links
+          MyTrainingPlan facilitates plan sharing between coaches and athletes. When a coach links
           an athlete to a plan, the athlete can view that plan and log their workouts. Coaches
           can view completion data for linked athletes.
         </p>
         <p>
-          CoachPlan is a tool — it does not regulate or mediate the coaching relationship itself.
+          MyTrainingPlan is a tool — it does not regulate or mediate the coaching relationship itself.
           Any coaching advice, training decisions, or health guidance remains the responsibility
           of the coach and athlete involved.
         </p>
 
         <h2>6. Strava Integration</h2>
         <p>
-          CoachPlan optionally integrates with Strava via their official API. By connecting
-          Strava, you authorise CoachPlan to read your Strava activity data in accordance with
+          MyTrainingPlan optionally integrates with Strava via their official API. By connecting
+          Strava, you authorise MyTrainingPlan to read your Strava activity data in accordance with
           Strava&apos;s own{" "}
           <a href="https://www.strava.com/legal/terms" target="_blank" rel="noopener noreferrer">
             Terms of Service
@@ -85,7 +85,7 @@ export default function TermsPage() {
 
         <h2>7. Data Ownership</h2>
         <p>
-          Your training plans, workout logs, and personal data remain yours. You grant CoachPlan
+          Your training plans, workout logs, and personal data remain yours. You grant MyTrainingPlan
           a limited licence to store and process your data solely to provide the service to you.
           We do not claim ownership of your content.
         </p>
@@ -97,21 +97,21 @@ export default function TermsPage() {
 
         <h2>8. AI-Assisted Features</h2>
         <p>
-          CoachPlan uses AI (powered by OpenAI) to extract and structure training data from
+          MyTrainingPlan uses AI (powered by OpenAI) to extract and structure training data from
           uploaded PDFs. AI-generated output may contain errors. You are responsible for
           reviewing extracted workout data for accuracy before relying on it.
         </p>
 
         <h2>9. Service Availability</h2>
         <p>
-          We aim to keep CoachPlan available and reliable, but we do not guarantee uninterrupted
+          We aim to keep MyTrainingPlan available and reliable, but we do not guarantee uninterrupted
           access. We may modify, suspend, or discontinue features at any time, with reasonable
           notice where practicable.
         </p>
 
         <h2>10. Limitation of Liability</h2>
         <p>
-          CoachPlan is provided &ldquo;as is&rdquo; without warranties of any kind. We are not liable for
+          MyTrainingPlan is provided &ldquo;as is&rdquo; without warranties of any kind. We are not liable for
           any indirect, incidental, or consequential damages arising from your use of the service,
           including but not limited to training outcomes, injury, or data loss.
         </p>
@@ -122,7 +122,7 @@ export default function TermsPage() {
 
         <h2>11. Changes to These Terms</h2>
         <p>
-          We may update these terms from time to time. Continued use of CoachPlan after changes
+          We may update these terms from time to time. Continued use of MyTrainingPlan after changes
           are posted constitutes acceptance of the revised terms. We will notify users of
           material changes via email or in-app notice.
         </p>
@@ -141,7 +141,7 @@ export default function TermsPage() {
       </div>
 
       <div className={styles.footer}>
-        <Link href="/">← Back to CoachPlan</Link>
+        <Link href="/">← Back to MyTrainingPlan</Link>
         <span>·</span>
         <Link href="/privacy">Privacy Policy</Link>
       </div>

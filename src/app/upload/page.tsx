@@ -44,7 +44,7 @@ const UPLOAD_FLOW_STEPS = [
   },
   {
     title: 'Parse Draft',
-    detail: 'CoachPlan extracts weeks, days, and sessions.'
+    detail: 'MyTrainingPlan extracts weeks, days, and sessions.'
   },
   {
     title: 'Review and Correct',

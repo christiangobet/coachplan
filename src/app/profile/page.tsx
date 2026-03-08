@@ -342,7 +342,7 @@ export default function ProfilePage() {
           <section className="dash-card athlete-page-header">
             <h1>Profile Setup</h1>
             <p className="muted">
-              Tell us how you train so CoachPlan can personalize your weekly execution.
+              Tell us how you train so MyTrainingPlan can personalize your weekly execution.
             </p>
           </section>
 

@@ -2,8 +2,8 @@ import Link from "next/link";
 import styles from "../legal.module.css";
 
 export const metadata = {
-  title: "Privacy Policy — CoachPlan",
-  description: "How CoachPlan collects, uses, and protects your personal data.",
+  title: "Privacy Policy — MyTrainingPlan",
+  description: "How MyTrainingPlan collects, uses, and protects your personal data.",
 };
 
 export default function PrivacyPage() {
@@ -18,7 +18,7 @@ export default function PrivacyPage() {
       <div className={styles.body}>
         <div className={styles.highlight}>
           <p>
-            CoachPlan is a training plan management tool for endurance athletes and coaches.
+            MyTrainingPlan is a training plan management tool for endurance athletes and coaches.
             This policy explains what data we collect, why we collect it, and how you can
             control it — including data we receive from Strava.
           </p>
@@ -26,7 +26,7 @@ export default function PrivacyPage() {
 
         <h2>1. Who We Are</h2>
         <p>
-          CoachPlan (&ldquo;we&rdquo;, &ldquo;us&rdquo;, or &ldquo;our&rdquo;) operates the CoachPlan
+          MyTrainingPlan (&ldquo;we&rdquo;, &ldquo;us&rdquo;, or &ldquo;our&rdquo;) operates the MyTrainingPlan
           application at www.mytrainingplan.io. For privacy questions, contact us at{" "}
           <a href="mailto:privacy@mytrainingplan.io">privacy@mytrainingplan.io</a>.
         </p>
@@ -44,7 +44,7 @@ export default function PrivacyPage() {
           </li>
           <li>
             <strong>Workout logs</strong> — distance, duration, pace, notes, and completion
-            status you record manually within CoachPlan.
+            status you record manually within MyTrainingPlan.
           </li>
           <li>
             <strong>Strava activity data</strong> — if you connect your Strava account, we
@@ -79,13 +79,13 @@ export default function PrivacyPage() {
 
         <h2>4. Strava Integration</h2>
         <p>
-          When you connect Strava, CoachPlan requests the{" "}
+          When you connect Strava, MyTrainingPlan requests the{" "}
           <strong>read</strong> and <strong>activity:read_all</strong> scopes. This allows
           us to read your activity history to match sessions to your training plan.
         </p>
         <p>
           We do not write data to Strava, share your Strava data with third parties, or use
-          it for any purpose other than populating your CoachPlan training log.
+          it for any purpose other than populating your MyTrainingPlan training log.
         </p>
         <p>
           You can disconnect Strava at any time from the Import Strava page. Disconnecting
@@ -94,7 +94,7 @@ export default function PrivacyPage() {
         </p>
 
         <h2>5. Data Sharing</h2>
-        <p>We share data with the following service providers only to the extent necessary to operate CoachPlan:</p>
+        <p>We share data with the following service providers only to the extent necessary to operate MyTrainingPlan:</p>
         <ul>
           <li><strong>Clerk</strong> — authentication and user account management</li>
           <li><strong>OpenAI</strong> — AI extraction of workout data from uploaded PDFs</li>
@@ -134,7 +134,7 @@ export default function PrivacyPage() {
 
         <h2>9. Cookies</h2>
         <p>
-          CoachPlan uses cookies and similar technologies for authentication (managed by
+          MyTrainingPlan uses cookies and similar technologies for authentication (managed by
           Clerk) and session management. We do not use advertising or tracking cookies.
         </p>
 
@@ -153,7 +153,7 @@ export default function PrivacyPage() {
       </div>
 
       <div className={styles.footer}>
-        <Link href="/">← Back to CoachPlan</Link>
+        <Link href="/">← Back to MyTrainingPlan</Link>
         <span>·</span>
         <Link href="/terms">Terms of Service</Link>
       </div>

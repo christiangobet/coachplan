@@ -650,6 +650,13 @@
   align-items: start;
 }
 
+.pcal-layout.edit-mode .pcal-main {
+  background: linear-gradient(180deg, rgba(252, 76, 2, 0.08) 0, rgba(252, 76, 2, 0.02) 120px, rgba(252, 76, 2, 0) 220px);
+  border: 1px solid rgba(252, 76, 2, 0.2);
+  border-radius: 16px;
+  padding: 12px;
+}
+
 .pcal-main {
   min-width: 0;
   position: sticky;
@@ -1072,6 +1079,19 @@
   align-items: center;
   gap: 10px;
   flex-shrink: 0;
+}
+
+.pcal-edit-mode-banner {
+  margin-top: 8px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #9b3200;
+  background: rgba(252, 76, 2, 0.14);
+  border: 1px solid rgba(252, 76, 2, 0.28);
 }
 
 /* Collapse sidebar + AI trainer when source PDF is open */
@@ -2486,6 +2506,13 @@
   color: var(--d-text);
   line-height: 1.6;
   white-space: pre-wrap;
+}
+
+.pcal-modal-edit-lockout {
+  border: 1px dashed rgba(252, 76, 2, 0.35);
+  border-radius: 12px;
+  padding: 12px;
+  background: rgba(252, 76, 2, 0.06);
 }
 
 .pcal-modal-actuals-form {

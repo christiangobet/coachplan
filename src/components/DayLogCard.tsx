@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { DayStatus } from '@/lib/day-status';
 import type { LogActivity } from '@/lib/log-activity';
@@ -189,14 +189,6 @@ function ActivityRow({
 }) {
   const isRestDay = activity.type === 'REST';
 
-  const plannedSourceUnit =
-    resolveDistanceUnitFromActivity({
-      distanceUnit: activity.distanceUnit,
-      paceTarget: activity.paceTarget,
-      actualPace: activity.actualPace,
-      fallbackUnit: viewerUnits,
-    }) || viewerUnits;
-
   const plannedDistanceHint = convertDistanceForDisplay(
     activity.plannedDistance,
     viewerUnits,
@@ -359,6 +351,17 @@ export default function DayLogCard({
     return init;
   });
 
+  const paceAutofillSignature = useMemo(
+    () =>
+      activities
+        .map((activity) => {
+          const f = forms[activity.id];
+          return `${activity.id}:${f?.actualDistance ?? ''}:${f?.actualDuration ?? ''}:${f?.paceUserEdited ?? ''}`;
+        })
+        .join('|'),
+    [activities, forms]
+  );
+
   // Sync initialDayStatus/missedReason when props change
   useEffect(() => { setDayStatus(initialDayStatus); }, [initialDayStatus]);
   useEffect(() => { setMissedReason(initialMissedReason || ''); }, [initialMissedReason]);
@@ -403,10 +406,7 @@ export default function DayLogCard({
       }
       return next;
     });
-  }, [
-    activities.map((a) => `${a.id}:${a.actualDistance}:${a.actualDuration}:${a.actualPace}`).join('|'),
-    viewerUnits,
-  ]);
+  }, [activities, viewerUnits]);
 
   // Pace auto-calc for RUN activities
   useEffect(() => {
@@ -431,12 +431,7 @@ export default function DayLogCard({
       }
       return next;
     });
-  }, [
-    activities.map((a) => {
-      const f = forms[a.id];
-      return `${a.id}:${f?.actualDistance}:${f?.actualDuration}:${f?.paceUserEdited}`;
-    }).join('|'),
-  ]);
+  }, [activities, paceAutofillSignature, viewerUnits]);
 
   function patchForm(activityId: string, patch: Partial<ActivityFormState>) {
     setForms((prev) => ({

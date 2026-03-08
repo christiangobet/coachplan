@@ -248,15 +248,6 @@ function formatDurationSeconds(value: number | null | undefined) {
   return `${Math.round(value / 60)} min`;
 }
 
-function formatMinutesTotal(value: number) {
-  if (value <= 0) return "0m";
-  const hours = Math.floor(value / 60);
-  const mins = value % 60;
-  if (hours && mins) return `${hours}h ${mins}m`;
-  if (hours) return `${hours}h`;
-  return `${mins}m`;
-}
-
 function formatDistanceMeters(value: number | null | undefined, viewerUnit: DistanceUnit) {
   if (!value || value <= 0) return "—";
   const converted = convertDistanceForDisplay(value / 1000, "KM", viewerUnit);
@@ -341,22 +332,6 @@ function parseExternalRawTimeLabel(raw: unknown) {
 
 function getExternalDateKey(raw: unknown, startTime: Date) {
   return parseExternalRawDateKey(raw) || dateKeyUtc(startTime);
-}
-
-function parseSyncedSourceDate(notes: string | null | undefined) {
-  if (!notes) return null;
-  const match = notes.match(/\[Synced from [^\]]* activity (\d{4}-\d{2}-\d{2})\]/i);
-  return match?.[1] || null;
-}
-
-function stripSyncTagLine(notes: string | null | undefined) {
-  if (!notes) return null;
-  const next = notes
-    .split("\n")
-    .filter((line) => !/\[Synced from /i.test(line))
-    .join("\n")
-    .trim();
-  return next || null;
 }
 
 export default async function CalendarPage({

@@ -30,6 +30,10 @@
   max-width: 16ch;
 }
 
+.heroBrand {
+  margin-bottom: 10px;
+}
+
 .heroCopy p {
   margin-top: 16px;
   max-width: 52ch;
@@ -312,6 +316,10 @@
   .hero {
     padding: 18px;
     border-radius: 18px;
+  }
+
+  .heroBrand {
+    margin-bottom: 8px;
   }
 
   .heroVisual {
