@@ -3522,10 +3522,10 @@ details[open] .day-log-instructions-toggle::before {
 
 /* 2-col fields (distance + duration), pace full-width */
 .cal-activity-section .dash-log-fields {
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.cal-activity-section .dash-log-fields .dash-log-field:last-child:nth-child(3) {
+.cal-activity-section .dash-log-fields .dash-log-field:nth-child(3) {
   grid-column: 1 / -1;
 }
 
@@ -3570,12 +3570,8 @@ details[open] .day-log-instructions-toggle::before {
     font-size: 12px;
   }
 
-  .cal-activity-section .dash-log-fields {
-    grid-template-columns: 1fr;
-  }
-
-  .cal-activity-section .dash-log-fields .dash-log-field:last-child {
-    grid-column: auto;
+  .cal-activity-section .dash-log-fields .dash-log-field:nth-child(3) {
+    grid-column: 1 / -1;
   }
 }
 

@@ -288,7 +288,8 @@
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--d-muted);
-  padding: 0 6px;
+  padding: 0;
+  text-align: center;
 }
 
 .cal-grid {
@@ -1535,11 +1536,9 @@
   .cal-weekdays,
   .cal-grid {
     min-width: 640px;
-  }
-
-  .cal-grid {
     grid-template-columns: repeat(7, minmax(84px, 1fr));
   }
+
 }
 
 @media (max-width: 768px) {
@@ -1592,6 +1591,7 @@
   .cal-weekdays,
   .cal-grid {
     min-width: 560px;
+    grid-template-columns: repeat(7, minmax(74px, 1fr));
   }
 
   .cal-day {
@@ -1665,6 +1665,7 @@
   .cal-weekdays,
   .cal-grid {
     min-width: 490px;
+    grid-template-columns: repeat(7, minmax(64px, 1fr));
   }
 
   .cal-day {
