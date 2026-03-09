@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import ActivityTypeIcon from '@/components/ActivityTypeIcon';
@@ -47,6 +48,7 @@ type ReviewDay = {
   label: string;
   isToday: boolean;
   isLockedPlanDay?: boolean;
+  closedReason?: 'DAY_DONE' | 'DAY_MISSED' | 'DAY_PARTIAL' | 'ALL_ACTIVITIES_COMPLETED' | null;
   planActivities: PlanActivityRow[];
   stravaActivities: StravaActivityRow[];
 };
@@ -116,15 +118,70 @@ function resolveEquivalence(activity: StravaActivityRow) {
 function equivalenceLabel(value: 'FULL' | 'PARTIAL' | 'NONE' | null) {
   if (value === 'FULL') return 'Counts fully';
   if (value === 'PARTIAL') return 'Counts partially';
-  if (value === 'NONE') return 'Does not count';
+  if (value === 'NONE') return 'No credit';
   return 'Not evaluated';
 }
 
 function equivalenceClass(value: 'FULL' | 'PARTIAL' | 'NONE' | null) {
-  if (value === 'FULL') return 'done';
-  if (value === 'PARTIAL') return 'partial';
-  if (value === 'NONE') return 'locked';
-  return 'pending';
+  if (value === 'FULL') return 'match-full';
+  if (value === 'PARTIAL') return 'match-partial';
+  if (value === 'NONE') return 'no-credit';
+  return 'match-pending';
+}
+
+type ImportState = 'CLOSED' | 'IMPORTED' | 'PARTIAL' | 'PENDING';
+type CompletionState = 'DONE' | 'MISSED' | 'PARTIAL' | 'OPEN';
+
+function resolveCompletionState(day: ReviewDay) {
+  if (day.closedReason === 'DAY_DONE' || day.closedReason === 'ALL_ACTIVITIES_COMPLETED') return 'DONE' as const;
+  if (day.closedReason === 'DAY_MISSED') return 'MISSED' as const;
+  if (day.closedReason === 'DAY_PARTIAL') return 'PARTIAL' as const;
+  return 'OPEN' as const;
+}
+
+function completionChipState(state: CompletionState) {
+  if (state === 'DONE') return { icon: '✓', label: 'Done day', className: 'completion-done' };
+  if (state === 'MISSED') return { icon: '✗', label: 'Missed day', className: 'completion-missed' };
+  if (state === 'PARTIAL') return { icon: '≈', label: 'Partial day', className: 'completion-partial' };
+  return { icon: '○', label: 'Open day', className: 'completion-open' };
+}
+
+function resolveImportState(args: {
+  dayLocked: boolean;
+  hasStrava: boolean;
+  matchedStravaCount: number;
+  stravaCount: number;
+}): ImportState {
+  if (args.dayLocked) return 'CLOSED';
+  if (!args.hasStrava) return 'PENDING';
+  if (args.matchedStravaCount > 0 && args.matchedStravaCount === args.stravaCount) return 'IMPORTED';
+  if (args.matchedStravaCount > 0) return 'PARTIAL';
+  return 'PENDING';
+}
+
+function importChipState(state: ImportState) {
+  if (state === 'CLOSED') return { icon: '🔒', label: 'Closed day', className: 'import-closed' };
+  if (state === 'IMPORTED') return { icon: '↓', label: 'Imported', className: 'import-imported' };
+  if (state === 'PARTIAL') return { icon: '≈', label: 'Partial import', className: 'import-partial' };
+  return { icon: '•', label: 'Pending import', className: 'import-pending' };
+}
+
+function closedReasonCopy(reason: ReviewDay['closedReason']) {
+  if (reason === 'DAY_DONE') return 'day marked done';
+  if (reason === 'DAY_MISSED') return 'day marked missed';
+  if (reason === 'DAY_PARTIAL') return 'day marked partial';
+  if (reason === 'ALL_ACTIVITIES_COMPLETED') return 'all planned activities completed';
+  return 'day closed';
+}
+
+function buildCalendarReopenHref(dateISO: string, planId: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateISO) || !planId) return '/calendar';
+  const month = dateISO.slice(0, 7);
+  const params = new URLSearchParams();
+  params.set('month', month);
+  params.set('plan', planId);
+  params.set('date', dateISO);
+  return `/calendar?${params.toString()}#day-details-card`;
 }
 
 export default function StravaActivityMatchTable() {
@@ -251,6 +308,7 @@ export default function StravaActivityMatchTable() {
     return { label: 'Sync recommended', tone: 'warn' as const };
   }, [data?.account?.connected, data?.account?.lastSyncAt]);
   const viewerUnits: DistanceUnit = data?.viewerUnits === 'KM' ? 'KM' : 'MILES';
+  const effectivePlanId = selectedPlanId || data?.plan?.id || '';
 
   return (
     <section className="dash-card dash-day-import-card">
@@ -279,6 +337,31 @@ export default function StravaActivityMatchTable() {
         <span>Last sync: {formatDate(data?.account?.lastSyncAt)}</span>
       </div>
 
+      {!loading && data?.account?.connected && rows.length > 0 && (
+        <div className="dash-day-status-legend" aria-label="Status legend">
+          <div className="dash-day-legend-group">
+            <strong>Completion</strong>
+            <span className="dash-day-status-chip completion-done"><span className="dash-day-chip-icon">✓</span>Done day</span>
+            <span className="dash-day-status-chip completion-partial"><span className="dash-day-chip-icon">≈</span>Partial day</span>
+            <span className="dash-day-status-chip completion-missed"><span className="dash-day-chip-icon">✗</span>Missed day</span>
+            <span className="dash-day-status-chip completion-open"><span className="dash-day-chip-icon">○</span>Open day</span>
+          </div>
+          <div className="dash-day-legend-group">
+            <strong>Import</strong>
+            <span className="dash-day-status-chip import-imported"><span className="dash-day-chip-icon">↓</span>Imported</span>
+            <span className="dash-day-status-chip import-partial"><span className="dash-day-chip-icon">≈</span>Partial import</span>
+            <span className="dash-day-status-chip import-pending"><span className="dash-day-chip-icon">•</span>Pending import</span>
+            <span className="dash-day-status-chip import-closed"><span className="dash-day-chip-icon">🔒</span>Closed day</span>
+          </div>
+          <div className="dash-day-legend-group">
+            <strong>Match quality</strong>
+            <span className="dash-day-status-chip match-full"><span className="dash-day-chip-icon">✓</span>Full credit</span>
+            <span className="dash-day-status-chip match-partial"><span className="dash-day-chip-icon">≈</span>Partial credit</span>
+            <span className="dash-day-status-chip no-credit"><span className="dash-day-chip-icon">✗</span>No credit</span>
+          </div>
+        </div>
+      )}
+
       {status && <p className="dash-sync-note">{status}</p>}
 
       {loading && <p className="dash-sync-note">Loading table...</p>}
@@ -306,14 +389,21 @@ export default function StravaActivityMatchTable() {
                 const matchedStravaCount = day.stravaActivities.filter((activity) => Boolean(activity.matchedPlanActivityId)).length;
                 const matchedPlanCount = day.planActivities.filter((activity) => Boolean(activity.matchedExternalActivityId)).length;
                 const completedPlanCount = day.planActivities.filter((activity) => activity.completed).length;
-                const dayDone = hasStrava && matchedStravaCount > 0 && matchedStravaCount === day.stravaActivities.length;
-                const dayPartial = hasStrava && matchedStravaCount > 0 && matchedStravaCount < day.stravaActivities.length;
-                const actionLabel = dayLocked ? 'Locked' : dayDone ? 'Done' : dayPartial ? 'Re-import' : 'Import';
-                const rowClickable = hasStrava && !dayLocked && !dayDone && !importing;
+                const completionState = resolveCompletionState(day);
+                const completionChip = completionChipState(completionState);
+                const importState = resolveImportState({
+                  dayLocked,
+                  hasStrava,
+                  matchedStravaCount,
+                  stravaCount: day.stravaActivities.length
+                });
+                const importChip = importChipState(importState);
+                const actionLabel = importState === 'PARTIAL' ? 'Re-import' : importState === 'PENDING' ? 'Import' : importState === 'IMPORTED' ? 'Imported' : 'Closed day';
+                const rowClickable = hasStrava && importState !== 'CLOSED' && importState !== 'IMPORTED' && !importing;
                 return (
                   <tr
                     key={day.date}
-                    className={`${dayLocked ? 'day-status-locked' : dayDone ? 'day-status-done' : dayPartial ? 'day-status-partial' : ''}${rowClickable ? ' day-row-clickable' : ''}`.trim()}
+                    className={`${importState === 'CLOSED' ? 'day-import-closed' : importState === 'IMPORTED' ? 'day-import-imported' : importState === 'PARTIAL' ? 'day-import-partial' : ''}${rowClickable ? ' day-row-clickable' : ''}`.trim()}
                     role={rowClickable ? 'button' : undefined}
                     tabIndex={rowClickable ? 0 : undefined}
                     onClick={rowClickable ? () => importDay(day.date) : undefined}
@@ -401,26 +491,40 @@ export default function StravaActivityMatchTable() {
                     <td data-col="Action">
                       {hasStrava ? (
                         <div className="dash-day-action-stack">
-                          <span className={`dash-day-status-chip ${dayLocked ? 'locked' : dayDone ? 'done' : dayPartial ? 'partial' : 'pending'}`}>
-                            {dayLocked ? 'Locked' : dayDone ? 'Done' : dayPartial ? 'Partial match' : 'Pending import'}
+                          <span className={`dash-day-status-chip ${importChip.className}`}>
+                            <span className="dash-day-chip-icon">{importChip.icon}</span>
+                            {importChip.label}
+                          </span>
+                          <span className={`dash-day-status-chip ${completionChip.className}`}>
+                            <span className="dash-day-chip-icon">{completionChip.icon}</span>
+                            {completionChip.label}
                           </span>
                           <span className="dash-day-action-meta">
-                            {dayLocked
-                              ? 'Completed day. Import and matching are disabled.'
+                            {importState === 'CLOSED'
+                              ? `Import disabled: day closed (${closedReasonCopy(day.closedReason)}).`
                               : `${matchedStravaCount}/${day.stravaActivities.length} matched · ${completedPlanCount}/${day.planActivities.length} done`}
                           </span>
                           <button
                             className="dash-sync-btn"
                             type="button"
-                            disabled={dayLocked || importing || dayDone}
+                            disabled={importState === 'CLOSED' || importing || importState === 'IMPORTED'}
                             onClick={(event) => {
                               event.stopPropagation();
-                              if (dayLocked) return;
+                              if (importState === 'CLOSED') return;
                               void importDay(day.date);
                             }}
                           >
                             {importing ? 'Importing...' : actionLabel}
                           </button>
+                          {importState === 'CLOSED' && effectivePlanId && (
+                            <Link
+                              href={buildCalendarReopenHref(day.date, effectivePlanId)}
+                              className="dash-day-reopen-link"
+                              onClick={(event) => event.stopPropagation()}
+                            >
+                              Open in Calendar to Reopen Day
+                            </Link>
+                          )}
                           {matchedPlanCount > 0 && (
                             <span className="dash-day-action-meta">
                               {matchedPlanCount} plan activities linked

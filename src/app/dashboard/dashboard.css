@@ -2690,6 +2690,8 @@ details[open] .day-log-instructions-toggle::before {
 
 .dash-day-status-chip {
   display: inline-flex;
+  align-items: center;
+  gap: 6px;
   width: fit-content;
   padding: 3px 8px;
   border-radius: 999px;
@@ -2697,29 +2699,73 @@ details[open] .day-log-instructions-toggle::before {
   font-weight: 700;
 }
 
-.dash-day-status-chip.pending {
+.dash-day-chip-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 10px;
+  font-size: 11px;
+  line-height: 1;
+}
+
+.dash-day-status-chip.import-pending {
   background: rgba(107, 107, 118, 0.12);
   color: var(--d-text-mid);
 }
 
-.dash-day-status-chip.partial {
+.dash-day-status-chip.import-partial {
   background: rgba(243, 156, 18, 0.15);
   color: #c77f00;
 }
 
-.dash-day-status-chip.done {
+.dash-day-status-chip.import-imported {
+  background: rgba(35, 139, 230, 0.14);
+  color: #1c63a8;
+}
+
+.dash-day-status-chip.import-closed {
+  background: rgba(107, 107, 118, 0.2);
+  color: #4a4a53;
+}
+
+.dash-day-status-chip.completion-open {
+  background: rgba(107, 107, 118, 0.12);
+  color: var(--d-text-mid);
+}
+
+.dash-day-status-chip.completion-partial {
+  background: rgba(243, 156, 18, 0.15);
+  color: #c77f00;
+}
+
+.dash-day-status-chip.completion-done {
   background: rgba(15, 138, 71, 0.14);
   color: #0f8a47;
 }
 
-.dash-day-status-chip.imported {
-  background: rgba(107, 107, 118, 0.14);
-  color: var(--d-text-mid);
+.dash-day-status-chip.completion-missed {
+  background: rgba(192, 57, 43, 0.12);
+  color: #b64033;
 }
 
-.dash-day-status-chip.locked {
-  background: rgba(107, 107, 118, 0.2);
-  color: #4a4a53;
+.dash-day-status-chip.match-full {
+  background: rgba(15, 138, 71, 0.14);
+  color: #0f8a47;
+}
+
+.dash-day-status-chip.match-partial {
+  background: rgba(243, 156, 18, 0.15);
+  color: #c77f00;
+}
+
+.dash-day-status-chip.no-credit {
+  background: rgba(192, 57, 43, 0.12);
+  color: #b64033;
+}
+
+.dash-day-status-chip.match-pending {
+  background: rgba(107, 107, 118, 0.12);
+  color: var(--d-text-mid);
 }
 
 .dash-day-action-meta {
@@ -2727,21 +2773,48 @@ details[open] .day-log-instructions-toggle::before {
   color: var(--d-muted);
 }
 
-.dash-day-table tr.day-status-done td {
+.dash-day-table tr.day-import-imported td {
   background: rgba(15, 138, 71, 0.02);
 }
 
-.dash-day-table tr.day-status-partial td {
+.dash-day-table tr.day-import-partial td {
   background: rgba(243, 156, 18, 0.03);
 }
 
-.dash-day-table tr.day-status-imported td {
-  background: rgba(107, 107, 118, 0.05);
-}
-
-.dash-day-table tr.day-status-locked td {
+.dash-day-table tr.day-import-closed td {
   background: rgba(107, 107, 118, 0.1);
   color: #5b5b63;
+}
+
+.dash-day-reopen-link {
+  display: inline-flex;
+  width: fit-content;
+  color: var(--d-orange);
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.dash-day-status-legend {
+  display: grid;
+  gap: 8px;
+  margin: 4px 0 10px;
+}
+
+.dash-day-legend-group {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.dash-day-legend-group strong {
+  font-size: 11px;
+  color: var(--d-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-right: 2px;
 }
 
 /* Status Feed */
@@ -3253,15 +3326,15 @@ details[open] .day-log-instructions-toggle::before {
     padding: 10px;
   }
 
-  .dash-day-table tr.day-status-done {
+  .dash-day-table tr.day-import-imported {
     background: rgba(15, 138, 71, 0.05);
   }
 
-  .dash-day-table tr.day-status-partial {
+  .dash-day-table tr.day-import-partial {
     background: rgba(243, 156, 18, 0.06);
   }
 
-  .dash-day-table tr.day-status-locked {
+  .dash-day-table tr.day-import-closed {
     background: rgba(107, 107, 118, 0.08);
   }
 

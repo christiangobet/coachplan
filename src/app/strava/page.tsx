@@ -45,7 +45,7 @@ export default async function StravaPage({
         <section className="dash-center">
           <div className="dash-page-heading">
             <h1>Import Strava</h1>
-            <p>Review planned sessions against synced Strava activities and import by day.</p>
+            <p>Review day-level completion, import status, and Strava match quality before importing.</p>
           </div>
 
           <div className="strava-mobile-sync">
@@ -64,6 +64,7 @@ export default async function StravaPage({
                 <li>Connect Strava and run sync.</li>
                 <li>Compare each day and import only the rows you want.</li>
                 <li>Use re-import when you update workouts in Strava.</li>
+                <li>Closed days are read-only for import. Reopen them from Calendar first.</li>
               </ol>
             </div>
 

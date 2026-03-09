@@ -3,7 +3,7 @@ import { cookies } from 'next/headers';
 import { prisma } from '@/lib/prisma';
 import { requireRoleApi } from '@/lib/role-guards';
 import { getDayDateFromWeekStart, resolveWeekBounds } from '@/lib/plan-dates';
-import { isDayClosed } from '@/lib/day-status';
+import { getDayStatus, isDayClosed } from '@/lib/day-status';
 import { pickSelectedPlan, SELECTED_PLAN_COOKIE } from '@/lib/plan-selection';
 
 export const dynamic = 'force-dynamic';
@@ -45,6 +45,22 @@ function getStravaDateKeyFromRaw(raw: unknown, fallbackStartTime: Date) {
 
 function isLockedPlanDay(notes: string | null | undefined, activities: Array<{ completed: boolean }>) {
   return isDayClosed(notes) || (activities.length > 0 && activities.every((activity) => activity.completed));
+}
+
+type ClosedReason = 'DAY_DONE' | 'DAY_MISSED' | 'DAY_PARTIAL' | 'ALL_ACTIVITIES_COMPLETED';
+
+function resolveClosedReason(
+  notes: string | null | undefined,
+  activities: Array<{ completed: boolean }>
+): ClosedReason | null {
+  const status = getDayStatus(notes);
+  if (status === 'DONE') return 'DAY_DONE';
+  if (status === 'MISSED') return 'DAY_MISSED';
+  if (status === 'PARTIAL') return 'DAY_PARTIAL';
+  if (activities.length > 0 && activities.every((activity) => activity.completed)) {
+    return 'ALL_ACTIVITIES_COMPLETED';
+  }
+  return null;
 }
 
 export async function GET(req: Request) {
@@ -107,6 +123,7 @@ export async function GET(req: Request) {
     matchedExternalActivityId: string | null;
   }>>();
   const lockedPlanDayByDate = new Map<string, boolean>();
+  const closedReasonByDate = new Map<string, ClosedReason>();
   let planStart: Date | null = null;
 
   if (activePlan) {
@@ -128,7 +145,11 @@ export async function GET(req: Request) {
         const key = toDateKey(dayDate);
         const row = planByDate.get(key) || [];
         const dayLocked = isLockedPlanDay(day.notes, day.activities || []);
+        const closedReason = resolveClosedReason(day.notes, day.activities || []);
         lockedPlanDayByDate.set(key, Boolean(lockedPlanDayByDate.get(key) || dayLocked));
+        if (closedReason && !closedReasonByDate.has(key)) {
+          closedReasonByDate.set(key, closedReason);
+        }
         for (const activity of day.activities || []) {
           row.push({
             id: activity.id,
@@ -237,6 +258,7 @@ export async function GET(req: Request) {
     label: formatDateLabel(key),
     isToday: key === toDateKey(today),
     isLockedPlanDay: Boolean(lockedPlanDayByDate.get(key)),
+    closedReason: closedReasonByDate.get(key) || null,
     planActivities: planByDate.get(key) || [],
     stravaActivities: stravaByDate.get(key) || []
   }));
