@@ -119,7 +119,12 @@ type SelectedDayState = {
 
 type DayStravaMarker = {
   id: string;
+  name: string;
   sportType: string | null;
+  startTime: string | null;
+  distanceM: number | null;
+  durationSec: number | null;
+  matchedPlanActivityId: string | null;
 };
 
 
@@ -661,7 +666,14 @@ export default function PlanDetailPage() {
         next[day.date] = day.stravaActivities
           .map((activity: any) => ({
             id: String(activity?.id || ''),
-            sportType: typeof activity?.sportType === 'string' ? activity.sportType : null
+            name: typeof activity?.name === 'string' && activity.name.trim().length > 0
+              ? activity.name
+              : (typeof activity?.sportType === 'string' ? formatType(activity.sportType) : 'Strava activity'),
+            sportType: typeof activity?.sportType === 'string' ? activity.sportType : null,
+            startTime: typeof activity?.startTime === 'string' ? activity.startTime : null,
+            distanceM: typeof activity?.distanceM === 'number' ? activity.distanceM : null,
+            durationSec: typeof activity?.durationSec === 'number' ? activity.durationSec : null,
+            matchedPlanActivityId: typeof activity?.matchedPlanActivityId === 'string' ? activity.matchedPlanActivityId : null
           }))
           .filter((activity: DayStravaMarker) => activity.id.length > 0);
       }
@@ -2545,7 +2557,15 @@ export default function PlanDetailPage() {
                             );
                           })}
                           {dayStravaLogs.length > 0 && (
-                            <span className="pcal-strava-pill">
+                            <button
+                              type="button"
+                              className="pcal-strava-pill"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                openDayLog();
+                              }}
+                              aria-label="View synced Strava activities for this day"
+                            >
                               <StravaIcon size={12} className="pcal-strava-pill-logo" />
                               <span className="pcal-strava-pill-icons">
                                 {stravaMarkerLogs.map((log) => (
@@ -2560,7 +2580,7 @@ export default function PlanDetailPage() {
                                   <span className="pcal-strava-pill-more">+{stravaOverflow}</span>
                                 )}
                               </span>
-                            </span>
+                            </button>
                           )}
                           {dropTarget && dropTarget.valid && day?.id && dropTarget.dayId === day.id && dropTarget.rawIndex === activities.length && (
                             <div className="pcal-drop-indicator" aria-hidden="true" />
@@ -2602,20 +2622,22 @@ export default function PlanDetailPage() {
                   ✕
                 </button>
               </div>
-              <DayLogCard
-                key={selectedDay.dateISO}
-                dayId={selectedDay.dayId}
-                dateISO={selectedDay.dateISO}
-                planId={planId}
-                activities={selectedDay.activities}
-                viewerUnits={viewerUnits}
-                dayStatus={selectedDay.dayStatus}
-                missedReason={selectedDay.missedReason}
-                stravaConnected={stravaConnected}
-                enabled
-                planView={isEditMode}
-                onClose={closeSelectedDayPanel}
-              />
+              <div className="pcal-day-panel-scroll">
+                <DayLogCard
+                  key={selectedDay.dateISO}
+                  dayId={selectedDay.dayId}
+                  dateISO={selectedDay.dateISO}
+                  planId={planId}
+                  activities={selectedDay.activities}
+                  viewerUnits={viewerUnits}
+                  dayStatus={selectedDay.dayStatus}
+                  missedReason={selectedDay.missedReason}
+                  stravaConnected={stravaConnected}
+                  enabled
+                  planView={isEditMode}
+                  onClose={closeSelectedDayPanel}
+                />
+              </div>
             </div>
           )}
         </aside>

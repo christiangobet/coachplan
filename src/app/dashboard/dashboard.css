@@ -276,8 +276,8 @@
   background-image: var(--plan-banner-url);
   background-size: cover;
   background-position: center var(--plan-banner-focus-y, 50%);
-  -webkit-mask-image: linear-gradient(90deg, rgba(0, 0, 0, 0.1) 0%, rgba(0, 0, 0, 1) 100%);
-  mask-image: linear-gradient(90deg, rgba(0, 0, 0, 0.1) 0%, rgba(0, 0, 0, 1) 100%);
+  -webkit-mask-image: linear-gradient(90deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.9) 100%);
+  mask-image: linear-gradient(90deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.9) 100%);
   -webkit-mask-repeat: no-repeat;
   mask-repeat: no-repeat;
   -webkit-mask-size: 100% 100%;
@@ -3761,6 +3761,72 @@ details[open] .day-log-instructions-toggle::before {
 
 .day-log-decision .dash-log-sync-note {
   margin-bottom: 0;
+}
+
+.day-log-synced-section {
+  padding: 10px 20px 12px;
+  border-top: 1px solid var(--d-border-light);
+  border-bottom: 1px solid var(--d-border-light);
+  background: #fff;
+}
+
+.day-log-synced-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.day-log-synced-head h4 {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--d-muted);
+}
+
+.day-log-synced-empty {
+  margin: 0;
+  font-size: 13px;
+  color: var(--d-text-mid);
+}
+
+.day-log-synced-list {
+  display: grid;
+  gap: 8px;
+}
+
+.day-log-synced-item {
+  border: 1px solid var(--d-border);
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: #fff;
+  display: grid;
+  gap: 4px;
+}
+
+.day-log-synced-item-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--d-text);
+}
+
+.day-log-synced-item-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.day-log-synced-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  color: var(--d-text-mid);
+  font-size: 12px;
 }
 
 /* Missed-day reason textarea */

@@ -1049,6 +1049,7 @@ export default async function CalendarPage({
                 missedReason={selectedDayInfo?.missedReason || null}
                 stravaConnected={Boolean(stravaAccount)}
                 enabled={selectedIsPastOrToday}
+                showSyncedStravaSection={false}
                 successRedirectHref={dashboardReturnHref}
               />
             )}

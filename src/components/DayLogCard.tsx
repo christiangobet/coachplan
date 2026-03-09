@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { DayStatus } from '@/lib/day-status';
 import type { LogActivity } from '@/lib/log-activity';
@@ -13,6 +13,8 @@ import {
   type DistanceUnit,
 } from '@/lib/unit-display';
 import SessionFlowStrip from '@/components/SessionFlowStrip';
+import ExternalSportIcon from '@/components/ExternalSportIcon';
+import StravaIcon from '@/components/StravaIcon';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -52,6 +54,15 @@ type ActivityFormState = {
   busy: boolean;
   error: string | null;
   savedStatus: string | null;
+};
+
+type SyncedStravaActivity = {
+  id: string;
+  name: string;
+  sportType: string | null;
+  startTime: string | null;
+  distanceM: number | null;
+  durationSec: number | null;
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -168,6 +179,21 @@ function resolveInstructionText(activity: LogActivity): string | null {
     return activity.plannedNotes.trim();
   }
   return null;
+}
+
+function formatSyncedStravaDuration(value: number | null | undefined) {
+  if (!value || value <= 0) return '—';
+  return `${Math.round(value / 60)} min`;
+}
+
+function formatSyncedStravaDistance(
+  value: number | null | undefined,
+  viewerUnits: DistanceUnit
+) {
+  if (!value || value <= 0) return '—';
+  const converted = convertDistanceForDisplay(value / 1000, 'KM', viewerUnits);
+  if (!converted) return '—';
+  return `${formatDistanceNumber(converted.value)} ${distanceUnitLabel(converted.unit)}`;
 }
 
 // ── ActivityRow ───────────────────────────────────────────────────────────────
@@ -303,6 +329,8 @@ export default function DayLogCard({
   stravaConnected,
   enabled,
   planView = false,
+  showSyncedStravaSection = true,
+  syncedStravaActivities = null,
   onClose,
   successRedirectHref = null,
 }: {
@@ -317,6 +345,8 @@ export default function DayLogCard({
   enabled: boolean;
   /** Plan-edit mode: show instructions only, hide all log forms and status buttons */
   planView?: boolean;
+  showSyncedStravaSection?: boolean;
+  syncedStravaActivities?: SyncedStravaActivity[] | null;
   onClose?: () => void;
   successRedirectHref?: string | null;
 }) {
@@ -336,6 +366,11 @@ export default function DayLogCard({
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [syncTone, setSyncTone] = useState<SyncTone>('info');
   const [syncDecisions, setSyncDecisions] = useState<StravaSyncDecision[]>([]);
+  const [syncedActivities, setSyncedActivities] = useState<SyncedStravaActivity[]>(() =>
+    Array.isArray(syncedStravaActivities) ? syncedStravaActivities : []
+  );
+  const [syncedActivitiesBusy, setSyncedActivitiesBusy] = useState(false);
+  const [syncedActivitiesError, setSyncedActivitiesError] = useState<string | null>(null);
 
   // Per-activity form state
   const [forms, setForms] = useState<Record<string, ActivityFormState>>(() => {
@@ -366,6 +401,58 @@ export default function DayLogCard({
   useEffect(() => { setDayStatus(initialDayStatus); }, [initialDayStatus]);
   useEffect(() => { setMissedReason(initialMissedReason || ''); }, [initialMissedReason]);
   useEffect(() => { setSyncDecisions([]); }, [dateISO, planId]);
+  useEffect(() => {
+    if (!Array.isArray(syncedStravaActivities)) return;
+    setSyncedActivities(syncedStravaActivities);
+    setSyncedActivitiesError(null);
+    setSyncedActivitiesBusy(false);
+  }, [syncedStravaActivities]);
+
+  const loadSyncedActivities = useCallback(async () => {
+    if (!showSyncedStravaSection || Array.isArray(syncedStravaActivities)) return;
+    if (!dateISO || !planId) {
+      setSyncedActivities([]);
+      return;
+    }
+    setSyncedActivitiesBusy(true);
+    setSyncedActivitiesError(null);
+    try {
+      const res = await fetch(`/api/integrations/strava/review?plan=${encodeURIComponent(planId)}`, {
+        cache: 'no-store'
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(body?.error || 'Failed to load synced Strava activities');
+      }
+      const matchingDay = Array.isArray(body?.days)
+        ? body.days.find((day: any) => day?.date === dateISO)
+        : null;
+      const nextActivities = Array.isArray(matchingDay?.stravaActivities)
+        ? matchingDay.stravaActivities
+          .map((activity: any) => ({
+            id: String(activity?.id || ''),
+            name: typeof activity?.name === 'string' && activity.name.trim().length > 0
+              ? activity.name
+              : (typeof activity?.sportType === 'string' ? activity.sportType.replace(/_/g, ' ') : 'Strava activity'),
+            sportType: typeof activity?.sportType === 'string' ? activity.sportType : null,
+            startTime: typeof activity?.startTime === 'string' ? activity.startTime : null,
+            distanceM: typeof activity?.distanceM === 'number' ? activity.distanceM : null,
+            durationSec: typeof activity?.durationSec === 'number' ? activity.durationSec : null,
+          }))
+          .filter((activity: SyncedStravaActivity) => activity.id.length > 0)
+        : [];
+      setSyncedActivities(nextActivities);
+    } catch (error: any) {
+      setSyncedActivities([]);
+      setSyncedActivitiesError(error?.message || 'Unable to load synced Strava activities');
+    } finally {
+      setSyncedActivitiesBusy(false);
+    }
+  }, [dateISO, planId, showSyncedStravaSection, syncedStravaActivities]);
+
+  useEffect(() => {
+    void loadSyncedActivities();
+  }, [loadSyncedActivities]);
 
   // Prefill each activity form from actuals
   useEffect(() => {
@@ -517,6 +604,7 @@ export default function DayLogCard({
       setSyncTone(summary && summary.stravaActivities === 0 ? 'warning' : 'success');
       setSyncMessage(summary ? summarizeImport(summary) : 'Strava sync complete.');
       setSyncDecisions(Array.isArray(summary?.decisions) ? summary?.decisions : []);
+      await loadSyncedActivities();
       router.refresh();
     } catch {
       setSyncTone('error');
@@ -726,6 +814,51 @@ export default function DayLogCard({
                   </div>
                 );
               })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Synced Strava activities */}
+      {showSyncedStravaSection && (
+        <div className="day-log-synced-section">
+          <div className="day-log-synced-head">
+            <StravaIcon size={13} />
+            <h4>Synced Strava activities</h4>
+          </div>
+          {syncedActivitiesBusy ? (
+            <p className="day-log-synced-empty">Loading synced activities…</p>
+          ) : syncedActivitiesError ? (
+            <p className="day-log-synced-empty">{syncedActivitiesError}</p>
+          ) : syncedActivities.length === 0 ? (
+            <p className="day-log-synced-empty">No synced Strava activities for this day.</p>
+          ) : (
+            <div className="day-log-synced-list">
+              {syncedActivities.map((activity) => (
+                <div key={activity.id} className="day-log-synced-item">
+                  <div className="day-log-synced-item-title">
+                    <ExternalSportIcon
+                      provider="STRAVA"
+                      sportType={activity.sportType}
+                      className="day-log-synced-item-icon"
+                    />
+                    <span>{activity.name}</span>
+                  </div>
+                  <div className="day-log-synced-item-meta">
+                    <span>
+                      {formatSyncedStravaDistance(activity.distanceM, viewerUnits)} · {formatSyncedStravaDuration(activity.durationSec)}
+                    </span>
+                    {activity.startTime && (
+                      <span>
+                        {new Date(activity.startTime).toLocaleTimeString('en-US', {
+                          hour: 'numeric',
+                          minute: '2-digit'
+                        })}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>
