@@ -549,6 +549,7 @@ export default function PlanDetailPage() {
   const [editingActivity, setEditingActivity] = useState<any>(null);
   const [addingToDayId, setAddingToDayId] = useState<string | null>(null);
   const [movingActivityId, setMovingActivityId] = useState<string | null>(null);
+  const [deletingWeekId, setDeletingWeekId] = useState<string | null>(null);
   const [draggingActivity, setDraggingActivity] = useState<{
     activityId: string;
     sourceDayId: string;
@@ -716,6 +717,46 @@ export default function PlanDetailPage() {
       setError(err?.message || 'Failed to load plan.');
     }
   }, [loadStravaMarkers, planId]);
+
+  const handleDeleteLastWeek = useCallback(async (week: any) => {
+    if (!planId || !week?.id) return;
+    const weekActivities = (week.days || []).flatMap((day: any) => day.activities || []);
+    if (weekActivities.length > 0) {
+      setError('Clear all activities from this week before deleting it.');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Delete week ${week.weekIndex}? This removes the week from the plan and updates total week count.`
+    );
+    if (!confirmed) return;
+
+    setDeletingWeekId(week.id);
+    setError(null);
+    try {
+      const res = await fetch(`/api/plans/${planId}/weeks/${week.id}`, {
+        method: 'DELETE'
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(body?.error || 'Failed to delete week');
+      }
+      emitPlanEditEvent('plan_last_week_deleted', {
+        weekId: week.id,
+        weekIndex: week.weekIndex
+      });
+      setSelectedDay(null);
+      await loadPlan();
+    } catch (err: any) {
+      emitPlanEditEvent('plan_last_week_delete_failed', {
+        weekId: week.id,
+        weekIndex: week.weekIndex
+      });
+      setError(err?.message || 'Failed to delete week');
+    } finally {
+      setDeletingWeekId(null);
+    }
+  }, [emitPlanEditEvent, loadPlan, planId]);
 
   const loadBannerLibrary = useCallback(async () => {
     if (!planId) return;
@@ -1462,6 +1503,7 @@ export default function PlanDetailPage() {
   const statusClass = plan.status === 'ACTIVE' ? 'active' : plan.status === 'DRAFT' ? 'draft' : 'archived';
   const weeks = [...(plan.weeks || [])].sort((a: any, b: any) => a.weekIndex - b.weekIndex);
   const allWeekIndexes = weeks.map((week: any) => week.weekIndex);
+  const lastWeekIndex = allWeekIndexes.length > 0 ? Math.max(...allWeekIndexes) : null;
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -2043,6 +2085,9 @@ export default function PlanDetailPage() {
               // Weekly run totals for the label
               const allWeekActivities = week.days?.flatMap((d: any) => d.activities || []) || [];
               const runActivities = allWeekActivities.filter((a: any) => String(a.type).toUpperCase() === 'RUN');
+              const isLastWeek = lastWeekIndex !== null && week.weekIndex === lastWeekIndex;
+              const weekHasActivities = allWeekActivities.length > 0;
+              const canDeleteLastWeek = isEditMode && isLastWeek && !weekHasActivities && deletingWeekId !== week.id;
               const weekTotalRunDist = runActivities.reduce((sum: number, a: any) => {
                 const src = resolveActivityDistanceSourceUnit(a, viewerUnits);
                 const d = toDisplayDistance(a.distance, src);
@@ -2076,6 +2121,26 @@ export default function PlanDetailPage() {
                           <span className="pcal-week-long-run" title="Longest run">
                             LR {formatDistanceNumber(longRunDist.value)}{viewerUnitLabel}
                           </span>
+                        )}
+                      </div>
+                    )}
+                    {isEditMode && isLastWeek && (
+                      <div className="pcal-week-edit-actions">
+                        <button
+                          type="button"
+                          className="pcal-week-delete-btn"
+                          onClick={() => void handleDeleteLastWeek(week)}
+                          disabled={!canDeleteLastWeek}
+                          title={
+                            weekHasActivities
+                              ? 'Clear all activities from this week before deleting it.'
+                              : undefined
+                          }
+                        >
+                          {deletingWeekId === week.id ? 'Deleting…' : 'Delete last week'}
+                        </button>
+                        {weekHasActivities && (
+                          <span className="pcal-week-delete-hint">Clear this week first</span>
                         )}
                       </div>
                     )}

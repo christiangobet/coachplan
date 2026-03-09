@@ -23,7 +23,7 @@ type AthleteNavItem =
 const NAV_ITEMS: Array<{ id: AthleteNavItem; href: string; label: string; planOnly?: boolean }> = [
   { id: "dashboard", href: "/dashboard", label: "Today" },
   { id: "calendar", href: "/calendar", label: "Training Calendar" },
-  { id: "plan-view", href: "/plans/:planId", label: "Plan View", planOnly: true },
+  { id: "plan-view", href: "/plans/:planId", label: "Plan by Week", planOnly: true },
   { id: "strava", href: "/strava", label: "Import Strava" },
   { id: "plans", href: "/plans", label: "Plans Library" },
   { id: "progress", href: "/progress", label: "Progress" },
