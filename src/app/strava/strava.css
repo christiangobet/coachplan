@@ -1,3 +1,7 @@
+.strava-page .dash-grid {
+  grid-template-columns: minmax(220px, 232px) minmax(0, 1fr);
+}
+
 .strava-mobile-sync {
   display: none;
 }

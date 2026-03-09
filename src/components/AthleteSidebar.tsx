@@ -27,7 +27,6 @@ const NAV_ITEMS: Array<{ id: AthleteNavItem; href: string; label: string; planOn
   { id: "strava", href: "/strava", label: "Import Strava" },
   { id: "plans", href: "/plans", label: "Plans Library" },
   { id: "progress", href: "/progress", label: "Progress" },
-  { id: "coach", href: "/coach", label: "Coach" },
   { id: "admin", href: "/admin", label: "Admin" },
   { id: "profile", href: "/profile", label: "Profile" },
   { id: "guide", href: "/guide", label: "Guide" }

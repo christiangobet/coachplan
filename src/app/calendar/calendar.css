@@ -158,12 +158,20 @@
   border-top: 1px solid var(--d-border-light);
 }
 
+.dash-plan-summary.has-banner .cal-plan-switch--nested {
+  border-top-color: rgba(248, 250, 252, 0.34);
+}
+
 .cal-plan-switch > span {
   font-size: 12px;
   color: var(--d-text-mid);
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+}
+
+.dash-plan-summary.has-banner .cal-plan-switch > span {
+  color: rgba(248, 250, 252, 0.9);
 }
 
 .cal-plan-pills {
@@ -183,6 +191,14 @@
   font-size: 12px;
   font-weight: 600;
   padding: 0 12px;
+}
+
+.dash-plan-summary.has-banner .cal-plan-pill {
+  background: rgba(255, 255, 255, 0.5);
+  border-color: rgba(255, 255, 255, 0.5);
+  color: #1f2937;
+  -webkit-backdrop-filter: blur(7px) saturate(120%);
+  backdrop-filter: blur(7px) saturate(120%);
 }
 
 .cal-plan-pill:hover {
