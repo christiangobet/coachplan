@@ -26,6 +26,8 @@ const eslintConfig = defineConfig([
     // Local AI tooling workspace (not part of app runtime code quality gate):
     "ai/**",
     ".claude/**",
+    // Git worktrees (separate isolated branches, not part of main codebase):
+    ".worktrees/**",
   ]),
 ]);
 
