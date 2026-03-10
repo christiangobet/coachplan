@@ -9,6 +9,12 @@ function toBoolean(value: string | null) {
   return normalized === '1' || normalized === 'true' || normalized === 'yes';
 }
 
+function toPositiveInt(value: string | null, fallback: number): number {
+  if (!value) return fallback;
+  const parsed = parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
 export async function GET(req: Request) {
   const authUser = await currentUser();
   if (!authUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -21,26 +27,14 @@ export async function GET(req: Request) {
   try {
     const url = new URL(req.url);
     const refresh = toBoolean(url.searchParams.get('refresh'));
+    const lookbackDays = toPositiveInt(url.searchParams.get('lookbackDays'), 84);
+
     const result = await getOrRefreshPerformanceSnapshotForUser({
       userId: dbUser.id,
-      forceRefresh: refresh
+      forceRefresh: refresh,
+      lookbackDays
     });
 
-    if (result.status === 'DISCONNECTED') {
-      return NextResponse.json({
-        status: 'disconnected',
-        snapshot: null,
-        reason: result.reason
-      });
-    }
-    if (result.status === 'INSUFFICIENT_DATA') {
-      return NextResponse.json({
-        status: 'insufficient_data',
-        snapshot: null,
-        reason: result.reason,
-        cached: result.cached
-      });
-    }
     if (result.status === 'NEEDS_SYNC') {
       return NextResponse.json({
         status: 'needs_sync',
@@ -49,17 +43,16 @@ export async function GET(req: Request) {
         requestedDays: result.requestedDays
       });
     }
+    if (result.status === 'DISCONNECTED') {
+      return NextResponse.json({ status: 'disconnected', snapshot: null, reason: result.reason });
+    }
+    if (result.status === 'INSUFFICIENT_DATA') {
+      return NextResponse.json({ status: 'insufficient_data', snapshot: null, reason: result.reason, cached: result.cached });
+    }
 
-    return NextResponse.json({
-      status: 'ready',
-      snapshot: result.snapshot,
-      cached: result.cached
-    });
+    return NextResponse.json({ status: 'ready', snapshot: result.snapshot, cached: result.cached });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to build performance snapshot';
-    return NextResponse.json(
-      { status: 'error', snapshot: null, reason: message },
-      { status: 500 }
-    );
+    return NextResponse.json({ status: 'error', snapshot: null, reason: message }, { status: 500 });
   }
 }
