@@ -28,6 +28,7 @@ import { normalizePaceForStorage } from '@/lib/unit-display';
 import { deriveSmartActivityTitle, isGenericActivityTitle } from '@/lib/activity-title';
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { pathToFileURL } from 'url';
+import { rateLimit } from '@/lib/rate-limit';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
@@ -2093,6 +2094,15 @@ function parseOptionalDateInput(input: unknown): { ok: true; value: Date | null 
 export async function POST(req: Request) {
   const user = await currentUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  // Rate limit: 10 plan uploads per hour per user
+  const rl = rateLimit(`plan-upload:${user.id}`, 10, 60 * 60 * 1000);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: `Too many uploads. Try again in ${Math.ceil(rl.retryAfterMs / 60000)} minutes.` },
+      { status: 429 }
+    );
+  }
   const dbUser = await prisma.user.findUnique({
     where: { id: user.id },
     select: { units: true }

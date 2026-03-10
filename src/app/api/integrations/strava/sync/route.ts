@@ -5,6 +5,8 @@ import { syncStravaActivitiesForUser } from '@/lib/integrations/strava';
 import { prisma } from '@/lib/prisma';
 import { getDayDateFromWeekStart, resolveWeekBounds } from '@/lib/plan-dates';
 import { pickSelectedPlan, SELECTED_PLAN_COOKIE } from '@/lib/plan-selection';
+import { logger } from '@/lib/logger';
+import { rateLimit } from '@/lib/rate-limit';
 
 function parseLookbackDays(raw: unknown) {
   if (raw === undefined || raw === null || raw === '') return 30;
@@ -66,6 +68,16 @@ async function getPlanStartDate(userId: string, preferredPlanId?: string | null)
 export async function POST(req: Request) {
   const access = await requireRoleApi('ATHLETE');
   if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
+
+  // Rate limit: 30 syncs per hour per user
+  const rl = rateLimit(`strava-sync:${access.context.userId}`, 30, 60 * 60 * 1000);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: `Too many sync requests. Try again in ${Math.ceil(rl.retryAfterMs / 60000)} minutes.` },
+      { status: 429 }
+    );
+  }
+
   const cookieStore = await cookies();
   const cookiePlanId = cookieStore.get(SELECTED_PLAN_COOKIE)?.value || null;
 
@@ -94,6 +106,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'lookbackDays must be a positive integer' }, { status: 400 });
   }
 
+  logger.info({ userId: access.context.userId, lookbackDays, forceLookback }, '[strava-sync] starting');
   try {
     const summary = await syncStravaActivitiesForUser({
       userId: access.context.userId,
@@ -101,9 +114,11 @@ export async function POST(req: Request) {
       forceLookback,
       preferredPlanId
     });
+    logger.info({ userId: access.context.userId, summary }, '[strava-sync] complete');
     return NextResponse.json({ summary });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to sync Strava activities';
+    logger.error({ userId: access.context.userId, err: message }, '[strava-sync] failed');
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
