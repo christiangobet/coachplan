@@ -1,11 +1,13 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { logger } from '@/lib/logger';
 
 type StravaWebhookPayload = {
   object_type?: string;
   aspect_type?: string;
   owner_id?: number;
   subscription_id?: number;
+  event_time?: number;
   updates?: Record<string, unknown>;
 };
 
@@ -45,6 +47,7 @@ export async function POST(req: Request) {
   try {
     payload = (await req.json()) as StravaWebhookPayload;
   } catch {
+    // Malformed JSON — acknowledge to prevent Strava retries
     return NextResponse.json({ received: true });
   }
 
@@ -57,7 +60,7 @@ export async function POST(req: Request) {
     ? parseInt(process.env.STRAVA_WEBHOOK_SUBSCRIPTION_ID, 10)
     : null;
   if (expectedSubscriptionId !== null && payload.subscription_id !== expectedSubscriptionId) {
-    console.warn('[strava-webhook] Rejected: unexpected subscription_id', payload.subscription_id);
+    logger.warn({ subscription_id: payload.subscription_id }, '[strava-webhook] rejected: unexpected subscription_id');
     return new Response('Forbidden', { status: 403 });
   }
 
@@ -66,22 +69,43 @@ export async function POST(req: Request) {
     return NextResponse.json({ received: true });
   }
 
+  // Log all incoming events with timestamps for audit trail (required for Strava extended API)
+  logger.info(
+    {
+      object_type: payload.object_type,
+      aspect_type: payload.aspect_type,
+      owner_id: payload.owner_id,
+      subscription_id: payload.subscription_id,
+      event_time: payload.event_time,
+      receivedAt: new Date().toISOString()
+    },
+    '[strava-webhook] event received'
+  );
+
   if (shouldDeactivateStravaAccount(payload)) {
-    console.info('[strava-webhook] Deactivating Strava account for owner_id:', payload.owner_id);
-    await prisma.externalAccount.updateMany({
-      where: {
-        provider: 'STRAVA',
-        providerUserId: String(payload.owner_id),
-        isActive: true
-      },
-      data: {
-        isActive: false,
-        accessToken: null,
-        refreshToken: null,
-        expiresAt: null,
-        syncCursor: null
-      }
-    });
+    try {
+      const result = await prisma.externalAccount.updateMany({
+        where: {
+          provider: 'STRAVA',
+          providerUserId: String(payload.owner_id),
+          isActive: true  // idempotent: no-op if already deactivated
+        },
+        data: {
+          isActive: false,
+          accessToken: null,
+          refreshToken: null,
+          expiresAt: null,
+          syncCursor: null
+        }
+      });
+      logger.info(
+        { owner_id: payload.owner_id, updatedCount: result.count },
+        '[strava-webhook] deactivated strava account'
+      );
+    } catch (err) {
+      // Log error but still return 200 — prevents Strava from unsubscribing the webhook on transient DB failures
+      logger.error({ owner_id: payload.owner_id, err }, '[strava-webhook] DB write failed for deactivation');
+    }
   }
 
   return NextResponse.json({ received: true });

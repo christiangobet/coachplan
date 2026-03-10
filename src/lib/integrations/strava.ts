@@ -7,6 +7,38 @@ import { isDayClosed, setDayStatus } from '@/lib/day-status';
 import { pickSelectedPlan } from '@/lib/plan-selection';
 import { resolveDistanceUnitFromActivity } from '@/lib/unit-display';
 import { evaluateStravaEquivalence } from '@/lib/integrations/strava-equivalence';
+import { logger } from '@/lib/logger';
+
+/**
+ * Fetch wrapper with exponential backoff that respects Strava's rate limits.
+ * Strava allows 200 requests per 15 minutes and 2000 per day.
+ * On 429 responses, backs off with exponential delay up to maxRetries.
+ */
+async function stravaFetchWithBackoff(
+  url: string,
+  options: RequestInit,
+  maxRetries = 3
+): Promise<Response> {
+  let lastError: Error | null = null;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const res = await fetch(url, { ...options, cache: 'no-store' });
+
+    if (res.status === 429) {
+      const retryAfter = parseInt(res.headers.get('x-ratelimit-reset') || res.headers.get('retry-after') || '60', 10);
+      const waitMs = Math.min(retryAfter * 1000, (2 ** attempt) * 1000 + Math.random() * 500);
+      logger.warn({ url, attempt, waitMs }, '[strava] rate limited — backing off');
+      if (attempt < maxRetries) {
+        await new Promise((resolve) => setTimeout(resolve, waitMs));
+        continue;
+      }
+      lastError = new Error(`Strava rate limit exceeded after ${maxRetries} retries`);
+      break;
+    }
+
+    return res;
+  }
+  throw lastError ?? new Error('Strava fetch failed');
+}
 
 const STRAVA_AUTH_URL = 'https://www.strava.com/oauth/authorize';
 const STRAVA_TOKEN_URL = 'https://www.strava.com/oauth/token';
@@ -273,10 +305,10 @@ async function fetchStravaActivities(
       });
       if (beforeEpoch) query.set('before', String(beforeEpoch));
 
-      const res = await fetch(`${STRAVA_ACTIVITIES_URL}?${query.toString()}`, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-        cache: 'no-store'
-      });
+      const res = await stravaFetchWithBackoff(
+        `${STRAVA_ACTIVITIES_URL}?${query.toString()}`,
+        { headers: { Authorization: `Bearer ${accessToken}` } }
+      );
 
       if (!res.ok) {
         const errorText = await res.text().catch(() => '');
@@ -348,10 +380,10 @@ async function fetchStravaActivitiesForDate(
       per_page: '100',
       page: String(page)
     });
-    const res = await fetch(`${STRAVA_ACTIVITIES_URL}?${query.toString()}`, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-      cache: 'no-store'
-    });
+    const res = await stravaFetchWithBackoff(
+      `${STRAVA_ACTIVITIES_URL}?${query.toString()}`,
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    );
     if (!res.ok) {
       const errorText = await res.text().catch(() => '');
       throw new Error(`Strava day activities request failed (${res.status}): ${errorText || 'Unknown error'}`);
@@ -1006,11 +1038,14 @@ export async function disconnectStravaForUser(userId: string) {
     }
   }
 
+  // Delete ExternalActivity records first (foreign key constraint on accountId),
+  // then the ExternalAccount. Required for Strava data retention compliance.
+  await prisma.externalActivity.deleteMany({
+    where: { userId, provider: 'STRAVA' }
+  });
+
   const deleted = await prisma.externalAccount.deleteMany({
-    where: {
-      userId,
-      provider: 'STRAVA'
-    }
+    where: { userId, provider: 'STRAVA' }
   });
 
   return {
