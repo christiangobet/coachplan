@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
+import { requireRoleApi } from '@/lib/role-guards';
 import { prisma } from '@/lib/prisma';
 
 // PATCH /api/admin/parser-prompts/[id] — update name/text, or activate
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { userId } = await auth();
-  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const access = await requireRoleApi('ADMIN');
+  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
 
   const { id } = await params;
   const body = await req.json();
@@ -28,8 +28,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
 // DELETE /api/admin/parser-prompts/[id] — reject if active or only remaining
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { userId } = await auth();
-  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const access = await requireRoleApi('ADMIN');
+  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
 
   const { id } = await params;
   const prompt = await prisma.parserPrompt.findUnique({ where: { id } });

@@ -2020,7 +2020,9 @@ async function parsePdfToJson(planId: string, pdfPath: string, name: string): Pr
     }
   } catch (error) {
     const err = error as Error & { stderr?: string; message: string };
-    pythonFailureReason = err.stderr?.trim() || err.message || 'Unknown parser failure';
+    // Log stderr server-side only; never expose to client
+    if (err.stderr?.trim()) console.error('[python-parser] stderr:', err.stderr.trim());
+    pythonFailureReason = 'Python parser failed';
   }
 
   let nodeParsed: ParsedPlanOutput | null = null;
@@ -2028,7 +2030,9 @@ async function parsePdfToJson(planId: string, pdfPath: string, name: string): Pr
   try {
     nodeParsed = await parsePdfToJsonNode(pdfPath, name);
   } catch (nodeError) {
-    nodeFailureReason = nodeError instanceof Error ? nodeError.message : 'Unknown node parser failure';
+    // Log details server-side only; never expose raw error messages to the client
+    console.error('[node-parser] failure:', nodeError instanceof Error ? nodeError.message : nodeError);
+    nodeFailureReason = 'Node parser failed';
   }
 
   const candidates: ParseCandidate[] = [];

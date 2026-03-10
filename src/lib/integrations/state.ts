@@ -8,9 +8,9 @@ type IntegrationStatePayload = {
 };
 
 function getStateSecret() {
-  const secret = process.env.INTEGRATIONS_STATE_SECRET || process.env.CLERK_SECRET_KEY;
+  const secret = process.env.INTEGRATIONS_STATE_SECRET;
   if (!secret) {
-    throw new Error('INTEGRATIONS_STATE_SECRET or CLERK_SECRET_KEY must be configured');
+    throw new Error('INTEGRATIONS_STATE_SECRET is required. Set it to a long random secret in .env.local');
   }
   return secret;
 }

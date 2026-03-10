@@ -12,6 +12,13 @@ export async function POST(req: Request) {
   const coachId = body?.coachId as string;
   if (!coachId) return NextResponse.json({ error: 'Coach required' }, { status: 400 });
 
+  // Validate coachId refers to a user with explicit COACH role in the DB.
+  // This prevents athletes from inferring COACH role onto arbitrary users.
+  const coach = await prisma.user.findUnique({ where: { id: coachId }, select: { role: true } });
+  if (!coach || coach.role !== 'COACH') {
+    return NextResponse.json({ error: 'Invalid coach' }, { status: 400 });
+  }
+
   await prisma.coachAthlete.upsert({
     where: { coachId_athleteId: { coachId, athleteId: access.context.userId } },
     update: {},

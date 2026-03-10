@@ -5,6 +5,7 @@ type StravaWebhookPayload = {
   object_type?: string;
   aspect_type?: string;
   owner_id?: number;
+  subscription_id?: number;
   updates?: Record<string, unknown>;
 };
 
@@ -51,11 +52,27 @@ export async function POST(req: Request) {
     return NextResponse.json({ received: true });
   }
 
-  if (shouldDeactivateStravaAccount(payload) && payload.owner_id) {
+  // Validate subscription_id if configured — rejects spoofed events from other apps
+  const expectedSubscriptionId = process.env.STRAVA_WEBHOOK_SUBSCRIPTION_ID
+    ? parseInt(process.env.STRAVA_WEBHOOK_SUBSCRIPTION_ID, 10)
+    : null;
+  if (expectedSubscriptionId !== null && payload.subscription_id !== expectedSubscriptionId) {
+    console.warn('[strava-webhook] Rejected: unexpected subscription_id', payload.subscription_id);
+    return new Response('Forbidden', { status: 403 });
+  }
+
+  // owner_id must be a positive integer
+  if (!payload.owner_id || typeof payload.owner_id !== 'number' || payload.owner_id <= 0) {
+    return NextResponse.json({ received: true });
+  }
+
+  if (shouldDeactivateStravaAccount(payload)) {
+    console.info('[strava-webhook] Deactivating Strava account for owner_id:', payload.owner_id);
     await prisma.externalAccount.updateMany({
       where: {
         provider: 'STRAVA',
-        providerUserId: String(payload.owner_id)
+        providerUserId: String(payload.owner_id),
+        isActive: true
       },
       data: {
         isActive: false,

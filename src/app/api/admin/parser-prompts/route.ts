@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
+import { requireRoleApi } from '@/lib/role-guards';
 import { prisma } from '@/lib/prisma';
 
 // GET /api/admin/parser-prompts — list all prompts
 export async function GET() {
-  const { userId } = await auth();
-  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const access = await requireRoleApi('ADMIN');
+  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
 
   const prompts = await prisma.parserPrompt.findMany({
     orderBy: { createdAt: 'asc' },
@@ -27,8 +27,8 @@ export async function GET() {
 
 // POST /api/admin/parser-prompts — create a new prompt
 export async function POST(req: Request) {
-  const { userId } = await auth();
-  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const access = await requireRoleApi('ADMIN');
+  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
 
   const body = await req.json();
   const { name, text, activate } = body as { name: string; text: string; activate?: boolean };
