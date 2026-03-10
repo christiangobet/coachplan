@@ -510,3 +510,45 @@
     align-items: flex-start;
   }
 }
+
+/* ── Snapshot window selector ── */
+.profile-snapshot-windows {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 0.75rem;
+}
+
+.profile-snapshot-window-btn {
+  padding: 0.25rem 0.6rem;
+  border-radius: 6px;
+  border: 1px solid var(--d-border);
+  background: none;
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--d-muted);
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+
+.profile-snapshot-window-btn:hover {
+  background: var(--d-border-light);
+  color: var(--d-text);
+}
+
+.profile-snapshot-window-btn.active {
+  background: var(--d-orange);
+  border-color: var(--d-orange);
+  color: #fff;
+}
+
+.profile-snapshot-window-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Needs-sync prompt */
+.profile-performance-needs-sync {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
