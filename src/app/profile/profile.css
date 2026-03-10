@@ -552,3 +552,59 @@
   flex-direction: column;
   gap: 0.4rem;
 }
+
+/* ── Evidence run circles ── */
+.profile-evidence-circles {
+  display: flex;
+  gap: 6px;
+  margin: 0.5rem 0 0.25rem;
+  flex-wrap: wrap;
+}
+
+.profile-evidence-dot {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.62rem;
+  font-weight: 700;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.profile-evidence-dot.level-race_like {
+  background: var(--d-orange);
+  color: #fff;
+}
+
+.profile-evidence-dot.level-sustained {
+  background: var(--d-green);
+  color: #fff;
+}
+
+.profile-evidence-dot.level-structured {
+  background: #3b82f6;
+  color: #fff;
+}
+
+.profile-evidence-dot.empty {
+  background: none;
+  border: 1.5px dashed var(--d-border);
+  color: var(--d-border);
+}
+
+.profile-evidence-hint {
+  font-size: 0.7rem;
+  color: var(--d-muted);
+  margin: 0 0 0.25rem;
+}
+
+.profile-evidence-legend {
+  font-size: 0.8rem;
+}
+
+.profile-evidence-legend.race { color: var(--d-orange); }
+.profile-evidence-legend.effort { color: var(--d-green); }
+.profile-evidence-legend.empty { color: var(--d-border); }

@@ -74,6 +74,7 @@ type ReadyPerformanceSnapshot = {
     workoutCount: number;
     newestEvidenceDate: string | null;
     oldestEvidenceDate: string | null;
+    evidenceRuns?: Array<{ dateISO: string; level: 'RACE_LIKE' | 'SUSTAINED' | 'STRUCTURED'; distanceKm: number }>;
   };
 };
 
@@ -134,6 +135,15 @@ function formatDate(value: string | null | undefined) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return null;
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function formatDayMonth(value: string | null | undefined) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  const dd = String(date.getDate()).padStart(2, '0');
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  return `${dd}/${mm}`;
 }
 
 function formatMonthYear(value: string | null | undefined) {
@@ -882,6 +892,28 @@ export default function ProfilePage() {
                   </div>
 
                   <p className="profile-performance-basis">{performanceSnapshot.evidenceSummary.basis}</p>
+
+                  {/* Evidence run circles — up to 6 slots */}
+                  <div className="profile-evidence-circles">
+                    {Array.from({ length: 6 }).map((_, i) => {
+                      const run = performanceSnapshot.evidenceSummary.evidenceRuns?.[i];
+                      return (
+                        <div
+                          key={i}
+                          className={`profile-evidence-dot${run ? ` level-${run.level.toLowerCase()}` : ' empty'}`}
+                          title={run ? `${run.distanceKm}km · ${formatDate(run.dateISO)}` : 'Unused slot'}
+                        >
+                          {run ? formatDayMonth(run.dateISO) : ''}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <p className="profile-evidence-hint">
+                    <span className="profile-evidence-legend race">●</span> race-like &nbsp;
+                    <span className="profile-evidence-legend effort">●</span> training effort &nbsp;
+                    <span className="profile-evidence-legend empty">○</span> unused slot
+                  </p>
+
                   <p className="profile-performance-meta">
                     Updated {formatDate(performanceSnapshot.computedAt) || 'just now'}
                     {performanceCached ? ' · cached' : ' · fresh'}

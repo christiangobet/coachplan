@@ -34,6 +34,7 @@ type ReadyPerformanceSnapshot = {
     workoutCount: number;
     newestEvidenceDate: string | null;
     oldestEvidenceDate: string | null;
+    evidenceRuns: Array<{ dateISO: string; level: 'RACE_LIKE' | 'SUSTAINED' | 'STRUCTURED'; distanceKm: number }>;
   };
 };
 
@@ -420,7 +421,12 @@ async function computeSnapshot(args: {
         sustainedCount,
         workoutCount,
         newestEvidenceDate: newestEvidence ? newestEvidence.toISOString() : null,
-        oldestEvidenceDate: oldestEvidence ? oldestEvidence.toISOString() : null
+        oldestEvidenceDate: oldestEvidence ? oldestEvidence.toISOString() : null,
+        evidenceRuns: evidence.map((item) => ({
+          dateISO: item.dateISO,
+          level: item.level,
+          distanceKm: Math.round(item.distanceKm * 10) / 10
+        }))
       }
     }
   };
