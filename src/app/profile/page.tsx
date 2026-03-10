@@ -78,10 +78,12 @@ type ReadyPerformanceSnapshot = {
 };
 
 type PerformanceSnapshotResponse = {
-  status: 'ready' | 'insufficient_data' | 'disconnected' | 'error';
+  status: 'ready' | 'insufficient_data' | 'disconnected' | 'error' | 'needs_sync';
   snapshot?: ReadyPerformanceSnapshot | null;
   reason?: string | null;
   cached?: boolean;
+  dataAvailableDays?: number;
+  requestedDays?: number;
 };
 
 // ── Constants ──────────────────────────────────────────────────────────────────
@@ -114,6 +116,16 @@ const PACE_ZONE_DEFS = [
   { key: 'threshold', label: 'Threshold' },
   { key: 'interval', label: 'Interval' }
 ] as const;
+
+const SNAPSHOT_WINDOWS = [
+  { label: '4w', days: 28 },
+  { label: '8w', days: 56 },
+  { label: '12w', days: 84 },
+  { label: '6m', days: 180 },
+  { label: '12m', days: 365 }
+] as const;
+
+const DEFAULT_SNAPSHOT_WINDOW = 84;
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -227,10 +239,13 @@ export default function ProfilePage() {
   // Stats (async)
   const [stats, setStats] = useState<ProfileStats | null>(null);
   const [performanceSnapshot, setPerformanceSnapshot] = useState<ReadyPerformanceSnapshot | null>(null);
-  const [performanceStatus, setPerformanceStatus] = useState<'idle' | 'loading' | 'ready' | 'insufficient_data' | 'disconnected' | 'error'>('idle');
+  const [performanceStatus, setPerformanceStatus] = useState<'idle' | 'loading' | 'ready' | 'insufficient_data' | 'disconnected' | 'error' | 'needs_sync'>('idle');
   const [performanceReason, setPerformanceReason] = useState<string | null>(null);
   const [performanceCached, setPerformanceCached] = useState(false);
   const [performanceRefreshing, setPerformanceRefreshing] = useState(false);
+  const [snapshotWindowDays, setSnapshotWindowDays] = useState(DEFAULT_SNAPSHOT_WINDOW);
+  const [snapshotNeedsSyncDays, setSnapshotNeedsSyncDays] = useState<{ available: number; requested: number } | null>(null);
+  const [snapshotFetching, setSnapshotFetching] = useState(false);
 
   // Save feedback
   const [nameSaved, setNameSaved] = useState(false);
@@ -250,12 +265,14 @@ export default function ProfilePage() {
     });
   }
 
-  const loadPerformanceSnapshot = useCallback(async (forceRefresh = false) => {
+  const loadPerformanceSnapshot = useCallback(async (forceRefresh = false, windowDays?: number) => {
     if (forceRefresh) setPerformanceRefreshing(true);
     if (!forceRefresh) setPerformanceStatus('loading');
     try {
-      const query = forceRefresh ? '?refresh=1' : '';
-      const res = await fetch(`/api/profile/performance-snapshot${query}`, { cache: 'no-store' });
+      const days = windowDays ?? snapshotWindowDays;
+      const params = new URLSearchParams({ lookbackDays: String(days) });
+      if (forceRefresh) params.set('refresh', '1');
+      const res = await fetch(`/api/profile/performance-snapshot?${params}`, { cache: 'no-store' });
       const data = (await res.json().catch(() => ({}))) as PerformanceSnapshotResponse;
 
       if (!res.ok || data.status === 'error') {
@@ -267,7 +284,26 @@ export default function ProfilePage() {
         return;
       }
 
+      if (data.status === 'disconnected') {
+        setPerformanceSnapshot(null);
+        setPerformanceCached(Boolean(data.cached));
+        setPerformanceStatus('disconnected');
+        setPerformanceReason(data.reason || null);
+        return;
+      }
+
+      if (data.status === 'needs_sync') {
+        setPerformanceStatus('needs_sync');
+        setPerformanceSnapshot(null);
+        setSnapshotNeedsSyncDays({
+          available: data.dataAvailableDays ?? 0,
+          requested: data.requestedDays ?? days
+        });
+        return;
+      }
+
       if (data.status === 'ready' && data.snapshot) {
+        setSnapshotNeedsSyncDays(null);
         setPerformanceStatus('ready');
         setPerformanceSnapshot(data.snapshot);
         setPerformanceReason(null);
@@ -288,9 +324,10 @@ export default function ProfilePage() {
         return;
       }
 
+      setSnapshotNeedsSyncDays(null);
       setPerformanceSnapshot(null);
       setPerformanceCached(Boolean(data.cached));
-      setPerformanceStatus(data.status === 'disconnected' ? 'disconnected' : 'insufficient_data');
+      setPerformanceStatus('insufficient_data');
       setPerformanceReason(data.reason || null);
       if (data.status === 'insufficient_data') {
         emitProfileEvent('profile_performance_snapshot_insufficient_data', {
@@ -307,7 +344,7 @@ export default function ProfilePage() {
     } finally {
       setPerformanceRefreshing(false);
     }
-  }, []);
+  }, [snapshotWindowDays]);
 
   useEffect(() => {
     // Load user + stats + integrations in parallel
@@ -531,6 +568,37 @@ export default function ProfilePage() {
     }
   }
 
+  async function handleWindowChange(days: number) {
+    setSnapshotWindowDays(days);
+    setSnapshotNeedsSyncDays(null);
+    await loadPerformanceSnapshot(false, days);
+  }
+
+  async function fetchAndRecompute() {
+    if (!snapshotNeedsSyncDays) return;
+    setSnapshotFetching(true);
+    setIntegrationStatus(`Syncing ${snapshotWindowDays} days of Strava history...`);
+    try {
+      const res = await fetch('/api/integrations/strava/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lookbackDays: snapshotWindowDays, forceLookback: true })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setIntegrationStatus(data?.error || 'Sync failed');
+        return;
+      }
+      setIntegrationStatus(null);
+      await loadIntegrationStatus();
+      await loadPerformanceSnapshot(true, snapshotWindowDays);
+    } catch {
+      setIntegrationStatus('Sync failed. Please try again.');
+    } finally {
+      setSnapshotFetching(false);
+    }
+  }
+
   // ── Render ────────────────────────────────────────────────────────────────────
 
   const initial = name.trim() ? name.trim()[0].toUpperCase() : '?';
@@ -707,11 +775,28 @@ export default function ProfilePage() {
                   type="button"
                   className="profile-performance-refresh-btn"
                   onClick={() => void loadPerformanceSnapshot(true)}
-                  disabled={!stravaAccount?.connected || performanceRefreshing}
+                  disabled={!stravaAccount?.connected || performanceRefreshing || snapshotFetching}
                 >
                   {performanceRefreshing ? 'Recalculating...' : 'Recalculate'}
                 </button>
               </div>
+
+              {/* Window selector */}
+              {stravaAccount?.connected && (
+                <div className="profile-snapshot-windows">
+                  {SNAPSHOT_WINDOWS.map(({ label, days }) => (
+                    <button
+                      key={days}
+                      type="button"
+                      className={`profile-snapshot-window-btn${snapshotWindowDays === days ? ' active' : ''}`}
+                      onClick={() => void handleWindowChange(days)}
+                      disabled={performanceRefreshing || snapshotFetching}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              )}
 
               {performanceStatus === 'loading' && (
                 <p className="profile-performance-note">Loading estimate...</p>
@@ -731,6 +816,25 @@ export default function ProfilePage() {
                   <p className="profile-performance-hint">
                     Add a recent sustained run or race-like effort to improve the estimate.
                   </p>
+                </div>
+              )}
+
+              {(performanceStatus as string) === 'needs_sync' && snapshotNeedsSyncDays && (
+                <div className="profile-performance-needs-sync">
+                  <p className="profile-performance-note">
+                    ⚠ Only {snapshotNeedsSyncDays.available} days of runs are synced.
+                  </p>
+                  <p className="profile-performance-hint">
+                    Fetch {Math.round(snapshotNeedsSyncDays.requested / 30)} months from Strava to use this window?
+                  </p>
+                  <button
+                    type="button"
+                    className="cta secondary"
+                    onClick={() => void fetchAndRecompute()}
+                    disabled={snapshotFetching}
+                  >
+                    {snapshotFetching ? 'Fetching...' : 'Fetch from Strava'}
+                  </button>
                 </div>
               )}
 
