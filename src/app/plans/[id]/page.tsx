@@ -1707,17 +1707,6 @@ export default function PlanDetailPage() {
                 )}
                 <button
                   type="button"
-                  className="dash-btn-ghost"
-                  onClick={() => {
-                    setBannerLibraryError(null);
-                    setBannerLibraryStatus(null);
-                    setBannerModalOpen(true);
-                  }}
-                >
-                  Banner Library
-                </button>
-                <button
-                  type="button"
                   className={`dash-btn-ghost pcal-edit-btn${isEditMode ? ' active' : ''}`}
                   onClick={() => {
                     setIsEditMode((prev) => {
@@ -1746,25 +1735,25 @@ export default function PlanDetailPage() {
                 Plan editing mode is on. You can edit planned activities only. Workout logging is disabled.
               </div>
             )}
-          </div>
 
-          {/* Stats bar */}
-          <div className="pcal-stats">
-            <div className="pcal-stat">
-              <span className="pcal-stat-value">{completionPct}%</span>
-              <span className="pcal-stat-label">Complete</span>
+            {/* Stats inside banner */}
+            <div className="pcal-stats">
+              <div className="pcal-stat">
+                <span className="pcal-stat-value">{completionPct}%</span>
+                <span className="pcal-stat-label">Complete</span>
+              </div>
+              <div className="pcal-stat">
+                <span className="pcal-stat-value">{completedActivities}/{totalActivities}</span>
+                <span className="pcal-stat-label">Workouts</span>
+              </div>
+              <div className="pcal-stat">
+                <span className="pcal-stat-value">{Math.floor(totalMinutes / 60)}h{totalMinutes % 60 > 0 ? ` ${totalMinutes % 60}m` : ''}</span>
+                <span className="pcal-stat-label">Total Time</span>
+              </div>
             </div>
-            <div className="pcal-stat">
-              <span className="pcal-stat-value">{completedActivities}/{totalActivities}</span>
-              <span className="pcal-stat-label">Workouts</span>
+            <div className="pcal-stat-bar">
+              <div className="pcal-stat-bar-fill" style={{ width: `${completionPct}%` }} />
             </div>
-            <div className="pcal-stat">
-              <span className="pcal-stat-value">{Math.floor(totalMinutes / 60)}h{totalMinutes % 60 > 0 ? ` ${totalMinutes % 60}m` : ''}</span>
-              <span className="pcal-stat-label">Total Time</span>
-            </div>
-          </div>
-          <div className="pcal-stat-bar">
-            <div className="pcal-stat-bar-fill" style={{ width: `${completionPct}%` }} />
           </div>
 
           {/* Inline accordion panels — Plan Guide + AI Trainer */}

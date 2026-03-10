@@ -278,9 +278,11 @@
   position: relative;
   overflow: hidden;
   margin: -14px 0 0;
-  padding: 14px 16px 10px;
-  display: grid;
+  padding: 14px 16px 12px;
+  display: flex;
+  flex-direction: column;
   gap: 6px;
+  min-height: 140px;
   background: linear-gradient(135deg, #f4f5f8 0%, #e9ecf2 100%);
 }
 
@@ -964,12 +966,10 @@
 }
 
 .plans-lib-progress {
-  margin-left: 16px;
-  margin-right: 16px;
+  margin-top: auto;
 }
 
 .plans-lib-card-footstats {
-  margin: 2px 16px 0;
   display: flex;
   gap: 10px;
   align-items: center;
@@ -977,6 +977,39 @@
   color: var(--d-text-mid);
   font-size: 12px;
   font-weight: 600;
+}
+
+/* Progress + stats inside banner — override colors for contrast */
+.plans-lib-card-banner .plans-lib-progress .plan-card-progress-track {
+  background: rgba(0, 0, 0, 0.15);
+}
+
+.plans-lib-card-banner.mode-active .plans-lib-progress .plan-card-progress-fill,
+.plans-lib-card-banner.mode-draft .plans-lib-progress .plan-card-progress-fill,
+.plans-lib-card-banner.mode-archived .plans-lib-progress .plan-card-progress-fill {
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.plans-lib-card-banner.mode-active .plans-lib-progress span,
+.plans-lib-card-banner.mode-active .plans-lib-card-footstats,
+.plans-lib-card-banner.mode-draft .plans-lib-progress span,
+.plans-lib-card-banner.mode-draft .plans-lib-card-footstats,
+.plans-lib-card-banner.mode-archived .plans-lib-progress span,
+.plans-lib-card-banner.mode-archived .plans-lib-card-footstats {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.plans-lib-card-banner.has-banner .plans-lib-progress .plan-card-progress-track {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.plans-lib-card-banner.has-banner .plans-lib-progress .plan-card-progress-fill {
+  background: #fff;
+}
+
+.plans-lib-card-banner.has-banner .plans-lib-progress span,
+.plans-lib-card-banner.has-banner .plans-lib-card-footstats {
+  color: rgba(255, 255, 255, 0.85);
 }
 
 .plans-lib-upload-btn {
@@ -1509,11 +1542,14 @@
 }
 
 .pcal-header.has-banner {
-  padding: 18px 20px 16px;
+  padding: 18px 20px 0;
   border-radius: 16px;
   border: 1px solid rgba(15, 36, 66, 0.2);
   overflow: hidden;
   background: linear-gradient(145deg, rgba(21, 36, 64, 0.9), rgba(252, 76, 2, 0.72));
+  display: flex;
+  flex-direction: column;
+  min-height: 220px;
 }
 
 .pcal-header.has-banner::before {
@@ -1543,6 +1579,35 @@
 .pcal-header.has-banner > * {
   position: relative;
   z-index: 1;
+}
+
+/* Stats block inside banner — push to bottom, strip white card bg */
+.pcal-header.has-banner .pcal-stats {
+  margin-top: auto;
+  background: none;
+  box-shadow: none;
+  border-radius: 0;
+  padding: 12px 0 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.pcal-header.has-banner .pcal-stat-value {
+  color: #fff;
+}
+
+.pcal-header.has-banner .pcal-stat-label {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.pcal-header.has-banner .pcal-stat-bar {
+  margin-bottom: 0;
+  border-radius: 0 0 15px 15px;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.pcal-header.has-banner .pcal-stat-bar-fill {
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 0 0 15px 15px;
 }
 
 .pcal-header-top {

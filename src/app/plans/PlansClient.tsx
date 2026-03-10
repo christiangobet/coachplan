@@ -802,6 +802,23 @@ export default function PlansClient() {
           )}
 
           {renderMetaRow(planMeta)}
+
+          <div className="plan-card-progress plans-lib-progress">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+              <span>{plan.progress ?? 0}% complete</span>
+              {(plan.stats?.totalActivities || keyPct !== null) && (
+                <div className="plans-lib-card-footstats" style={{ margin: 0 }}>
+                  <span>
+                    {plan.stats?.totalActivities ? `${plan.stats.completedActivities}/${plan.stats.totalActivities} sessions` : '—'}
+                  </span>
+                  {keyPct !== null && <span>Key {keyPct}%</span>}
+                </div>
+              )}
+            </div>
+            <div className="plan-card-progress-track">
+              <div className="plan-card-progress-fill" style={{ width: `${plan.progress ?? 0}%` }} />
+            </div>
+          </div>
         </div>
 
         {(plan.raceType || plan.difficulty) && (
@@ -825,22 +842,6 @@ export default function PlansClient() {
                 ))}
               </div>
             </div>
-          </div>
-        )}
-
-        <div className="plan-card-progress plans-lib-progress">
-          <span>{plan.progress ?? 0}% complete</span>
-          <div className="plan-card-progress-track">
-            <div className="plan-card-progress-fill" style={{ width: `${plan.progress ?? 0}%` }} />
-          </div>
-        </div>
-
-        {(plan.stats?.totalActivities || keyPct !== null) && (
-          <div className="plans-lib-card-footstats">
-            <span>
-              {plan.stats?.totalActivities ? `${plan.stats.completedActivities}/${plan.stats.totalActivities} sessions` : '—'}
-            </span>
-            {keyPct !== null && <span>Key {keyPct}%</span>}
           </div>
         )}
 
