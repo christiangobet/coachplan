@@ -384,9 +384,15 @@ async function computeSnapshot(args: {
   score -= clamp((meanElevation - 28) / 5, 0, 8);
   score = Math.round(clamp(score, 18, 97));
 
+  const windowLabel = selectedWindowDays <= 28 ? '4 weeks'
+    : selectedWindowDays <= 56 ? '8 weeks'
+    : selectedWindowDays <= 84 ? '12 weeks'
+    : selectedWindowDays <= 180 ? '6 months'
+    : '12 months';
+
   const basis = raceLikeCount > 0
-    ? `Based on ${raceLikeCount} race-like run${raceLikeCount > 1 ? 's' : ''} and ${Math.max(0, evidence.length - raceLikeCount)} recent effort${Math.max(0, evidence.length - raceLikeCount) === 1 ? '' : 's'}.`
-    : `Based on ${sustainedCount} sustained effort${sustainedCount === 1 ? '' : 's'}${workoutCount > 0 ? ` and ${workoutCount} structured workout${workoutCount === 1 ? '' : 's'}` : ''}.`;
+    ? `Based on ${raceLikeCount} race-like run${raceLikeCount > 1 ? 's' : ''} and ${Math.max(0, evidence.length - raceLikeCount)} recent effort${Math.max(0, evidence.length - raceLikeCount) === 1 ? '' : 's'} from your last ${windowLabel}.`
+    : `Based on ${sustainedCount} sustained effort${sustainedCount === 1 ? '' : 's'}${workoutCount > 0 ? ` and ${workoutCount} structured workout${workoutCount === 1 ? '' : 's'}` : ''} from your last ${windowLabel}.`;
 
   return {
     status: 'READY',
