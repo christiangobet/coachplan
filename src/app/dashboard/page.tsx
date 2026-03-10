@@ -95,31 +95,32 @@ export default async function DashboardPage({
   });
   const viewerUnits: DistanceUnit = syncedUser.units === "KM" ? "KM" : "MILES";
 
-  const totalPlanCount = await prisma.trainingPlan.count({
-    where: { athleteId: user.id, isTemplate: false }
-  });
-  const latestDraftPlan = await prisma.trainingPlan.findFirst({
-    where: { athleteId: user.id, isTemplate: false, status: "DRAFT" },
-    orderBy: { createdAt: "desc" },
-    select: {
-      id: true,
-      name: true
-    }
-  });
-
-  const plans = await prisma.trainingPlan.findMany({
-    where: { athleteId: user.id, isTemplate: false, status: "ACTIVE" },
-    orderBy: { createdAt: "desc" },
-    include: {
-      weeks: {
-        include: {
-          days: {
-            include: { activities: true }
+  const [totalPlanCount, latestDraftPlan, plans] = await Promise.all([
+    prisma.trainingPlan.count({
+      where: { athleteId: user.id, isTemplate: false }
+    }),
+    prisma.trainingPlan.findFirst({
+      where: { athleteId: user.id, isTemplate: false, status: "DRAFT" },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        name: true
+      }
+    }),
+    prisma.trainingPlan.findMany({
+      where: { athleteId: user.id, isTemplate: false, status: "ACTIVE" },
+      orderBy: { createdAt: "desc" },
+      include: {
+        weeks: {
+          include: {
+            days: {
+              include: { activities: true }
+            }
           }
         }
       }
-    }
-  });
+    })
+  ]);
 
   /* ── Empty / onboarding state ── */
   if (totalPlanCount === 0) {

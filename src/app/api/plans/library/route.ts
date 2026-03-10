@@ -30,23 +30,6 @@ function resolveActivityDateISO(startDate: Date | null, dayOfWeek: number | null
   return toLocalDateKey(next);
 }
 
-function pickNextActivity(candidates: NextActivityCandidate[]) {
-  if (!candidates.length) return null;
-  const todayKey = toLocalDateKey(new Date());
-  const sorted = [...candidates].sort((a, b) => {
-    const aDate = a.dateISO ?? '9999-99-99';
-    const bDate = b.dateISO ?? '9999-99-99';
-    if (aDate !== bDate) return aDate.localeCompare(bDate);
-    const aWeek = a.weekIndex ?? 999;
-    const bWeek = b.weekIndex ?? 999;
-    if (aWeek !== bWeek) return aWeek - bWeek;
-    const aDay = a.dayOfWeek ?? 999;
-    const bDay = b.dayOfWeek ?? 999;
-    return aDay - bDay;
-  });
-  const futureOrToday = sorted.find((activity) => activity.dateISO && activity.dateISO >= todayKey);
-  return futureOrToday || sorted[0];
-}
 
 export async function GET() {
   const user = await currentUser();
@@ -68,12 +51,25 @@ export async function GET() {
         createdAt: true,
         bannerImageId: true,
         bannerImage: {
-          select: {
-            focusY: true,
-          },
+          select: { focusY: true }
         },
         planGuide: true,
+        // Use aggregate counts instead of loading all activities
+        _count: {
+          select: {
+            activities: true,
+            // Filtered counts: completed and key activities
+          }
+        },
+        // Only fetch the first upcoming uncompleted activity (ordered by week + day)
         activities: {
+          where: { completed: false },
+          take: 1,
+          orderBy: [
+            { day: { week: { weekIndex: 'asc' } } },
+            { day: { dayOfWeek: 'asc' } },
+            { sessionOrder: 'asc' }
+          ],
           select: {
             id: true,
             title: true,
@@ -81,17 +77,11 @@ export async function GET() {
             distance: true,
             distanceUnit: true,
             duration: true,
-            completed: true,
-            mustDo: true,
-            priority: true,
             day: {
               select: {
                 dayOfWeek: true,
                 week: {
-                  select: {
-                    weekIndex: true,
-                    startDate: true
-                  }
+                  select: { weekIndex: true, startDate: true }
                 }
               }
             }
@@ -132,29 +122,67 @@ export async function GET() {
     })
   ]);
 
+  // Batch stats queries across all plans — avoids loading all activity rows
+  const planIds = plansRaw.map((p) => p.id);
+  const [completionGroups, keyGroups, keyCompletedGroups] = await Promise.all([
+    prisma.planActivity.groupBy({
+      by: ['planId', 'completed'],
+      where: { planId: { in: planIds } },
+      _count: { id: true }
+    }),
+    prisma.planActivity.groupBy({
+      by: ['planId'],
+      where: { planId: { in: planIds }, OR: [{ mustDo: true }, { priority: 'KEY' }] },
+      _count: { id: true }
+    }),
+    prisma.planActivity.groupBy({
+      by: ['planId'],
+      where: { planId: { in: planIds }, OR: [{ mustDo: true }, { priority: 'KEY' }], completed: true },
+      _count: { id: true }
+    })
+  ]);
+
+  const statsByPlanId = new Map<string, { total: number; completed: number; key: number; keyCompleted: number }>();
+  for (const group of completionGroups) {
+    const entry = statsByPlanId.get(group.planId) ?? { total: 0, completed: 0, key: 0, keyCompleted: 0 };
+    entry.total += group._count.id;
+    if (group.completed) entry.completed = group._count.id;
+    statsByPlanId.set(group.planId, entry);
+  }
+  for (const group of keyGroups) {
+    const entry = statsByPlanId.get(group.planId) ?? { total: 0, completed: 0, key: 0, keyCompleted: 0 };
+    entry.key = group._count.id;
+    statsByPlanId.set(group.planId, entry);
+  }
+  for (const group of keyCompletedGroups) {
+    const entry = statsByPlanId.get(group.planId) ?? { total: 0, completed: 0, key: 0, keyCompleted: 0 };
+    entry.keyCompleted = group._count.id;
+    statsByPlanId.set(group.planId, entry);
+  }
+
   const plans = plansRaw.map((plan) => {
-    const totalActivities = plan.activities.length;
-    const completedActivities = plan.activities.filter((activity) => activity.completed).length;
-    const keyActivities = plan.activities.filter((activity) => activity.mustDo || activity.priority === 'KEY').length;
-    const keyCompleted = plan.activities.filter(
-      (activity) => (activity.mustDo || activity.priority === 'KEY') && activity.completed
-    ).length;
+    const s = statsByPlanId.get(plan.id) ?? { total: 0, completed: 0, key: 0, keyCompleted: 0 };
+    const totalActivities = s.total;
+    const completedActivities = s.completed;
+    const keyActivities = s.key;
+    const keyCompleted = s.keyCompleted;
 
-    const nextCandidates: NextActivityCandidate[] = plan.activities
-      .filter((activity) => !activity.completed)
-      .map((activity) => ({
-        id: activity.id,
-        title: activity.title,
-        type: activity.type,
-        distance: activity.distance ?? null,
-        distanceUnit: activity.distanceUnit ?? null,
-        duration: activity.duration ?? null,
-        weekIndex: activity.day?.week?.weekIndex ?? null,
-        dayOfWeek: activity.day?.dayOfWeek ?? null,
-        dateISO: resolveActivityDateISO(activity.day?.week?.startDate ?? null, activity.day?.dayOfWeek ?? null)
-      }));
+    // next activity is pre-fetched with take:1, ordered by week+day
+    const nextRaw = plan.activities[0] ?? null;
+    const nextActivity: NextActivityCandidate | null = nextRaw
+      ? {
+          id: nextRaw.id,
+          title: nextRaw.title,
+          type: nextRaw.type,
+          distance: nextRaw.distance ?? null,
+          distanceUnit: nextRaw.distanceUnit ?? null,
+          duration: nextRaw.duration ?? null,
+          weekIndex: nextRaw.day?.week?.weekIndex ?? null,
+          dayOfWeek: nextRaw.day?.dayOfWeek ?? null,
+          dateISO: resolveActivityDateISO(nextRaw.day?.week?.startDate ?? null, nextRaw.day?.dayOfWeek ?? null)
+        }
+      : null;
 
-    const nextActivity = pickNextActivity(nextCandidates);
     const progress = totalActivities > 0 ? Math.round((completedActivities / totalActivities) * 100) : 0;
 
     return {

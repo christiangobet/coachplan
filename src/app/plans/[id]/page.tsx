@@ -687,7 +687,11 @@ export default function PlanDetailPage() {
   const loadPlan = useCallback(async () => {
     if (!planId) return;
     try {
-      const res = await fetch(`/api/plans/${planId}`);
+      // Fetch plan data and Strava markers in parallel — removes one full round-trip
+      const [res] = await Promise.all([
+        fetch(`/api/plans/${planId}`),
+        loadStravaMarkers(planId)
+      ]);
       const text = await res.text();
       let data: any = null;
       try {
@@ -702,7 +706,6 @@ export default function PlanDetailPage() {
       }
       setViewerUnits(data?.viewerUnits === 'KM' ? 'KM' : 'MILES');
       setPlan(data.plan);
-      await loadStravaMarkers(planId);
       setSelectedActivity((prev: any) => {
         if (!prev) return prev;
         const located = locateActivityInPlan(data.plan, prev.id);
