@@ -51,7 +51,8 @@ export type ProfilePerformanceSnapshot = ReadyPerformanceSnapshot | Insufficient
 export type PerformanceSnapshotResult =
   | { status: 'READY'; snapshot: ReadyPerformanceSnapshot; cached: boolean }
   | { status: 'INSUFFICIENT_DATA'; reason: string; cached: boolean }
-  | { status: 'DISCONNECTED'; reason: string };
+  | { status: 'DISCONNECTED'; reason: string }
+  | { status: 'NEEDS_SYNC'; dataAvailableDays: number; requestedDays: number };
 
 type CandidateEvidence = {
   id: string;
@@ -74,8 +75,6 @@ const TARGETS = {
 } as const;
 
 const RACE_DISTANCE_ANCHORS = [5, 10, 21.0975, 42.195];
-const MAX_WINDOW_DAYS = 180;
-const PRIMARY_WINDOW_DAYS = 84;
 const MIN_DISTANCE_KM = 3;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -95,11 +94,6 @@ function isRoadRunLike(sportType: string | null | undefined) {
   if (!normalized) return false;
   if (normalized.includes('TRAIL') || normalized.includes('HIKE') || normalized.includes('WALK')) return false;
   return normalized === 'RUN' || normalized === 'VIRTUALRUN' || normalized === 'TREADMILL' || normalized === 'TREADMILLRUN';
-}
-
-function isRecent(date: Date, days: number) {
-  const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
-  return date.getTime() >= cutoff;
 }
 
 function recencyWeight(date: Date) {
@@ -170,11 +164,12 @@ function parseCachedSnapshot(raw: unknown): ProfilePerformanceSnapshot | null {
 async function computeSnapshot(args: {
   userId: string;
   lastSyncAt: Date | null;
+  lookbackDays: number;
 }): Promise<
   | { status: 'READY'; snapshot: ReadyPerformanceSnapshot }
   | { status: 'INSUFFICIENT_DATA'; snapshot: InsufficientPerformanceSnapshot }
 > {
-  const since = new Date(Date.now() - MAX_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+  const since = new Date(Date.now() - args.lookbackDays * 24 * 60 * 60 * 1000);
   const activities = await prisma.externalActivity.findMany({
     where: {
       userId: args.userId,
@@ -239,9 +234,8 @@ async function computeSnapshot(args: {
     };
   }
 
-  const primaryWindow = runLike.filter((activity) => isRecent(activity.startTime, PRIMARY_WINDOW_DAYS));
-  const selectedWindowDays = primaryWindow.length >= 2 ? PRIMARY_WINDOW_DAYS : MAX_WINDOW_DAYS;
-  const sourceRuns = selectedWindowDays === PRIMARY_WINDOW_DAYS ? primaryWindow : runLike;
+  const sourceRuns = runLike;
+  const selectedWindowDays = args.lookbackDays;
 
   const raceLike = sourceRuns
     .filter((activity) => isRaceLikeName(activity.name) || isNearRaceDistance(activity.distanceKm))
@@ -429,6 +423,7 @@ async function computeSnapshot(args: {
 export async function getOrRefreshPerformanceSnapshotForUser(args: {
   userId: string;
   forceRefresh?: boolean;
+  lookbackDays?: number;
 }): Promise<PerformanceSnapshotResult> {
   const [user, account] = await Promise.all([
     prisma.user.findUnique({
@@ -455,6 +450,26 @@ export async function getOrRefreshPerformanceSnapshotForUser(args: {
   if (!user) return { status: 'DISCONNECTED', reason: 'User not found' };
   if (!account?.isActive) return { status: 'DISCONNECTED', reason: 'Strava is not connected.' };
 
+  const requestedDays = args.lookbackDays ?? 84;
+
+  // Check if DB has enough data for the requested window
+  const oldestActivity = await prisma.externalActivity.findFirst({
+    where: { userId: args.userId, provider: IntegrationProvider.STRAVA },
+    orderBy: { startTime: 'asc' },
+    select: { startTime: true }
+  });
+
+  if (oldestActivity) {
+    const dataAvailableDays = (Date.now() - oldestActivity.startTime.getTime()) / (1000 * 60 * 60 * 24);
+    if (dataAvailableDays < requestedDays * 0.8) {
+      return {
+        status: 'NEEDS_SYNC',
+        dataAvailableDays: Math.floor(dataAvailableDays),
+        requestedDays
+      };
+    }
+  }
+
   const cached = parseCachedSnapshot(user.performanceSnapshot);
   const currentSyncIso = account.lastSyncAt ? account.lastSyncAt.toISOString() : null;
   const cachedSyncIso = cached?.basedOnLastSyncAt || null;
@@ -467,7 +482,8 @@ export async function getOrRefreshPerformanceSnapshotForUser(args: {
 
   const computed = await computeSnapshot({
     userId: args.userId,
-    lastSyncAt: account.lastSyncAt
+    lastSyncAt: account.lastSyncAt,
+    lookbackDays: requestedDays
   });
 
   await prisma.user.update({

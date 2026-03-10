@@ -41,6 +41,14 @@ export async function GET(req: Request) {
         cached: result.cached
       });
     }
+    if (result.status === 'NEEDS_SYNC') {
+      return NextResponse.json({
+        status: 'needs_sync',
+        snapshot: null,
+        dataAvailableDays: result.dataAvailableDays,
+        requestedDays: result.requestedDays
+      });
+    }
 
     return NextResponse.json({
       status: 'ready',
