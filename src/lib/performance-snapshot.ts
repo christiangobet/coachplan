@@ -470,7 +470,8 @@ export async function getOrRefreshPerformanceSnapshotForUser(args: {
   const cached = parseCachedSnapshot(user.performanceSnapshot);
   const currentSyncIso = account.lastSyncAt ? account.lastSyncAt.toISOString() : null;
   const cachedSyncIso = cached?.basedOnLastSyncAt || null;
-  if (!args.forceRefresh && cached && cachedSyncIso === currentSyncIso) {
+  const cachedWindowDays = cached?.status === 'READY' ? (cached as ReadyPerformanceSnapshot).windowDays : null;
+  if (!args.forceRefresh && cached && cachedSyncIso === currentSyncIso && cachedWindowDays === requestedDays) {
     if (cached.status === 'READY') {
       return { status: 'READY', snapshot: cached, cached: true };
     }

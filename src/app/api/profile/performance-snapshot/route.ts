@@ -27,7 +27,7 @@ export async function GET(req: Request) {
   try {
     const url = new URL(req.url);
     const refresh = toBoolean(url.searchParams.get('refresh'));
-    const lookbackDays = toPositiveInt(url.searchParams.get('lookbackDays'), 84);
+    const lookbackDays = Math.min(toPositiveInt(url.searchParams.get('lookbackDays'), 84), 3650);
 
     const result = await getOrRefreshPerformanceSnapshotForUser({
       userId: dbUser.id,
