@@ -1,0 +1,356 @@
+/* src/app/profile/profile.css */
+
+/* ── Two-column layout ── */
+.profile-grid {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 1.25rem;
+  align-items: start;
+}
+
+@media (max-width: 768px) {
+  .profile-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Avatar card ── */
+.profile-avatar-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.profile-avatar-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.profile-avatar-circle {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--d-orange);
+  color: #fff;
+  font-size: 1.5rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.profile-avatar-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.profile-avatar-name {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--d-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.profile-avatar-email {
+  font-size: 0.8rem;
+  color: var(--d-muted);
+  text-decoration: none;
+}
+
+.profile-avatar-email:hover {
+  color: var(--d-orange);
+}
+
+.profile-avatar-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.78rem;
+  color: var(--d-muted);
+}
+
+.profile-role-badge {
+  display: inline-block;
+  padding: 0.15rem 0.55rem;
+  border-radius: 99px;
+  background: rgba(252, 76, 2, 0.1);
+  color: var(--d-orange);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+/* ── Race goal card ── */
+.profile-race-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.profile-race-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.profile-race-header h3 {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--d-text);
+  margin: 0;
+}
+
+.profile-race-edit-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--d-muted);
+  font-size: 0.78rem;
+  padding: 0;
+  text-decoration: underline;
+}
+
+.profile-race-edit-btn:hover {
+  color: var(--d-orange);
+}
+
+.profile-race-countdown {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.65rem;
+  border-radius: 99px;
+  background: rgba(252, 76, 2, 0.1);
+  color: var(--d-orange);
+  font-size: 0.78rem;
+  font-weight: 700;
+  width: fit-content;
+}
+
+.profile-race-countdown.urgent {
+  background: rgba(252, 76, 2, 0.18);
+}
+
+.profile-race-countdown.past {
+  background: var(--d-border-light);
+  color: var(--d-muted);
+}
+
+.profile-race-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.profile-race-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.82rem;
+}
+
+.profile-race-row span:first-child {
+  color: var(--d-muted);
+}
+
+.profile-race-row span:last-child {
+  font-weight: 600;
+  color: var(--d-text);
+}
+
+.profile-race-empty {
+  font-size: 0.82rem;
+  color: var(--d-muted);
+}
+
+.profile-race-empty a {
+  color: var(--d-orange);
+  text-decoration: none;
+}
+
+.profile-race-empty a:hover {
+  text-decoration: underline;
+}
+
+/* ── Stats card ── */
+.profile-stats-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.profile-stat-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid var(--d-border-light);
+  font-size: 0.82rem;
+}
+
+.profile-stat-row:last-child {
+  border-bottom: none;
+}
+
+.profile-stat-label {
+  color: var(--d-muted);
+}
+
+.profile-stat-value {
+  font-weight: 700;
+  color: var(--d-text);
+}
+
+.profile-stat-skeleton {
+  height: 0.75rem;
+  border-radius: 4px;
+  background: var(--d-border-light);
+  width: 3rem;
+  animation: shimmer 1.2s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+/* ── Strava card ── */
+.profile-strava-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.profile-strava-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.profile-strava-header h3 {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--d-text);
+  margin: 0;
+}
+
+.profile-strava-badge {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.15rem 0.5rem;
+  border-radius: 99px;
+}
+
+.profile-strava-badge.connected {
+  background: rgba(15, 138, 71, 0.1);
+  color: var(--d-green);
+}
+
+.profile-strava-badge.disconnected {
+  background: var(--d-border-light);
+  color: var(--d-muted);
+}
+
+.profile-strava-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.78rem;
+  color: var(--d-muted);
+}
+
+.profile-strava-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.profile-integration-status {
+  font-size: 0.78rem;
+  color: var(--d-muted);
+  margin-top: 0.25rem;
+}
+
+/* ── Right column ── */
+.profile-settings-col {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.profile-section-title {
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--d-muted);
+  margin: 0 0 0.75rem;
+}
+
+/* Personal section */
+.profile-personal-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+@media (max-width: 480px) {
+  .profile-personal-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.profile-units-toggle {
+  display: flex;
+  border: 1px solid var(--d-border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.profile-units-toggle button {
+  flex: 1;
+  padding: 0.45rem;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--d-muted);
+  transition: background 0.15s, color 0.15s;
+}
+
+.profile-units-toggle button.active {
+  background: var(--d-orange);
+  color: #fff;
+}
+
+/* Inline save feedback */
+.profile-save-tick {
+  font-size: 0.75rem;
+  color: var(--d-green);
+  margin-left: 0.5rem;
+}
+
+/* Page header */
+.profile-page-header {
+  margin-bottom: 0.25rem;
+}
+
+.profile-page-header h1 {
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: var(--d-text);
+  margin: 0 0 0.25rem;
+}
+
+.profile-page-header p {
+  font-size: 0.82rem;
+  color: var(--d-muted);
+  margin: 0;
+}
