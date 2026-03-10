@@ -12,7 +12,7 @@ export default function PrivacyPage() {
       <div className={styles.header}>
         <span className={styles.eyebrow}>Legal</span>
         <h1>Privacy Policy</h1>
-        <p className={styles.meta}>Last updated: February 28, 2026</p>
+        <p className={styles.meta}>Last updated: March 10, 2026</p>
       </div>
 
       <div className={styles.body}>
@@ -89,8 +89,18 @@ export default function PrivacyPage() {
         </p>
         <p>
           You can disconnect Strava at any time from the Import Strava page. Disconnecting
-          removes your Strava access tokens from our database. Previously imported activity
-          data in your training log is retained unless you request full deletion.
+          immediately deletes your Strava OAuth tokens and all Strava activity records from
+          our database. Your manually logged training data (distances, notes, completion
+          status you entered yourself) is not affected by disconnecting Strava.
+        </p>
+        <p>
+          We also listen to Strava&apos;s deauthorisation webhook. If you revoke access from the
+          Strava side, we automatically invalidate your tokens within minutes.
+        </p>
+        <p>
+          To permanently delete all your data including your training log, email{" "}
+          <a href="mailto:privacy@mytrainingplan.io">privacy@mytrainingplan.io</a> or use
+          the account deletion option in your profile settings.
         </p>
 
         <h2>5. Data Sharing</h2>
