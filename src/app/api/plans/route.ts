@@ -14,8 +14,8 @@ import { FLAGS } from '@/lib/feature-flags';
 import { populatePlanFromV4 } from '@/lib/parsing/v4-to-plan';
 import { canonicalizeTableLabel, extractWeekNumber, normalizePlanText } from '@/lib/plan-parser-i18n.mjs';
 import { normalizeWhitespace, titleCase, planNameFromFilename, decodeActivityText, normalizeMatchText, chooseActivityRawText, expandAlternatives, splitCombinedActivities } from '@/lib/parsing/upload-normalizers';
-import { RUN_SUBTYPES, SUBTYPE_TITLES, normalizeSubtypeToken, inferSubtype, mapActivityType, mapAiTypeToActivityType, mapAiSessionTypeToSubtype, mapAiPrimarySportToType } from '@/lib/parsing/activity-type-mapper';
-import { DistanceParseResult, UnitPreference, parseNumber, asUpperDistanceUnit, hasMetersNotation, inferDistanceUnitFromText, normalizeDistanceValue, convertDistanceValue, convertDistanceToStorageUnit, resolveDistanceFromValueUnit, resolveDistanceFromSegmentMetrics, inferDominantDistanceUnit, resolveImpliedRunDistanceFromText, resolveDistanceFromText, parseRange, extractDistanceRange, parseStructure, resolveDistanceFromStructure, resolveDurationFromText } from '@/lib/parsing/distance-parser';
+import { SUBTYPE_TITLES, normalizeSubtypeToken, inferSubtype, mapActivityType, mapAiTypeToActivityType, mapAiSessionTypeToSubtype, mapAiPrimarySportToType } from '@/lib/parsing/activity-type-mapper';
+import { type UnitPreference, convertDistanceToStorageUnit, resolveDistanceFromValueUnit, resolveDistanceFromSegmentMetrics, inferDominantDistanceUnit, resolveDistanceFromText, parseStructure, resolveDistanceFromStructure, resolveDurationFromText } from '@/lib/parsing/distance-parser';
 import { hasConfiguredAiProvider } from '@/lib/openai';
 import { buildProgramDocumentProfile, type ProgramDocumentProfile } from '@/lib/plan-document-profile';
 import {

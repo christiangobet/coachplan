@@ -223,8 +223,7 @@ export function extractDistanceRange(text: string, patterns: RegExp[]) {
 
 export function parseStructure(text: string) {
   const normalizedText = normalizePlanText(text);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const structure: any = {};
+  const structure: Record<string, unknown> = {};
   const warmup = extractDistanceRange(normalizedText, [
     /(\d+(?:\.\d+)?(?:\s*-\s*\d+(?:\.\d+)?)?)\s*(?:mile|miles|mi|km|kilometer|kilometre|meter|meters|metre|metres|m)\s*(?:WU|warm[\s-]?up)\b/i,
     /(?:WU|warm[\s-]?up)\s*(\d+(?:\.\d+)?(?:\s*-\s*\d+(?:\.\d+)?)?)\s*(?:mile|miles|mi|km|kilometer|kilometre|meter|meters|metre|metres|m)\b/i
