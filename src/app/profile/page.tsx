@@ -819,7 +819,7 @@ export default function ProfilePage() {
                 </div>
               )}
 
-              {(performanceStatus as string) === 'needs_sync' && snapshotNeedsSyncDays && (
+              {performanceStatus === 'needs_sync' && snapshotNeedsSyncDays && (
                 <div className="profile-performance-needs-sync">
                   <p className="profile-performance-note">
                     ⚠ Only {snapshotNeedsSyncDays.available} days of runs are synced.
