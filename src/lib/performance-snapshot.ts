@@ -459,15 +459,12 @@ export async function getOrRefreshPerformanceSnapshotForUser(args: {
     select: { startTime: true }
   });
 
-  if (oldestActivity) {
-    const dataAvailableDays = (Date.now() - oldestActivity.startTime.getTime()) / (1000 * 60 * 60 * 24);
-    if (dataAvailableDays < requestedDays * 0.8) {
-      return {
-        status: 'NEEDS_SYNC',
-        dataAvailableDays: Math.floor(dataAvailableDays),
-        requestedDays
-      };
-    }
+  if (!oldestActivity) {
+    return { status: 'NEEDS_SYNC', dataAvailableDays: 0, requestedDays };
+  }
+  const dataAvailableDays = (Date.now() - oldestActivity.startTime.getTime()) / (1000 * 60 * 60 * 24);
+  if (dataAvailableDays < requestedDays * 0.8) {
+    return { status: 'NEEDS_SYNC', dataAvailableDays: Math.floor(dataAvailableDays), requestedDays };
   }
 
   const cached = parseCachedSnapshot(user.performanceSnapshot);
