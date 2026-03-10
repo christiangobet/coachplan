@@ -777,6 +777,47 @@ export default function ProfilePage() {
               )}
             </div>
 
+          </div>
+
+          {/* ── RIGHT COLUMN ── */}
+          <div className="profile-settings-col">
+
+            {/* Personal */}
+            <div className="dash-card">
+              <p className="profile-section-title">Personal</p>
+              <div className="profile-personal-grid">
+                <label>
+                  <span style={{ fontSize: '0.78rem', color: 'var(--d-muted)', display: 'block', marginBottom: '0.3rem' }}>Name</span>
+                  <input
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    onBlur={saveNameOnBlur}
+                    style={{ width: '100%' }}
+                  />
+                  {nameSaved && <span className="profile-save-tick">✓ Saved</span>}
+                </label>
+                <label>
+                  <span style={{ fontSize: '0.78rem', color: 'var(--d-muted)', display: 'block', marginBottom: '0.3rem' }}>Units</span>
+                  <div className="profile-units-toggle">
+                    <button
+                      type="button"
+                      className={units === 'MILES' ? 'active' : ''}
+                      onClick={() => saveUnits('MILES')}
+                    >
+                      Miles
+                    </button>
+                    <button
+                      type="button"
+                      className={units === 'KM' ? 'active' : ''}
+                      onClick={() => saveUnits('KM')}
+                    >
+                      KM
+                    </button>
+                  </div>
+                </label>
+              </div>
+            </div>
+
             {/* Performance snapshot card */}
             <div className="dash-card profile-performance-card">
               <div className="profile-performance-header">
@@ -920,47 +961,6 @@ export default function ProfilePage() {
                   </p>
                 </>
               )}
-            </div>
-
-          </div>
-
-          {/* ── RIGHT COLUMN ── */}
-          <div className="profile-settings-col">
-
-            {/* Personal */}
-            <div className="dash-card">
-              <p className="profile-section-title">Personal</p>
-              <div className="profile-personal-grid">
-                <label>
-                  <span style={{ fontSize: '0.78rem', color: 'var(--d-muted)', display: 'block', marginBottom: '0.3rem' }}>Name</span>
-                  <input
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    onBlur={saveNameOnBlur}
-                    style={{ width: '100%' }}
-                  />
-                  {nameSaved && <span className="profile-save-tick">✓ Saved</span>}
-                </label>
-                <label>
-                  <span style={{ fontSize: '0.78rem', color: 'var(--d-muted)', display: 'block', marginBottom: '0.3rem' }}>Units</span>
-                  <div className="profile-units-toggle">
-                    <button
-                      type="button"
-                      className={units === 'MILES' ? 'active' : ''}
-                      onClick={() => saveUnits('MILES')}
-                    >
-                      Miles
-                    </button>
-                    <button
-                      type="button"
-                      className={units === 'KM' ? 'active' : ''}
-                      onClick={() => saveUnits('KM')}
-                    >
-                      KM
-                    </button>
-                  </div>
-                </label>
-              </div>
             </div>
 
             {/* Pace zones */}
