@@ -76,17 +76,6 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
             }
           }
         }
-      },
-      days: {
-        orderBy: { dayOfWeek: 'asc' },
-        include: {
-          activities: {
-            orderBy: ACTIVITY_ORDER_BY
-          }
-        }
-      },
-      activities: {
-        orderBy: [{ dayId: 'asc' as const }, ...ACTIVITY_ORDER_BY]
       }
     }
   });

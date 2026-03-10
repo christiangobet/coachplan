@@ -106,8 +106,6 @@ type ReviewPlan = {
   parseProfile?: unknown;
   planGuide?: string | null;
   weeks: ReviewWeek[];
-  days: ReviewDay[];
-  activities: ReviewActivity[];
 };
 
 type ReviewProgramProfile = {
@@ -406,16 +404,7 @@ function applyActivityUpdateToPlan(
           activity.id === activityId ? updater(activity) : activity
         )
       }))
-    })),
-    days: plan.days.map((day) => ({
-      ...day,
-      activities: day.activities.map((activity) =>
-        activity.id === activityId ? updater(activity) : activity
-      )
-    })),
-    activities: plan.activities.map((activity) =>
-      activity.id === activityId ? updater(activity) : activity
-    )
+    }))
   };
 }
 
@@ -429,8 +418,7 @@ function applyDayUpdateToPlan(
     weeks: plan.weeks.map((week) => ({
       ...week,
       days: week.days.map((day) => (day.id === dayId ? updater(day) : day))
-    })),
-    days: plan.days.map((day) => (day.id === dayId ? updater(day) : day))
+    }))
   };
 }
 
@@ -448,13 +436,7 @@ function appendActivityToDayPlan(
           ? { ...day, activities: [...(day.activities || []), activity] }
           : day
       ))
-    })),
-    days: plan.days.map((day) => (
-      day.id === dayId
-        ? { ...day, activities: [...(day.activities || []), activity] }
-        : day
-    )),
-    activities: [...plan.activities, activity]
+    }))
   };
 }
 
@@ -470,12 +452,7 @@ function removeActivityFromPlan(
         ...day,
         activities: day.activities.filter((activity) => activity.id !== activityId)
       }))
-    })),
-    days: plan.days.map((day) => ({
-      ...day,
-      activities: day.activities.filter((activity) => activity.id !== activityId)
-    })),
-    activities: plan.activities.filter((activity) => activity.id !== activityId)
+    }))
   };
 }
 
@@ -877,14 +854,16 @@ export default function PlanReviewPage() {
   }, [plan]);
 
   const unassigned = useMemo(() => {
-    if (!plan?.days) return [];
-    return plan.days.filter((day) => !day.weekId);
-  }, [plan]);
+    // weekId is non-nullable in the schema; all days are week-assigned.
+    // Kept as empty array for UI safety.
+    return [] as ReviewDay[];
+  }, []);
 
   const summary = useMemo(() => {
     const totalWeeks = plan?.weeks?.length || 0;
-    const totalActivities = plan?.activities?.length || 0;
-    const runActivities = (plan?.activities || []).filter((activity) => activity.type === 'RUN').length;
+    const allActivities = plan?.weeks?.flatMap((w) => w.days.flatMap((d) => d.activities)) ?? [];
+    const totalActivities = allActivities.length;
+    const runActivities = allActivities.filter((a) => a.type === 'RUN').length;
     const unassignedCount = unassigned?.length || 0;
     return { totalWeeks, totalActivities, runActivities, unassignedCount };
   }, [plan, unassigned]);
