@@ -7,6 +7,7 @@ import { isDayClosed, setDayStatus } from '@/lib/day-status';
 import { pickSelectedPlan } from '@/lib/plan-selection';
 import { resolveDistanceUnitFromActivity } from '@/lib/unit-display';
 import { evaluateStravaEquivalence } from '@/lib/integrations/strava-equivalence';
+import { refreshPerformanceSnapshotForUser } from '@/lib/performance-snapshot';
 import { logger } from '@/lib/logger';
 
 /**
@@ -1342,6 +1343,15 @@ export async function syncStravaActivitiesForUser(args: {
       isActive: true
     }
   });
+
+  try {
+    await refreshPerformanceSnapshotForUser(args.userId);
+  } catch (error: unknown) {
+    logger.warn(
+      { userId: args.userId, err: error instanceof Error ? error.message : String(error) },
+      '[strava-sync] performance snapshot refresh failed'
+    );
+  }
 
   return {
     imported,

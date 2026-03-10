@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import StravaConnectButton from '@/components/StravaConnectButton';
 import '../dashboard/dashboard.css';
@@ -40,6 +40,48 @@ type ProfileStats = {
   totalPlans: number;
   completedSessions: number;
   activeWeeks: number;
+};
+
+type PerformanceConfidenceLabel = 'HIGH' | 'MEDIUM' | 'LOW';
+
+type PerformanceSnapshotEstimate = {
+  distanceKm: number;
+  timeSec: number;
+};
+
+type ReadyPerformanceSnapshot = {
+  version: 1;
+  status: 'READY';
+  source: 'STRAVA';
+  computedAt: string;
+  basedOnLastSyncAt: string | null;
+  windowDays: number;
+  confidence: {
+    score: number;
+    label: PerformanceConfidenceLabel;
+  };
+  estimates: {
+    fiveK: PerformanceSnapshotEstimate;
+    tenK: PerformanceSnapshotEstimate;
+    halfMarathon: PerformanceSnapshotEstimate;
+    marathon: PerformanceSnapshotEstimate;
+  };
+  evidenceSummary: {
+    basis: string;
+    evidenceCount: number;
+    raceLikeCount: number;
+    sustainedCount: number;
+    workoutCount: number;
+    newestEvidenceDate: string | null;
+    oldestEvidenceDate: string | null;
+  };
+};
+
+type PerformanceSnapshotResponse = {
+  status: 'ready' | 'insufficient_data' | 'disconnected' | 'error';
+  snapshot?: ReadyPerformanceSnapshot | null;
+  reason?: string | null;
+  cached?: boolean;
 };
 
 // ── Constants ──────────────────────────────────────────────────────────────────
@@ -135,6 +177,19 @@ function getCountdownLabel(dateStr: string): { label: string; variant: 'normal' 
   return { label: `${days} days`, variant: 'normal' };
 }
 
+function emitProfileEvent(event: string, detail: Record<string, unknown> = {}) {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(
+    new CustomEvent('coachplan:analytics', {
+      detail: {
+        event,
+        context: 'profile',
+        ...detail
+      }
+    })
+  );
+}
+
 // ── Component ──────────────────────────────────────────────────────────────────
 
 export default function ProfilePage() {
@@ -171,6 +226,11 @@ export default function ProfilePage() {
 
   // Stats (async)
   const [stats, setStats] = useState<ProfileStats | null>(null);
+  const [performanceSnapshot, setPerformanceSnapshot] = useState<ReadyPerformanceSnapshot | null>(null);
+  const [performanceStatus, setPerformanceStatus] = useState<'idle' | 'loading' | 'ready' | 'insufficient_data' | 'disconnected' | 'error'>('idle');
+  const [performanceReason, setPerformanceReason] = useState<string | null>(null);
+  const [performanceCached, setPerformanceCached] = useState(false);
+  const [performanceRefreshing, setPerformanceRefreshing] = useState(false);
 
   // Save feedback
   const [nameSaved, setNameSaved] = useState(false);
@@ -189,6 +249,65 @@ export default function ProfilePage() {
       garminConfigured: Boolean(data?.capability?.garminConfigured)
     });
   }
+
+  const loadPerformanceSnapshot = useCallback(async (forceRefresh = false) => {
+    if (forceRefresh) setPerformanceRefreshing(true);
+    if (!forceRefresh) setPerformanceStatus('loading');
+    try {
+      const query = forceRefresh ? '?refresh=1' : '';
+      const res = await fetch(`/api/profile/performance-snapshot${query}`, { cache: 'no-store' });
+      const data = (await res.json().catch(() => ({}))) as PerformanceSnapshotResponse;
+
+      if (!res.ok || data.status === 'error') {
+        setPerformanceStatus('error');
+        setPerformanceSnapshot(null);
+        setPerformanceCached(false);
+        setPerformanceReason(data?.reason || 'Failed to load performance snapshot.');
+        emitProfileEvent('profile_performance_snapshot_error', { forceRefresh, statusCode: res.status });
+        return;
+      }
+
+      if (data.status === 'ready' && data.snapshot) {
+        setPerformanceStatus('ready');
+        setPerformanceSnapshot(data.snapshot);
+        setPerformanceReason(null);
+        setPerformanceCached(Boolean(data.cached));
+        emitProfileEvent('profile_performance_snapshot_viewed', {
+          confidenceLabel: data.snapshot.confidence.label,
+          confidenceScore: data.snapshot.confidence.score,
+          windowDays: data.snapshot.windowDays,
+          forceRefresh,
+          cached: Boolean(data.cached)
+        });
+        if (forceRefresh) {
+          emitProfileEvent('profile_performance_snapshot_refreshed', {
+            confidenceLabel: data.snapshot.confidence.label,
+            confidenceScore: data.snapshot.confidence.score
+          });
+        }
+        return;
+      }
+
+      setPerformanceSnapshot(null);
+      setPerformanceCached(Boolean(data.cached));
+      setPerformanceStatus(data.status === 'disconnected' ? 'disconnected' : 'insufficient_data');
+      setPerformanceReason(data.reason || null);
+      if (data.status === 'insufficient_data') {
+        emitProfileEvent('profile_performance_snapshot_insufficient_data', {
+          forceRefresh,
+          cached: Boolean(data.cached)
+        });
+      }
+    } catch {
+      setPerformanceStatus('error');
+      setPerformanceSnapshot(null);
+      setPerformanceCached(false);
+      setPerformanceReason('Failed to load performance snapshot.');
+      emitProfileEvent('profile_performance_snapshot_error', { forceRefresh });
+    } finally {
+      setPerformanceRefreshing(false);
+    }
+  }, []);
 
   useEffect(() => {
     // Load user + stats + integrations in parallel
@@ -222,7 +341,8 @@ export default function ProfilePage() {
       setCoaches(coachData?.coaches || []);
       if (statsData?.totalPlans !== undefined) setStats(statsData);
     });
-  }, []);
+    void loadPerformanceSnapshot();
+  }, [loadPerformanceSnapshot]);
 
   useEffect(() => {
     const integration = searchParams.get('integration');
@@ -231,6 +351,7 @@ export default function ProfilePage() {
     if (integration === 'strava_connected') {
       setIntegrationStatus('Strava connected successfully.');
       loadIntegrationStatus();
+      void loadPerformanceSnapshot(true);
     }
     if (integrationWarning === 'sync_failed') {
       setIntegrationStatus('Strava connected, but first sync failed. Try sync now.');
@@ -238,7 +359,7 @@ export default function ProfilePage() {
     if (integrationError) {
       setIntegrationStatus(`Integration error: ${integrationError}`);
     }
-  }, [searchParams]);
+  }, [searchParams, loadPerformanceSnapshot]);
 
   // ── Derived state ─────────────────────────────────────────────────────────────
 
@@ -379,6 +500,7 @@ export default function ProfilePage() {
         `Sync complete: ${s?.imported ?? 0} imported, ${s?.matched ?? 0} matched, ${s?.workoutsUpdated ?? 0} updated`
       );
       await loadIntegrationStatus();
+      await loadPerformanceSnapshot(true);
     } catch {
       setIntegrationStatus('Failed to sync Strava activities');
     } finally {
@@ -398,6 +520,10 @@ export default function ProfilePage() {
       }
       setIntegrationStatus('Strava disconnected');
       await loadIntegrationStatus();
+      setPerformanceStatus('disconnected');
+      setPerformanceSnapshot(null);
+      setPerformanceCached(false);
+      setPerformanceReason('Connect Strava to estimate performance.');
     } catch {
       setIntegrationStatus('Failed to disconnect Strava');
     } finally {
@@ -409,6 +535,12 @@ export default function ProfilePage() {
 
   const initial = name.trim() ? name.trim()[0].toUpperCase() : '?';
   const memberSince = formatMonthYear(createdAt);
+  const confidenceClass =
+    performanceSnapshot?.confidence.label === 'HIGH'
+      ? 'high'
+      : performanceSnapshot?.confidence.label === 'MEDIUM'
+        ? 'medium'
+        : 'low';
 
   return (
     <main className="dash">
@@ -564,6 +696,93 @@ export default function ProfilePage() {
               </div>
               {integrationStatus && (
                 <p className="profile-integration-status">{integrationStatus}</p>
+              )}
+            </div>
+
+            {/* Performance snapshot card */}
+            <div className="dash-card profile-performance-card">
+              <div className="profile-performance-header">
+                <h3>Performance Snapshot (Estimated)</h3>
+                <button
+                  type="button"
+                  className="profile-performance-refresh-btn"
+                  onClick={() => void loadPerformanceSnapshot(true)}
+                  disabled={!stravaAccount?.connected || performanceRefreshing}
+                >
+                  {performanceRefreshing ? 'Recalculating...' : 'Recalculate'}
+                </button>
+              </div>
+
+              {performanceStatus === 'loading' && (
+                <p className="profile-performance-note">Loading estimate...</p>
+              )}
+
+              {performanceStatus === 'disconnected' && (
+                <p className="profile-performance-note">
+                  Connect Strava to estimate likely race performance.
+                </p>
+              )}
+
+              {performanceStatus === 'insufficient_data' && (
+                <div className="profile-performance-empty">
+                  <p className="profile-performance-note">
+                    {performanceReason || 'Not enough strong run evidence yet. Sync more recent runs.'}
+                  </p>
+                  <p className="profile-performance-hint">
+                    Add a recent sustained run or race-like effort to improve the estimate.
+                  </p>
+                </div>
+              )}
+
+              {performanceStatus === 'error' && (
+                <div className="profile-performance-empty">
+                  <p className="profile-performance-note">
+                    {performanceReason || 'Unable to load performance snapshot.'}
+                  </p>
+                  <button
+                    type="button"
+                    className="cta secondary"
+                    onClick={() => void loadPerformanceSnapshot(true)}
+                  >
+                    Retry
+                  </button>
+                </div>
+              )}
+
+              {performanceStatus === 'ready' && performanceSnapshot && (
+                <>
+                  <div className="profile-performance-grid">
+                    <div className="profile-performance-row">
+                      <span>Estimated 5K</span>
+                      <strong>{formatGoalTime(performanceSnapshot.estimates.fiveK.timeSec)}</strong>
+                    </div>
+                    <div className="profile-performance-row">
+                      <span>Estimated 10K</span>
+                      <strong>{formatGoalTime(performanceSnapshot.estimates.tenK.timeSec)}</strong>
+                    </div>
+                    <div className="profile-performance-row">
+                      <span>Estimated Half Marathon</span>
+                      <strong>{formatGoalTime(performanceSnapshot.estimates.halfMarathon.timeSec)}</strong>
+                    </div>
+                    <div className="profile-performance-row">
+                      <span>Estimated Marathon</span>
+                      <strong>{formatGoalTime(performanceSnapshot.estimates.marathon.timeSec)}</strong>
+                    </div>
+                  </div>
+
+                  <div className="profile-performance-confidence">
+                    <span>Confidence</span>
+                    <span className={`profile-performance-confidence-chip ${confidenceClass}`}>
+                      {performanceSnapshot.confidence.label} · {performanceSnapshot.confidence.score}%
+                    </span>
+                  </div>
+
+                  <p className="profile-performance-basis">{performanceSnapshot.evidenceSummary.basis}</p>
+                  <p className="profile-performance-meta">
+                    Updated {formatDate(performanceSnapshot.computedAt) || 'just now'}
+                    {performanceCached ? ' · cached' : ' · fresh'}
+                  </p>
+                </>
               )}
             </div>
 

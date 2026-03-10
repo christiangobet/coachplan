@@ -71,6 +71,7 @@ model User {
   deactivatedAt DateTime?
   units        Units?   @default(MILES)
   paceTargets  Json?
+  performanceSnapshot Json?
   goalRaceDate DateTime?
   createdAt    DateTime @default(now())
 

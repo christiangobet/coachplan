@@ -277,6 +277,145 @@
   margin-top: 0.25rem;
 }
 
+/* ── Performance snapshot card ── */
+.profile-performance-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.profile-performance-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.profile-performance-header h3 {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--d-text);
+}
+
+.profile-performance-refresh-btn {
+  border: 1px solid var(--d-border);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--d-text-mid);
+  min-height: 28px;
+  padding: 0 0.7rem;
+  font-size: 0.73rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.profile-performance-refresh-btn:hover:not(:disabled) {
+  border-color: var(--d-orange);
+  color: var(--d-orange);
+}
+
+.profile-performance-refresh-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.profile-performance-grid {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.profile-performance-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.28rem 0;
+  border-bottom: 1px solid var(--d-border-light);
+  font-size: 0.8rem;
+}
+
+.profile-performance-row:last-child {
+  border-bottom: none;
+}
+
+.profile-performance-row span {
+  color: var(--d-muted);
+}
+
+.profile-performance-row strong {
+  color: var(--d-text);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.profile-performance-confidence {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.78rem;
+}
+
+.profile-performance-confidence > span:first-child {
+  color: var(--d-muted);
+}
+
+.profile-performance-confidence-chip {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.2rem 0.5rem;
+}
+
+.profile-performance-confidence-chip.high {
+  background: rgba(15, 138, 71, 0.12);
+  color: #0f8a47;
+}
+
+.profile-performance-confidence-chip.medium {
+  background: rgba(243, 156, 18, 0.14);
+  color: #b26d07;
+}
+
+.profile-performance-confidence-chip.low {
+  background: rgba(107, 107, 118, 0.14);
+  color: var(--d-text-mid);
+}
+
+.profile-performance-basis {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--d-text-mid);
+  line-height: 1.4;
+}
+
+.profile-performance-meta {
+  margin: 0;
+  font-size: 0.72rem;
+  color: var(--d-muted);
+}
+
+.profile-performance-note {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--d-text-mid);
+}
+
+.profile-performance-hint {
+  margin: 0.35rem 0 0;
+  font-size: 0.72rem;
+  color: var(--d-muted);
+}
+
+.profile-performance-empty .cta.secondary {
+  margin-top: 0.45rem;
+  min-height: 30px;
+  font-size: 0.75rem;
+}
+
 /* ── Right column ── */
 .profile-settings-col {
   display: flex;
@@ -353,4 +492,21 @@
   font-size: 0.82rem;
   color: var(--d-muted);
   margin: 0;
+}
+
+@media (max-width: 480px) {
+  .profile-performance-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .profile-performance-refresh-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .profile-performance-confidence {
+    flex-direction: column;
+    align-items: flex-start;
+  }
 }
