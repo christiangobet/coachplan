@@ -1737,3 +1737,126 @@
     padding: 10px 14px;
   }
 }
+
+/* ===== DARK MODE OVERRIDES ===== */
+/* NOTE: cal-grid-wrap does not exist — use cal-month-card. cal-day-detail-wrap does not exist — use cal-day-details-card */
+
+[data-theme="dark"] .cal-month-card,
+[data-theme="dark"] .cal-page {
+  background: var(--d-bg);
+}
+
+/* Calendar grid cells — background: #fff is hardcoded, must override */
+[data-theme="dark"] .cal-day {
+  background: var(--d-surface);
+  border-color: var(--d-border-light);
+  color: var(--d-text);
+}
+[data-theme="dark"] .cal-day:hover {
+  border-color: rgba(252, 76, 2, 0.3);
+  background: #111f38;
+}
+[data-theme="dark"] .cal-day.today {
+  border-color: rgba(252, 76, 2, 0.5);
+  background: rgba(252, 76, 2, 0.06);
+}
+[data-theme="dark"] .cal-day.day-done {
+  border-color: rgba(15, 138, 71, 0.3);
+  background: rgba(15, 138, 71, 0.1);
+}
+[data-theme="dark"] .cal-day.day-missed {
+  border-color: rgba(217, 119, 6, 0.35);
+  background: rgba(245, 158, 11, 0.08);
+}
+[data-theme="dark"] .cal-day.selected {
+  border-color: #3b82f6;
+  background: rgba(59, 130, 246, 0.08);
+}
+[data-theme="dark"] .cal-day-number {
+  color: var(--d-text-mid);
+}
+[data-theme="dark"] .cal-day.today .cal-day-number {
+  color: #fc4c02;
+}
+
+/* Activity chips in calendar */
+[data-theme="dark"] .cal-activity {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.07);
+  color: var(--d-text);
+}
+[data-theme="dark"] .cal-activity.done {
+  background: rgba(15, 138, 71, 0.12);
+  border-color: rgba(15, 138, 71, 0.25);
+}
+[data-theme="dark"] .cal-activity em {
+  color: #4ade80;
+}
+[data-theme="dark"] .cal-run-distance {
+  color: #fc8c5a;
+}
+
+/* Plan pill */
+[data-theme="dark"] .cal-plan-pill {
+  background: rgba(252, 76, 2, 0.12);
+  border-color: rgba(252, 76, 2, 0.25);
+  color: #fc8c5a;
+}
+
+/* Day detail panel — actual class is cal-day-details-card */
+[data-theme="dark"] .cal-day-details-card {
+  background: var(--d-surface);
+  border-color: var(--d-border);
+  color: var(--d-text);
+}
+[data-theme="dark"] .cal-detail-header {
+  border-bottom-color: var(--d-border);
+}
+[data-theme="dark"] .cal-day-detail-header span.done {
+  color: #4ade80;
+}
+[data-theme="dark"] .cal-day-detail-header span.missed {
+  color: #fbbf24;
+}
+[data-theme="dark"] .cal-day-missed-note {
+  color: #fbbf24;
+  background: rgba(243, 156, 18, 0.1);
+  border-color: rgba(243, 156, 18, 0.2);
+}
+[data-theme="dark"] .cal-day-toggle-error {
+  color: #f87171;
+}
+
+/* Status badges */
+[data-theme="dark"] .cal-detail-badge.status-partial {
+  color: #fbbf24;
+}
+[data-theme="dark"] .cal-match-badge.full {
+  color: #4ade80;
+}
+[data-theme="dark"] .cal-match-badge.partial {
+  color: #fbbf24;
+}
+[data-theme="dark"] .cal-match-badge.none {
+  color: #f87171;
+}
+
+/* Log/Strava pills */
+[data-theme="dark"] .cal-log-pill {
+  background: rgba(15, 138, 71, 0.12);
+  border-color: rgba(15, 138, 71, 0.25);
+  color: #4ade80;
+}
+[data-theme="dark"] .cal-strava-pill {
+  background: rgba(252, 76, 2, 0.12);
+  border-color: rgba(252, 76, 2, 0.25);
+  color: #fc4c02;
+}
+
+/* Sync/toggle buttons */
+[data-theme="dark"] .cal-day-toggle .dash-sync-btn.is-done {
+  color: #4ade80;
+}
+[data-theme="dark"] .cal-day-toggle .dash-sync-btn.is-warning {
+  color: #fbbf24;
+}
