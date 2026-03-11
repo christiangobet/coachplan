@@ -3991,3 +3991,28 @@ details[open] .day-log-instructions-toggle::before {
   background: var(--d-orange);
   color: #fff;
 }
+
+/* ===== DARK MODE TOKEN OVERRIDES ===== */
+/* Must scope to .dash to override the .dash { --d-* } declarations above */
+[data-theme="dark"] .dash,
+[data-theme="dark"] .plans-page-shell,
+[data-theme="dark"] .pcal {
+  --d-bg: #070c16;
+  --d-surface: #0f1729;
+  --d-raised: #111f38;
+  --d-border: rgba(255, 255, 255, 0.08);
+  --d-border-light: rgba(255, 255, 255, 0.05);
+  --d-text: #f5f8ff;
+  --d-text-mid: #94a3b8;
+  --d-muted: #475569;
+  --d-orange: #fc4c02;
+  --d-green: #4ade80;
+  --d-red: #f87171;
+  --d-amber: #fbbf24;
+  --d-orange-soft: rgba(252, 76, 2, 0.15);
+  --d-green-soft: rgba(15, 138, 71, 0.15);
+  --d-red-soft: rgba(231, 76, 60, 0.15);
+  --d-amber-soft: rgba(243, 156, 18, 0.15);
+  --d-shadow: 0 1px 3px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
+  --d-shadow-md: 0 4px 16px rgba(0, 0, 0, 0.4), 0 2px 6px rgba(0, 0, 0, 0.3);
+}
