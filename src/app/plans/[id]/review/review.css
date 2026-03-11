@@ -1646,3 +1646,52 @@
 [data-theme="dark"] .review-muted {
   color: #64748b;
 }
+
+/* ── Headings and body text — slate-blue palette (#1f2f4a, #2c4467) invisible on dark ── */
+[data-theme="dark"] .review-source-pane-head h3,
+[data-theme="dark"] .review-profile-head h3,
+[data-theme="dark"] .review-diagnostics-head h3,
+[data-theme="dark"] .review-publish-head h3,
+[data-theme="dark"] .review-week-head h2,
+[data-theme="dark"] .review-mobile-guard-card h1,
+[data-theme="dark"] .review-stats-grid strong,
+[data-theme="dark"] .review-profile-grid strong,
+[data-theme="dark"] .review-activity-summary strong {
+  color: var(--d-text);
+}
+
+[data-theme="dark"] .review-source-pane-head p,
+[data-theme="dark"] .review-profile-head p,
+[data-theme="dark"] .review-diagnostics-head p,
+[data-theme="dark"] .review-mobile-guard-card p,
+[data-theme="dark"] .review-inline-status,
+[data-theme="dark"] .review-autosave,
+[data-theme="dark"] .review-flow-editor-head span,
+[data-theme="dark"] .review-flow-editor-close,
+[data-theme="dark"] .review-pdf-page-input,
+[data-theme="dark"] .review-pdf-zoom-label,
+[data-theme="dark"] .review-col-type-highlight > span,
+[data-theme="dark"] .review-pace-chip,
+[data-theme="dark"] .review-pace-chip:hover {
+  color: var(--d-text-mid);
+}
+
+/* ── Buttons — dark text becomes invisible on dark raised bg ── */
+[data-theme="dark"] .review-hero-actions .cta.secondary,
+[data-theme="dark"] .review-save-btn,
+[data-theme="dark"] .review-save-btn.secondary,
+[data-theme="dark"] .review-delete-btn.ghost,
+[data-theme="dark"] .review-source-chip {
+  color: var(--d-text-mid);
+}
+
+/* ── Help popover text ── */
+[data-theme="dark"] .review-help-dot,
+[data-theme="dark"] .review-help-popover {
+  color: var(--d-text-mid);
+}
+
+/* ── Flow editor close button hover ── */
+[data-theme="dark"] .review-flow-editor-close:hover {
+  color: var(--d-text);
+}

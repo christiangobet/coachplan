@@ -4211,3 +4211,8 @@
   background: rgba(15, 138, 71, 0.12);
   border-color: rgba(15, 138, 71, 0.25);
 }
+
+/* ── Next-up label — #5f6a7a invisible on dark raised bg ── */
+[data-theme="dark"] .plans-lib-next-label {
+  color: var(--d-muted);
+}
