@@ -101,7 +101,7 @@
   gap: 8px;
   border: 1px solid #d7e2f4;
   border-radius: 10px;
-  background: #fff;
+  background: var(--d-raised);
   padding: 6px;
 }
 
@@ -151,7 +151,7 @@
   min-height: 420px;
   border: 1px solid #d7e2f4;
   border-radius: 10px;
-  background: #fff;
+  background: var(--d-raised);
   overflow: auto;
   overscroll-behavior: contain;
   padding: 12px;
@@ -258,7 +258,7 @@
 
 .review-action-bar {
   padding-bottom: 8px;
-  border-bottom: 1px solid #e1e8f5;
+  border-bottom: 1px solid var(--d-border-light);
   background: inherit;
 }
 
@@ -313,7 +313,7 @@
 .review-modal-actions .cta.secondary {
   border-color: #d5deee;
   color: #2f4568;
-  background: #fff;
+  background: var(--d-raised);
 }
 
 .review-hero-actions .cta.secondary:hover,
@@ -330,8 +330,8 @@
 }
 
 .review-stats-grid div {
-  background: #f8fbff;
-  border: 1px solid #e2eaf7;
+  background: var(--d-surface);
+  border: 1px solid var(--d-border-light);
   border-radius: 12px;
   padding: 10px 12px;
   display: grid;
@@ -380,7 +380,7 @@
 
 .review-profile-grid div {
   border: 1px solid #deebfb;
-  background: #fff;
+  background: var(--d-raised);
   border-radius: 10px;
   padding: 8px 10px;
   display: grid;
@@ -554,7 +554,7 @@
   height: 32px;
   border: 1px solid #c8d5eb;
   border-radius: 10px;
-  background: #fff;
+  background: var(--d-raised);
   color: #2f4568;
   font-family: inherit;
   font-size: 12px;
@@ -573,7 +573,7 @@
 .review-save-btn.secondary {
   border-color: #d4dfef;
   color: #51627f;
-  background: #f6f9ff;
+  background: var(--d-surface);
 }
 
 .review-save-btn.secondary:hover {
@@ -616,7 +616,7 @@
   height: 16px;
   border-radius: 999px;
   border: 1px solid #b8c7e3;
-  background: #fff;
+  background: var(--d-raised);
   color: #5a6f93;
   font-size: 11px;
   font-weight: 700;
@@ -640,7 +640,7 @@
   width: 240px;
   border: 1px solid #d7e1f2;
   border-radius: 8px;
-  background: #ffffff;
+  background: var(--d-raised);
   color: #50617e;
   font-size: 11px;
   font-weight: 600;
@@ -705,7 +705,7 @@
   outline: none;
   border-color: #fc4c02;
   box-shadow: 0 0 0 3px rgba(252, 76, 2, 0.1);
-  background: #fff;
+  background: var(--d-raised);
 }
 
 .review-visually-hidden {
@@ -746,9 +746,9 @@
 }
 
 .review-activity-item {
-  border: 1px solid #e1e8f5;
+  border: 1px solid var(--d-border-light);
   border-radius: 12px;
-  background: #ffffff;
+  background: var(--d-raised);
   padding: 8px 10px;
   display: grid;
   gap: 8px;
@@ -772,7 +772,7 @@
 }
 
 .review-activity-top {
-  border-bottom: 1px solid #edf2fb;
+  border-bottom: 1px solid var(--d-border-light);
   padding-bottom: 8px;
 }
 
@@ -865,7 +865,7 @@
   height: 32px;
   border: 1px solid #d6dfef;
   border-radius: 8px;
-  background: #ffffff;
+  background: var(--d-raised);
   color: #60708d;
   font-size: 12px;
   font-weight: 700;
@@ -894,7 +894,7 @@
     "instructions instructions"
     "pace effort";
   gap: 12px;
-  border-top: 1px solid #edf2fb;
+  border-top: 1px solid var(--d-border-light);
   padding-top: 10px;
 }
 
@@ -917,7 +917,7 @@
 .review-flow-editor {
   border: 1px solid #d7e2f3;
   border-radius: 10px;
-  background: #f8fbff;
+  background: var(--d-surface);
   padding: 10px;
   display: grid;
   gap: 10px;
@@ -1003,7 +1003,7 @@
   font-size: 13px;
   font-weight: 700;
   border-color: #cad8ee;
-  background: #ffffff;
+  background: var(--d-raised);
 }
 
 .review-col-distance {
@@ -1058,7 +1058,7 @@
   font-size: 12px;
   padding: 5px 8px;
   border-color: #d1dcef;
-  background: #ffffff;
+  background: var(--d-raised);
 }
 
 .review-field-inline {
@@ -1074,7 +1074,7 @@
   font-size: 13px;
   padding: 7px 10px;
   border-color: #d2ddf0;
-  background: #ffffff;
+  background: var(--d-raised);
 }
 
 .review-activity-details .review-field > span,
@@ -1108,7 +1108,7 @@
   min-height: 36px;
   border-radius: 999px;
   border: 1px solid #d0d8e7;
-  background: #f4f7fb;
+  background: var(--d-surface);
   color: #74829a;
   font-size: 11px;
   font-weight: 700;
@@ -1241,7 +1241,7 @@
 .review-publish-body {
   display: grid;
   gap: 12px;
-  border-top: 1px solid #e1e8f5;
+  border-top: 1px solid var(--d-border-light);
   padding-top: 12px;
 }
 
@@ -1266,7 +1266,7 @@
   height: 32px;
   border: 1px solid #d2ddf0;
   border-radius: 999px;
-  background: #fff;
+  background: var(--d-raised);
   color: #4d5f7f;
   font-size: 12px;
   font-weight: 700;
@@ -1438,7 +1438,7 @@
 /* ── Session Instructions Panel ─────────────────────────────────────────── */
 
 .review-session-instructions-panel {
-  border-top: 1px solid #edf2fb;
+  border-top: 1px solid var(--d-border-light);
   padding-top: 8px;
   margin-top: 2px;
 }

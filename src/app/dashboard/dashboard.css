@@ -433,7 +433,7 @@
 .dash-weekly-metrics-bar {
   height: 6px;
   border-radius: 999px;
-  background: #e5e5ea;
+  background: var(--d-surface);
   overflow: hidden;
 }
 
@@ -887,7 +887,7 @@ details[open] .day-log-instructions-toggle::before {
   min-height: 36px;
   border-radius: 9px;
   border: 1px solid var(--d-border);
-  background: #fff;
+  background: var(--d-raised);
   font-family: inherit;
   font-size: 12px;
   font-weight: 700;
@@ -1186,7 +1186,7 @@ details[open] .day-log-instructions-toggle::before {
   font-size: 12px;
   line-height: 1.4;
   border: 1px solid var(--d-border);
-  background: #fff;
+  background: var(--d-raised);
   color: var(--d-text-mid);
 }
 
@@ -1227,7 +1227,7 @@ details[open] .day-log-instructions-toggle::before {
 .dash-activity-log-day-pill.status-open {
   border: 1px solid var(--d-border);
   color: var(--d-text-mid);
-  background: #fff;
+  background: var(--d-raised);
 }
 
 .dash-activity-log-day-pill.status-done {
@@ -1245,7 +1245,7 @@ details[open] .day-log-instructions-toggle::before {
 .dash-activity-log-day-state {
   border: 1px solid var(--d-border);
   border-radius: var(--d-radius-sm);
-  background: #fff;
+  background: var(--d-raised);
   padding: 10px;
   display: grid;
   gap: 8px;
@@ -1261,7 +1261,7 @@ details[open] .day-log-instructions-toggle::before {
   width: 100%;
   border-radius: var(--d-radius-sm);
   border: 1px solid var(--d-border);
-  background: #fff;
+  background: var(--d-raised);
   padding: 8px 10px;
   min-height: 70px;
   resize: vertical;
@@ -1295,7 +1295,7 @@ details[open] .day-log-instructions-toggle::before {
 
 .dash-activity-log-card .dash-sync-btn.is-neutral {
   border-color: var(--d-border);
-  background: #fff;
+  background: var(--d-raised);
   color: var(--d-text-mid);
 }
 
@@ -1333,7 +1333,7 @@ details[open] .day-log-instructions-toggle::before {
   border: 1px solid var(--d-border);
   border-radius: var(--d-radius-sm);
   padding: 10px 12px;
-  background: #fff;
+  background: var(--d-raised);
   display: grid;
   gap: 10px;
 }
@@ -1375,8 +1375,8 @@ details[open] .day-log-instructions-toggle::before {
   font-size: 11px;
   font-weight: 700;
   color: #2f4568;
-  border: 1px solid #d2ddf0;
-  background: #eef4ff;
+  border: 1px solid var(--d-border);
+  background: var(--d-surface);
 }
 
 .dash-activity-log-notes-wrap {
@@ -3708,8 +3708,8 @@ details[open] .day-log-instructions-toggle::before {
 }
 
 .day-log-card .cal-activity-distance-progress.planned {
-  background: #eef3fb;
-  border-color: #cfd8e6;
+  background: var(--d-surface);
+  border-color: var(--d-border);
   color: #3f5675;
 }
 

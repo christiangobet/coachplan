@@ -283,7 +283,7 @@
   flex-direction: column;
   gap: 6px;
   min-height: 140px;
-  background: linear-gradient(135deg, #f4f5f8 0%, #e9ecf2 100%);
+  background: var(--d-surface);
 }
 
 .plans-lib-card-banner.mode-active {
@@ -468,7 +468,7 @@
   border: 1px solid var(--d-border);
   border-radius: 999px;
   padding: 6px 10px;
-  background: #fff;
+  background: var(--d-raised);
   color: var(--d-text-mid);
   font-size: 12px;
   font-weight: 600;
@@ -735,7 +735,7 @@
   height: 40px;
   border: 1px solid var(--d-border);
   border-radius: 10px;
-  background: #fff;
+  background: var(--d-raised);
   padding: 0 12px;
 }
 
@@ -770,7 +770,7 @@
 
 .plans-lib-segment-btn {
   border: 1px solid #dfe4ed;
-  background: #fff;
+  background: var(--d-raised);
   border-radius: 999px;
   min-height: 32px;
   padding: 0 12px;
@@ -790,7 +790,7 @@
   min-width: 20px;
   min-height: 20px;
   border-radius: 999px;
-  background: #f3f6fb;
+  background: var(--d-surface);
   color: var(--d-text-mid);
   font-size: 11px;
   font-weight: 700;
@@ -852,7 +852,7 @@
   border-radius: 14px;
   border: 1px solid #e6e7eb;
   box-shadow: 0 2px 8px rgba(18, 21, 28, 0.04);
-  background: #fff;
+  background: var(--d-raised);
 }
 
 .plan-card--library .plan-card-name {
@@ -892,7 +892,7 @@
 
 .plan-card--library.status-archived {
   opacity: 0.92;
-  background: #f8f8fb;
+  background: var(--d-surface);
 }
 
 .plans-lib-card-meta {
@@ -928,7 +928,7 @@
   margin: 10px 16px 0;
   padding: 8px 10px;
   border-radius: 10px;
-  background: #f9fbff;
+  background: var(--d-surface);
   border: 1px solid #e7ebf3;
   display: grid;
   gap: 2px;
@@ -1266,7 +1266,7 @@
   min-height: 0;
   border: 1px solid var(--d-border);
   border-radius: var(--d-radius);
-  background: #f6f9ff;
+  background: var(--d-surface);
   overflow: hidden;
   padding: 8px;
 }
@@ -1816,7 +1816,7 @@
 .pcal-banner-card-image-wrap {
   position: relative;
   aspect-ratio: 16 / 9;
-  background: linear-gradient(140deg, #f6f6f6, #eceff3);
+  background: var(--d-surface);
 }
 
 .pcal-banner-card-image {
@@ -2036,7 +2036,7 @@
 
 .pcal-ai-turn.role-coach {
   justify-self: start;
-  background: #f8fafc;
+  background: var(--d-surface);
   border-top-left-radius: 4px;
   border-top-right-radius: 12px;
 }
@@ -2212,7 +2212,7 @@
 }
 
 .pcal-ai-trainer-change-list li.is-applied {
-  background: #f4f5f7;
+  background: var(--d-surface);
   border-color: #d5dae0;
   opacity: 0.8;
 }
@@ -2295,7 +2295,7 @@
   border: 1px solid var(--d-border);
   border-radius: var(--d-radius-sm);
   padding: 10px;
-  background: #f7f8fa;
+  background: var(--d-surface);
 }
 
 .pcal-ai-trainer-invariant-grid {
@@ -2567,7 +2567,7 @@
   padding: 0 8px;
   border-radius: 999px;
   border: 1px solid var(--d-border);
-  background: #fff;
+  background: var(--d-raised);
   color: var(--d-text-mid);
   font: 700 11px/1 'Figtree', sans-serif;
   letter-spacing: 0.02em;
@@ -2896,7 +2896,7 @@
 }
 
 .pcal-run-distance-line.planned {
-  background: #eef3fb;
+  background: var(--d-surface);
   border-color: #cfd8e6;
   color: #3f5675;
 }
@@ -3076,7 +3076,7 @@
   height: 16px;
   border-radius: 50%;
   border: 2px solid var(--d-border);
-  background: #fff;
+  background: var(--d-raised);
   flex-shrink: 0;
   transition: all 0.15s;
   position: relative;
@@ -3326,7 +3326,7 @@
   min-height: 22px;
   border-radius: 999px;
   border: 1px solid rgba(170, 178, 194, 0.58);
-  background: #f8fafc;
+  background: var(--d-surface);
   color: #4f6078;
   font-size: 11px;
   font-weight: 700;
@@ -3336,7 +3336,7 @@
 
 .pcal-modal-strava-sync {
   border: 1px solid var(--d-border);
-  background: #fff;
+  background: var(--d-raised);
   color: var(--d-text);
   border-radius: var(--d-radius-sm);
   min-height: 32px;
@@ -3471,7 +3471,7 @@
 
 .pcal-modal-cancel {
   border: 1px solid var(--d-border);
-  background: #fff;
+  background: var(--d-raised);
   color: var(--d-text);
 }
 
