@@ -846,148 +846,149 @@ export default async function CalendarPage({
                     ].join(" ").trim()}
                     data-debug-id="TCD"
                   >
-                    <Link className="cal-day-hit" href={dayHref} aria-label={`Open ${key}`} />
-                    <div className="cal-day-head">
-                      <span className="cal-day-number">{date.getDate()}</span>
-                      <div className="cal-day-head-badges">
-                        {dayDone && <span className="cal-day-check" title="Day completed">✓</span>}
-                        {dayMissed && <span className="cal-day-check missed" title="Day closed as missed">✗</span>}
-                        {dayPartial && <span className="cal-day-check partial" title="Day partially completed">✓</span>}
-                        {totalDayDistLabel && <span className="cal-day-dist">{totalDayDistLabel}</span>}
+                    <Link className="cal-day-hit" href={dayHref} aria-label={`Open ${key}`}>
+                      <div className="cal-day-head">
+                        <span className="cal-day-number">{date.getDate()}</span>
+                        <div className="cal-day-head-badges">
+                          {dayDone && <span className="cal-day-check" title="Day completed">✓</span>}
+                          {dayMissed && <span className="cal-day-check missed" title="Day closed as missed">✗</span>}
+                          {dayPartial && <span className="cal-day-check partial" title="Day partially completed">✓</span>}
+                          {totalDayDistLabel && <span className="cal-day-dist">{totalDayDistLabel}</span>}
+                        </div>
                       </div>
-                    </div>
 
-                    <div className="cal-day-list" data-debug-id="TAL">
-                      {displayActivities.slice(0, 3).map(({ activity, sessionCount }) => {
-                        const sessionMembers = sessionCount
-                          ? dayActivities.filter(a => a.sessionGroupId === activity.sessionGroupId)
-                          : null;
-                        const sessionAllDone = sessionMembers?.every(a => a.completed) ?? false;
-                        const isCompleted = sessionCount ? sessionAllDone : activity.completed;
-                        const isRun = String(activity.type || "").toUpperCase() === "RUN";
-                        const plannedDistanceLabel = (() => {
-                          if (sessionMembers && sessionMembers.length > 1) {
-                            let total = 0;
-                            let hasAny = false;
-                            for (const member of sessionMembers) {
-                              const sourceUnit = resolveDistanceUnitFromActivity({
-                                distanceUnit: member.distanceUnit,
-                                paceTarget: member.paceTarget,
-                                actualPace: member.actualPace,
-                                fallbackUnit: viewerUnits
-                              }) || viewerUnits;
-                              const converted = convertDistanceForDisplay(member.distance, sourceUnit, viewerUnits);
-                              if (converted) {
-                                total += converted.value;
-                                hasAny = true;
+                      <div className="cal-day-list" data-debug-id="TAL">
+                        {displayActivities.slice(0, 3).map(({ activity, sessionCount }) => {
+                          const sessionMembers = sessionCount
+                            ? dayActivities.filter(a => a.sessionGroupId === activity.sessionGroupId)
+                            : null;
+                          const sessionAllDone = sessionMembers?.every(a => a.completed) ?? false;
+                          const isCompleted = sessionCount ? sessionAllDone : activity.completed;
+                          const isRun = String(activity.type || "").toUpperCase() === "RUN";
+                          const plannedDistanceLabel = (() => {
+                            if (sessionMembers && sessionMembers.length > 1) {
+                              let total = 0;
+                              let hasAny = false;
+                              for (const member of sessionMembers) {
+                                const sourceUnit = resolveDistanceUnitFromActivity({
+                                  distanceUnit: member.distanceUnit,
+                                  paceTarget: member.paceTarget,
+                                  actualPace: member.actualPace,
+                                  fallbackUnit: viewerUnits
+                                }) || viewerUnits;
+                                const converted = convertDistanceForDisplay(member.distance, sourceUnit, viewerUnits);
+                                if (converted) {
+                                  total += converted.value;
+                                  hasAny = true;
+                                }
                               }
+                              return hasAny ? `${formatDistanceOneDecimal(total)}${distanceUnitLabel(viewerUnits)}` : null;
                             }
-                            return hasAny ? `${formatDistanceOneDecimal(total)}${distanceUnitLabel(viewerUnits)}` : null;
-                          }
-                          const sourceUnit = resolveDistanceUnitFromActivity({
-                            distanceUnit: activity.distanceUnit,
-                            paceTarget: activity.paceTarget,
-                            actualPace: activity.actualPace,
-                            fallbackUnit: viewerUnits
-                          }) || viewerUnits;
-                          const converted = convertDistanceForDisplay(activity.distance, sourceUnit, viewerUnits);
-                          return converted ? `${formatDistanceOneDecimal(converted.value)}${distanceUnitLabel(converted.unit)}` : null;
-                        })();
-                        const loggedDistanceLabel = (() => {
-                          if (sessionMembers && sessionMembers.length > 1) {
-                            let total = 0;
-                            let hasAny = false;
-                            for (const member of sessionMembers) {
-                              const sourceUnit = resolveDistanceUnitFromActivity({
-                                distanceUnit: member.distanceUnit,
-                                paceTarget: member.paceTarget,
-                                actualPace: member.actualPace,
-                                fallbackUnit: viewerUnits,
-                                preferActualPace: true
-                              }) || viewerUnits;
-                              const converted = convertDistanceForDisplay(member.actualDistance, sourceUnit, viewerUnits);
-                              if (converted) {
-                                total += converted.value;
-                                hasAny = true;
+                            const sourceUnit = resolveDistanceUnitFromActivity({
+                              distanceUnit: activity.distanceUnit,
+                              paceTarget: activity.paceTarget,
+                              actualPace: activity.actualPace,
+                              fallbackUnit: viewerUnits
+                            }) || viewerUnits;
+                            const converted = convertDistanceForDisplay(activity.distance, sourceUnit, viewerUnits);
+                            return converted ? `${formatDistanceOneDecimal(converted.value)}${distanceUnitLabel(converted.unit)}` : null;
+                          })();
+                          const loggedDistanceLabel = (() => {
+                            if (sessionMembers && sessionMembers.length > 1) {
+                              let total = 0;
+                              let hasAny = false;
+                              for (const member of sessionMembers) {
+                                const sourceUnit = resolveDistanceUnitFromActivity({
+                                  distanceUnit: member.distanceUnit,
+                                  paceTarget: member.paceTarget,
+                                  actualPace: member.actualPace,
+                                  fallbackUnit: viewerUnits,
+                                  preferActualPace: true
+                                }) || viewerUnits;
+                                const converted = convertDistanceForDisplay(member.actualDistance, sourceUnit, viewerUnits);
+                                if (converted) {
+                                  total += converted.value;
+                                  hasAny = true;
+                                }
                               }
+                              return hasAny ? `${formatDistanceOneDecimal(total)}${distanceUnitLabel(viewerUnits)}` : null;
                             }
-                            return hasAny ? `${formatDistanceOneDecimal(total)}${distanceUnitLabel(viewerUnits)}` : null;
-                          }
-                          const sourceUnit = resolveDistanceUnitFromActivity({
-                            distanceUnit: activity.distanceUnit,
-                            paceTarget: activity.paceTarget,
-                            actualPace: activity.actualPace,
-                            fallbackUnit: viewerUnits,
-                            preferActualPace: true
-                          }) || viewerUnits;
-                          const converted = convertDistanceForDisplay(activity.actualDistance, sourceUnit, viewerUnits);
-                          return converted ? `${formatDistanceOneDecimal(converted.value)}${distanceUnitLabel(converted.unit)}` : null;
-                        })();
-                        const runDistanceLabel = isRun
-                          ? buildDistanceProgressLabel(plannedDistanceLabel, loggedDistanceLabel, distanceUnitLabel(viewerUnits))
-                          : null;
-                        return (
-                          <div
-                            key={activity.id}
-                            className={`cal-activity type-${activity.type.toLowerCase()}${isCompleted ? " completed" : ""}`}
-                            title={sessionCount ? `${getTypeAbbr(activity.type)} ×${sessionCount}` : activity.title}
-                          >
-                            <span className="cal-activity-title">
-                              <span className={`cal-activity-code type-${activity.type.toLowerCase()}`}>
-                                {getTypeAbbr(activity.type)}{sessionCount && sessionCount > 1 ? ` ×${sessionCount}` : ""}
-                              </span>
-                              {isCompleted && <span className="cal-activity-done-dot" />}
-                            </span>
-                            {runDistanceLabel && (
-                              <span className="cal-run-distance">{runDistanceLabel}</span>
-                            )}
-                            {activity.type === "RUN" && (() => {
-                              const bucket = activity.paceTargetBucket || inferPaceBucketFromText(activity.paceTarget);
-                              const bucketShort = bucket ? (PACE_BUCKET_SHORT[bucket] ?? null) : null;
-                              const paceDisplay = bucketShort
-                                ? null
-                                : (activity.paceTarget ? convertPaceForDisplay(activity.paceTarget, viewerUnits) : null);
-                              if (!bucketShort && !paceDisplay) return null;
-                              return (
-                                <span
-                                  className={`cal-pace-badge${bucketShort ? ' cal-pace-badge--bucket' : ''}`}
-                                  title={activity.paceTarget ?? undefined}
-                                >
-                                  {bucketShort ?? paceDisplay}
+                            const sourceUnit = resolveDistanceUnitFromActivity({
+                              distanceUnit: activity.distanceUnit,
+                              paceTarget: activity.paceTarget,
+                              actualPace: activity.actualPace,
+                              fallbackUnit: viewerUnits,
+                              preferActualPace: true
+                            }) || viewerUnits;
+                            const converted = convertDistanceForDisplay(activity.actualDistance, sourceUnit, viewerUnits);
+                            return converted ? `${formatDistanceOneDecimal(converted.value)}${distanceUnitLabel(converted.unit)}` : null;
+                          })();
+                          const runDistanceLabel = isRun
+                            ? buildDistanceProgressLabel(plannedDistanceLabel, loggedDistanceLabel, distanceUnitLabel(viewerUnits))
+                            : null;
+                          return (
+                            <div
+                              key={activity.id}
+                              className={`cal-activity type-${activity.type.toLowerCase()}${isCompleted ? " completed" : ""}`}
+                              title={sessionCount ? `${getTypeAbbr(activity.type)} ×${sessionCount}` : activity.title}
+                            >
+                              <span className="cal-activity-title">
+                                <span className={`cal-activity-code type-${activity.type.toLowerCase()}`}>
+                                  {getTypeAbbr(activity.type)}{sessionCount && sessionCount > 1 ? ` ×${sessionCount}` : ""}
                                 </span>
-                              );
-                            })()}
-                          </div>
-                        );
-                      })}
-                      {moreCount > 0 && (
-                        <span className="cal-more">
-                          +{moreCount} more
-                        </span>
-                      )}
-                      {stravaLogs.length > 0 ? (
-                        <span className="cal-strava-pill">
-                          <StravaIcon size={12} className="cal-strava-pill-logo" />
-                          <span className="cal-strava-pill-icons">
-                            {stravaMarkerLogs.map((log) => (
-                              <ExternalSportIcon
-                                key={log.id}
-                                provider={log.provider}
-                                sportType={log.sportType}
-                                className="cal-strava-icon"
-                              />
-                            ))}
-                            {stravaOverflow > 0 && (
-                              <span className="cal-strava-pill-more">+{stravaOverflow}</span>
-                            )}
+                                {isCompleted && <span className="cal-activity-done-dot" />}
+                              </span>
+                              {runDistanceLabel && (
+                                <span className="cal-run-distance">{runDistanceLabel}</span>
+                              )}
+                              {activity.type === "RUN" && (() => {
+                                const bucket = activity.paceTargetBucket || inferPaceBucketFromText(activity.paceTarget);
+                                const bucketShort = bucket ? (PACE_BUCKET_SHORT[bucket] ?? null) : null;
+                                const paceDisplay = bucketShort
+                                  ? null
+                                  : (activity.paceTarget ? convertPaceForDisplay(activity.paceTarget, viewerUnits) : null);
+                                if (!bucketShort && !paceDisplay) return null;
+                                return (
+                                  <span
+                                    className={`cal-pace-badge${bucketShort ? ' cal-pace-badge--bucket' : ''}`}
+                                    title={activity.paceTarget ?? undefined}
+                                  >
+                                    {bucketShort ?? paceDisplay}
+                                  </span>
+                                );
+                              })()}
+                            </div>
+                          );
+                        })}
+                        {moreCount > 0 && (
+                          <span className="cal-more">
+                            +{moreCount} more
                           </span>
-                        </span>
-                      ) : dayLogs.length > 0 && (
-                        <span className="cal-log-pill">
-                          {dayLogs.length} log{dayLogs.length > 1 ? "s" : ""}
-                        </span>
-                      )}
-                    </div>
+                        )}
+                        {stravaLogs.length > 0 ? (
+                          <span className="cal-strava-pill">
+                            <StravaIcon size={12} className="cal-strava-pill-logo" />
+                            <span className="cal-strava-pill-icons">
+                              {stravaMarkerLogs.map((log) => (
+                                <ExternalSportIcon
+                                  key={log.id}
+                                  provider={log.provider}
+                                  sportType={log.sportType}
+                                  className="cal-strava-icon"
+                                />
+                              ))}
+                              {stravaOverflow > 0 && (
+                                <span className="cal-strava-pill-more">+{stravaOverflow}</span>
+                              )}
+                            </span>
+                          </span>
+                        ) : dayLogs.length > 0 && (
+                          <span className="cal-log-pill">
+                            {dayLogs.length} log{dayLogs.length > 1 ? "s" : ""}
+                          </span>
+                        )}
+                      </div>
+                    </Link>
                   </div>
                 );
               })}
