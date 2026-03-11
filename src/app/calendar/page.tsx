@@ -25,6 +25,7 @@ import ExternalSportIcon from "@/components/ExternalSportIcon";
 import RaceDetailsEditor from "@/components/RaceDetailsEditor";
 import SelectedPlanCookie from "@/components/SelectedPlanCookie";
 import StravaDaySyncButton from "@/components/StravaDaySyncButton";
+import CalendarDayTapHandler from "@/components/CalendarDayTapHandler";
 import StravaIcon from "@/components/StravaIcon";
 import PlanSummarySection from "@/components/PlanSummarySection";
 import CalendarMobileDoubleTap from "@/components/CalendarMobileDoubleTap";
@@ -688,6 +689,7 @@ export default async function CalendarPage({
   return (
     <main className={`dash cal-page${hasSelectedDate ? ' cal-day-open' : ''}`} data-debug-id="TRL">
       <SelectedPlanCookie planId={selectedPlan.id} />
+      <CalendarDayTapHandler />
       <div className="dash-grid">
         <AthleteSidebar active="calendar" name={name} selectedPlanId={selectedPlan.id} />
 
