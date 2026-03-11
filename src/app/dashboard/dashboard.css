@@ -3843,7 +3843,7 @@ details[open] .day-log-instructions-toggle::before {
   padding: 10px 20px 12px;
   border-top: 1px solid var(--d-border-light);
   border-bottom: 1px solid var(--d-border-light);
-  background: #fff;
+  background: var(--d-raised);
 }
 
 .day-log-synced-head {
@@ -3876,7 +3876,7 @@ details[open] .day-log-instructions-toggle::before {
   border: 1px solid var(--d-border);
   border-radius: 10px;
   padding: 8px 10px;
-  background: #fff;
+  background: var(--d-raised);
   display: grid;
   gap: 4px;
 }
