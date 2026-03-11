@@ -1,27 +1,7 @@
-import { redirect } from "next/navigation";
-import { currentUser } from "@clerk/nextjs/server";
-import Link from "next/link";
-import Image from "next/image";
-import BrandLogo from "@/components/BrandLogo";
-import styles from "./page.module.css";
-
-const featureCards = [
-  {
-    title: "Upload & Parse",
-    text: "Drop in your PDF plan and convert it into clean week/day workouts in minutes.",
-    image: "/landing/upload-parse.svg"
-  },
-  {
-    title: "Race-Day Alignment",
-    text: "Shift your full schedule so peak week lands exactly on race weekend.",
-    image: "/landing/race-alignment.svg"
-  },
-  {
-    title: "Coach Sync",
-    text: "Share plans, track completion, and keep athlete feedback in one workflow.",
-    image: "/landing/coach-sync.svg"
-  }
-];
+import { redirect } from 'next/navigation';
+import { currentUser } from '@clerk/nextjs/server';
+import Link from 'next/link';
+import styles from './page.module.css';
 
 export default async function Home() {
   let user = null;
@@ -32,97 +12,324 @@ export default async function Home() {
   }
 
   if (user) {
-    redirect("/auth/resolve-role");
+    redirect('/auth/resolve-role');
   }
 
   return (
-    <main className={styles.landing}>
-      <section className={styles.hero}>
-        <div className={styles.heroCopy}>
-          <div className={styles.heroBrand}>
-            <BrandLogo variant="wordmark" size="landing" tone="light" priority />
-          </div>
-          <span className={styles.eyebrow}>Built for athletes and coaches</span>
-          <h1>Training plans that feel as sharp as race day.</h1>
-          <p>
-            MyTrainingPlan turns static PDFs into structured sessions, aligns your build to the big event,
-            and gives you one place to track execution week by week.
-          </p>
-          <div className={styles.ctas}>
-            <Link className={styles.ctaPrimary} href="/sign-up">Create account</Link>
-            <Link className={styles.ctaSecondary} href="/sign-in">Sign in</Link>
-          </div>
-          <p className={styles.socialProof}>Works with any PDF training plan · Align to your race in minutes</p>
-          <div className={styles.metrics}>
-            <div className={styles.metric}>
-              <strong>PDF to schedule</strong>
-              <span>AI extraction + structure</span>
+    <div className={styles.landing}>
+
+      {/* ===== NAV ===== */}
+      <nav className={styles.nav}>
+        <div className={styles.navInner}>
+          <Link href="/" className={styles.navBrand}>
+            <div className={styles.navLogo}>
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                <path d="M7 1L13 12H1L7 1Z" fill="white" />
+              </svg>
             </div>
-            <div className={styles.metric}>
-              <strong>Race-ready timing</strong>
-              <span>Automatic week alignment</span>
-            </div>
-            <div className={styles.metric}>
-              <strong>Daily execution</strong>
-              <span>Complete and log actuals</span>
-            </div>
+            <span className={styles.navWordmark}>MyTrainingPlan</span>
+          </Link>
+          <div className={styles.navActions}>
+            <Link href="/sign-in" className={styles.btnGhost}>Sign in</Link>
+            <Link href="/sign-up" className={styles.btnPrimary}>Create account →</Link>
           </div>
         </div>
-        <div className={styles.heroVisual}>
-          <Image
-            src="/landing/hero-race-group.jpg"
-            alt="Group of runners racing in a city marathon"
-            className={styles.heroImage}
-            fill
-            sizes="(max-width: 1080px) 100vw, 460px"
-            priority
-          />
-          <div className={styles.heroBadge}>
-            <span className={styles.heroBadgeLabel}>Active Plan</span>
-            <strong>City Marathon Build</strong>
-            <span>Race date: Oct 19</span>
+      </nav>
+
+      {/* ===== HERO ===== */}
+      <section className={styles.heroOuter}>
+        <div className={styles.heroInner}>
+
+          {/* Left: copy */}
+          <div className={styles.heroCopy}>
+            <span className={styles.eyebrow}>For endurance athletes</span>
+            <h1 className={styles.heroTitle}>
+              Training plans as sharp as <em>race day.</em>
+            </h1>
+            <p className={styles.heroDesc}>
+              Drop in your PDF plan, set your race date, and get a structured
+              week-by-week schedule that keeps you on track through the whole build.
+            </p>
+            <div className={styles.heroCtas}>
+              <Link href="/sign-up" className={styles.ctaMain}>Start for free →</Link>
+              <Link href="/sign-in" className={styles.ctaSec}>Sign in</Link>
+            </div>
+            <p className={styles.socialProof}>
+              Works with any PDF training plan · Align to your race in minutes
+            </p>
+            {/* Mobile-only social proof pills */}
+            <div className={styles.proofPills}>
+              <span className={styles.proofPill}>✓ Any PDF plan</span>
+              <span className={styles.proofPill}>⚡ Race-aligned</span>
+              <span className={styles.proofPill}>🔗 Strava sync</span>
+            </div>
           </div>
+
+          {/* Right: app mockup */}
+          <div className={styles.heroVisual}>
+            <div className={styles.appFrame}>
+              <div className={styles.appTopbar}>
+                <div>
+                  <div className={styles.planLabel}>Active plan</div>
+                  <div className={styles.planName}>City Marathon Build</div>
+                </div>
+                <div className={styles.raceBadge}>
+                  <div className={styles.raceDot} />
+                  <span className={styles.raceText}>Race: Oct 19 · 38 days</span>
+                </div>
+              </div>
+              <div className={styles.weekHeader}>
+                <span className={styles.weekLabel}>Week 8 of 16</span>
+                <span className={styles.weekMeta}>Sep 9 – Sep 15</span>
+              </div>
+              <div className={styles.daysGrid}>
+                {[
+                  { label: 'Mon', type: 'Easy',   dist: '6mi ✓',  state: 'done'   },
+                  { label: 'Tue', type: 'Tempo',  dist: '8mi ✓',  state: 'done'   },
+                  { label: 'Wed', type: 'Long',   dist: '14mi',   state: 'active' },
+                  { label: 'Thu', type: 'Rest',   dist: '—',      state: 'rest'   },
+                  { label: 'Fri', type: 'Easy',   dist: '5mi',    state: ''       },
+                  { label: 'Sat', type: 'Stride', dist: '4×100',  state: ''       },
+                  { label: 'Sun', type: 'Rest',   dist: '—',      state: 'rest'   },
+                ].map(({ label, type, dist, state }) => (
+                  <div
+                    key={label}
+                    className={[
+                      styles.day,
+                      state === 'done'   ? styles.dayDone   : '',
+                      state === 'active' ? styles.dayActive : '',
+                      state === 'rest'   ? styles.dayRest   : '',
+                    ].filter(Boolean).join(' ')}
+                  >
+                    <div className={styles.dayLabel}>{label}</div>
+                    <div className={styles.dayType}>{type}</div>
+                    <div className={styles.dayDist}>{dist}</div>
+                  </div>
+                ))}
+              </div>
+              <div className={styles.progressWrap}>
+                <div className={styles.progressLabels}>
+                  <span>Build progress</span>
+                  <span>65% complete</span>
+                </div>
+                <div className={styles.progressTrack}>
+                  <div className={styles.progressFill} />
+                </div>
+              </div>
+              <div className={styles.stravaRow}>
+                <div className={styles.stravaLeft}>
+                  <div className={styles.stravaIcon}>
+                    <svg width="10" height="10" viewBox="0 0 16 16" fill="white">
+                      <path d="M9 3l3 7h-2L8 6 6 10H4l3-7h2z" />
+                    </svg>
+                  </div>
+                  <span className={styles.stravaText}>Strava connected · Last sync 2h ago</span>
+                </div>
+                <span className={styles.stravaSync}>Sync now</span>
+              </div>
+            </div>
+          </div>
+
         </div>
       </section>
 
-      <section className={styles.features}>
+      {/* ===== TESTIMONIAL STRIP ===== */}
+      <div className={styles.testimonialStrip}>
+        <div className={styles.testimonialStripInner}>
+          <div className={styles.testimonial}>
+            <p className={styles.tQuote}>
+              &ldquo;Had my full race calendar set up in under 3 minutes. Incredible.&rdquo;
+            </p>
+            <div className={styles.tAuthor}>— James T., Ironman athlete</div>
+          </div>
+          <div className={styles.tDivider} />
+          <div className={styles.testimonial}>
+            <p className={styles.tQuote}>
+              &ldquo;Finally a tool that gets how runners think about their build weeks.&rdquo;
+            </p>
+            <div className={styles.tAuthor}>— Sarah M., Marathon runner · BQ 2024</div>
+          </div>
+          <div className={styles.tDivider} />
+          <div className={styles.testimonial}>
+            <p className={styles.tQuote}>
+              &ldquo;My athletes love the shared plan and weekly completion tracking.&rdquo;
+            </p>
+            <div className={styles.tAuthor}>— Coach Priya N., Running coach</div>
+          </div>
+        </div>
+      </div>
+
+      {/* ===== HOW IT WORKS ===== */}
+      <section className={styles.section}>
         <div className={styles.sectionHead}>
-          <h2>Everything in one training command center</h2>
-          <p>From plan setup to daily check-off, keep the whole season visible.</p>
+          <div className={styles.sectionEyebrow}>How it works</div>
+          <h2 className={styles.sectionTitle}>From PDF to race-ready<br />in three steps.</h2>
+          <p className={styles.sectionSub}>No manual data entry. No reformatting. Drop in your plan and go.</p>
         </div>
-        <div className={styles.featureGrid}>
-          {featureCards.map((card) => (
-            <article key={card.title} className={styles.featureCard}>
-              <Image
-                src={card.image}
-                alt={`${card.title} illustration`}
-                className={styles.featureImage}
-                width={800}
-                height={520}
-              />
-              <h3>{card.title}</h3>
-              <p>{card.text}</p>
-            </article>
-          ))}
+        <div className={styles.steps}>
+          <div className={styles.step}>
+            <div className={`${styles.stepNum} ${styles.stepNumActive}`}>1</div>
+            <div className={styles.stepBody}>
+              <div className={styles.stepLabel}>Step one</div>
+              <div className={styles.stepTitle}>Upload your PDF plan</div>
+              <p className={styles.stepDesc}>
+                Drop in any coach-written PDF — Hal Higdon, Jack Daniels, your personal coach&rsquo;s
+                plan. AI extracts every workout, week by week, into a clean structured schedule.
+              </p>
+              <div className={styles.stepDetail}>
+                <strong>~2 min</strong> average parse time · <span className={styles.stepTag}>AI-powered</span>
+              </div>
+            </div>
+          </div>
+          <div className={styles.step}>
+            <div className={`${styles.stepNum} ${styles.stepNumMid}`}>2</div>
+            <div className={styles.stepBody}>
+              <div className={styles.stepLabel}>Step two</div>
+              <div className={styles.stepTitle}>Set your race date</div>
+              <p className={styles.stepDesc}>
+                Pick your event and date. The entire schedule shifts automatically so your peak
+                training week lands exactly on race weekend — no manual math, no spreadsheets.
+              </p>
+              <div className={styles.stepDetail}>
+                <strong>Automatic</strong> week alignment · supports multiple races
+              </div>
+            </div>
+          </div>
+          <div className={styles.step}>
+            <div className={`${styles.stepNum} ${styles.stepNumDim}`}>3</div>
+            <div className={styles.stepBody}>
+              <div className={styles.stepLabel}>Step three</div>
+              <div className={styles.stepTitle}>Execute. Log. Repeat.</div>
+              <p className={styles.stepDesc}>
+                Check off workouts daily, log your actual distance and pace, and connect Strava
+                to auto-import runs. See your build progress at a glance — all the way to the line.
+              </p>
+              <div className={styles.stepDetail}>
+                🔗 Strava sync · <strong>Daily</strong> execution log
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
-      <section className={styles.bottomCta}>
-        <h2>Start with your next training cycle today</h2>
-        <p>Import a plan, set your race date, and make every workout count.</p>
-        <div className={styles.ctas}>
-          <Link className={styles.ctaPrimary} href="/sign-up">Create account</Link>
-          <Link className={styles.ctaSecondary} href="/sign-in">Sign in</Link>
+      {/* divider */}
+      <div className={styles.sectionDivider}>
+        <div className={styles.sectionDividerLine} />
+      </div>
+
+      {/* ===== FEATURES ===== */}
+      <section className={styles.section}>
+        <div className={styles.sectionHead}>
+          <div className={styles.sectionEyebrow}>Features</div>
+          <h2 className={styles.sectionTitle}>Everything in one<br />training command center.</h2>
+          <p className={styles.sectionSub}>Built for athletes who take their training seriously.</p>
+        </div>
+        <div className={styles.featuresGrid}>
+          <article className={styles.featCard}>
+            <div className={`${styles.featIcon} ${styles.featIconOrange}`}>📄</div>
+            <h3 className={styles.featTitle}>Upload &amp; Parse</h3>
+            <p className={styles.featDesc}>
+              AI extracts workouts from any PDF plan — distance, pace targets, effort levels,
+              and rest days — into a clean structured calendar.
+            </p>
+          </article>
+          <article className={styles.featCard}>
+            <div className={`${styles.featIcon} ${styles.featIconBlue}`}>🏁</div>
+            <h3 className={styles.featTitle}>Race-Day Alignment</h3>
+            <p className={styles.featDesc}>
+              Set a race date and the full schedule shifts automatically. Peak week always lands
+              on race weekend. Works across multiple events in a single season.
+            </p>
+          </article>
+          <article className={styles.featCard}>
+            <div className={`${styles.featIcon} ${styles.featIconGreen}`}>👥</div>
+            <h3 className={styles.featTitle}>Coach Sync</h3>
+            <p className={styles.featDesc}>
+              Coaches share plans with athletes, track weekly completion, and keep feedback
+              in one place — no more chasing athletes across email and DMs.
+            </p>
+          </article>
         </div>
       </section>
 
-      <footer className={styles.legalFooter}>
-        <Link href="/privacy">Privacy Policy</Link>
-        <span>·</span>
-        <Link href="/terms">Terms of Service</Link>
-        <span>·</span>
-        <span>© {new Date().getFullYear()} mytrainingplan.io</span>
+      {/* ===== BOTTOM CTA ===== */}
+      <div className={styles.bottomCtaOuter}>
+        <div className={styles.bottomCta}>
+          <div className={styles.ctaEyebrow}>Start today</div>
+          <h2 className={styles.ctaTitle}>
+            Your next race is already <em>waiting.</em>
+          </h2>
+          <p className={styles.ctaDesc}>
+            Import your plan, set your race date, and make every workout in the build count.
+          </p>
+          <div className={styles.ctaButtons}>
+            <Link href="/sign-up" className={styles.ctaMainLg}>Create free account →</Link>
+            <Link href="/sign-in" className={styles.ctaSecLg}>Sign in</Link>
+          </div>
+          <p className={styles.ctaFootnote}>Free to start · No credit card required</p>
+          <div className={styles.ctaStats}>
+            <div>
+              <div className={styles.ctaStatVal}><em>2</em> min</div>
+              <div className={styles.ctaStatLabel}>PDF to structured plan</div>
+            </div>
+            <div>
+              <div className={styles.ctaStatVal}>Auto</div>
+              <div className={styles.ctaStatLabel}>Race-week alignment</div>
+            </div>
+            <div>
+              <div className={styles.ctaStatVal}>Daily</div>
+              <div className={styles.ctaStatLabel}>Execution tracking</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ===== FOOTER ===== */}
+      <footer className={styles.footer}>
+        <div className={styles.footerInner}>
+          <div className={styles.footerTop}>
+            <div>
+              <div className={styles.footerBrandRow}>
+                <div className={styles.footerLogo}>
+                  <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
+                    <path d="M7 1L13 12H1L7 1Z" fill="white" />
+                  </svg>
+                </div>
+                <span className={styles.footerWordmark}>MyTrainingPlan</span>
+              </div>
+              <p className={styles.footerTagline}>
+                Training plans as sharp as race day. Built for endurance athletes and coaches.
+              </p>
+            </div>
+            <div className={styles.footerLinks}>
+              <div className={styles.footerCol}>
+                <div className={styles.footerColTitle}>Product</div>
+                <Link href="/#how-it-works">How it works</Link>
+                <Link href="/#features">For coaches</Link>
+                <Link href="/strava">Strava integration</Link>
+              </div>
+              <div className={styles.footerCol}>
+                <div className={styles.footerColTitle}>Account</div>
+                <Link href="/sign-up">Create account</Link>
+                <Link href="/sign-in">Sign in</Link>
+              </div>
+              <div className={styles.footerCol}>
+                <div className={styles.footerColTitle}>Legal</div>
+                <Link href="/privacy">Privacy Policy</Link>
+                <Link href="/terms">Terms of Service</Link>
+              </div>
+            </div>
+          </div>
+          <div className={styles.footerBottom}>
+            <span className={styles.footerCopy}>© {new Date().getFullYear()} mytrainingplan.io</span>
+            <div className={styles.footerLegal}>
+              <Link href="/privacy">Privacy</Link>
+              <Link href="/terms">Terms</Link>
+            </div>
+          </div>
+        </div>
       </footer>
-    </main>
+
+    </div>
   );
 }
