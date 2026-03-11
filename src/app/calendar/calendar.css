@@ -1570,6 +1570,11 @@
 }
 
 @media (max-width: 768px) {
+  .cal-day-hit {
+    pointer-events: none;
+    cursor: default;
+  }
+
   body:has(.cal-page.cal-day-open) {
     overflow: hidden;
   }
