@@ -61,6 +61,7 @@ export default async function RootLayout({
   const isSignedIn = !!roleContext;
   const content = (
     <html lang="en">
+      <script dangerouslySetInnerHTML={{ __html: `(function(){var t=localStorage.getItem('theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark');})();` }} />
       <body>
         <Header
           brand="MyTrainingPlan"

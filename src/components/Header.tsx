@@ -5,6 +5,7 @@ import { UserButton } from '@clerk/nextjs';
 import { usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import BrandLogo from '@/components/BrandLogo';
+import ThemeToggle from '@/components/ThemeToggle';
 import {
     appendPlanQueryToHref,
     extractPlanIdFromPathname,
@@ -121,6 +122,7 @@ export default function Header({
                     </button>
 
                     <div style={{ marginLeft: 'auto' }} className="header-user-btn">
+                        <ThemeToggle />
                         <UserButton />
                     </div>
                 </>

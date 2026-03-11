@@ -6,11 +6,11 @@ export default function ThemeToggle() {
   const [dark, setDark] = useState(false);
 
   useEffect(() => {
-    const saved = localStorage.getItem('theme');
-    const isDark = saved === 'dark';
-    setDark(isDark);
+    const isDark = localStorage.getItem('theme') === 'dark';
+    if (isDark !== dark) setDark(isDark);
     setMounted(true);
     document.documentElement.classList.add('theme-ready');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function toggle() {
