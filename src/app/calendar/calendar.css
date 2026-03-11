@@ -369,6 +369,9 @@
   inset: 0;
   z-index: 4;
   border-radius: 12px;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .cal-day.out-month {
