@@ -730,3 +730,127 @@ tbody tr:nth-child(odd) {
     padding-bottom: calc(60px + 56px + env(safe-area-inset-bottom)) !important;
   }
 }
+
+/* ===== THEME TOGGLE BUTTON ===== */
+.theme-toggle-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: transparent;
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.15s, background 0.15s;
+  flex-shrink: 0;
+}
+.theme-toggle-btn:hover {
+  border-color: var(--accent);
+  background: rgba(252, 76, 2, 0.06);
+}
+
+/* header-user-btn gap when ThemeToggle is present */
+.header-user-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ===== SMOOTH THEME TRANSITION (only after user interaction) ===== */
+.theme-ready body {
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* ===== DARK MODE TOKEN OVERRIDES ===== */
+[data-theme="dark"] {
+  /* Legacy globals tokens */
+  --ink: #f5f8ff;
+  --muted: #94a3b8;
+  --panel: #070c16;
+  --background: #0f1729;
+  --border: rgba(255, 255, 255, 0.08);
+  --accent-strong: #fc6a2a;
+  --green: #4ade80;
+  --red: #f87171;
+  --amber: #fbbf24;
+}
+
+[data-theme="dark"] body {
+  background: #070c16;
+  color: #f5f8ff;
+}
+
+/* Header */
+[data-theme="dark"] .header {
+  background: rgba(7, 12, 22, 0.92);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom-color: rgba(255, 255, 255, 0.07);
+}
+
+/* Nav links */
+[data-theme="dark"] .nav a {
+  color: #475569;
+}
+[data-theme="dark"] .nav a:hover {
+  color: #f5f8ff;
+}
+
+/* Mobile menu */
+[data-theme="dark"] .mobile-menu {
+  background: #0d1421;
+  border-color: rgba(255, 255, 255, 0.07);
+}
+[data-theme="dark"] .mobile-nav-link {
+  color: #94a3b8;
+  border-bottom-color: rgba(255, 255, 255, 0.06);
+}
+[data-theme="dark"] .mobile-nav-link:hover {
+  color: #f5f8ff;
+  background: rgba(255, 255, 255, 0.04);
+}
+[data-theme="dark"] .mobile-overlay {
+  background: rgba(0, 0, 0, 0.6);
+}
+
+/* Theme toggle in dark mode */
+[data-theme="dark"] .theme-toggle-btn {
+  border-color: rgba(255, 255, 255, 0.12);
+}
+[data-theme="dark"] .theme-toggle-btn:hover {
+  border-color: rgba(252, 76, 2, 0.4);
+  background: rgba(252, 76, 2, 0.1);
+}
+
+/* Cards and general surfaces */
+[data-theme="dark"] .card {
+  background: #0f1729;
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+/* Buttons */
+[data-theme="dark"] .cta.secondary {
+  border-color: rgba(255, 255, 255, 0.14);
+  color: #94a3b8;
+}
+[data-theme="dark"] .cta.secondary:hover {
+  border-color: rgba(255, 255, 255, 0.3);
+  color: #f5f8ff;
+}
+
+/* Account disabled card */
+[data-theme="dark"] .account-disabled-shell {
+  background: #070c16;
+}
+[data-theme="dark"] .account-disabled-card {
+  background: #0f1729;
+  border-color: rgba(255, 255, 255, 0.08);
+}
+[data-theme="dark"] .account-disabled-card h1 {
+  color: #f5f8ff;
+}
+[data-theme="dark"] .account-disabled-card p {
+  color: #94a3b8;
+}
