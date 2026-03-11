@@ -3993,7 +3993,8 @@ details[open] .day-log-instructions-toggle::before {
 }
 
 /* ===== DARK MODE TOKEN OVERRIDES ===== */
-/* Must scope to .dash to override the .dash { --d-* } declarations above */
+/* Also override :root because plans.css declares tokens there for portal/fixed elements */
+[data-theme="dark"],
 [data-theme="dark"] .dash,
 [data-theme="dark"] .plans-page-shell,
 [data-theme="dark"] .pcal {
@@ -4004,7 +4005,7 @@ details[open] .day-log-instructions-toggle::before {
   --d-border-light: rgba(255, 255, 255, 0.05);
   --d-text: #f5f8ff;
   --d-text-mid: #94a3b8;
-  --d-muted: #475569;
+  --d-muted: #64748b;
   --d-orange: #fc4c02;
   --d-green: #4ade80;
   --d-red: #f87171;
