@@ -60,7 +60,7 @@ export default async function RootLayout({
     : "/auth/resolve-role";
   const isSignedIn = !!roleContext;
   const content = (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <script dangerouslySetInnerHTML={{ __html: `(function(){var t=localStorage.getItem('theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark');})();` }} />
       <body>
         <Header
