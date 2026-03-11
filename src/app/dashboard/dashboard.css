@@ -2480,7 +2480,7 @@ details[open] .day-log-instructions-toggle::before {
   padding: 8px;
   border: 1px solid var(--d-border-light);
   border-radius: var(--d-radius-sm);
-  background: #fff;
+  background: var(--d-raised);
 }
 
 .dash-day-item.done {
@@ -2786,7 +2786,7 @@ details[open] .day-log-instructions-toggle::before {
 
 .dash-day-table tr.day-import-closed td {
   background: rgba(107, 107, 118, 0.1);
-  color: #5b5b63;
+  color: var(--d-muted);
 }
 
 .dash-day-reopen-link {
