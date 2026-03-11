@@ -489,7 +489,7 @@ export default function PlanDetailPage() {
   const [syncingStrava, setSyncingStrava] = useState(false);
   const [savingActuals, setSavingActuals] = useState(false);
   const [viewerUnits, setViewerUnits] = useState<DistanceUnit>('MILES');
-  const [viewMode, setViewMode] = useState<'plan' | 'log'>('plan');
+  const [viewMode, setViewMode] = useState<'plan' | 'log'>('log');
   const [cellView, setCellView] = useState<'compact' | 'detail'>('detail');
   const [selectedDay, setSelectedDay] = useState<SelectedDayState | null>(null);
   const [stravaConnected, setStravaConnected] = useState(false);
