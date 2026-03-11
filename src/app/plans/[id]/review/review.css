@@ -1582,3 +1582,67 @@
     align-items: flex-start;
   }
 }
+
+/* ===== DARK MODE OVERRIDES ===== */
+/* review.css uses a slate-blue design system with hardcoded hex colors.
+   Actual class names: .review-page-card, .review-hero, .review-day-block, etc. */
+
+/* Main card container — hardcoded gradient #ffffff → #fcfdff */
+[data-theme="dark"] .review-page-card {
+  background: #0f1729;
+  border-color: rgba(255, 255, 255, 0.08);
+  color: #f5f8ff;
+}
+
+/* Review hero header — hardcoded color: #1f2f4a */
+[data-theme="dark"] .review-hero {
+  background: #0d1421;
+  border-bottom-color: rgba(255, 255, 255, 0.07);
+}
+[data-theme="dark"] .review-hero-head h1 {
+  color: #f5f8ff;
+}
+[data-theme="dark"] .review-hero-head p {
+  color: #94a3b8;
+}
+
+/* Source pane — hardcoded #f6f9ff, border #d9e4f6 */
+[data-theme="dark"] .review-source-pane-body {
+  background: #0d1421;
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+/* Day blocks — hardcoded #fbfdff, border #d9e4f6, border-left #f9a07a */
+[data-theme="dark"] .review-day-block {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.07);
+  border-left-color: rgba(252, 76, 2, 0.4);
+}
+
+/* Activity items — hardcoded #ffffff, border #e1e8f5 */
+[data-theme="dark"] .review-activity-item {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+/* Form fields — hardcoded #fcfdff, border #cbd8ef */
+[data-theme="dark"] .review-field input,
+[data-theme="dark"] .review-field select,
+[data-theme="dark"] .review-field textarea {
+  background: #111f38;
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #f5f8ff;
+}
+[data-theme="dark"] .review-field input:focus,
+[data-theme="dark"] .review-field select:focus,
+[data-theme="dark"] .review-field textarea:focus {
+  border-color: rgba(252, 76, 2, 0.5);
+}
+
+/* Text colors — hardcoded #2c4467, #60708d → readable on dark */
+[data-theme="dark"] .review-page-shell {
+  color: #f5f8ff;
+}
+[data-theme="dark"] .review-muted {
+  color: #64748b;
+}
