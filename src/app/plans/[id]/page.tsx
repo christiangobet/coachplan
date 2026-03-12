@@ -1947,7 +1947,14 @@ export default function PlanDetailPage() {
                             </span>
                           )}
                         </div>
-                        <p>{humanizeAiText(turn.text, aiChangeLookup)}</p>
+                        {turn.proposalState === 'applied' ? (
+                          <p className="pcal-ai-trainer-applied-summary">
+                            Coach suggestion applied
+                            {turn.createdAt ? ` — ${new Date(turn.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : ''}
+                          </p>
+                        ) : (
+                          <p>{humanizeAiText(turn.text, aiChangeLookup)}</p>
+                        )}
                         {turn.errorCode && (
                           <span className="pcal-ai-turn-error-code">{turn.errorCode}</span>
                         )}

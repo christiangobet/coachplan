@@ -2095,6 +2095,12 @@
   color: #1d4ed8;
 }
 
+.pcal-ai-trainer-applied-summary {
+  color: var(--d-muted);
+  font-size: 13px;
+  font-style: italic;
+}
+
 .pcal-ai-turn-use {
   justify-self: start;
   min-height: 30px;
