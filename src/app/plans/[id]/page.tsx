@@ -529,6 +529,9 @@ export default function PlanDetailPage() {
     sourceIndex: number;
   } | null>(null);
   const touchDropTargetRef = useRef<{ dayId: string; rawIndex: number } | null>(null);
+  // Long-press detection: drag only activates after 400ms hold (prevents conflict with scroll)
+  const touchLiftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const touchStartPosRef = useRef<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
     if (searchParams && searchParams.get('mode') === 'edit') {
@@ -2513,17 +2516,45 @@ export default function PlanDetailPage() {
                                   draggable={!activityDragDisabled}
                                   onTouchStart={(event) => {
                                     if (!touchDndEnabled || !day?.id || dayLockedForMove || a.completed) return;
-                                    touchDragRef.current = {
-                                      activityId: a.id,
-                                      sourceDayId: day.id,
-                                      sourceIndex: activityIndex,
-                                    };
-                                    setDraggingActivity({
-                                      activityId: a.id,
-                                      sourceDayId: day.id,
-                                      sourceIndex: activityIndex,
-                                    });
-                                    // Don't preventDefault here — would block subsequent click on tap
+                                    const touch = event.touches[0];
+                                    touchStartPosRef.current = { x: touch.clientX, y: touch.clientY };
+                                    if (touchLiftTimerRef.current) clearTimeout(touchLiftTimerRef.current);
+                                    // Long press (400ms) activates drag — prevents conflict with scroll/tap
+                                    touchLiftTimerRef.current = setTimeout(() => {
+                                      touchLiftTimerRef.current = null;
+                                      touchDragRef.current = {
+                                        activityId: a.id,
+                                        sourceDayId: day.id,
+                                        sourceIndex: activityIndex,
+                                      };
+                                      setDraggingActivity({
+                                        activityId: a.id,
+                                        sourceDayId: day.id,
+                                        sourceIndex: activityIndex,
+                                      });
+                                      // Haptic feedback if available
+                                      if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(30);
+                                    }, 400);
+                                  }}
+                                  onTouchMove={(event) => {
+                                    // If finger moves > 8px before lift threshold, cancel — user is scrolling
+                                    if (!touchLiftTimerRef.current || !touchStartPosRef.current) return;
+                                    const touch = event.touches[0];
+                                    const dx = Math.abs(touch.clientX - touchStartPosRef.current.x);
+                                    const dy = Math.abs(touch.clientY - touchStartPosRef.current.y);
+                                    if (dx > 8 || dy > 8) {
+                                      clearTimeout(touchLiftTimerRef.current);
+                                      touchLiftTimerRef.current = null;
+                                      touchStartPosRef.current = null;
+                                    }
+                                  }}
+                                  onTouchEnd={() => {
+                                    // Finger lifted before long-press threshold — cancel pending lift
+                                    if (touchLiftTimerRef.current) {
+                                      clearTimeout(touchLiftTimerRef.current);
+                                      touchLiftTimerRef.current = null;
+                                      touchStartPosRef.current = null;
+                                    }
                                   }}
                                   onDragStart={(event) => {
                                     if (activityDragDisabled || !day?.id) return;
