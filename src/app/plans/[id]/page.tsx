@@ -519,6 +519,13 @@ export default function PlanDetailPage() {
   } | null>(null);
   const dragMovedRef = useRef(false);
   const suppressClickActivityIdRef = useRef<string | null>(null);
+  // Touch drag state (iOS/iPad — HTML5 drag events don't fire on touch devices)
+  const touchDragRef = useRef<{
+    activityId: string;
+    sourceDayId: string;
+    sourceIndex: number;
+  } | null>(null);
+  const touchDropTargetRef = useRef<{ dayId: string; rawIndex: number } | null>(null);
 
   useEffect(() => {
     if (searchParams && searchParams.get('mode') === 'edit') {
@@ -891,7 +898,9 @@ export default function PlanDetailPage() {
         sourceDayId,
         targetDayId
       });
-      // Write change log entry and schedule AI risk scan for cross-day moves
+      // Reload plan immediately so the move is visible right away
+      await loadPlan();
+      // Write change log entry and schedule AI risk scan for cross-day moves (fire-and-forget)
       if (!sameDay) {
         fetch(`/api/plans/${planId}/change-log`, {
           method: 'POST',
@@ -932,7 +941,6 @@ export default function PlanDetailPage() {
           })
           .catch(() => {});
       }
-      await loadPlan();
     } catch (err: any) {
       emitPlanEditEvent('plan_activity_move_failed', {
         activityId,
@@ -950,6 +958,53 @@ export default function PlanDetailPage() {
   useEffect(() => {
     loadPlan();
   }, [loadPlan]);
+
+  // Touch drag support for iOS/iPadOS (HTML5 drag events don't fire on touch devices)
+  useEffect(() => {
+    if (!isEditMode) return;
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (!touchDragRef.current) return;
+      e.preventDefault(); // prevent page scroll while dragging
+      const touch = e.touches[0];
+      // Walk up DOM from element under finger to find the day cell
+      const elements = document.elementsFromPoint(touch.clientX, touch.clientY);
+      let foundDayId: string | null = null;
+      for (const el of elements) {
+        const dayId = (el as HTMLElement).dataset?.dayId;
+        if (dayId) { foundDayId = dayId; break; }
+      }
+      if (foundDayId) {
+        touchDropTargetRef.current = { dayId: foundDayId, rawIndex: 9999 };
+        setDropTarget({ dayId: foundDayId, rawIndex: 9999, position: 'append', valid: true });
+      }
+    };
+
+    const handleTouchEnd = () => {
+      const drag = touchDragRef.current;
+      const drop = touchDropTargetRef.current;
+      touchDragRef.current = null;
+      touchDropTargetRef.current = null;
+      setDraggingActivity(null);
+      setDropTarget(null);
+      if (drag && drop && drop.dayId !== drag.sourceDayId) {
+        void moveActivity({
+          activityId: drag.activityId,
+          sourceDayId: drag.sourceDayId,
+          sourceIndex: drag.sourceIndex,
+          targetDayId: drop.dayId,
+          rawTargetIndex: drop.rawIndex,
+        });
+      }
+    };
+
+    document.addEventListener('touchmove', handleTouchMove, { passive: false });
+    document.addEventListener('touchend', handleTouchEnd);
+    return () => {
+      document.removeEventListener('touchmove', handleTouchMove);
+      document.removeEventListener('touchend', handleTouchEnd);
+    };
+  }, [isEditMode, moveActivity]);
 
   // Load chat history on mount
   useEffect(() => {
@@ -1551,6 +1606,7 @@ export default function PlanDetailPage() {
   const completionPct = totalActivities > 0 ? Math.round((completedActivities / totalActivities) * 100) : 0;
   const viewerUnitLabel = distanceUnitLabel(viewerUnits);
   const desktopDndEnabled = isEditMode && isWideScreen;
+  const touchDndEnabled = isEditMode; // touch drag works on all screen sizes (iOS/iPad)
   const toDisplayDistance = (value: number | null | undefined, sourceUnit: string | null | undefined) =>
     convertDistanceForDisplay(value, sourceUnit, viewerUnits);
 
@@ -2243,6 +2299,7 @@ export default function PlanDetailPage() {
                         <div
                           className={`pcal-cell${isToday ? ' pcal-cell-today' : ''}${isPast ? ' pcal-cell-past' : ''}${dayDone ? ' pcal-cell-day-done' : ''}${dayMissed ? ' pcal-cell-day-missed' : ''}${dayPartial ? ' pcal-cell-day-partial' : ''}${primaryType ? ` pcal-cell--type-${primaryType}` : ''}${dayDate && !isEditMode ? ' pcal-cell-clickable' : ''}${isDropTargetDay && dropTarget?.valid ? ' pcal-cell-drop-target' : ''}${isDropTargetDay && dropTarget && !dropTarget.valid ? ' pcal-cell-drop-target-invalid' : ''}`}
                           data-debug-id="PDC"
+                          data-day-id={day?.id}
                           key={dow}
                           onClick={dayDate && !isEditMode ? openDayLog : undefined}
                           onDragOver={(event) => {
@@ -2450,6 +2507,20 @@ export default function PlanDetailPage() {
                                   className={`pcal-activity pcal-activity-clickable${a.completed ? ' pcal-activity-done' : ''}${a.mustDo || a.priority === 'KEY' ? ' pcal-activity-key' : ''}${longRun && a.id === longRun.id ? ' pcal-activity-long-run' : ''}${cellView === 'compact' ? ' pcal-activity-compact' : ''}${movingActivityId === a.id ? ' pcal-activity-moving' : ''}${draggingActivity?.activityId === a.id ? ' pcal-activity-dragging' : ''}`}
                                   title={cellView === 'compact' ? a.title : undefined}
                                   draggable={!activityDragDisabled}
+                                  onTouchStart={(event) => {
+                                    if (!touchDndEnabled || !day?.id || dayLockedForMove || a.completed) return;
+                                    touchDragRef.current = {
+                                      activityId: a.id,
+                                      sourceDayId: day.id,
+                                      sourceIndex: activityIndex,
+                                    };
+                                    setDraggingActivity({
+                                      activityId: a.id,
+                                      sourceDayId: day.id,
+                                      sourceIndex: activityIndex,
+                                    });
+                                    // Don't prevent default here — let touchmove handler manage scroll prevention
+                                  }}
                                   onDragStart={(event) => {
                                     if (activityDragDisabled || !day?.id) return;
                                     event.stopPropagation();
