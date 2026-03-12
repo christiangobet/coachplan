@@ -867,26 +867,59 @@ export default function PlanDetailPage() {
 
     setMovingActivityId(activityId);
     setError(null);
-    try {
-      // Capture before-state from current plan data (must be before loadPlan refreshes state)
-      const activitiesForDay = (dayId: string) => {
-        for (const week of (plan?.weeks ?? [])) {
-          for (const day of (week.days ?? [])) {
-            if (day.id === dayId) {
-              return (day.activities ?? []).map((a: { id: string; type: string; subtype?: string | null; title: string; duration?: number | null; distance?: number | null; distanceUnit?: string | null; priority?: string | null }) => ({
-                id: a.id, type: a.type, subtype: a.subtype ?? null,
-                title: a.title, duration: a.duration ?? null,
-                distance: a.distance ?? null, distanceUnit: a.distanceUnit ?? null,
-                priority: a.priority ?? null,
-              }));
+
+    // Capture before/after snapshots for change log (must happen before optimistic update)
+    const activitiesForDay = (dayId: string) => {
+      for (const week of (plan?.weeks ?? [])) {
+        for (const day of (week.days ?? [])) {
+          if (day.id === dayId) {
+            return (day.activities ?? []).map((a: { id: string; type: string; subtype?: string | null; title: string; duration?: number | null; distance?: number | null; distanceUnit?: string | null; priority?: string | null }) => ({
+              id: a.id, type: a.type, subtype: a.subtype ?? null,
+              title: a.title, duration: a.duration ?? null,
+              distance: a.distance ?? null, distanceUnit: a.distanceUnit ?? null,
+              priority: a.priority ?? null,
+            }));
+          }
+        }
+      }
+      return [];
+    };
+    const beforeActivities = activitiesForDay(sourceDayId);
+    const afterActivitiesSnapshot = activitiesForDay(targetDayId);
+    const planSnapshot = plan; // keep for revert on error
+
+    // Optimistic update — move activity in local state immediately (no server wait)
+    setPlan((prev: any) => {
+      if (!prev) return prev;
+      const next = JSON.parse(JSON.stringify(prev));
+      let moved: any = null;
+      for (const week of next.weeks ?? []) {
+        for (const day of week.days ?? []) {
+          if (day.id === sourceDayId) {
+            const idx = (day.activities ?? []).findIndex((a: any) => a.id === activityId);
+            if (idx !== -1) { [moved] = day.activities.splice(idx, 1); }
+          }
+        }
+      }
+      if (moved) {
+        moved.dayId = targetDayId;
+        for (const week of next.weeks ?? []) {
+          for (const day of week.days ?? []) {
+            if (day.id === targetDayId) {
+              const insertAt = Math.min(Math.max(0, normalizedIndex), (day.activities ?? []).length);
+              day.activities.splice(insertAt, 0, moved);
             }
           }
         }
-        return [];
-      };
-      const beforeActivities = activitiesForDay(sourceDayId);
-      const afterActivitiesSnapshot = activitiesForDay(targetDayId);
+      }
+      return next;
+    });
+    // Clear drag state immediately so UI feels instant
+    setDraggingActivity(null);
+    setDropTarget(null);
+    setMovingActivityId(null);
 
+    try {
       const res = await fetch(`/api/activities/${activityId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -904,8 +937,8 @@ export default function PlanDetailPage() {
         sourceDayId,
         targetDayId
       });
-      // Reload plan immediately so the move is visible right away
-      await loadPlan();
+      // Reconcile with server in background — non-blocking
+      loadPlan().catch(() => {});
       // Write change log entry and schedule AI risk scan for cross-day moves (fire-and-forget)
       if (!sameDay) {
         fetch(`/api/plans/${planId}/change-log`, {
@@ -948,16 +981,14 @@ export default function PlanDetailPage() {
           .catch(() => {});
       }
     } catch (err: any) {
+      // Revert optimistic update on error
+      setPlan(planSnapshot);
       emitPlanEditEvent('plan_activity_move_failed', {
         activityId,
         sourceDayId,
         targetDayId
       });
       setError(err?.message || 'Failed to move activity');
-    } finally {
-      setMovingActivityId(null);
-      setDropTarget(null);
-      setDraggingActivity(null);
     }
   }, [emitPlanEditEvent, loadPlan, plan, planId, editSessionId, setChatMessages]);
 
