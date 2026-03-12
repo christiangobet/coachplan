@@ -980,6 +980,13 @@ export default function PlanDetailPage() {
                   .then((chatData: { coachMessage?: import('@/lib/plan-chat-types').ChatMessage | null }) => {
                     if (chatData.coachMessage) {
                       setChatMessages((prev) => [...prev, chatData.coachMessage!]);
+                      // Also show in the floating widget thread
+                      setAiChatTurns((prev) => [...prev, {
+                        id: chatData.coachMessage!.id,
+                        role: 'coach' as const,
+                        text: chatData.coachMessage!.content,
+                        createdAt: new Date(chatData.coachMessage!.createdAt).getTime(),
+                      }]);
                       if (!chatOpen) setHasUnread(true);
                     }
                   })
@@ -1878,6 +1885,13 @@ export default function PlanDetailPage() {
                             .then((data: { coachMessage?: import('@/lib/plan-chat-types').ChatMessage }) => {
                               if (data.coachMessage) {
                                 setChatMessages((prev) => [...prev, data.coachMessage!]);
+                                // Also show in the floating widget thread
+                                setAiChatTurns((prev) => [...prev, {
+                                  id: data.coachMessage!.id,
+                                  role: 'coach' as const,
+                                  text: data.coachMessage!.content,
+                                  createdAt: new Date(data.coachMessage!.createdAt).getTime(),
+                                }]);
                                 if (!chatOpen) setHasUnread(true);
                               }
                             })
