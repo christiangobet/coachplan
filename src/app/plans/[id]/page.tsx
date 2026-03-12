@@ -506,6 +506,7 @@ export default function PlanDetailPage() {
   const [aiTrainerError, setAiTrainerError] = useState<string | null>(null);
   const [aiTrainerStatus, setAiTrainerStatus] = useState<string | null>(null);
   const [aiTrainerClarification, setAiTrainerClarification] = useState('');
+  const [proposalDetailsOpen, setProposalDetailsOpen] = useState(false);
   const aiTrainerApplying = aiTrainerApplyingTarget !== null;
   const activeProposalTurn = useMemo(
     () => aiChatTurns.find((turn) => turn.id === activeProposalTurnId && turn.proposal) || null,
@@ -1909,7 +1910,23 @@ export default function PlanDetailPage() {
                   </div>
 
                   <div className="pcal-ai-thread">
-                    {aiChatTurns.length === 0 && (
+                    {/* Chat history from DB (loaded on mount) */}
+                    {chatMessages.map((msg) => (
+                      <article key={msg.id} className={`pcal-ai-turn role-${msg.role}`}>
+                        <div className="pcal-ai-turn-head">
+                          <strong>
+                            {msg.role === 'athlete' ? 'You' : msg.role === 'coach' ? 'Coach' : 'System'}
+                          </strong>
+                          {msg.metadata?.state && msg.metadata.state !== 'active' && (
+                            <span className={`pcal-ai-turn-state state-${msg.metadata.state}`}>
+                              {msg.metadata.state === 'applied' ? 'Applied' : 'History'}
+                            </span>
+                          )}
+                        </div>
+                        <p>{msg.content}</p>
+                      </article>
+                    ))}
+                    {aiChatTurns.length === 0 && chatMessages.length === 0 && (
                       <p className="pcal-ai-trainer-status">
                         Start with one clear request, for example: &quot;Move this week&apos;s long run to Sunday and rebalance recovery.&quot;
                       </p>
@@ -1974,140 +1991,106 @@ export default function PlanDetailPage() {
 
                   {aiTrainerProposal ? (
                     <div className="pcal-ai-trainer-proposal">
-                      <div className="pcal-ai-trainer-meta">
-                        <strong>Active Recommendation</strong>
-                        <span>Confidence: {aiTrainerProposal.confidence}</span>
-                      </div>
-                      <p>{humanizeAiText(aiTrainerProposal.coachReply, aiChangeLookup)}</p>
+                      {/* Coach reply */}
+                      <p className="pcal-ai-trainer-reply">
+                        {humanizeAiText(aiTrainerProposal.coachReply, aiChangeLookup)}
+                      </p>
+
+                      {/* Follow-up question */}
                       {aiTrainerProposal.followUpQuestion && (
-                        <p className="pcal-ai-trainer-followup">
-                          Follow-up: {humanizeAiText(aiTrainerProposal.followUpQuestion, aiChangeLookup)}
+                        <p className="pcal-ai-trainer-followup-q">
+                          {humanizeAiText(aiTrainerProposal.followUpQuestion, aiChangeLookup)}
                         </p>
                       )}
+
+                      {/* Clarification required */}
                       {aiTrainerProposal.requiresClarification && (
-                        <div className="pcal-ai-trainer-followup">
-                          <p>
-                            Clarification required: {humanizeAiText(aiTrainerProposal.clarificationPrompt || 'Please confirm constraints before applying.', aiChangeLookup)}
-                          </p>
+                        <div className="pcal-ai-trainer-clarification">
+                          <p>{humanizeAiText(aiTrainerProposal.clarificationPrompt ?? 'Please confirm before applying.', aiChangeLookup)}</p>
                           <textarea
                             value={aiTrainerClarification}
                             onChange={(e) => setAiTrainerClarification(e.target.value)}
-                            placeholder="Example: Keep long run on Sunday, max 1 hard session mid-week, no added mileage this week."
-                            rows={3}
+                            placeholder="Your response..."
+                            rows={2}
                           />
                         </div>
                       )}
-                      {aiTrainerProposal.invariantReport && aiTrainerProposal.invariantReport.weeks.length > 0 && (
-                        <div className="pcal-ai-trainer-invariants">
+
+                      {/* Changes list */}
+                      {aiTrainerProposal.changes.length > 0 && (
+                        <div className="pcal-ai-trainer-change-list">
+                          {aiTrainerProposal.changes.map((change, i) => (
+                            <div key={i} className="pcal-ai-trainer-change-item">
+                              <span className="pcal-ai-trainer-change-dot" />
+                              <span className="pcal-ai-trainer-change-label">
+                                {humanizeAiText(change.reason, aiChangeLookup)}
+                              </span>
+                              <button
+                                type="button"
+                                className="dash-btn-primary pcal-ai-apply-one"
+                                onClick={() => applyAiAdjustment(i)}
+                                disabled={aiTrainerLoading}
+                              >
+                                Apply
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Action row */}
+                      <div className="pcal-ai-trainer-actions">
+                        {aiTrainerProposal.changes.length > 1 && (
+                          <button
+                            type="button"
+                            className="dash-btn-primary"
+                            onClick={() => applyAiAdjustment()}
+                            disabled={aiTrainerLoading}
+                          >
+                            Apply all changes
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          className="dash-btn-ghost pcal-ai-details-toggle"
+                          onClick={() => setProposalDetailsOpen((p) => !p)}
+                        >
+                          {proposalDetailsOpen ? '▾ Hide details' : '▸ Show details'}
+                        </button>
+                      </div>
+
+                      {/* Expandable details */}
+                      {proposalDetailsOpen && (
+                        <div className="pcal-ai-trainer-details">
                           <div className="pcal-ai-trainer-meta">
-                            <strong>Week Balance Check</strong>
-                            <span>
-                              Mode: {aiTrainerProposal.invariantReport.selectedMode.replace(/_/g, ' ')} · Score: {aiTrainerProposal.invariantReport.candidateScore}
-                            </span>
+                            <span>Confidence: {aiTrainerProposal.confidence}</span>
+                            {aiTrainerProposal.invariantReport && (
+                              <span>Mode: {aiTrainerProposal.invariantReport.selectedMode.replace(/_/g, ' ')}</span>
+                            )}
                           </div>
-                          <div className="pcal-ai-trainer-invariant-grid">
-                            {aiTrainerProposal.invariantReport.weeks.map((week) => (
-                              <article key={`inv-${week.weekIndex}`} className="pcal-ai-trainer-invariant-week">
-                                <header>
-                                  <strong>Week {week.weekIndex}</strong>
-                                </header>
-                                <p>Rest: {week.before.restDays} → {week.after.restDays}</p>
-                                <p>Hard days: {week.before.hardDays} → {week.after.hardDays}</p>
-                                <p>Long run: {formatDowLabel(week.before.longRunDayOfWeek)} → {formatDowLabel(week.after.longRunDayOfWeek)}</p>
-                                <p>Planned duration: {week.before.plannedDurationMin}m → {week.after.plannedDurationMin}m</p>
-                                {week.flags.length > 0 && (
-                                  <ul>
-                                    {week.flags.map((flag, idx) => (
-                                      <li key={`${week.weekIndex}-${flag}-${idx}`}>{flag}</li>
-                                    ))}
-                                  </ul>
-                                )}
-                              </article>
-                            ))}
-                          </div>
-                          {aiTrainerProposal.invariantReport.summaryFlags.length > 0 && (
-                            <div className="pcal-ai-trainer-risks">
-                              <strong>Balance Notes</strong>
-                              <ul>
-                                {aiTrainerProposal.invariantReport.summaryFlags.map((flag, idx) => (
-                                  <li key={`summary-${idx}`}>{flag}</li>
-                                ))}
-                              </ul>
+                          {aiTrainerProposal.riskFlags && aiTrainerProposal.riskFlags.length > 0 && (
+                            <ul className="pcal-ai-trainer-risks">
+                              {aiTrainerProposal.riskFlags.map((flag, i) => (
+                                <li key={i}>⚠ {flag}</li>
+                              ))}
+                            </ul>
+                          )}
+                          {aiTrainerProposal.invariantReport && aiTrainerProposal.invariantReport.weeks.length > 0 && (
+                            <div className="pcal-ai-trainer-invariants">
+                              {aiTrainerProposal.invariantReport.weeks.map((w) => (
+                                <div key={w.weekIndex} className="pcal-ai-trainer-week-row">
+                                  <span>Week {w.weekIndex}</span>
+                                  <span>Rest: {w.before.restDays}→{w.after.restDays}</span>
+                                  <span>Hard: {w.before.hardDays}→{w.after.hardDays}</span>
+                                  {w.flags.length > 0 && <span className="pcal-ai-trainer-week-flag">{w.flags.join(', ')}</span>}
+                                </div>
+                              ))}
                             </div>
                           )}
                         </div>
                       )}
-                      <div className="pcal-ai-trainer-meta">
-                        <strong>Planned Changes ({aiTrainerProposal.changes.length})</strong>
-                      </div>
-                      {aiTrainerProposal.changes.length === 0 && (
-                        <p className="pcal-ai-trainer-followup">
-                          This request needs a plan-structure update (weeks/dates), which is not supported yet.
-                        </p>
-                      )}
-                      <ul className="pcal-ai-trainer-change-list">
-                        {aiTrainerProposal.changes.map((change, idx) => (
-                          <li
-                            key={`${change.op}-${idx}`}
-                            className={aiTrainerAppliedRows.has(idx) ? 'is-applied' : ''}
-                          >
-                            <div className="pcal-ai-trainer-change-head">
-                              <span className="pcal-ai-trainer-op">{change.op.replace(/_/g, ' ')}</span>
-                              <strong>{describeAiChange(change, aiChangeLookup)}</strong>
-                              <button
-                                className="dash-btn-ghost pcal-ai-trainer-apply-one"
-                                type="button"
-                                onClick={() => applyAiAdjustment(idx)}
-                                disabled={
-                                  aiTrainerAppliedRows.has(idx)
-                                  || aiTrainerLoading
-                                  || aiTrainerApplying
-                                  || (aiTrainerProposal.requiresClarification && !aiTrainerClarification.trim())
-                                }
-                              >
-                                {aiTrainerAppliedRows.has(idx)
-                                  ? 'Applied'
-                                  : aiTrainerApplyingTarget === idx
-                                    ? 'Applying…'
-                                    : 'Apply'}
-                              </button>
-                            </div>
-                            <p>{humanizeAiText(change.reason, aiChangeLookup)}</p>
-                          </li>
-                        ))}
-                      </ul>
-                      <div className="pcal-ai-trainer-apply-all">
-                        <button
-                          className="dash-btn-primary"
-                          type="button"
-                          onClick={() => applyAiAdjustment()}
-                          disabled={
-                            aiTrainerProposal.changes.length === 0
-                            || aiTrainerAppliedRows.size >= aiTrainerProposal.changes.length
-                            || aiTrainerLoading
-                            || aiTrainerApplying
-                            || (aiTrainerProposal.requiresClarification && !aiTrainerClarification.trim())
-                          }
-                        >
-                          {aiTrainerApplyingTarget === 'all' ? 'Applying all…' : 'Apply All Changes'}
-                        </button>
-                      </div>
-                      {(aiTrainerProposal.riskFlags || []).length > 0 && (
-                        <div className="pcal-ai-trainer-risks">
-                          <strong>Risk Flags</strong>
-                          <ul>
-                            {(aiTrainerProposal.riskFlags || []).map((flag, idx) => (
-                              <li key={`${flag}-${idx}`}>{humanizeAiText(flag, aiChangeLookup)}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
                     </div>
-                  ) : (
-                    <div className="pcal-ai-trainer-proposal pcal-ai-proposal-empty">
-                      <p>No active recommendation. Generate a new one from the chat above.</p>
-                    </div>
-                  )}
+                  ) : null}
                 </section>
               </div>
             </details>
