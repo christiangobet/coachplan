@@ -459,6 +459,8 @@ export default function PlanDetailPage() {
   const [aiTrainerClarification, setAiTrainerClarification] = useState('');
   const [proposalDetailsOpen, setProposalDetailsOpen] = useState(false);
   const aiTrainerApplying = aiTrainerApplyingTarget !== null;
+  const [chatOpen, setChatOpen] = useState(false);
+  const [hasUnread, setHasUnread] = useState(false);
   const activeProposalTurn = useMemo(
     () => aiChatTurns.find((turn) => turn.id === activeProposalTurnId && turn.proposal) || null,
     [aiChatTurns, activeProposalTurnId]
