@@ -160,7 +160,7 @@ The accordion is read-only. The floating widget is the sole interaction point.
 ## CSS Classes (new)
 
 ```
-.ai-widget-container     — fixed positioning wrapper
+.ai-widget               — fixed positioning wrapper
 .ai-widget-pill          — closed state button
 .ai-widget-unread-dot    — unread indicator on pill
 .ai-widget-panel         — open chat panel
