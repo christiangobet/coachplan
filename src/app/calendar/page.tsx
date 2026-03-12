@@ -343,70 +343,95 @@ export default async function CalendarPage({
 }: {
   searchParams?: Promise<CalendarSearchParams>;
 }) {
-  const user = await currentUser();
+  // Stage 1: parallel — auth + params + cookies (no DB yet)
+  const [user, params, cookieStore] = await Promise.all([
+    currentUser(),
+    searchParams ?? Promise.resolve({} as CalendarSearchParams),
+    cookies(),
+  ]);
   if (!user) redirect("/sign-in");
 
   const name = getFirstName(user.fullName || user.firstName || "Athlete");
-
-  const syncedUser = await ensureUserFromAuth(user, {
-    defaultRole: "ATHLETE",
-    defaultCurrentRole: "ATHLETE"
-  });
-  const viewerUnits: DistanceUnit = syncedUser.units === "KM" ? "KM" : "MILES";
-
-  const stravaAccount = await prisma.externalAccount.findFirst({
-    where: { userId: user.id, provider: "STRAVA" },
-    select: { id: true }
-  });
-
-  const params = (await searchParams) || {};
   const requestedPlanId = typeof params.plan === "string" ? params.plan : "";
   const requestedMonth = typeof params.month === "string" ? params.month : undefined;
   const requestedDate = typeof params.date === "string" ? params.date : undefined;
   const requestedReturnTo = typeof params.returnTo === "string" ? params.returnTo : "";
   const returnToDashboard = requestedReturnTo === "dashboard";
   const returnToParam = returnToDashboard ? "dashboard" : null;
-  const cookieStore = await cookies();
   const cookiePlanId = cookieStore.get(SELECTED_PLAN_COOKIE)?.value || "";
 
-  const plans = await prisma.trainingPlan.findMany({
-    where: { athleteId: user.id, isTemplate: false },
-    orderBy: { createdAt: "desc" },
-    include: {
-      weeks: {
-        include: {
-          days: {
-            include: { activities: true }
+  // Stage 2: parallel — user sync + strava account + plans metadata (no nested includes)
+  const [syncedUser, stravaAccount, plansMeta] = await Promise.all([
+    ensureUserFromAuth(user, { defaultRole: "ATHLETE", defaultCurrentRole: "ATHLETE" }),
+    prisma.externalAccount.findFirst({
+      where: { userId: user.id, provider: "STRAVA" },
+      select: { id: true }
+    }),
+    prisma.trainingPlan.findMany({
+      where: { athleteId: user.id, isTemplate: false },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true, name: true, status: true, sourceId: true, bannerImageId: true,
+        raceName: true, raceType: true, raceDate: true, weekCount: true,
+        createdAt: true
+      }
+    }),
+  ]);
+  const viewerUnits: DistanceUnit = syncedUser.units === "KM" ? "KM" : "MILES";
+
+  // Pick selected plan from lightweight metadata (no full tree needed yet)
+  if (plansMeta.length === 0) redirect("/dashboard");
+  const activePlansMeta = plansMeta.filter((plan) => plan.status === "ACTIVE");
+  if (activePlansMeta.length === 0) redirect("/plans");
+  const selectedPlanMeta = pickSelectedPlan(activePlansMeta, { requestedPlanId, cookiePlanId });
+  if (!selectedPlanMeta) redirect("/plans");
+
+  // Compute approximate grid range from params for early external activities fetch
+  const earlyMonthStart = normalizeDate(parseMonthParam(requestedMonth) || new Date());
+  earlyMonthStart.setDate(1);
+  const earlyMonthEnd = normalizeDate(new Date(earlyMonthStart.getFullYear(), earlyMonthStart.getMonth() + 1, 0));
+  const earlyGridStart = normalizeDate(new Date(earlyMonthStart));
+  earlyGridStart.setDate(earlyGridStart.getDate() - (getIsoDay(earlyGridStart) - 1));
+  const earlyGridEnd = normalizeDate(new Date(earlyMonthEnd));
+  earlyGridEnd.setDate(earlyGridEnd.getDate() + (7 - getIsoDay(earlyGridEnd)));
+  earlyGridEnd.setHours(23, 59, 59, 999);
+
+  // Stage 3: parallel — full plan tree + banner + source name + external activities
+  const [selectedPlan, sourcePlanNameResult, selectedBannerImage, externalActivitiesRaw] = await Promise.all([
+    prisma.trainingPlan.findUnique({
+      where: { id: selectedPlanMeta.id },
+      include: {
+        weeks: {
+          orderBy: { weekIndex: "asc" },
+          include: {
+            days: {
+              orderBy: { dayOfWeek: "asc" },
+              include: { activities: true }
+            }
           }
         }
       }
-    }
-  });
-
-  if (plans.length === 0) redirect("/dashboard");
-  const activePlans = plans.filter((plan) => plan.status === "ACTIVE");
-  if (activePlans.length === 0) redirect("/plans");
-
-  const selectedPlan = pickSelectedPlan(activePlans, {
-    requestedPlanId,
-    cookiePlanId
-  });
+    }),
+    selectedPlanMeta.sourceId
+      ? prisma.trainingPlan.findUnique({ where: { id: selectedPlanMeta.sourceId }, select: { name: true } })
+      : Promise.resolve(null),
+    selectedPlanMeta.bannerImageId
+      ? prisma.planImage.findUnique({ where: { id: selectedPlanMeta.bannerImageId }, select: { focusY: true } })
+      : Promise.resolve(null),
+    prisma.externalActivity.findMany({
+      where: { userId: user.id, startTime: { gte: earlyGridStart, lte: earlyGridEnd } },
+      orderBy: { startTime: "asc" },
+      select: {
+        id: true, provider: true, name: true, sportType: true, startTime: true,
+        distanceM: true, durationSec: true, avgHeartRate: true, calories: true,
+        matchedPlanActivityId: true, equivalence: true, equivalenceOverride: true,
+        equivalenceNote: true, loadRatio: true, raw: true
+      }
+    }),
+  ]);
   if (!selectedPlan) redirect("/plans");
 
-  const sourcePlanName = selectedPlan.sourceId
-    ? (
-      await prisma.trainingPlan.findUnique({
-        where: { id: selectedPlan.sourceId },
-        select: { name: true }
-      })
-    )?.name || null
-    : null;
-  const selectedBannerImage = selectedPlan.bannerImageId
-    ? await prisma.planImage.findUnique({
-      where: { id: selectedPlan.bannerImageId },
-      select: { focusY: true }
-    })
-    : null;
+  const sourcePlanName = sourcePlanNameResult?.name || null;
   const planDisplayName = sourcePlanName || selectedPlan.name;
   const selectedPlanBanner = buildPlanBanner(
     selectedPlan.id,
@@ -418,7 +443,7 @@ export default async function CalendarPage({
   const raceDateStr = selectedPlan.raceDate
     ? new Date(selectedPlan.raceDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
     : "Not set";
-  const jumpToPlans = activePlans.filter((plan) => plan.id !== selectedPlan.id);
+  const jumpToPlans = activePlansMeta.filter((plan) => plan.id !== selectedPlan.id);
 
   const weeks = [...selectedPlan.weeks].sort((a, b) => a.weekIndex - b.weekIndex);
   const weekOne = weeks.find((week) => week.weekIndex === 1) || weeks[0] || null;
@@ -603,36 +628,7 @@ export default async function CalendarPage({
   const dashboardReturnHref = returnToDashboard ? `/dashboard?plan=${encodeURIComponent(selectedPlan.id)}` : null;
   const collapseCardHref = dashboardReturnHref ?? buildCalendarHref(monthStart, selectedPlan.id, null, returnToParam);
 
-  const externalRangeStart = normalizeDate(new Date(gridStart));
-  const externalRangeEnd = normalizeDate(new Date(gridEnd));
-  externalRangeEnd.setHours(23, 59, 59, 999);
-  const externalActivitiesRaw = await prisma.externalActivity.findMany({
-    where: {
-      userId: user.id,
-      startTime: {
-        gte: externalRangeStart,
-        lte: externalRangeEnd
-      }
-    },
-    orderBy: { startTime: "asc" },
-    select: {
-      id: true,
-      provider: true,
-      name: true,
-      sportType: true,
-      startTime: true,
-      distanceM: true,
-      durationSec: true,
-      avgHeartRate: true,
-      calories: true,
-      matchedPlanActivityId: true,
-      equivalence: true,
-      equivalenceOverride: true,
-      equivalenceNote: true,
-      loadRatio: true,
-      raw: true
-    }
-  });
+  // externalActivitiesRaw already fetched in stage 3 (parallel with plan load)
 
   const externalByDate = new Map<string, DayExternalLog[]>();
   for (const item of externalActivitiesRaw) {
