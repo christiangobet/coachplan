@@ -526,6 +526,8 @@ export default function PlanDetailPage() {
     sourceIndex: number;
   } | null>(null);
   const touchDropTargetRef = useRef<{ dayId: string; rawIndex: number } | null>(null);
+  // Flag to cancel HTML5 drag when a touch drag is already in progress (iPadOS dual-fires both)
+  const touchDraggingRef = useRef(false);
 
   useEffect(() => {
     if (searchParams && searchParams.get('mode') === 'edit') {
@@ -985,6 +987,7 @@ export default function PlanDetailPage() {
       const drop = touchDropTargetRef.current;
       touchDragRef.current = null;
       touchDropTargetRef.current = null;
+      touchDraggingRef.current = false;
       setDraggingActivity(null);
       setDropTarget(null);
       if (drag && drop && drop.dayId !== drag.sourceDayId) {
@@ -2509,6 +2512,7 @@ export default function PlanDetailPage() {
                                   draggable={!activityDragDisabled}
                                   onTouchStart={(event) => {
                                     if (!touchDndEnabled || !day?.id || dayLockedForMove || a.completed) return;
+                                    touchDraggingRef.current = true;
                                     touchDragRef.current = {
                                       activityId: a.id,
                                       sourceDayId: day.id,
@@ -2519,9 +2523,12 @@ export default function PlanDetailPage() {
                                       sourceDayId: day.id,
                                       sourceIndex: activityIndex,
                                     });
-                                    // Don't prevent default here — let touchmove handler manage scroll prevention
+                                    // Don't preventDefault here — would block subsequent click on tap
                                   }}
                                   onDragStart={(event) => {
+                                    // Cancel HTML5 drag if a touch drag is already in progress
+                                    // (iPadOS 15+ fires both touch and drag events for the same gesture)
+                                    if (touchDraggingRef.current) { event.preventDefault(); return; }
                                     if (activityDragDisabled || !day?.id) return;
                                     event.stopPropagation();
                                     dragMovedRef.current = false;
