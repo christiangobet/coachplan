@@ -360,22 +360,35 @@ export default async function CalendarPage({
   const returnToParam = returnToDashboard ? "dashboard" : null;
   const cookiePlanId = cookieStore.get(SELECTED_PLAN_COOKIE)?.value || "";
 
-  // Stage 2: parallel — user sync + strava account + plans metadata (no nested includes)
+  // Resolve the target plan ID — URL param wins, then cookie
+  const targetPlanId = requestedPlanId || cookiePlanId || "";
+
+  const PLAN_META_SELECT = {
+    id: true, name: true, status: true, sourceId: true, bannerImageId: true,
+    raceName: true, raceType: true, raceDate: true, weekCount: true, createdAt: true
+  } as const;
+
+  // Stage 2: parallel — user sync + strava account + plan resolution
+  // Happy path: plan ID known → load only that one plan's metadata (+ other active plan names for switcher)
+  // Fallback: no plan ID → load all active plan metadata to auto-select
   const [syncedUser, stravaAccount, plansMeta] = await Promise.all([
     ensureUserFromAuth(user, { defaultRole: "ATHLETE", defaultCurrentRole: "ATHLETE" }),
     prisma.externalAccount.findFirst({
       where: { userId: user.id, provider: "STRAVA" },
       select: { id: true }
     }),
-    prisma.trainingPlan.findMany({
-      where: { athleteId: user.id, isTemplate: false },
-      orderBy: { createdAt: "desc" },
-      select: {
-        id: true, name: true, status: true, sourceId: true, bannerImageId: true,
-        raceName: true, raceType: true, raceDate: true, weekCount: true,
-        createdAt: true
-      }
-    }),
+    targetPlanId
+      ? prisma.trainingPlan.findMany({
+          // Load only: the requested plan + other ACTIVE plans (for switcher, metadata only)
+          where: { athleteId: user.id, isTemplate: false, status: "ACTIVE" },
+          orderBy: { createdAt: "desc" },
+          select: PLAN_META_SELECT,
+        })
+      : prisma.trainingPlan.findMany({
+          where: { athleteId: user.id, isTemplate: false },
+          orderBy: { createdAt: "desc" },
+          select: PLAN_META_SELECT,
+        }),
   ]);
   const viewerUnits: DistanceUnit = syncedUser.units === "KM" ? "KM" : "MILES";
 
