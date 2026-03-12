@@ -1531,23 +1531,6 @@ export default function PlanDetailPage() {
     }
   }, [aiTrainerClarification, aiTrainerInput, aiTrainerProposal, aiTrainerAppliedRows, aiAppliedByTurn, activeProposalTurn, loadPlan, planId]);
 
-  const activateProposalTurn = useCallback((turnId: string) => {
-    setAiChatTurns((prev) =>
-      prev.map((turn) => {
-        if (!turn.proposal) return turn;
-        if (turn.id === turnId) return { ...turn, proposalState: turn.proposalState === 'applied' ? 'applied' : 'active' };
-        if (turn.proposalState === 'active') {
-          return { ...turn, proposalState: 'superseded' };
-        }
-        return turn;
-      })
-    );
-    setActiveProposalTurnId(turnId);
-    setAiTrainerClarification('');
-    setAiTrainerError(null);
-    setAiTrainerStatus('Previous recommendation re-opened.');
-  }, []);
-
   const clearAiChat = useCallback(() => {
     setAiChatTurns([createAiGreetingTurn()]);
     setActiveProposalTurnId(null);
@@ -1968,29 +1951,13 @@ export default function PlanDetailPage() {
               </div>
             </details>
             <details className="pcal-inline-panel">
-              <summary className="pcal-inline-panel-summary">AI Trainer</summary>
+              <summary className="pcal-inline-panel-summary">Coach History</summary>
               <div className="pcal-inline-panel-body">
-                <section className="pcal-ai-trainer pcal-ai-trainer-chat">
-                  <div className="pcal-ai-trainer-head">
-                    <div>
-                      <h2>AI Trainer</h2>
-                      <p>Chat with your coach. Each new request starts a fresh recommendation thread.</p>
-                    </div>
-                    <div className="pcal-ai-trainer-head-actions">
-                      <button
-                        className="dash-btn-ghost"
-                        type="button"
-                        onClick={clearAiChat}
-                        disabled={aiTrainerLoading || aiTrainerApplying}
-                      >
-                        Clear chat
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="pcal-ai-thread">
-                    {/* Chat history from DB (loaded on mount) */}
-                    {chatMessages.map((msg) => (
+                <div className="pcal-ai-history">
+                  {chatMessages.length === 0 ? (
+                    <p className="pcal-ai-trainer-status">Your coaching conversations will appear here.</p>
+                  ) : (
+                    chatMessages.map((msg) => (
                       <article key={msg.id} className={`pcal-ai-turn role-${msg.role}`}>
                         <div className="pcal-ai-turn-head">
                           <strong>
@@ -2004,180 +1971,9 @@ export default function PlanDetailPage() {
                         </div>
                         <p>{msg.content}</p>
                       </article>
-                    ))}
-                    {aiChatTurns.length === 0 && chatMessages.length === 0 && (
-                      <p className="pcal-ai-trainer-status">
-                        Start with one clear request, for example: &quot;Move this week&apos;s long run to Sunday and rebalance recovery.&quot;
-                      </p>
-                    )}
-                    {aiChatTurns.map((turn) => (
-                      <article key={turn.id} className={`pcal-ai-turn role-${turn.role}`}>
-                        <div className="pcal-ai-turn-head">
-                          <strong>
-                            {turn.role === 'athlete' ? 'You' : turn.role === 'coach' ? 'Coach' : 'System'}
-                          </strong>
-                          {turn.proposal && (
-                            <span className={`pcal-ai-turn-state state-${turn.proposalState || 'superseded'}`}>
-                              {turn.proposalState === 'active'
-                                ? 'Active proposal'
-                                : turn.proposalState === 'applied'
-                                  ? 'Applied'
-                                  : 'History'}
-                            </span>
-                          )}
-                        </div>
-                        {turn.proposalState === 'applied' ? (
-                          <p className="pcal-ai-trainer-applied-summary">
-                            Coach suggestion applied
-                            {turn.createdAt ? ` — ${new Date(turn.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : ''}
-                          </p>
-                        ) : (
-                          <p>{humanizeAiText(turn.text, aiChangeLookup)}</p>
-                        )}
-                        {turn.errorCode && (
-                          <span className="pcal-ai-turn-error-code">{turn.errorCode}</span>
-                        )}
-                        {turn.proposal && turn.proposalState !== 'active' && turn.proposalState !== 'applied' && (
-                          <button
-                            className="dash-btn-ghost pcal-ai-turn-use"
-                            type="button"
-                            onClick={() => activateProposalTurn(turn.id)}
-                          >
-                            Use this proposal
-                          </button>
-                        )}
-                      </article>
-                    ))}
-                  </div>
-
-                  <div className="pcal-ai-composer">
-                    <textarea
-                      value={aiTrainerInput}
-                      onChange={(e) => setAiTrainerInput(e.target.value)}
-                      placeholder="Example: Move this week's long run to Sunday because I'll ski Saturday, and rebalance the week safely."
-                      rows={4}
-                    />
-                    <div className="pcal-ai-trainer-actions">
-                      <button
-                        className="dash-btn-primary"
-                        type="button"
-                        onClick={generateAiAdjustment}
-                        disabled={aiTrainerLoading || aiTrainerApplying}
-                      >
-                        {aiTrainerLoading ? 'Generating…' : 'Generate Recommendation'}
-                      </button>
-                    </div>
-                    {aiTrainerError && <p className="pcal-ai-trainer-error">{aiTrainerError}</p>}
-                    {aiTrainerStatus && (
-                      <p className="pcal-ai-trainer-status">
-                        {humanizeAiText(aiTrainerStatus, aiChangeLookup)}
-                      </p>
-                    )}
-                  </div>
-
-                  {aiTrainerProposal ? (
-                    <div className="pcal-ai-trainer-proposal">
-                      {/* Coach reply */}
-                      <p className="pcal-ai-trainer-reply">
-                        {humanizeAiText(aiTrainerProposal.coachReply, aiChangeLookup)}
-                      </p>
-
-                      {/* Follow-up question */}
-                      {aiTrainerProposal.followUpQuestion && (
-                        <p className="pcal-ai-trainer-followup-q">
-                          {humanizeAiText(aiTrainerProposal.followUpQuestion, aiChangeLookup)}
-                        </p>
-                      )}
-
-                      {/* Clarification required */}
-                      {aiTrainerProposal.requiresClarification && (
-                        <div className="pcal-ai-trainer-clarification">
-                          <p>{humanizeAiText(aiTrainerProposal.clarificationPrompt ?? 'Please confirm before applying.', aiChangeLookup)}</p>
-                          <textarea
-                            value={aiTrainerClarification}
-                            onChange={(e) => setAiTrainerClarification(e.target.value)}
-                            placeholder="Your response..."
-                            rows={2}
-                          />
-                        </div>
-                      )}
-
-                      {/* Changes list */}
-                      {aiTrainerProposal.changes.length > 0 && (
-                        <div className="pcal-ai-trainer-change-list">
-                          {aiTrainerProposal.changes.map((change, i) => (
-                            <div key={i} className="pcal-ai-trainer-change-item">
-                              <span className="pcal-ai-trainer-change-dot" />
-                              <span className="pcal-ai-trainer-change-label">
-                                {humanizeAiText(change.reason, aiChangeLookup)}
-                              </span>
-                              <button
-                                type="button"
-                                className="dash-btn-primary pcal-ai-apply-one"
-                                onClick={() => applyAiAdjustment(i)}
-                                disabled={aiTrainerLoading}
-                              >
-                                Apply
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      {/* Action row */}
-                      <div className="pcal-ai-trainer-actions">
-                        {aiTrainerProposal.changes.length > 1 && (
-                          <button
-                            type="button"
-                            className="dash-btn-primary"
-                            onClick={() => applyAiAdjustment()}
-                            disabled={aiTrainerLoading}
-                          >
-                            Apply all changes
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          className="dash-btn-ghost pcal-ai-details-toggle"
-                          onClick={() => setProposalDetailsOpen((p) => !p)}
-                        >
-                          {proposalDetailsOpen ? '▾ Hide details' : '▸ Show details'}
-                        </button>
-                      </div>
-
-                      {/* Expandable details */}
-                      {proposalDetailsOpen && (
-                        <div className="pcal-ai-trainer-details">
-                          <div className="pcal-ai-trainer-meta">
-                            <span>Confidence: {aiTrainerProposal.confidence}</span>
-                            {aiTrainerProposal.invariantReport && (
-                              <span>Mode: {aiTrainerProposal.invariantReport.selectedMode.replace(/_/g, ' ')}</span>
-                            )}
-                          </div>
-                          {aiTrainerProposal.riskFlags && aiTrainerProposal.riskFlags.length > 0 && (
-                            <ul className="pcal-ai-trainer-risks">
-                              {aiTrainerProposal.riskFlags.map((flag, i) => (
-                                <li key={i}>⚠ {flag}</li>
-                              ))}
-                            </ul>
-                          )}
-                          {aiTrainerProposal.invariantReport && aiTrainerProposal.invariantReport.weeks.length > 0 && (
-                            <div className="pcal-ai-trainer-invariants">
-                              {aiTrainerProposal.invariantReport.weeks.map((w) => (
-                                <div key={w.weekIndex} className="pcal-ai-trainer-week-row">
-                                  <span>Week {w.weekIndex}</span>
-                                  <span>Rest: {w.before.restDays}→{w.after.restDays}</span>
-                                  <span>Hard: {w.before.hardDays}→{w.after.hardDays}</span>
-                                  {w.flags.length > 0 && <span className="pcal-ai-trainer-week-flag">{w.flags.join(', ')}</span>}
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  ) : null}
-                </section>
+                    ))
+                  )}
+                </div>
               </div>
             </details>
           </div>
