@@ -987,7 +987,7 @@ export default function PlanDetailPage() {
                         text: chatData.coachMessage!.content,
                         createdAt: new Date(chatData.coachMessage!.createdAt).getTime(),
                       }]);
-                      if (!chatOpen) setHasUnread(true);
+                      if (!chatOpen) { setChatOpen(true); setHasUnread(false); } else { setHasUnread(true); }
                     }
                   })
                   .catch(() => {});
@@ -1892,7 +1892,7 @@ export default function PlanDetailPage() {
                                   text: data.coachMessage!.content,
                                   createdAt: new Date(data.coachMessage!.createdAt).getTime(),
                                 }]);
-                                if (!chatOpen) setHasUnread(true);
+                                if (!chatOpen) { setChatOpen(true); setHasUnread(false); } else { setHasUnread(true); }
                               }
                             })
                             .catch(() => {});
