@@ -980,6 +980,7 @@ export default function PlanDetailPage() {
                   .then((chatData: { coachMessage?: import('@/lib/plan-chat-types').ChatMessage | null }) => {
                     if (chatData.coachMessage) {
                       setChatMessages((prev) => [...prev, chatData.coachMessage!]);
+                      if (!chatOpen) setHasUnread(true);
                     }
                   })
                   .catch(() => {});
@@ -1405,6 +1406,7 @@ export default function PlanDetailPage() {
         const greetingOnly = keepOnlyGreeting(prev);
         return [...greetingOnly, athleteTurn, coachTurn];
       });
+      if (!chatOpen) setHasUnread(true);
       setActiveProposalTurnId(coachTurnId);
       setAiAppliedByTurn({ [coachTurnId]: [] });
       setAiTrainerStatus(proposal.summary || 'New recommendation generated.');
@@ -1893,6 +1895,7 @@ export default function PlanDetailPage() {
                             .then((data: { coachMessage?: import('@/lib/plan-chat-types').ChatMessage }) => {
                               if (data.coachMessage) {
                                 setChatMessages((prev) => [...prev, data.coachMessage!]);
+                                if (!chatOpen) setHasUnread(true);
                               }
                             })
                             .catch(() => {});
