@@ -450,18 +450,26 @@ async function buildPlanActivityCandidates(
   preferredPlanId?: string | null,
   fallbackUnits?: Units | null
 ): Promise<PlanActivityCandidates> {
-  const plans = await prisma.trainingPlan.findMany({
-    where: { athleteId: userId, isTemplate: false },
-    orderBy: { createdAt: 'desc' },
-    include: {
-      weeks: {
-        include: {
-          days: { include: { activities: true } }
-        }
+  const PLAN_INCLUDE = {
+    weeks: {
+      include: {
+        days: { include: { activities: true } }
       }
     }
-  });
-  const plan = pickSelectedPlan(plans, { cookiePlanId: preferredPlanId });
+  } as const;
+
+  // If we already know the plan ID, load only that plan — skip loading all plans
+  const plans = preferredPlanId
+    ? await prisma.trainingPlan.findMany({
+        where: { id: preferredPlanId, athleteId: userId, isTemplate: false },
+        include: PLAN_INCLUDE,
+      })
+    : await prisma.trainingPlan.findMany({
+        where: { athleteId: userId, isTemplate: false, status: 'ACTIVE' },
+        orderBy: { createdAt: 'desc' },
+        include: PLAN_INCLUDE,
+      });
+  const plan = pickSelectedPlan(plans, { cookiePlanId: preferredPlanId }) ?? null;
 
   const map = new Map<string, PlannedActivityCandidate[]>();
   const byId = new Map<string, PlannedActivityCandidate>();

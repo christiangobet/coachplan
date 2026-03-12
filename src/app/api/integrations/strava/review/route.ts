@@ -66,48 +66,45 @@ function resolveClosedReason(
 export async function GET(req: Request) {
   const access = await requireRoleApi('ATHLETE');
   if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
-  const profile = await prisma.user.findUnique({
-    where: { id: access.context.userId },
-    select: { units: true }
-  });
-  const viewerUnits = profile?.units === 'KM' ? 'KM' : 'MILES';
   const url = new URL(req.url);
   const requestedPlanId = url.searchParams.get('plan')?.trim() || '';
   const cookieStore = await cookies();
   const cookiePlanId = cookieStore.get(SELECTED_PLAN_COOKIE)?.value || '';
 
-  const account = await prisma.externalAccount.findUnique({
-    where: {
-      userId_provider: {
-        userId: access.context.userId,
-        provider: 'STRAVA'
+  const PLAN_INCLUDE = {
+    weeks: {
+      include: {
+        days: { include: { activities: true } }
       }
-    },
-    select: {
-      isActive: true,
-      providerUsername: true,
-      lastSyncAt: true,
-      syncCursor: true
     }
-  });
+  } as const;
 
-  const plans = await prisma.trainingPlan.findMany({
-    where: { athleteId: access.context.userId, isTemplate: false },
-    orderBy: { createdAt: 'desc' },
-    include: {
-      weeks: {
-        include: {
-          days: {
-            include: { activities: true }
-          }
-        }
+  // Parallelize: user units + strava account + plan (load only the requested plan when ID is known)
+  const [profile, account, activePlan] = await Promise.all([
+    prisma.user.findUnique({ where: { id: access.context.userId }, select: { units: true } }),
+    prisma.externalAccount.findUnique({
+      where: { userId_provider: { userId: access.context.userId, provider: 'STRAVA' } },
+      select: { isActive: true, providerUsername: true, lastSyncAt: true, syncCursor: true }
+    }),
+    (async () => {
+      const targetId = requestedPlanId || cookiePlanId;
+      if (targetId) {
+        const plan = await prisma.trainingPlan.findFirst({
+          where: { id: targetId, athleteId: access.context.userId, isTemplate: false },
+          include: PLAN_INCLUDE,
+        });
+        if (plan) return plan;
       }
-    }
-  });
-  const activePlan = pickSelectedPlan(plans, {
-    requestedPlanId,
-    cookiePlanId
-  });
+      // Fallback: pick from active plans only
+      const plans = await prisma.trainingPlan.findMany({
+        where: { athleteId: access.context.userId, isTemplate: false, status: 'ACTIVE' },
+        orderBy: { createdAt: 'desc' },
+        include: PLAN_INCLUDE,
+      });
+      return pickSelectedPlan(plans, { requestedPlanId, cookiePlanId }) ?? null;
+    })(),
+  ]);
+  const viewerUnits = profile?.units === 'KM' ? 'KM' : 'MILES';
 
   const planByDate = new Map<string, Array<{
     id: string;
