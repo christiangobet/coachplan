@@ -2841,6 +2841,13 @@ export default function PlanDetailPage() {
                 </div>
               )}
 
+              {/* Status message */}
+              {aiTrainerStatus && (
+                <p style={{ fontSize: '11px', color: 'var(--d-muted)', padding: '4px 12px 0', margin: 0 }}>
+                  {humanizeAiText(aiTrainerStatus, aiChangeLookup)}
+                </p>
+              )}
+
               {/* Input row */}
               <div className="ai-widget-input-row">
                 <textarea
