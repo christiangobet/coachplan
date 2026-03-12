@@ -1293,6 +1293,13 @@ export default function PlanDetailPage() {
       return [...greetingOnly, athleteTurn];
     });
     try {
+      // Persist athlete message to chat DB (non-blocking)
+      fetch(`/api/plans/${planId}/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ trigger: 'athlete_message', content: message }),
+      }).catch(() => {});
+
       const res = await fetch(`/api/plans/${planId}/ai-adjust`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
