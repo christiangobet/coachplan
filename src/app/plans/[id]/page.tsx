@@ -2428,11 +2428,14 @@ export default function PlanDetailPage() {
                                     }
                                   }}
                                   onTouchEnd={() => {
-                                    // Finger lifted before long-press threshold — cancel pending lift
                                     if (touchLiftTimerRef.current) {
+                                      // Finger lifted before 400ms — tap, cancel pending drag
                                       clearTimeout(touchLiftTimerRef.current);
                                       touchLiftTimerRef.current = null;
                                       touchStartPosRef.current = null;
+                                    } else if (touchDragRef.current?.activityId === a.id) {
+                                      // Drag was active — suppress the iOS synthetic click that fires ~300ms later
+                                      suppressClickActivityIdRef.current = a.id;
                                     }
                                   }}
                                   onDragStart={(event) => {
@@ -2496,6 +2499,7 @@ export default function PlanDetailPage() {
                                   onClick={(e) => {
                                     if (suppressClickActivityIdRef.current === a.id) {
                                       suppressClickActivityIdRef.current = null;
+                                      e.stopPropagation();
                                       return;
                                     }
                                     if (isEditMode) {
@@ -2642,7 +2646,7 @@ export default function PlanDetailPage() {
                               </div>
                             );
                           })}
-                          {dayStravaLogs.length > 0 && (
+                          {dayStravaLogs.length > 0 && !isEditMode && (
                             <button
                               type="button"
                               className="pcal-strava-pill"
