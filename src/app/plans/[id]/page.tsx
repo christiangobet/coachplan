@@ -459,6 +459,15 @@ export default function PlanDetailPage() {
   const [aiTrainerClarification, setAiTrainerClarification] = useState('');
   const [proposalDetailsOpen, setProposalDetailsOpen] = useState(false);
   const aiTrainerApplying = aiTrainerApplyingTarget !== null;
+  const [chatOpen, setChatOpen] = useState(false);
+  const [hasUnread, setHasUnread] = useState(false);
+  const widgetThreadRef = useRef<HTMLDivElement>(null);
+  // Auto-scroll widget thread to bottom when new messages arrive
+  useEffect(() => {
+    if (chatOpen && widgetThreadRef.current) {
+      widgetThreadRef.current.scrollTop = widgetThreadRef.current.scrollHeight;
+    }
+  }, [aiChatTurns, chatOpen]);
   const activeProposalTurn = useMemo(
     () => aiChatTurns.find((turn) => turn.id === activeProposalTurnId && turn.proposal) || null,
     [aiChatTurns, activeProposalTurnId]
@@ -971,6 +980,7 @@ export default function PlanDetailPage() {
                   .then((chatData: { coachMessage?: import('@/lib/plan-chat-types').ChatMessage | null }) => {
                     if (chatData.coachMessage) {
                       setChatMessages((prev) => [...prev, chatData.coachMessage!]);
+                      if (!chatOpen) setHasUnread(true);
                     }
                   })
                   .catch(() => {});
@@ -989,7 +999,7 @@ export default function PlanDetailPage() {
       });
       setError(err?.message || 'Failed to move activity');
     }
-  }, [emitPlanEditEvent, loadPlan, plan, planId, editSessionId, setChatMessages]);
+  }, [emitPlanEditEvent, loadPlan, plan, planId, editSessionId, setChatMessages, chatOpen]);
 
   useEffect(() => {
     loadPlan();
@@ -1396,6 +1406,7 @@ export default function PlanDetailPage() {
         const greetingOnly = keepOnlyGreeting(prev);
         return [...greetingOnly, athleteTurn, coachTurn];
       });
+      if (!chatOpen) setHasUnread(true);
       setActiveProposalTurnId(coachTurnId);
       setAiAppliedByTurn({ [coachTurnId]: [] });
       setAiTrainerStatus(proposal.summary || 'New recommendation generated.');
@@ -1420,7 +1431,7 @@ export default function PlanDetailPage() {
     } finally {
       setAiTrainerLoading(false);
     }
-  }, [aiTrainerInput, planId]);
+  }, [aiTrainerInput, planId, chatOpen]);
 
   const applyAiAdjustment = useCallback(async (changeIndex?: number) => {
     if (!planId || !aiTrainerProposal || !activeProposalTurn) return;
@@ -1519,23 +1530,6 @@ export default function PlanDetailPage() {
       setAiTrainerApplyingTarget(null);
     }
   }, [aiTrainerClarification, aiTrainerInput, aiTrainerProposal, aiTrainerAppliedRows, aiAppliedByTurn, activeProposalTurn, loadPlan, planId]);
-
-  const activateProposalTurn = useCallback((turnId: string) => {
-    setAiChatTurns((prev) =>
-      prev.map((turn) => {
-        if (!turn.proposal) return turn;
-        if (turn.id === turnId) return { ...turn, proposalState: turn.proposalState === 'applied' ? 'applied' : 'active' };
-        if (turn.proposalState === 'active') {
-          return { ...turn, proposalState: 'superseded' };
-        }
-        return turn;
-      })
-    );
-    setActiveProposalTurnId(turnId);
-    setAiTrainerClarification('');
-    setAiTrainerError(null);
-    setAiTrainerStatus('Previous recommendation re-opened.');
-  }, []);
 
   const clearAiChat = useCallback(() => {
     setAiChatTurns([createAiGreetingTurn()]);
@@ -1884,6 +1878,7 @@ export default function PlanDetailPage() {
                             .then((data: { coachMessage?: import('@/lib/plan-chat-types').ChatMessage }) => {
                               if (data.coachMessage) {
                                 setChatMessages((prev) => [...prev, data.coachMessage!]);
+                                if (!chatOpen) setHasUnread(true);
                               }
                             })
                             .catch(() => {});
@@ -1956,29 +1951,13 @@ export default function PlanDetailPage() {
               </div>
             </details>
             <details className="pcal-inline-panel">
-              <summary className="pcal-inline-panel-summary">AI Trainer</summary>
+              <summary className="pcal-inline-panel-summary">Coach History</summary>
               <div className="pcal-inline-panel-body">
-                <section className="pcal-ai-trainer pcal-ai-trainer-chat">
-                  <div className="pcal-ai-trainer-head">
-                    <div>
-                      <h2>AI Trainer</h2>
-                      <p>Chat with your coach. Each new request starts a fresh recommendation thread.</p>
-                    </div>
-                    <div className="pcal-ai-trainer-head-actions">
-                      <button
-                        className="dash-btn-ghost"
-                        type="button"
-                        onClick={clearAiChat}
-                        disabled={aiTrainerLoading || aiTrainerApplying}
-                      >
-                        Clear chat
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="pcal-ai-thread">
-                    {/* Chat history from DB (loaded on mount) */}
-                    {chatMessages.map((msg) => (
+                <div className="pcal-ai-history">
+                  {chatMessages.length === 0 ? (
+                    <p className="pcal-ai-trainer-status">Your coaching conversations will appear here.</p>
+                  ) : (
+                    chatMessages.map((msg) => (
                       <article key={msg.id} className={`pcal-ai-turn role-${msg.role}`}>
                         <div className="pcal-ai-turn-head">
                           <strong>
@@ -1992,180 +1971,9 @@ export default function PlanDetailPage() {
                         </div>
                         <p>{msg.content}</p>
                       </article>
-                    ))}
-                    {aiChatTurns.length === 0 && chatMessages.length === 0 && (
-                      <p className="pcal-ai-trainer-status">
-                        Start with one clear request, for example: &quot;Move this week&apos;s long run to Sunday and rebalance recovery.&quot;
-                      </p>
-                    )}
-                    {aiChatTurns.map((turn) => (
-                      <article key={turn.id} className={`pcal-ai-turn role-${turn.role}`}>
-                        <div className="pcal-ai-turn-head">
-                          <strong>
-                            {turn.role === 'athlete' ? 'You' : turn.role === 'coach' ? 'Coach' : 'System'}
-                          </strong>
-                          {turn.proposal && (
-                            <span className={`pcal-ai-turn-state state-${turn.proposalState || 'superseded'}`}>
-                              {turn.proposalState === 'active'
-                                ? 'Active proposal'
-                                : turn.proposalState === 'applied'
-                                  ? 'Applied'
-                                  : 'History'}
-                            </span>
-                          )}
-                        </div>
-                        {turn.proposalState === 'applied' ? (
-                          <p className="pcal-ai-trainer-applied-summary">
-                            Coach suggestion applied
-                            {turn.createdAt ? ` — ${new Date(turn.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : ''}
-                          </p>
-                        ) : (
-                          <p>{humanizeAiText(turn.text, aiChangeLookup)}</p>
-                        )}
-                        {turn.errorCode && (
-                          <span className="pcal-ai-turn-error-code">{turn.errorCode}</span>
-                        )}
-                        {turn.proposal && turn.proposalState !== 'active' && turn.proposalState !== 'applied' && (
-                          <button
-                            className="dash-btn-ghost pcal-ai-turn-use"
-                            type="button"
-                            onClick={() => activateProposalTurn(turn.id)}
-                          >
-                            Use this proposal
-                          </button>
-                        )}
-                      </article>
-                    ))}
-                  </div>
-
-                  <div className="pcal-ai-composer">
-                    <textarea
-                      value={aiTrainerInput}
-                      onChange={(e) => setAiTrainerInput(e.target.value)}
-                      placeholder="Example: Move this week's long run to Sunday because I'll ski Saturday, and rebalance the week safely."
-                      rows={4}
-                    />
-                    <div className="pcal-ai-trainer-actions">
-                      <button
-                        className="dash-btn-primary"
-                        type="button"
-                        onClick={generateAiAdjustment}
-                        disabled={aiTrainerLoading || aiTrainerApplying}
-                      >
-                        {aiTrainerLoading ? 'Generating…' : 'Generate Recommendation'}
-                      </button>
-                    </div>
-                    {aiTrainerError && <p className="pcal-ai-trainer-error">{aiTrainerError}</p>}
-                    {aiTrainerStatus && (
-                      <p className="pcal-ai-trainer-status">
-                        {humanizeAiText(aiTrainerStatus, aiChangeLookup)}
-                      </p>
-                    )}
-                  </div>
-
-                  {aiTrainerProposal ? (
-                    <div className="pcal-ai-trainer-proposal">
-                      {/* Coach reply */}
-                      <p className="pcal-ai-trainer-reply">
-                        {humanizeAiText(aiTrainerProposal.coachReply, aiChangeLookup)}
-                      </p>
-
-                      {/* Follow-up question */}
-                      {aiTrainerProposal.followUpQuestion && (
-                        <p className="pcal-ai-trainer-followup-q">
-                          {humanizeAiText(aiTrainerProposal.followUpQuestion, aiChangeLookup)}
-                        </p>
-                      )}
-
-                      {/* Clarification required */}
-                      {aiTrainerProposal.requiresClarification && (
-                        <div className="pcal-ai-trainer-clarification">
-                          <p>{humanizeAiText(aiTrainerProposal.clarificationPrompt ?? 'Please confirm before applying.', aiChangeLookup)}</p>
-                          <textarea
-                            value={aiTrainerClarification}
-                            onChange={(e) => setAiTrainerClarification(e.target.value)}
-                            placeholder="Your response..."
-                            rows={2}
-                          />
-                        </div>
-                      )}
-
-                      {/* Changes list */}
-                      {aiTrainerProposal.changes.length > 0 && (
-                        <div className="pcal-ai-trainer-change-list">
-                          {aiTrainerProposal.changes.map((change, i) => (
-                            <div key={i} className="pcal-ai-trainer-change-item">
-                              <span className="pcal-ai-trainer-change-dot" />
-                              <span className="pcal-ai-trainer-change-label">
-                                {humanizeAiText(change.reason, aiChangeLookup)}
-                              </span>
-                              <button
-                                type="button"
-                                className="dash-btn-primary pcal-ai-apply-one"
-                                onClick={() => applyAiAdjustment(i)}
-                                disabled={aiTrainerLoading}
-                              >
-                                Apply
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      {/* Action row */}
-                      <div className="pcal-ai-trainer-actions">
-                        {aiTrainerProposal.changes.length > 1 && (
-                          <button
-                            type="button"
-                            className="dash-btn-primary"
-                            onClick={() => applyAiAdjustment()}
-                            disabled={aiTrainerLoading}
-                          >
-                            Apply all changes
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          className="dash-btn-ghost pcal-ai-details-toggle"
-                          onClick={() => setProposalDetailsOpen((p) => !p)}
-                        >
-                          {proposalDetailsOpen ? '▾ Hide details' : '▸ Show details'}
-                        </button>
-                      </div>
-
-                      {/* Expandable details */}
-                      {proposalDetailsOpen && (
-                        <div className="pcal-ai-trainer-details">
-                          <div className="pcal-ai-trainer-meta">
-                            <span>Confidence: {aiTrainerProposal.confidence}</span>
-                            {aiTrainerProposal.invariantReport && (
-                              <span>Mode: {aiTrainerProposal.invariantReport.selectedMode.replace(/_/g, ' ')}</span>
-                            )}
-                          </div>
-                          {aiTrainerProposal.riskFlags && aiTrainerProposal.riskFlags.length > 0 && (
-                            <ul className="pcal-ai-trainer-risks">
-                              {aiTrainerProposal.riskFlags.map((flag, i) => (
-                                <li key={i}>⚠ {flag}</li>
-                              ))}
-                            </ul>
-                          )}
-                          {aiTrainerProposal.invariantReport && aiTrainerProposal.invariantReport.weeks.length > 0 && (
-                            <div className="pcal-ai-trainer-invariants">
-                              {aiTrainerProposal.invariantReport.weeks.map((w) => (
-                                <div key={w.weekIndex} className="pcal-ai-trainer-week-row">
-                                  <span>Week {w.weekIndex}</span>
-                                  <span>Rest: {w.before.restDays}→{w.after.restDays}</span>
-                                  <span>Hard: {w.before.hardDays}→{w.after.hardDays}</span>
-                                  {w.flags.length > 0 && <span className="pcal-ai-trainer-week-flag">{w.flags.join(', ')}</span>}
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  ) : null}
-                </section>
+                    ))
+                  )}
+                </div>
               </div>
             </details>
           </div>
@@ -2907,6 +2715,180 @@ export default function PlanDetailPage() {
         </aside>
       </div>
       </div>
+
+      {/* ─── Floating AI Coach Widget ─────────────────────────────────── */}
+      {planId && (
+        <div className="ai-widget">
+          {chatOpen ? (
+            <div className="ai-widget-panel">
+              {/* Header */}
+              <div className="ai-widget-header">
+                <div className="ai-widget-header-title">
+                  <span>🏃</span>
+                  <div>
+                    <div>AI Coach</div>
+                    <div className="ai-widget-header-subtitle">Plan adjustments &amp; advice</div>
+                  </div>
+                </div>
+                <div className="ai-widget-header-actions">
+                  <button
+                    type="button"
+                    className="ai-widget-header-btn"
+                    onClick={() => { setChatOpen(false); }}
+                    title="Minimise"
+                    aria-label="Minimise coach chat"
+                  >
+                    —
+                  </button>
+                  <button
+                    type="button"
+                    className="ai-widget-header-btn"
+                    onClick={clearAiChat}
+                    disabled={aiTrainerLoading || aiTrainerApplying}
+                    title="Clear chat"
+                    aria-label="Clear chat history"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+
+              {/* Message thread */}
+              <div className="ai-widget-thread" ref={widgetThreadRef}>
+                {aiChatTurns.length === 0 ? (
+                  <p className="ai-widget-thread-empty">
+                    Tell me what changed this week — a missed session, travel, or fatigue — and I&apos;ll adjust your plan.
+                  </p>
+                ) : (
+                  aiChatTurns.map((turn) => (
+                    <div
+                      key={turn.id}
+                      className={`ai-widget-bubble ai-widget-bubble--${turn.role}`}
+                    >
+                      <div className="ai-widget-bubble-label">
+                        {turn.role === 'athlete' ? 'You' : turn.role === 'coach' ? 'Coach' : ''}
+                      </div>
+                      {turn.proposalState === 'applied' ? (
+                        <span style={{ opacity: 0.6, fontStyle: 'italic' }}>
+                          Suggestion applied{turn.createdAt ? ` — ${new Date(turn.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : ''}
+                        </span>
+                      ) : (
+                        humanizeAiText(turn.text, aiChangeLookup)
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {/* Active proposal block */}
+              {aiTrainerProposal && (
+                <div className="ai-widget-proposal">
+                  <p className="ai-widget-proposal-reply">
+                    {humanizeAiText(aiTrainerProposal.coachReply, aiChangeLookup)}
+                  </p>
+                  {aiTrainerProposal.followUpQuestion && (
+                    <p className="ai-widget-proposal-followup">
+                      {humanizeAiText(aiTrainerProposal.followUpQuestion, aiChangeLookup)}
+                    </p>
+                  )}
+                  {aiTrainerProposal.changes.length > 0 && (
+                    <div className="ai-widget-proposal-changes">
+                      {aiTrainerProposal.changes.map((change, i) => (
+                        <div key={i} className="ai-widget-proposal-change">
+                          <span className="ai-widget-proposal-change-dot" />
+                          <span className="ai-widget-proposal-change-label">
+                            {humanizeAiText(change.reason, aiChangeLookup)}
+                          </span>
+                          <button
+                            type="button"
+                            className="ai-widget-proposal-apply-one"
+                            onClick={() => applyAiAdjustment(i)}
+                            disabled={aiTrainerLoading || aiTrainerApplying || aiTrainerAppliedRows.has(i)}
+                          >
+                            Apply
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div className="ai-widget-proposal-actions">
+                    {aiTrainerProposal.changes.length > 1 && (
+                      <button
+                        type="button"
+                        className="dash-btn-primary"
+                        style={{ fontSize: '12px', padding: '5px 12px' }}
+                        onClick={() => applyAiAdjustment()}
+                        disabled={aiTrainerLoading || aiTrainerApplying}
+                      >
+                        Apply all
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="ai-widget-proposal-details-toggle"
+                      onClick={() => setProposalDetailsOpen((p) => !p)}
+                    >
+                      {proposalDetailsOpen ? '▾ Hide details' : '▸ Show details'}
+                    </button>
+                  </div>
+                  {proposalDetailsOpen && aiTrainerProposal.riskFlags && aiTrainerProposal.riskFlags.length > 0 && (
+                    <ul style={{ fontSize: '11px', color: 'var(--d-muted)', paddingLeft: '16px', margin: 0 }}>
+                      {aiTrainerProposal.riskFlags.map((flag, i) => (
+                        <li key={i}>⚠ {flag}</li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+
+              {/* Status message */}
+              {aiTrainerStatus && (
+                <p style={{ fontSize: '11px', color: 'var(--d-muted)', padding: '4px 12px 0', margin: 0 }}>
+                  {humanizeAiText(aiTrainerStatus, aiChangeLookup)}
+                </p>
+              )}
+
+              {/* Input row */}
+              <div className="ai-widget-input-row">
+                <textarea
+                  className="ai-widget-input"
+                  value={aiTrainerInput}
+                  onChange={(e) => setAiTrainerInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      void generateAiAdjustment();
+                    }
+                  }}
+                  placeholder="Ask your coach…"
+                  rows={1}
+                  disabled={aiTrainerLoading || aiTrainerApplying}
+                />
+                <button
+                  type="button"
+                  className="ai-widget-send-btn"
+                  onClick={() => void generateAiAdjustment()}
+                  disabled={aiTrainerLoading || aiTrainerApplying || !aiTrainerInput.trim()}
+                >
+                  {aiTrainerLoading ? '…' : 'Send'}
+                </button>
+              </div>
+              {aiTrainerError && <p className="ai-widget-error">{aiTrainerError}</p>}
+            </div>
+          ) : null}
+
+          {/* Pill button — always visible */}
+          <button
+            type="button"
+            className="ai-widget-pill"
+            onClick={() => { setChatOpen(true); setHasUnread(false); }}
+            aria-label="Open AI coach chat"
+          >
+            🏃 Coach
+            {hasUnread && <span className="ai-widget-unread-dot" />}
+          </button>
+        </div>
+      )}
 
       {/* Activity detail modal */}
       {selectedActivity && (
