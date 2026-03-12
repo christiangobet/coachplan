@@ -999,7 +999,7 @@ export default function PlanDetailPage() {
       });
       setError(err?.message || 'Failed to move activity');
     }
-  }, [emitPlanEditEvent, loadPlan, plan, planId, editSessionId, setChatMessages]);
+  }, [emitPlanEditEvent, loadPlan, plan, planId, editSessionId, setChatMessages, chatOpen]);
 
   useEffect(() => {
     loadPlan();
@@ -1431,7 +1431,7 @@ export default function PlanDetailPage() {
     } finally {
       setAiTrainerLoading(false);
     }
-  }, [aiTrainerInput, planId]);
+  }, [aiTrainerInput, planId, chatOpen]);
 
   const applyAiAdjustment = useCallback(async (changeIndex?: number) => {
     if (!planId || !aiTrainerProposal || !activeProposalTurn) return;
@@ -2803,7 +2803,7 @@ export default function PlanDetailPage() {
                             type="button"
                             className="ai-widget-proposal-apply-one"
                             onClick={() => applyAiAdjustment(i)}
-                            disabled={aiTrainerLoading || aiTrainerApplying}
+                            disabled={aiTrainerLoading || aiTrainerApplying || aiTrainerAppliedRows.has(i)}
                           >
                             Apply
                           </button>
