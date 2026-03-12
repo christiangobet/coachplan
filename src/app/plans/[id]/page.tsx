@@ -473,6 +473,9 @@ export default function PlanDetailPage() {
   const [isWideScreen, setIsWideScreen] = useState(
     () => (typeof window === 'undefined' ? true : window.matchMedia('(min-width: 1100px)').matches)
   );
+  // Detect touch-primary devices (iPad, phone). pointer:coarse = no fine mouse pointer.
+  // On these devices we use touch drag exclusively and disable HTML5 draggable to avoid conflict.
+  const isTouchPrimary = typeof window === 'undefined' ? false : window.matchMedia('(pointer: coarse)').matches;
   const [showSourcePdf, setShowSourcePdf] = useState(false);
   const [sourceDocumentChecked, setSourceDocumentChecked] = useState(false);
   const [sourceDocument, setSourceDocument] = useState<SourceDocumentMeta>({
@@ -526,8 +529,6 @@ export default function PlanDetailPage() {
     sourceIndex: number;
   } | null>(null);
   const touchDropTargetRef = useRef<{ dayId: string; rawIndex: number } | null>(null);
-  // Flag to cancel HTML5 drag when a touch drag is already in progress (iPadOS dual-fires both)
-  const touchDraggingRef = useRef(false);
 
   useEffect(() => {
     if (searchParams && searchParams.get('mode') === 'edit') {
@@ -987,7 +988,6 @@ export default function PlanDetailPage() {
       const drop = touchDropTargetRef.current;
       touchDragRef.current = null;
       touchDropTargetRef.current = null;
-      touchDraggingRef.current = false;
       setDraggingActivity(null);
       setDropTarget(null);
       if (drag && drop && drop.dayId !== drag.sourceDayId) {
@@ -2485,7 +2485,8 @@ export default function PlanDetailPage() {
                               }
                             }
 
-                            const activityDragDisabled = !desktopDndEnabled || !day?.id || dayLockedForMove || a.completed;
+                            // On touch-primary devices (iPad), disable HTML5 draggable — touch drag handles it instead
+                            const activityDragDisabled = !desktopDndEnabled || !day?.id || dayLockedForMove || a.completed || isTouchPrimary;
                             const showDropBefore = Boolean(
                               dropTarget
                               && dropTarget.valid
@@ -2512,7 +2513,6 @@ export default function PlanDetailPage() {
                                   draggable={!activityDragDisabled}
                                   onTouchStart={(event) => {
                                     if (!touchDndEnabled || !day?.id || dayLockedForMove || a.completed) return;
-                                    touchDraggingRef.current = true;
                                     touchDragRef.current = {
                                       activityId: a.id,
                                       sourceDayId: day.id,
@@ -2526,9 +2526,6 @@ export default function PlanDetailPage() {
                                     // Don't preventDefault here — would block subsequent click on tap
                                   }}
                                   onDragStart={(event) => {
-                                    // Cancel HTML5 drag if a touch drag is already in progress
-                                    // (iPadOS 15+ fires both touch and drag events for the same gesture)
-                                    if (touchDraggingRef.current) { event.preventDefault(); return; }
                                     if (activityDragDisabled || !day?.id) return;
                                     event.stopPropagation();
                                     dragMovedRef.current = false;
