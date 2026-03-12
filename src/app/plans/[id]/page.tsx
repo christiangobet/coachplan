@@ -855,6 +855,25 @@ export default function PlanDetailPage() {
     setMovingActivityId(activityId);
     setError(null);
     try {
+      // Capture before-state from current plan data (must be before loadPlan refreshes state)
+      const activitiesForDay = (dayId: string) => {
+        for (const week of (plan?.weeks ?? [])) {
+          for (const day of (week.days ?? [])) {
+            if (day.id === dayId) {
+              return (day.activities ?? []).map((a: { id: string; type: string; subtype?: string | null; title: string; duration?: number | null; distance?: number | null; distanceUnit?: string | null; priority?: string | null }) => ({
+                id: a.id, type: a.type, subtype: a.subtype ?? null,
+                title: a.title, duration: a.duration ?? null,
+                distance: a.distance ?? null, distanceUnit: a.distanceUnit ?? null,
+                priority: a.priority ?? null,
+              }));
+            }
+          }
+        }
+        return [];
+      };
+      const beforeActivities = activitiesForDay(sourceDayId);
+      const afterActivitiesSnapshot = activitiesForDay(targetDayId);
+
       const res = await fetch(`/api/activities/${activityId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -874,25 +893,6 @@ export default function PlanDetailPage() {
       });
       // Write change log entry and schedule AI risk scan for cross-day moves
       if (!sameDay) {
-        // Capture after-state from current plan data
-        const activitiesForDay = (dayId: string) => {
-          for (const week of (plan?.weeks ?? [])) {
-            for (const day of (week.days ?? [])) {
-              if (day.id === dayId) {
-                return (day.activities ?? []).map((a: { id: string; type: string; subtype?: string | null; title: string; duration?: number | null; distance?: number | null; distanceUnit?: string | null; priority?: string | null }) => ({
-                  id: a.id, type: a.type, subtype: a.subtype ?? null,
-                  title: a.title, duration: a.duration ?? null,
-                  distance: a.distance ?? null, distanceUnit: a.distanceUnit ?? null,
-                  priority: a.priority ?? null,
-                }));
-              }
-            }
-          }
-          return [];
-        };
-
-        const afterActivities = activitiesForDay(targetDayId);
-
         fetch(`/api/plans/${planId}/change-log`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -903,7 +903,8 @@ export default function PlanDetailPage() {
             fromDayId: sourceDayId,
             toDayId: targetDayId,
             editSessionId: editSessionId ?? undefined,
-            after: { dayId: targetDayId, activities: afterActivities },
+            before: { dayId: sourceDayId, activities: beforeActivities },
+            after: { dayId: targetDayId, activities: afterActivitiesSnapshot },
           }),
         })
           .then((r) => r.json())
@@ -1245,12 +1246,8 @@ export default function PlanDetailPage() {
       return [...greetingOnly, athleteTurn];
     });
     try {
-      // Persist athlete message to chat DB (non-blocking)
-      fetch(`/api/plans/${planId}/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ trigger: 'athlete_message', content: message }),
-      }).catch(() => {});
+      // TODO: persist athlete messages to DB — requires a save-only mode that doesn't trigger AI
+      // The trigger:'athlete_message' causes a duplicate AI call; removed for now
 
       const res = await fetch(`/api/plans/${planId}/ai-adjust`, {
         method: 'POST',
