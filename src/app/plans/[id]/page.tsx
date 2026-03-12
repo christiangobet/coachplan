@@ -656,11 +656,8 @@ export default function PlanDetailPage() {
   const loadPlan = useCallback(async () => {
     if (!planId) return;
     try {
-      // Fetch plan data and Strava markers in parallel — removes one full round-trip
-      const [res] = await Promise.all([
-        fetch(`/api/plans/${planId}`),
-        loadStravaMarkers(planId)
-      ]);
+      // Fetch plan data first — render immediately without waiting for Strava
+      const res = await fetch(`/api/plans/${planId}`);
       const text = await res.text();
       let data: any = null;
       try {
@@ -685,6 +682,8 @@ export default function PlanDetailPage() {
         };
       });
       setError(null);
+      // Load Strava markers in background — they overlay after plan is already visible
+      loadStravaMarkers(planId).catch(() => {});
     } catch (err: any) {
       setError(err?.message || 'Failed to load plan.');
     }

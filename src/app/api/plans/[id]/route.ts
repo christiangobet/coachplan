@@ -52,38 +52,34 @@ async function appendPlanPresentation<T extends { id: string; sourceId?: string 
 }
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const user = await currentUser();
+  const [user, { id }] = await Promise.all([currentUser(), params]);
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  const profile = await prisma.user.findUnique({
-    where: { id: user.id },
-    select: { units: true }
-  });
-  const viewerUnits = profile?.units === 'KM' ? 'KM' : 'MILES';
 
-  const { id } = await params;
-  const plan = await prisma.trainingPlan.findUnique({
-    where: { id },
-    include: {
-      weeks: {
-        orderBy: { weekIndex: 'asc' },
-        include: {
-          days: {
-            orderBy: { dayOfWeek: 'asc' },
-            include: {
-              activities: {
-                orderBy: ACTIVITY_ORDER_BY
-              }
+  // Fetch user profile and plan tree in parallel
+  const [profile, plan] = await Promise.all([
+    prisma.user.findUnique({ where: { id: user.id }, select: { units: true } }),
+    prisma.trainingPlan.findUnique({
+      where: { id },
+      include: {
+        weeks: {
+          orderBy: { weekIndex: 'asc' },
+          include: {
+            days: {
+              orderBy: { dayOfWeek: 'asc' },
+              include: { activities: { orderBy: ACTIVITY_ORDER_BY } }
             }
           }
         }
       }
-    }
-  });
+    }),
+  ]);
+
   if (!plan) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   if (plan.ownerId !== user.id && plan.athleteId !== user.id) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
+  const viewerUnits = profile?.units === 'KM' ? 'KM' : 'MILES';
   return NextResponse.json({ plan: await appendPlanPresentation(plan), viewerUnits });
 }
 
