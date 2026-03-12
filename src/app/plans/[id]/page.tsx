@@ -498,6 +498,7 @@ export default function PlanDetailPage() {
   const [aiChatTurns, setAiChatTurns] = useState<AiChatTurn[]>(() => [
     createAiGreetingTurn()
   ]);
+  const [chatMessages, setChatMessages] = useState<import('@/lib/plan-chat-types').ChatMessage[]>([]);
   const [activeProposalTurnId, setActiveProposalTurnId] = useState<string | null>(null);
   const [aiAppliedByTurn, setAiAppliedByTurn] = useState<Record<string, number[]>>({});
   const [aiTrainerLoading, setAiTrainerLoading] = useState(false);
@@ -546,6 +547,9 @@ export default function PlanDetailPage() {
 
   // -- Edit Mode State --
   const [isEditMode, setIsEditMode] = useState(false);
+  const [editSessionId, setEditSessionId] = useState<string | null>(null);
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingChangeLogIds = useRef<string[]>([]);
   const [editingActivity, setEditingActivity] = useState<any>(null);
   const [addingToDayId, setAddingToDayId] = useState<string | null>(null);
   const [movingActivityId, setMovingActivityId] = useState<string | null>(null);
@@ -916,6 +920,65 @@ export default function PlanDetailPage() {
         sourceDayId,
         targetDayId
       });
+      // Write change log entry and schedule AI risk scan for cross-day moves
+      if (!sameDay) {
+        // Capture after-state from current plan data
+        const activitiesForDay = (dayId: string) => {
+          for (const week of (plan?.weeks ?? [])) {
+            for (const day of (week.days ?? [])) {
+              if (day.id === dayId) {
+                return (day.activities ?? []).map((a: { id: string; type: string; subtype?: string | null; title: string; duration?: number | null; distance?: number | null; distanceUnit?: string | null; priority?: string | null }) => ({
+                  id: a.id, type: a.type, subtype: a.subtype ?? null,
+                  title: a.title, duration: a.duration ?? null,
+                  distance: a.distance ?? null, distanceUnit: a.distanceUnit ?? null,
+                  priority: a.priority ?? null,
+                }));
+              }
+            }
+          }
+          return [];
+        };
+
+        const afterActivities = activitiesForDay(targetDayId);
+
+        fetch(`/api/plans/${planId}/change-log`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            source: 'manual_drag',
+            changeType: 'move_activity',
+            activityId,
+            fromDayId: sourceDayId,
+            toDayId: targetDayId,
+            editSessionId: editSessionId ?? undefined,
+            after: { dayId: targetDayId, activities: afterActivities },
+          }),
+        })
+          .then((r) => r.json())
+          .then((data: { id?: string }) => {
+            if (data.id) {
+              pendingChangeLogIds.current.push(data.id);
+              if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+              debounceTimerRef.current = setTimeout(() => {
+                const ids = [...pendingChangeLogIds.current];
+                pendingChangeLogIds.current = [];
+                fetch(`/api/plans/${planId}/chat`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ trigger: 'drag_drop', changeLogIds: ids }),
+                })
+                  .then((r) => r.json())
+                  .then((chatData: { coachMessage?: import('@/lib/plan-chat-types').ChatMessage | null }) => {
+                    if (chatData.coachMessage) {
+                      setChatMessages((prev) => [...prev, chatData.coachMessage!]);
+                    }
+                  })
+                  .catch(() => {});
+              }, 5000);
+            }
+          })
+          .catch(() => {});
+      }
       await loadPlan();
     } catch (err: any) {
       emitPlanEditEvent('plan_activity_move_failed', {
@@ -929,11 +992,22 @@ export default function PlanDetailPage() {
       setDropTarget(null);
       setDraggingActivity(null);
     }
-  }, [emitPlanEditEvent, loadPlan]);
+  }, [emitPlanEditEvent, loadPlan, plan, planId, editSessionId, setChatMessages]);
 
   useEffect(() => {
     loadPlan();
   }, [loadPlan]);
+
+  // Load chat history on mount
+  useEffect(() => {
+    if (!planId) return;
+    fetch(`/api/plans/${planId}/chat?limit=50`)
+      .then((r) => r.json())
+      .then((data: { messages?: import('@/lib/plan-chat-types').ChatMessage[] }) => {
+        if (data.messages) setChatMessages(data.messages);
+      })
+      .catch(() => {}); // non-critical
+  }, [planId]);
 
   useEffect(() => {
     if (!bannerModalOpen) return;
@@ -1714,6 +1788,31 @@ export default function PlanDetailPage() {
                       if (next) {
                         setSelectedDay(null);
                         setSelectedActivity(null);
+                        // Start edit session
+                        fetch(`/api/plans/${planId}/edit-session`, { method: 'POST' })
+                          .then((r) => r.json())
+                          .then((data: { editSessionId?: string }) => {
+                            if (data.editSessionId) setEditSessionId(data.editSessionId);
+                          })
+                          .catch(() => {});
+                      } else {
+                        // Done editing — trigger session summary
+                        const sessionId = editSessionId;
+                        setEditSessionId(null);
+                        if (sessionId) {
+                          fetch(`/api/plans/${planId}/chat`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ trigger: 'edit_session_end', editSessionId: sessionId }),
+                          })
+                            .then((r) => r.json())
+                            .then((data: { coachMessage?: import('@/lib/plan-chat-types').ChatMessage }) => {
+                              if (data.coachMessage) {
+                                setChatMessages((prev) => [...prev, data.coachMessage!]);
+                              }
+                            })
+                            .catch(() => {});
+                        }
                       }
                       return next;
                     });
