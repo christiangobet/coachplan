@@ -30,7 +30,7 @@ Four deliverables:
 
 ## Data Model
 
-Two new Prisma tables:
+Two new Prisma tables, plus back-relation fields added to `TrainingPlan`:
 
 ```prisma
 model PlanChatMessage {
@@ -38,8 +38,9 @@ model PlanChatMessage {
   planId    String
   plan      TrainingPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
   role      String       // "athlete" | "coach" | "system"
+                         // When building OpenAI context: "athlete"→"user", "coach"→"assistant", "system"→"system"
   content   String       // natural language text
-  metadata  Json?        // proposal blob if role=coach; move context if role=system
+  metadata  Json?        // see MessageMetadata type below
   createdAt DateTime     @default(now())
 
   @@index([planId, createdAt])
@@ -54,13 +55,55 @@ model PlanChangeLog {
   activityId String?
   fromDayId  String?
   toDayId    String?
-  before     Json?        // activity list snapshot of source day before move
-  after      Json?        // activity list snapshot of destination day after move
+  before     Json?        // DaySnapshot for source day before move (see type below)
+  after      Json?        // DaySnapshot for destination day after move
+  editSessionId String?   // server-generated token, set when isEditMode → true
   createdAt  DateTime     @default(now())
 
   @@index([planId, createdAt])
 }
 ```
+
+**Back-relations to add to `TrainingPlan` in schema.prisma:**
+```prisma
+chatMessages PlanChatMessage[]
+changeLogs   PlanChangeLog[]
+```
+
+### TypeScript types for JSON fields
+
+```typescript
+// PlanChatMessage.metadata
+type MessageMetadata = {
+  // For role="coach" messages that include a proposal:
+  proposal?: PlanAdjustmentProposal;
+  state?: 'active' | 'applied' | 'superseded'; // default: "active"
+  // For role="system" move-note messages:
+  changeLogIds?: string[];
+};
+
+// PlanChangeLog.before / .after
+type DaySnapshot = {
+  dayId: string;
+  activities: Array<{
+    id: string;
+    type: string;        // ActivityType enum value
+    subtype: string | null;
+    title: string;
+    duration: number | null;  // minutes
+    distance: number | null;
+    distanceUnit: string | null;
+    priority: string | null;
+  }>;
+};
+```
+
+### Proposal state transitions
+
+- New coach message → `state: "active"`
+- Athlete sends a new message → all existing `active` coach messages for this plan become `state: "superseded"` (server updates on save of new athlete message)
+- Athlete applies a proposal → that message's `state` becomes `"applied"` (server updates on apply)
+- An older proposal can still be applied even if superseded — the app allows it
 
 ### AI context window (every call)
 - Last 30 `PlanChatMessage` entries for this plan (newest last)
@@ -73,19 +116,29 @@ model PlanChangeLog {
 
 ### New endpoints
 
+**`POST /api/plans/[id]/edit-session`**
+Called when athlete enters edit mode. Returns `{ editSessionId: string }` — a server-generated cuid used to fence PlanChangeLog entries for this edit session.
+
 **`GET /api/plans/[id]/chat?limit=50`**
 Returns last N messages for chat panel hydration on page load.
 
 **`POST /api/plans/[id]/chat`**
 Two triggers:
 - `{ trigger: "athlete_message", content: "..." }` — athlete typed a message
-- `{ trigger: "drag_drop", changeLogId: "...", sessionEnd: false }` — move completed; AI does risk scan
-- `{ trigger: "edit_session_end", sessionId: "..." }` — "Done Editing" tapped; AI generates summary
+- `{ trigger: "drag_drop", changeLogIds: ["...", "..."] }` — one or more moves (5s debounce accumulated); AI does risk scan
+- `{ trigger: "edit_session_end", editSessionId: "..." }` — "Done Editing" tapped; AI generates summary
 
-Response: `{ messageId, status: "pending" | "done" }` — client polls for the coach reply.
-
-**`GET /api/plans/[id]/chat/pending?since=<timestamp>`**
-Returns new messages since timestamp. Client polls every 2s while waiting for AI response.
+**Response pattern — synchronous, no polling:**
+The POST handler runs the AI call inline and returns the complete coach message before responding:
+```json
+{
+  "coachMessage": { "id": "...", "role": "coach", "content": "...", "metadata": { ... }, "createdAt": "..." } | null,
+  "silent": true
+}
+```
+- `coachMessage` is `null` when Tier 1 risk scan finds no issues (silent move)
+- `silent: true` signals the client not to open/highlight the chat panel
+- No polling endpoint needed — the client appends the returned message directly
 
 ### Existing endpoint change
 `POST /api/plans/[id]/ai-adjust` — when `apply=true`, write a `PlanChangeLog` entry with `source: "ai_applied"` alongside the existing apply logic.
@@ -105,19 +158,21 @@ Returns new messages since timestamp. Client polls every 2s while waiting for AI
    after: activity list of destination day after move
    ↓
 4. Client starts 5s debounce timer
-   (resets if another move happens within 5s)
+   (resets if another move happens within 5s; accumulates changeLogIds)
    ↓
 5. After 5s — POST /api/plans/[id]/chat
-   { trigger: "drag_drop", changeLogIds: [...] }
+   { trigger: "drag_drop", changeLogIds: ["id1", "id2", ...] }
    ↓
 6. Server builds context: recent messages + change log + performance data
    AI runs risk assessment on accumulated moves
    ↓
 7a. Risk detected → AI generates short comment (50-120 words) + optional follow-up
     Save as PlanChatMessage (role: "system" for move note, "coach" for reply)
-7b. No risk → silent (no message saved, no chat update)
+    POST returns { coachMessage: { ... }, silent: false }
+7b. No risk → silent, no message saved
+    POST returns { coachMessage: null, silent: true }
    ↓
-8. Client polling picks up new coach message → appends to chat panel
+8. Client appends returned coachMessage directly to chat panel (no polling)
 ```
 
 **Risk detection criteria (fires Tier 1 comment):**
@@ -135,11 +190,17 @@ Safe moves (easy runs, rest day swaps, cross-training) → silence.
 When athlete taps "Done Editing" (`isEditMode` → false):
 
 ```
-1. Collect all PlanChangeLog entries written since edit session started
-   (track session start timestamp in client state when isEditMode → true)
+0. When athlete taps "Edit Plan" (isEditMode → true):
+   Client calls POST /api/plans/[id]/edit-session → server returns { editSessionId: "cuid" }
+   Client stores editSessionId in React state for the duration of edit mode
+   All PlanChangeLog entries written during this session include this editSessionId
+   ↓
+1. When athlete taps "Done Editing":
+   Collect editSessionId from state
    ↓
 2. POST /api/plans/[id]/chat
-   { trigger: "edit_session_end", since: <sessionStartTimestamp> }
+   { trigger: "edit_session_end", editSessionId: "..." }
+   Server queries PlanChangeLog WHERE editSessionId = X (no clock drift risk)
    ↓
 3. AI generates consolidated summary of all changes in this session
    Always fires (even if no risks detected)
@@ -169,9 +230,11 @@ GET /api/plans/[id]/chat?limit=50
 ```
 POST /api/plans/[id]/chat { trigger: "athlete_message", content }
 → saves athlete message immediately (role: "athlete")
-→ triggers AI call
-→ AI response saved as coach message
-→ client polls and appends
+→ marks any existing "active" coach messages as "superseded"
+→ runs AI call inline (synchronous)
+→ saves AI response as coach message (role: "coach", state: "active")
+→ returns { coachMessage: { ... } }
+→ client appends returned message directly to chat panel
 ```
 
 **Token budget:**
@@ -184,9 +247,21 @@ AI always receives last 30 messages + 14-day change log. Older history is stored
 On every AI call, include a structured summary of the last 14 days of completed activities:
 
 ```
-Query: PlanActivity WHERE planId = X AND completed = true AND dayDate >= 14 days ago
-  Include: Strava match (if any) for pace, HR, distance
-  Include: manually logged actuals (actualPace, actualDuration, actualDistance)
+Query:
+  PlanActivity
+    WHERE planId = X AND completed = true
+    AND completedAt >= (now - 14 days)
+    include: day { dayOfWeek, week { startDate } }   ← to derive calendar date for display
+    include: externalActivities (via ExternalActivity.matchedPlanActivityId = PlanActivity.id)
+              → avgHeartRate (Int?), movingTimeSec (Int?), distanceM (Float?)
+
+  Note: completedAt is used for the 14-day filter. For manually-done activities where
+  completedAt may be null, fall back to deriving the date from
+  day.week.startDate + (day.dayOfWeek - 1) days.
+
+  Include manually logged actuals from PlanActivity: actualPace, actualDuration, actualDistance.
+  Include Strava fields from ExternalActivity: avgHeartRate, movingTimeSec, distanceM (÷ 1000 for km).
+  Prefer Strava values over manual when both exist.
 
 Format for AI:
 "Recent performance (last 14 days):
