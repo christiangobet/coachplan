@@ -349,11 +349,6 @@ function keepOnlyGreeting(turns: AiChatTurn[]): AiChatTurn[] {
   return existing ? [existing] : [createAiGreetingTurn()];
 }
 
-function formatDowLabel(dayOfWeek: number | null | undefined) {
-  if (!dayOfWeek || dayOfWeek < 1 || dayOfWeek > 7) return '—';
-  return DAY_LABELS[dayOfWeek - 1] || '—';
-}
-
 function nextTurnId() {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID();
@@ -388,50 +383,6 @@ type AiChangeLookup = {
   dayLabelById: Map<string, string>;
   activityLabelById: Map<string, string>;
 };
-
-function describeAiChange(change: AiTrainerChange, lookup: AiChangeLookup) {
-  const dayLabel = (dayId: string) => lookup.dayLabelById.get(dayId) || 'a plan day';
-  const activityLabel = (activityId: string) => lookup.activityLabelById.get(activityId) || 'a scheduled activity';
-  const dayName = (dayOfWeek: number | null | undefined) => {
-    if (!dayOfWeek || dayOfWeek < 1 || dayOfWeek > 7) return 'a day';
-    return DAY_LABELS[dayOfWeek - 1] || 'a day';
-  };
-
-  if (change.op === 'extend_plan') {
-    const startDate = new Date(`${change.newStartDate}T00:00:00`);
-    const startText = Number.isNaN(startDate.getTime())
-      ? change.newStartDate
-      : startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-    return `Extend plan to start on ${startText} (prepend weeks, keep race date).`;
-  }
-  if (change.op === 'reanchor_subtype_weekly') {
-    const subtypeLabel = change.subtype.replace(/[-_]+/g, ' ').trim();
-    const sourceText = change.fromDayOfWeek ? ` from ${dayName(change.fromDayOfWeek)}` : '';
-    const startText = change.startWeekIndex ? ` from week ${change.startWeekIndex}` : ' for remaining weeks';
-    return `Move ${subtypeLabel} sessions${sourceText} to ${dayName(change.targetDayOfWeek)}${startText}.`;
-  }
-  if (change.op === 'move_activity') {
-    return `Move ${activityLabel(change.activityId)} to ${dayLabel(change.targetDayId)}.`;
-  }
-  if (change.op === 'delete_activity') {
-    return `Remove ${activityLabel(change.activityId)}.`;
-  }
-  if (change.op === 'add_activity') {
-    return `Add ${formatType(change.type)} "${change.title}" on ${dayLabel(change.dayId)}.`;
-  }
-  const updates: string[] = [];
-  if (change.title !== undefined) updates.push('title');
-  if (change.type !== undefined) updates.push('type');
-  if (change.duration !== undefined) updates.push('duration');
-  if (change.distance !== undefined) updates.push('distance');
-  if (change.paceTarget !== undefined) updates.push('pace');
-  if (change.effortTarget !== undefined) updates.push('effort');
-  if (change.notes !== undefined) updates.push('notes');
-  if (change.priority !== undefined) updates.push('priority');
-  if (change.mustDo !== undefined) updates.push('must-do');
-  if (change.bailAllowed !== undefined) updates.push('bail');
-  return `Edit ${activityLabel(change.activityId)}${updates.length > 0 ? ` (${updates.join(', ')})` : ''}.`;
-}
 
 function humanizeAiText(text: string | null | undefined, lookup: AiChangeLookup) {
   if (!text) return '';
