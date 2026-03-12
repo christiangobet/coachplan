@@ -4637,7 +4637,7 @@
 
 .ai-widget-error {
   font-size: 11px;
-  color: #e53e3e;
+  color: var(--d-red);
   padding: 4px 12px 6px;
   flex-shrink: 0;
 }

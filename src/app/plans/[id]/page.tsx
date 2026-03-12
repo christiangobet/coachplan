@@ -2937,6 +2937,7 @@ export default function PlanDetailPage() {
                     className="ai-widget-header-btn"
                     onClick={() => { setChatOpen(false); }}
                     title="Minimise"
+                    aria-label="Minimise coach chat"
                   >
                     —
                   </button>
@@ -2946,6 +2947,7 @@ export default function PlanDetailPage() {
                     onClick={clearAiChat}
                     disabled={aiTrainerLoading || aiTrainerApplying}
                     title="Clear chat"
+                    aria-label="Clear chat history"
                   >
                     ✕
                   </button>
@@ -3074,6 +3076,7 @@ export default function PlanDetailPage() {
             type="button"
             className="ai-widget-pill"
             onClick={() => { setChatOpen(true); setHasUnread(false); }}
+            aria-label="Open AI coach chat"
           >
             🏃 Coach
             {hasUnread && <span className="ai-widget-unread-dot" />}
