@@ -29,12 +29,24 @@ No existing state changes. New addition only:
 const [chatOpen, setChatOpen] = useState(false);
 ```
 
-Existing state used by the widget (unchanged):
+Existing state used by the widget (unchanged, exact names from page.tsx):
 - `aiChatTurns` — in-session messages
 - `aiTrainerProposal` — active proposal with apply handlers
-- `aiLoading`, `aiInput`, `setAiInput` — input and loading
+- `aiTrainerLoading` — AI call in progress (disables send + apply buttons)
+- `aiTrainerApplying` — proposal apply in progress (also disables send + apply buttons)
+- `aiTrainerInput` / `setAiTrainerInput` — controlled input field value
 - `aiTrainerError` — error display
 - `chatMessages` — DB-persisted history (accordion only)
+
+New state:
+```typescript
+const [chatOpen, setChatOpen] = useState(false);
+const [hasUnread, setHasUnread] = useState(false);
+```
+
+`hasUnread` lifecycle:
+- Set to `true` whenever a new coach message is appended to `aiChatTurns` (or `chatMessages`) AND `chatOpen` is `false`
+- Set to `false` when the widget is opened (`setChatOpen(true)` also calls `setHasUnread(false)`)
 
 ---
 
