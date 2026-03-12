@@ -162,9 +162,41 @@ model TrainingPlan {
   sourceDocument PlanSourceDocument?
   images     PlanImage[] @relation("PlanImageLibrary")
   bannerImage PlanImage? @relation("SelectedPlanBanner", fields: [bannerImageId], references: [id], onDelete: SetNull)
+  chatMessages PlanChatMessage[]
+  changeLogs   PlanChangeLog[]
 
   @@index([athleteId, status])
   @@index([ownerId, status])
+}
+
+model PlanChatMessage {
+  id        String       @id @default(cuid())
+  planId    String
+  plan      TrainingPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  role      String       // "athlete" | "coach" | "system"
+  content   String
+  metadata  Json?
+  createdAt DateTime     @default(now())
+
+  @@index([planId, createdAt])
+}
+
+model PlanChangeLog {
+  id            String       @id @default(cuid())
+  planId        String
+  plan          TrainingPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  source        String       // "manual_drag" | "ai_applied" | "manual_edit"
+  changeType    String       // "move_activity" | "edit_activity" | "add_activity" | "delete_activity"
+  activityId    String?
+  fromDayId     String?
+  toDayId       String?
+  before        Json?
+  after         Json?
+  editSessionId String?
+  createdAt     DateTime     @default(now())
+
+  @@index([planId, createdAt])
+  @@index([planId, editSessionId])
 }
 
 model PlanSourceDocument {

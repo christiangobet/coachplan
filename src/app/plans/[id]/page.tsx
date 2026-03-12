@@ -349,11 +349,6 @@ function keepOnlyGreeting(turns: AiChatTurn[]): AiChatTurn[] {
   return existing ? [existing] : [createAiGreetingTurn()];
 }
 
-function formatDowLabel(dayOfWeek: number | null | undefined) {
-  if (!dayOfWeek || dayOfWeek < 1 || dayOfWeek > 7) return '—';
-  return DAY_LABELS[dayOfWeek - 1] || '—';
-}
-
 function nextTurnId() {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID();
@@ -388,50 +383,6 @@ type AiChangeLookup = {
   dayLabelById: Map<string, string>;
   activityLabelById: Map<string, string>;
 };
-
-function describeAiChange(change: AiTrainerChange, lookup: AiChangeLookup) {
-  const dayLabel = (dayId: string) => lookup.dayLabelById.get(dayId) || 'a plan day';
-  const activityLabel = (activityId: string) => lookup.activityLabelById.get(activityId) || 'a scheduled activity';
-  const dayName = (dayOfWeek: number | null | undefined) => {
-    if (!dayOfWeek || dayOfWeek < 1 || dayOfWeek > 7) return 'a day';
-    return DAY_LABELS[dayOfWeek - 1] || 'a day';
-  };
-
-  if (change.op === 'extend_plan') {
-    const startDate = new Date(`${change.newStartDate}T00:00:00`);
-    const startText = Number.isNaN(startDate.getTime())
-      ? change.newStartDate
-      : startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-    return `Extend plan to start on ${startText} (prepend weeks, keep race date).`;
-  }
-  if (change.op === 'reanchor_subtype_weekly') {
-    const subtypeLabel = change.subtype.replace(/[-_]+/g, ' ').trim();
-    const sourceText = change.fromDayOfWeek ? ` from ${dayName(change.fromDayOfWeek)}` : '';
-    const startText = change.startWeekIndex ? ` from week ${change.startWeekIndex}` : ' for remaining weeks';
-    return `Move ${subtypeLabel} sessions${sourceText} to ${dayName(change.targetDayOfWeek)}${startText}.`;
-  }
-  if (change.op === 'move_activity') {
-    return `Move ${activityLabel(change.activityId)} to ${dayLabel(change.targetDayId)}.`;
-  }
-  if (change.op === 'delete_activity') {
-    return `Remove ${activityLabel(change.activityId)}.`;
-  }
-  if (change.op === 'add_activity') {
-    return `Add ${formatType(change.type)} "${change.title}" on ${dayLabel(change.dayId)}.`;
-  }
-  const updates: string[] = [];
-  if (change.title !== undefined) updates.push('title');
-  if (change.type !== undefined) updates.push('type');
-  if (change.duration !== undefined) updates.push('duration');
-  if (change.distance !== undefined) updates.push('distance');
-  if (change.paceTarget !== undefined) updates.push('pace');
-  if (change.effortTarget !== undefined) updates.push('effort');
-  if (change.notes !== undefined) updates.push('notes');
-  if (change.priority !== undefined) updates.push('priority');
-  if (change.mustDo !== undefined) updates.push('must-do');
-  if (change.bailAllowed !== undefined) updates.push('bail');
-  return `Edit ${activityLabel(change.activityId)}${updates.length > 0 ? ` (${updates.join(', ')})` : ''}.`;
-}
 
 function humanizeAiText(text: string | null | undefined, lookup: AiChangeLookup) {
   if (!text) return '';
@@ -498,6 +449,7 @@ export default function PlanDetailPage() {
   const [aiChatTurns, setAiChatTurns] = useState<AiChatTurn[]>(() => [
     createAiGreetingTurn()
   ]);
+  const [chatMessages, setChatMessages] = useState<import('@/lib/plan-chat-types').ChatMessage[]>([]);
   const [activeProposalTurnId, setActiveProposalTurnId] = useState<string | null>(null);
   const [aiAppliedByTurn, setAiAppliedByTurn] = useState<Record<string, number[]>>({});
   const [aiTrainerLoading, setAiTrainerLoading] = useState(false);
@@ -505,6 +457,7 @@ export default function PlanDetailPage() {
   const [aiTrainerError, setAiTrainerError] = useState<string | null>(null);
   const [aiTrainerStatus, setAiTrainerStatus] = useState<string | null>(null);
   const [aiTrainerClarification, setAiTrainerClarification] = useState('');
+  const [proposalDetailsOpen, setProposalDetailsOpen] = useState(false);
   const aiTrainerApplying = aiTrainerApplyingTarget !== null;
   const activeProposalTurn = useMemo(
     () => aiChatTurns.find((turn) => turn.id === activeProposalTurnId && turn.proposal) || null,
@@ -546,6 +499,9 @@ export default function PlanDetailPage() {
 
   // -- Edit Mode State --
   const [isEditMode, setIsEditMode] = useState(false);
+  const [editSessionId, setEditSessionId] = useState<string | null>(null);
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingChangeLogIds = useRef<string[]>([]);
   const [editingActivity, setEditingActivity] = useState<any>(null);
   const [addingToDayId, setAddingToDayId] = useState<string | null>(null);
   const [movingActivityId, setMovingActivityId] = useState<string | null>(null);
@@ -899,6 +855,25 @@ export default function PlanDetailPage() {
     setMovingActivityId(activityId);
     setError(null);
     try {
+      // Capture before-state from current plan data (must be before loadPlan refreshes state)
+      const activitiesForDay = (dayId: string) => {
+        for (const week of (plan?.weeks ?? [])) {
+          for (const day of (week.days ?? [])) {
+            if (day.id === dayId) {
+              return (day.activities ?? []).map((a: { id: string; type: string; subtype?: string | null; title: string; duration?: number | null; distance?: number | null; distanceUnit?: string | null; priority?: string | null }) => ({
+                id: a.id, type: a.type, subtype: a.subtype ?? null,
+                title: a.title, duration: a.duration ?? null,
+                distance: a.distance ?? null, distanceUnit: a.distanceUnit ?? null,
+                priority: a.priority ?? null,
+              }));
+            }
+          }
+        }
+        return [];
+      };
+      const beforeActivities = activitiesForDay(sourceDayId);
+      const afterActivitiesSnapshot = activitiesForDay(targetDayId);
+
       const res = await fetch(`/api/activities/${activityId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -916,6 +891,47 @@ export default function PlanDetailPage() {
         sourceDayId,
         targetDayId
       });
+      // Write change log entry and schedule AI risk scan for cross-day moves
+      if (!sameDay) {
+        fetch(`/api/plans/${planId}/change-log`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            source: 'manual_drag',
+            changeType: 'move_activity',
+            activityId,
+            fromDayId: sourceDayId,
+            toDayId: targetDayId,
+            editSessionId: editSessionId ?? undefined,
+            before: { dayId: sourceDayId, activities: beforeActivities },
+            after: { dayId: targetDayId, activities: afterActivitiesSnapshot },
+          }),
+        })
+          .then((r) => r.json())
+          .then((data: { id?: string }) => {
+            if (data.id) {
+              pendingChangeLogIds.current.push(data.id);
+              if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+              debounceTimerRef.current = setTimeout(() => {
+                const ids = [...pendingChangeLogIds.current];
+                pendingChangeLogIds.current = [];
+                fetch(`/api/plans/${planId}/chat`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ trigger: 'drag_drop', changeLogIds: ids }),
+                })
+                  .then((r) => r.json())
+                  .then((chatData: { coachMessage?: import('@/lib/plan-chat-types').ChatMessage | null }) => {
+                    if (chatData.coachMessage) {
+                      setChatMessages((prev) => [...prev, chatData.coachMessage!]);
+                    }
+                  })
+                  .catch(() => {});
+              }, 5000);
+            }
+          })
+          .catch(() => {});
+      }
       await loadPlan();
     } catch (err: any) {
       emitPlanEditEvent('plan_activity_move_failed', {
@@ -929,11 +945,22 @@ export default function PlanDetailPage() {
       setDropTarget(null);
       setDraggingActivity(null);
     }
-  }, [emitPlanEditEvent, loadPlan]);
+  }, [emitPlanEditEvent, loadPlan, plan, planId, editSessionId, setChatMessages]);
 
   useEffect(() => {
     loadPlan();
   }, [loadPlan]);
+
+  // Load chat history on mount
+  useEffect(() => {
+    if (!planId) return;
+    fetch(`/api/plans/${planId}/chat?limit=50`)
+      .then((r) => r.json())
+      .then((data: { messages?: import('@/lib/plan-chat-types').ChatMessage[] }) => {
+        if (data.messages) setChatMessages(data.messages);
+      })
+      .catch(() => {}); // non-critical
+  }, [planId]);
 
   useEffect(() => {
     if (!bannerModalOpen) return;
@@ -1219,6 +1246,9 @@ export default function PlanDetailPage() {
       return [...greetingOnly, athleteTurn];
     });
     try {
+      // TODO: persist athlete messages to DB — requires a save-only mode that doesn't trigger AI
+      // The trigger:'athlete_message' causes a duplicate AI call; removed for now
+
       const res = await fetch(`/api/plans/${planId}/ai-adjust`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1714,6 +1744,31 @@ export default function PlanDetailPage() {
                       if (next) {
                         setSelectedDay(null);
                         setSelectedActivity(null);
+                        // Start edit session
+                        fetch(`/api/plans/${planId}/edit-session`, { method: 'POST' })
+                          .then((r) => r.json())
+                          .then((data: { editSessionId?: string }) => {
+                            if (data.editSessionId) setEditSessionId(data.editSessionId);
+                          })
+                          .catch(() => {});
+                      } else {
+                        // Done editing — trigger session summary
+                        const sessionId = editSessionId;
+                        setEditSessionId(null);
+                        if (sessionId) {
+                          fetch(`/api/plans/${planId}/chat`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ trigger: 'edit_session_end', editSessionId: sessionId }),
+                          })
+                            .then((r) => r.json())
+                            .then((data: { coachMessage?: import('@/lib/plan-chat-types').ChatMessage }) => {
+                              if (data.coachMessage) {
+                                setChatMessages((prev) => [...prev, data.coachMessage!]);
+                              }
+                            })
+                            .catch(() => {});
+                        }
                       }
                       return next;
                     });
@@ -1803,7 +1858,23 @@ export default function PlanDetailPage() {
                   </div>
 
                   <div className="pcal-ai-thread">
-                    {aiChatTurns.length === 0 && (
+                    {/* Chat history from DB (loaded on mount) */}
+                    {chatMessages.map((msg) => (
+                      <article key={msg.id} className={`pcal-ai-turn role-${msg.role}`}>
+                        <div className="pcal-ai-turn-head">
+                          <strong>
+                            {msg.role === 'athlete' ? 'You' : msg.role === 'coach' ? 'Coach' : 'System'}
+                          </strong>
+                          {msg.metadata?.state && msg.metadata.state !== 'active' && (
+                            <span className={`pcal-ai-turn-state state-${msg.metadata.state}`}>
+                              {msg.metadata.state === 'applied' ? 'Applied' : 'History'}
+                            </span>
+                          )}
+                        </div>
+                        <p>{msg.content}</p>
+                      </article>
+                    ))}
+                    {aiChatTurns.length === 0 && chatMessages.length === 0 && (
                       <p className="pcal-ai-trainer-status">
                         Start with one clear request, for example: &quot;Move this week&apos;s long run to Sunday and rebalance recovery.&quot;
                       </p>
@@ -1824,7 +1895,14 @@ export default function PlanDetailPage() {
                             </span>
                           )}
                         </div>
-                        <p>{humanizeAiText(turn.text, aiChangeLookup)}</p>
+                        {turn.proposalState === 'applied' ? (
+                          <p className="pcal-ai-trainer-applied-summary">
+                            Coach suggestion applied
+                            {turn.createdAt ? ` — ${new Date(turn.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : ''}
+                          </p>
+                        ) : (
+                          <p>{humanizeAiText(turn.text, aiChangeLookup)}</p>
+                        )}
                         {turn.errorCode && (
                           <span className="pcal-ai-turn-error-code">{turn.errorCode}</span>
                         )}
@@ -1868,140 +1946,106 @@ export default function PlanDetailPage() {
 
                   {aiTrainerProposal ? (
                     <div className="pcal-ai-trainer-proposal">
-                      <div className="pcal-ai-trainer-meta">
-                        <strong>Active Recommendation</strong>
-                        <span>Confidence: {aiTrainerProposal.confidence}</span>
-                      </div>
-                      <p>{humanizeAiText(aiTrainerProposal.coachReply, aiChangeLookup)}</p>
+                      {/* Coach reply */}
+                      <p className="pcal-ai-trainer-reply">
+                        {humanizeAiText(aiTrainerProposal.coachReply, aiChangeLookup)}
+                      </p>
+
+                      {/* Follow-up question */}
                       {aiTrainerProposal.followUpQuestion && (
-                        <p className="pcal-ai-trainer-followup">
-                          Follow-up: {humanizeAiText(aiTrainerProposal.followUpQuestion, aiChangeLookup)}
+                        <p className="pcal-ai-trainer-followup-q">
+                          {humanizeAiText(aiTrainerProposal.followUpQuestion, aiChangeLookup)}
                         </p>
                       )}
+
+                      {/* Clarification required */}
                       {aiTrainerProposal.requiresClarification && (
-                        <div className="pcal-ai-trainer-followup">
-                          <p>
-                            Clarification required: {humanizeAiText(aiTrainerProposal.clarificationPrompt || 'Please confirm constraints before applying.', aiChangeLookup)}
-                          </p>
+                        <div className="pcal-ai-trainer-clarification">
+                          <p>{humanizeAiText(aiTrainerProposal.clarificationPrompt ?? 'Please confirm before applying.', aiChangeLookup)}</p>
                           <textarea
                             value={aiTrainerClarification}
                             onChange={(e) => setAiTrainerClarification(e.target.value)}
-                            placeholder="Example: Keep long run on Sunday, max 1 hard session mid-week, no added mileage this week."
-                            rows={3}
+                            placeholder="Your response..."
+                            rows={2}
                           />
                         </div>
                       )}
-                      {aiTrainerProposal.invariantReport && aiTrainerProposal.invariantReport.weeks.length > 0 && (
-                        <div className="pcal-ai-trainer-invariants">
+
+                      {/* Changes list */}
+                      {aiTrainerProposal.changes.length > 0 && (
+                        <div className="pcal-ai-trainer-change-list">
+                          {aiTrainerProposal.changes.map((change, i) => (
+                            <div key={i} className="pcal-ai-trainer-change-item">
+                              <span className="pcal-ai-trainer-change-dot" />
+                              <span className="pcal-ai-trainer-change-label">
+                                {humanizeAiText(change.reason, aiChangeLookup)}
+                              </span>
+                              <button
+                                type="button"
+                                className="dash-btn-primary pcal-ai-apply-one"
+                                onClick={() => applyAiAdjustment(i)}
+                                disabled={aiTrainerLoading}
+                              >
+                                Apply
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Action row */}
+                      <div className="pcal-ai-trainer-actions">
+                        {aiTrainerProposal.changes.length > 1 && (
+                          <button
+                            type="button"
+                            className="dash-btn-primary"
+                            onClick={() => applyAiAdjustment()}
+                            disabled={aiTrainerLoading}
+                          >
+                            Apply all changes
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          className="dash-btn-ghost pcal-ai-details-toggle"
+                          onClick={() => setProposalDetailsOpen((p) => !p)}
+                        >
+                          {proposalDetailsOpen ? '▾ Hide details' : '▸ Show details'}
+                        </button>
+                      </div>
+
+                      {/* Expandable details */}
+                      {proposalDetailsOpen && (
+                        <div className="pcal-ai-trainer-details">
                           <div className="pcal-ai-trainer-meta">
-                            <strong>Week Balance Check</strong>
-                            <span>
-                              Mode: {aiTrainerProposal.invariantReport.selectedMode.replace(/_/g, ' ')} · Score: {aiTrainerProposal.invariantReport.candidateScore}
-                            </span>
+                            <span>Confidence: {aiTrainerProposal.confidence}</span>
+                            {aiTrainerProposal.invariantReport && (
+                              <span>Mode: {aiTrainerProposal.invariantReport.selectedMode.replace(/_/g, ' ')}</span>
+                            )}
                           </div>
-                          <div className="pcal-ai-trainer-invariant-grid">
-                            {aiTrainerProposal.invariantReport.weeks.map((week) => (
-                              <article key={`inv-${week.weekIndex}`} className="pcal-ai-trainer-invariant-week">
-                                <header>
-                                  <strong>Week {week.weekIndex}</strong>
-                                </header>
-                                <p>Rest: {week.before.restDays} → {week.after.restDays}</p>
-                                <p>Hard days: {week.before.hardDays} → {week.after.hardDays}</p>
-                                <p>Long run: {formatDowLabel(week.before.longRunDayOfWeek)} → {formatDowLabel(week.after.longRunDayOfWeek)}</p>
-                                <p>Planned duration: {week.before.plannedDurationMin}m → {week.after.plannedDurationMin}m</p>
-                                {week.flags.length > 0 && (
-                                  <ul>
-                                    {week.flags.map((flag, idx) => (
-                                      <li key={`${week.weekIndex}-${flag}-${idx}`}>{flag}</li>
-                                    ))}
-                                  </ul>
-                                )}
-                              </article>
-                            ))}
-                          </div>
-                          {aiTrainerProposal.invariantReport.summaryFlags.length > 0 && (
-                            <div className="pcal-ai-trainer-risks">
-                              <strong>Balance Notes</strong>
-                              <ul>
-                                {aiTrainerProposal.invariantReport.summaryFlags.map((flag, idx) => (
-                                  <li key={`summary-${idx}`}>{flag}</li>
-                                ))}
-                              </ul>
+                          {aiTrainerProposal.riskFlags && aiTrainerProposal.riskFlags.length > 0 && (
+                            <ul className="pcal-ai-trainer-risks">
+                              {aiTrainerProposal.riskFlags.map((flag, i) => (
+                                <li key={i}>⚠ {flag}</li>
+                              ))}
+                            </ul>
+                          )}
+                          {aiTrainerProposal.invariantReport && aiTrainerProposal.invariantReport.weeks.length > 0 && (
+                            <div className="pcal-ai-trainer-invariants">
+                              {aiTrainerProposal.invariantReport.weeks.map((w) => (
+                                <div key={w.weekIndex} className="pcal-ai-trainer-week-row">
+                                  <span>Week {w.weekIndex}</span>
+                                  <span>Rest: {w.before.restDays}→{w.after.restDays}</span>
+                                  <span>Hard: {w.before.hardDays}→{w.after.hardDays}</span>
+                                  {w.flags.length > 0 && <span className="pcal-ai-trainer-week-flag">{w.flags.join(', ')}</span>}
+                                </div>
+                              ))}
                             </div>
                           )}
                         </div>
                       )}
-                      <div className="pcal-ai-trainer-meta">
-                        <strong>Planned Changes ({aiTrainerProposal.changes.length})</strong>
-                      </div>
-                      {aiTrainerProposal.changes.length === 0 && (
-                        <p className="pcal-ai-trainer-followup">
-                          This request needs a plan-structure update (weeks/dates), which is not supported yet.
-                        </p>
-                      )}
-                      <ul className="pcal-ai-trainer-change-list">
-                        {aiTrainerProposal.changes.map((change, idx) => (
-                          <li
-                            key={`${change.op}-${idx}`}
-                            className={aiTrainerAppliedRows.has(idx) ? 'is-applied' : ''}
-                          >
-                            <div className="pcal-ai-trainer-change-head">
-                              <span className="pcal-ai-trainer-op">{change.op.replace(/_/g, ' ')}</span>
-                              <strong>{describeAiChange(change, aiChangeLookup)}</strong>
-                              <button
-                                className="dash-btn-ghost pcal-ai-trainer-apply-one"
-                                type="button"
-                                onClick={() => applyAiAdjustment(idx)}
-                                disabled={
-                                  aiTrainerAppliedRows.has(idx)
-                                  || aiTrainerLoading
-                                  || aiTrainerApplying
-                                  || (aiTrainerProposal.requiresClarification && !aiTrainerClarification.trim())
-                                }
-                              >
-                                {aiTrainerAppliedRows.has(idx)
-                                  ? 'Applied'
-                                  : aiTrainerApplyingTarget === idx
-                                    ? 'Applying…'
-                                    : 'Apply'}
-                              </button>
-                            </div>
-                            <p>{humanizeAiText(change.reason, aiChangeLookup)}</p>
-                          </li>
-                        ))}
-                      </ul>
-                      <div className="pcal-ai-trainer-apply-all">
-                        <button
-                          className="dash-btn-primary"
-                          type="button"
-                          onClick={() => applyAiAdjustment()}
-                          disabled={
-                            aiTrainerProposal.changes.length === 0
-                            || aiTrainerAppliedRows.size >= aiTrainerProposal.changes.length
-                            || aiTrainerLoading
-                            || aiTrainerApplying
-                            || (aiTrainerProposal.requiresClarification && !aiTrainerClarification.trim())
-                          }
-                        >
-                          {aiTrainerApplyingTarget === 'all' ? 'Applying all…' : 'Apply All Changes'}
-                        </button>
-                      </div>
-                      {(aiTrainerProposal.riskFlags || []).length > 0 && (
-                        <div className="pcal-ai-trainer-risks">
-                          <strong>Risk Flags</strong>
-                          <ul>
-                            {(aiTrainerProposal.riskFlags || []).map((flag, idx) => (
-                              <li key={`${flag}-${idx}`}>{humanizeAiText(flag, aiChangeLookup)}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
                     </div>
-                  ) : (
-                    <div className="pcal-ai-trainer-proposal pcal-ai-proposal-empty">
-                      <p>No active recommendation. Generate a new one from the chat above.</p>
-                    </div>
-                  )}
+                  ) : null}
                 </section>
               </div>
             </details>

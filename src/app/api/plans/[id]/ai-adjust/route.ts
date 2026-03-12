@@ -1464,6 +1464,47 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   try {
     const result = await applyAdjustmentProposal(plan.id, proposalToApply);
+
+    // Log each applied change to PlanChangeLog
+    await Promise.all(
+      proposalToApply.changes.map((change) =>
+        prisma.planChangeLog.create({
+          data: {
+            planId: plan.id,
+            source: 'ai_applied',
+            changeType: change.op,
+            activityId: 'activityId' in change ? (change as { activityId: string }).activityId : null,
+            fromDayId: null,
+            toDayId:
+              'targetDayId' in change
+                ? (change as { targetDayId: string }).targetDayId
+                : 'dayId' in change
+                  ? (change as { dayId: string }).dayId
+                  : null,
+          },
+        })
+      )
+    );
+
+    // Mark most recent active coach message as applied (best-effort)
+    try {
+      const activeCoachMsg = await prisma.planChatMessage.findFirst({
+        where: { planId: plan.id, role: 'coach' },
+        orderBy: { createdAt: 'desc' },
+      });
+      if (activeCoachMsg) {
+        const meta = (activeCoachMsg.metadata as Record<string, unknown>) ?? {};
+        if (meta.state === 'active') {
+          await prisma.planChatMessage.update({
+            where: { id: activeCoachMsg.id },
+            data: { metadata: { ...meta, state: 'applied' } },
+          });
+        }
+      }
+    } catch {
+      // Non-critical: don't fail the apply if message update fails
+    }
+
     const refreshed = await loadPlanForUser(plan.id, user.id);
     if (!refreshed) {
       return NextResponse.json({ error: 'Plan refresh failed after apply' }, { status: 500 });
