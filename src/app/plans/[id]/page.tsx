@@ -994,7 +994,14 @@ export default function PlanDetailPage() {
 
   useEffect(() => {
     loadPlan();
-  }, [loadPlan]);
+    // Seed version fingerprint on mount so first poll has a baseline to compare against
+    if (planId) {
+      fetch(`/api/plans/${planId}/version`)
+        .then((r) => r.json())
+        .then((d: { version?: string }) => { if (d.version) lastKnownVersionRef.current = d.version; })
+        .catch(() => {});
+    }
+  }, [loadPlan, planId]);
 
   // Touch drag support for iOS/iPadOS (HTML5 drag events don't fire on touch devices)
   useEffect(() => {
@@ -1053,6 +1060,26 @@ export default function PlanDetailPage() {
       })
       .catch(() => {}); // non-critical
   }, [planId]);
+
+  // Cross-device sync: poll /version every 30s, reload plan only if fingerprint changed
+  const lastKnownVersionRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!planId) return;
+    const poll = async () => {
+      if (document.hidden) return; // skip when tab not visible
+      try {
+        const res = await fetch(`/api/plans/${planId}/version`);
+        if (!res.ok) return;
+        const { version } = await res.json() as { version: string };
+        if (lastKnownVersionRef.current && version !== lastKnownVersionRef.current) {
+          await loadPlan();
+        }
+        lastKnownVersionRef.current = version;
+      } catch { /* non-critical */ }
+    };
+    const interval = setInterval(poll, 30_000);
+    return () => clearInterval(interval);
+  }, [planId, loadPlan]);
 
   useEffect(() => {
     if (!bannerModalOpen) return;
