@@ -95,7 +95,8 @@ export default async function DashboardPage({
   });
   const viewerUnits: DistanceUnit = syncedUser.units === "KM" ? "KM" : "MILES";
 
-  const [totalPlanCount, latestDraftPlan, plans] = await Promise.all([
+  // Stage 1: lightweight metadata — used for plan selection and guard states
+  const [totalPlanCount, latestDraftPlan, plansMeta] = await Promise.all([
     prisma.trainingPlan.count({
       where: { athleteId: user.id, isTemplate: false }
     }),
@@ -110,17 +111,23 @@ export default async function DashboardPage({
     prisma.trainingPlan.findMany({
       where: { athleteId: user.id, isTemplate: false, status: "ACTIVE" },
       orderBy: { createdAt: "desc" },
-      include: {
-        weeks: {
-          include: {
-            days: {
-              include: { activities: true }
-            }
-          }
-        }
+      select: {
+        id: true,
+        name: true,
+        status: true,
+        sourceId: true,
+        bannerImageId: true,
+        raceDate: true,
+        raceName: true,
+        raceType: true,
+        weekCount: true,
+        planSummary: true,
+        createdAt: true
       }
     })
   ]);
+
+  const plans = plansMeta; // alias for guard state checks below
 
   /* ── Empty / onboarding state ── */
   if (totalPlanCount === 0) {
@@ -216,10 +223,61 @@ export default async function DashboardPage({
   }
 
   /* ── Active plan data ── */
-  const activePlan = pickSelectedPlan(plans, {
+  const selectedMeta = pickSelectedPlan(plans, {
     requestedPlanId,
     cookiePlanId
   });
+
+  if (!selectedMeta) {
+    return (
+      <main className="dash">
+        <div className="dash-atmosphere" />
+        <div className="dash-topo" />
+        <div className="dash-empty-content">
+          <p style={{ color: "var(--d-muted)" }}>No plans available.</p>
+        </div>
+      </main>
+    );
+  }
+
+  // Stage 2: full tree for selected plan only + parallel secondary queries
+  const [activePlanFull, sourcePlan, activeBannerImage, stravaAccount] = await Promise.all([
+    prisma.trainingPlan.findUnique({
+      where: { id: selectedMeta.id },
+      include: {
+        weeks: {
+          orderBy: { weekIndex: "asc" },
+          include: {
+            days: {
+              orderBy: { dayOfWeek: "asc" },
+              include: { activities: true }
+            }
+          }
+        }
+      }
+    }),
+    selectedMeta.sourceId
+      ? prisma.trainingPlan.findUnique({
+        where: { id: selectedMeta.sourceId },
+        select: { name: true }
+      })
+      : Promise.resolve(null),
+    selectedMeta.bannerImageId
+      ? prisma.planImage.findUnique({
+        where: { id: selectedMeta.bannerImageId },
+        select: { focusY: true }
+      })
+      : Promise.resolve(null),
+    prisma.externalAccount.findFirst({
+      where: { userId: user.id, provider: "STRAVA" },
+      select: { id: true }
+    })
+  ]);
+
+  // Merge metadata back (planSummary etc.) into the full plan object
+  const activePlan = activePlanFull
+    ? { ...activePlanFull, planSummary: selectedMeta.planSummary }
+    : null;
 
   if (!activePlan) {
     return (
@@ -233,30 +291,13 @@ export default async function DashboardPage({
     );
   }
 
-  let sourcePlanName: string | null = null;
-  if (activePlan.sourceId) {
-    const sourcePlan = await prisma.trainingPlan.findUnique({
-      where: { id: activePlan.sourceId },
-      select: { name: true }
-    });
-    sourcePlanName = sourcePlan?.name || null;
-  }
-  const activeBannerImage = activePlan.bannerImageId
-    ? await prisma.planImage.findUnique({
-      where: { id: activePlan.bannerImageId },
-      select: { focusY: true }
-    })
-    : null;
+  const sourcePlanName = sourcePlan?.name || null;
   const planDisplayName = sourcePlanName || activePlan.name;
   const activePlanBanner = buildPlanBanner(
     activePlan.id,
     activePlan.bannerImageId,
     activeBannerImage?.focusY ?? null
   );
-  const stravaAccount = await prisma.externalAccount.findFirst({
-    where: { userId: user.id, provider: "STRAVA" },
-    select: { id: true }
-  });
 
   const now = new Date();
   const today = new Date(now);

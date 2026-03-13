@@ -175,27 +175,48 @@ export default async function ProgressPage({
   const cookieStore = await cookies();
   const cookiePlanId = cookieStore.get(SELECTED_PLAN_COOKIE)?.value || "";
 
-  const plans = await prisma.trainingPlan.findMany({
+  // Stage 1: metadata only — used for plan switcher tabs and selection
+  const plansMeta = await prisma.trainingPlan.findMany({
     where: { athleteId: user.id, isTemplate: false },
     orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      name: true,
+      status: true,
+      raceDate: true,
+      raceName: true,
+      weekCount: true,
+      createdAt: true
+    }
+  });
+
+  if (plansMeta.length === 0) redirect("/dashboard");
+
+  const selectedMeta = pickSelectedPlan(plansMeta, {
+    requestedPlanId,
+    cookiePlanId
+  });
+  if (!selectedMeta) redirect("/dashboard");
+
+  // Stage 2: full tree for selected plan only
+  const selectedPlanFull = await prisma.trainingPlan.findUnique({
+    where: { id: selectedMeta.id },
     include: {
       weeks: {
+        orderBy: { weekIndex: "asc" },
         include: {
           days: {
+            orderBy: { dayOfWeek: "asc" },
             include: { activities: true }
           }
         }
       }
     }
   });
+  if (!selectedPlanFull) redirect("/dashboard");
 
-  if (plans.length === 0) redirect("/dashboard");
-
-  const selectedPlan = pickSelectedPlan(plans, {
-    requestedPlanId,
-    cookiePlanId
-  });
-  if (!selectedPlan) redirect("/dashboard");
+  const selectedPlan = { ...selectedPlanFull, raceName: selectedMeta.raceName };
+  const plans = plansMeta; // alias for plan-switcher tab list (id + name only)
 
   const weeks = [...selectedPlan.weeks].sort((a, b) => a.weekIndex - b.weekIndex);
   const allWeekIndexes = weeks.map((w) => w.weekIndex);
