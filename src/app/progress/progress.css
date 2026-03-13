@@ -341,3 +341,26 @@
     grid-template-columns: 1fr;
   }
 }
+
+@media (max-width: 480px) {
+  /* Stack CTA buttons vertically so labels don't truncate */
+  .prog-top-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .prog-top-action-link {
+    text-align: center;
+  }
+
+  /* Plan filter chips become a single horizontal scroll strip */
+  .prog-filter-chips {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
+  }
+  .prog-filter-chips::-webkit-scrollbar {
+    display: none;
+  }
+}
