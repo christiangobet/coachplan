@@ -188,3 +188,30 @@
     min-height: 310px;
   }
 }
+
+@media (max-width: 480px) {
+  .visualPane {
+    display: none;
+  }
+
+  .authPage {
+    padding: 12px;
+  }
+
+  .authShell {
+    border-radius: 16px;
+  }
+
+  .formPane {
+    padding: 16px 12px;
+  }
+
+  .formCard {
+    padding: 16px 14px;
+    border-radius: 12px;
+  }
+
+  .formCard h2 {
+    font-size: 22px;
+  }
+}
