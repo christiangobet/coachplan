@@ -1618,6 +1618,21 @@
   .cal-day-details-card.is-open .cal-detail-close {
     display: inline-flex;
   }
+
+  /* ── P0 fix: un-hide aside when day panel is open (768px breakpoint) ── */
+  .cal-right:has(.cal-day-details-card.is-open) {
+    display: block !important;
+    width: 0;
+    height: 0;
+    overflow: visible;
+    padding: 0;
+    gap: 0;
+    border: none;
+    box-shadow: none;
+  }
+  .cal-right:has(.cal-day-details-card.is-open) > :not(#day-details-card) {
+    display: none;
+  }
 }
 
 @media (max-width: 640px) {
@@ -1752,6 +1767,23 @@
 
   .cal-day-detail-section {
     padding: 10px 14px;
+  }
+}
+
+/* ── P0 fix: un-hide aside when day panel is open (1380px breakpoint) ── */
+@media (max-width: 1380px) {
+  .cal-right:has(.cal-day-details-card.is-open) {
+    display: block !important;
+    width: 0;
+    height: 0;
+    overflow: visible;
+    padding: 0;
+    gap: 0;
+    border: none;
+    box-shadow: none;
+  }
+  .cal-right:has(.cal-day-details-card.is-open) > :not(#day-details-card) {
+    display: none;
   }
 }
 
