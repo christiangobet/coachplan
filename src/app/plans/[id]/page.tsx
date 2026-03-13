@@ -28,6 +28,7 @@ import StravaIcon from '@/components/StravaIcon';
 import type { PlanSummary } from '@/lib/types/plan-summary';
 import { buildLogActivities, type LogActivity } from '@/lib/log-activity';
 import { PLAN_IMAGE_MAX_COUNT, PLAN_IMAGE_MAX_FILE_BYTES } from '@/lib/plan-banner';
+import type { ChatMessage } from '@/lib/plan-chat-types';
 import '../plans.css';
 import './review/review.css';
 import '../../dashboard/dashboard.css';
@@ -344,6 +345,15 @@ function createAiGreetingTurn(): AiChatTurn {
   };
 }
 
+function chatMessageToAiTurn(message: ChatMessage): AiChatTurn {
+  return {
+    id: message.id,
+    role: message.role,
+    text: message.content,
+    createdAt: new Date(message.createdAt).getTime()
+  };
+}
+
 function keepOnlyGreeting(turns: AiChatTurn[]): AiChatTurn[] {
   const existing = turns.find((turn) => turn.role === 'coach' && turn.text === AI_GREETING && !turn.proposal);
   return existing ? [existing] : [createAiGreetingTurn()];
@@ -449,7 +459,7 @@ export default function PlanDetailPage() {
   const [aiChatTurns, setAiChatTurns] = useState<AiChatTurn[]>(() => [
     createAiGreetingTurn()
   ]);
-  const [chatMessages, setChatMessages] = useState<import('@/lib/plan-chat-types').ChatMessage[]>([]);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [activeProposalTurnId, setActiveProposalTurnId] = useState<string | null>(null);
   const [aiAppliedByTurn, setAiAppliedByTurn] = useState<Record<string, number[]>>({});
   const [aiTrainerLoading, setAiTrainerLoading] = useState(false);
@@ -459,9 +469,15 @@ export default function PlanDetailPage() {
   const [aiTrainerClarification, setAiTrainerClarification] = useState('');
   const [proposalDetailsOpen, setProposalDetailsOpen] = useState(false);
   const aiTrainerApplying = aiTrainerApplyingTarget !== null;
+  const [isAiCoachMobile, setIsAiCoachMobile] = useState(
+    () => (typeof window === 'undefined' ? false : window.matchMedia('(max-width: 768px)').matches)
+  );
   const [chatOpen, setChatOpen] = useState(false);
   const [hasUnread, setHasUnread] = useState(false);
   const widgetThreadRef = useRef<HTMLDivElement>(null);
+  const aiCoachInputRef = useRef<HTMLTextAreaElement>(null);
+  const aiCoachViewportHeightRef = useRef<number>(0);
+  const aiCoachSurface = isAiCoachMobile ? 'mobile_sheet' : 'desktop_widget';
   // Auto-scroll widget thread to bottom when new messages arrive
   useEffect(() => {
     if (chatOpen && widgetThreadRef.current) {
@@ -575,6 +591,38 @@ export default function PlanDetailPage() {
       })
     );
   }, [planId]);
+
+  const openAiCoach = useCallback((source: string) => {
+    setChatOpen(true);
+    setHasUnread(false);
+    emitPlanEditEvent('ai_coach_opened', {
+      source,
+      surface: aiCoachSurface
+    });
+  }, [aiCoachSurface, emitPlanEditEvent]);
+
+  const closeAiCoach = useCallback((source: string) => {
+    setChatOpen(false);
+    emitPlanEditEvent('ai_coach_closed', {
+      source,
+      surface: aiCoachSurface
+    });
+  }, [aiCoachSurface, emitPlanEditEvent]);
+
+  const noteCoachMessageReceived = useCallback((source: string, detail: Record<string, unknown> = {}) => {
+    setHasUnread(!chatOpen);
+    emitPlanEditEvent('ai_coach_message_received', {
+      source,
+      surface: aiCoachSurface,
+      ...detail
+    });
+  }, [aiCoachSurface, chatOpen, emitPlanEditEvent]);
+
+  const appendPersistedCoachMessage = useCallback((message: ChatMessage, source: string) => {
+    setChatMessages((prev) => [...prev, message]);
+    setAiChatTurns((prev) => [...prev, chatMessageToAiTurn(message)]);
+    noteCoachMessageReceived(source, { role: message.role });
+  }, [noteCoachMessageReceived]);
 
   const handleSaveActivity = async (data: ActivityFormData) => {
     try {
@@ -977,17 +1025,9 @@ export default function PlanDetailPage() {
                   body: JSON.stringify({ trigger: 'drag_drop', changeLogIds: ids }),
                 })
                   .then((r) => r.json())
-                  .then((chatData: { coachMessage?: import('@/lib/plan-chat-types').ChatMessage | null }) => {
+                  .then((chatData: { coachMessage?: ChatMessage | null }) => {
                     if (chatData.coachMessage) {
-                      setChatMessages((prev) => [...prev, chatData.coachMessage!]);
-                      // Also show in the floating widget thread
-                      setAiChatTurns((prev) => [...prev, {
-                        id: chatData.coachMessage!.id,
-                        role: 'coach' as const,
-                        text: chatData.coachMessage!.content,
-                        createdAt: new Date(chatData.coachMessage!.createdAt).getTime(),
-                      }]);
-                      if (!chatOpen) { setChatOpen(true); setHasUnread(false); } else { setHasUnread(true); }
+                      appendPersistedCoachMessage(chatData.coachMessage, 'drag_drop');
                     }
                   })
                   .catch(() => {});
@@ -1006,7 +1046,7 @@ export default function PlanDetailPage() {
       });
       setError(err?.message || 'Failed to move activity');
     }
-  }, [emitPlanEditEvent, loadPlan, plan, planId, editSessionId, setChatMessages, chatOpen]);
+  }, [appendPersistedCoachMessage, emitPlanEditEvent, loadPlan, plan, planId, editSessionId]);
 
   useEffect(() => {
     loadPlan();
@@ -1071,7 +1111,7 @@ export default function PlanDetailPage() {
     if (!planId) return;
     fetch(`/api/plans/${planId}/chat?limit=50`)
       .then((r) => r.json())
-      .then((data: { messages?: import('@/lib/plan-chat-types').ChatMessage[] }) => {
+      .then((data: { messages?: ChatMessage[] }) => {
         if (data.messages) setChatMessages(data.messages);
       })
       .catch(() => {}); // non-critical
@@ -1149,6 +1189,63 @@ export default function PlanDetailPage() {
     handleChange();
     media.addEventListener('change', handleChange);
     return () => media.removeEventListener('change', handleChange);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const media = window.matchMedia('(max-width: 768px)');
+    const handleChange = () => setIsAiCoachMobile(media.matches);
+    handleChange();
+    media.addEventListener('change', handleChange);
+    return () => media.removeEventListener('change', handleChange);
+  }, []);
+
+  useEffect(() => {
+    if (!chatOpen) return;
+    const timer = window.setTimeout(() => {
+      aiCoachInputRef.current?.focus();
+    }, 50);
+    return () => window.clearTimeout(timer);
+  }, [chatOpen]);
+
+  useEffect(() => {
+    if (!chatOpen || !isAiCoachMobile || typeof document === 'undefined') return;
+    const { documentElement, body } = document;
+    const previousDocOverflow = documentElement.style.overflow;
+    const previousBodyOverflow = body.style.overflow;
+    const previousTouchAction = body.style.touchAction;
+
+    documentElement.style.overflow = 'hidden';
+    body.style.overflow = 'hidden';
+    body.style.touchAction = 'none';
+
+    return () => {
+      documentElement.style.overflow = previousDocOverflow;
+      body.style.overflow = previousBodyOverflow;
+      body.style.touchAction = previousTouchAction;
+    };
+  }, [chatOpen, isAiCoachMobile]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const setViewportHeight = () => {
+      const nextHeight = Math.round(window.visualViewport?.height ?? window.innerHeight);
+      if (nextHeight === aiCoachViewportHeightRef.current) return;
+      aiCoachViewportHeightRef.current = nextHeight;
+      document.documentElement.style.setProperty('--ai-coach-viewport-height', `${nextHeight}px`);
+    };
+
+    setViewportHeight();
+    window.addEventListener('resize', setViewportHeight);
+    window.visualViewport?.addEventListener('resize', setViewportHeight);
+    window.visualViewport?.addEventListener('scroll', setViewportHeight);
+
+    return () => {
+      window.removeEventListener('resize', setViewportHeight);
+      window.visualViewport?.removeEventListener('resize', setViewportHeight);
+      window.visualViewport?.removeEventListener('scroll', setViewportHeight);
+    };
   }, []);
 
   useEffect(() => {
@@ -1380,6 +1477,11 @@ export default function PlanDetailPage() {
       const greetingOnly = keepOnlyGreeting(prev);
       return [...greetingOnly, athleteTurn];
     });
+    emitPlanEditEvent('ai_coach_message_sent', {
+      source: 'athlete_input',
+      surface: aiCoachSurface,
+      length: message.length
+    });
     try {
       // TODO: persist athlete messages to DB — requires a save-only mode that doesn't trigger AI
       // The trigger:'athlete_message' causes a duplicate AI call; removed for now
@@ -1413,9 +1515,13 @@ export default function PlanDetailPage() {
         const greetingOnly = keepOnlyGreeting(prev);
         return [...greetingOnly, athleteTurn, coachTurn];
       });
-      if (!chatOpen) setHasUnread(true);
+      noteCoachMessageReceived('ai_adjust_response', {
+        role: 'coach',
+        hasProposal: true
+      });
       setActiveProposalTurnId(coachTurnId);
       setAiAppliedByTurn({ [coachTurnId]: [] });
+      setProposalDetailsOpen(false);
       setAiTrainerStatus(proposal.summary || 'New recommendation generated.');
     } catch (err: unknown) {
       const classified = classifyAiError(err instanceof Error ? err.message : 'Failed to generate adjustment proposal.');
@@ -1438,7 +1544,7 @@ export default function PlanDetailPage() {
     } finally {
       setAiTrainerLoading(false);
     }
-  }, [aiTrainerInput, planId, chatOpen]);
+  }, [aiCoachSurface, aiTrainerInput, emitPlanEditEvent, noteCoachMessageReceived, planId]);
 
   const applyAiAdjustment = useCallback(async (changeIndex?: number) => {
     if (!planId || !aiTrainerProposal || !activeProposalTurn) return;
@@ -1517,6 +1623,11 @@ export default function PlanDetailPage() {
         );
         setActiveProposalTurnId(null);
       }
+      emitPlanEditEvent('ai_coach_proposal_applied', {
+        surface: aiCoachSurface,
+        mode: changeIndex == null ? 'all' : 'single',
+        changeCount: appliedRowIndexes.length
+      });
       setSelectedActivity(null);
       await loadPlan();
     } catch (err: unknown) {
@@ -1536,9 +1647,12 @@ export default function PlanDetailPage() {
     } finally {
       setAiTrainerApplyingTarget(null);
     }
-  }, [aiTrainerClarification, aiTrainerInput, aiTrainerProposal, aiTrainerAppliedRows, aiAppliedByTurn, activeProposalTurn, loadPlan, planId]);
+  }, [aiCoachSurface, aiTrainerClarification, aiTrainerInput, aiTrainerProposal, aiTrainerAppliedRows, aiAppliedByTurn, activeProposalTurn, emitPlanEditEvent, loadPlan, planId]);
 
   const clearAiChat = useCallback(() => {
+    emitPlanEditEvent('ai_coach_clear_requested', {
+      surface: aiCoachSurface
+    });
     setAiChatTurns([createAiGreetingTurn()]);
     setActiveProposalTurnId(null);
     setAiAppliedByTurn({});
@@ -1546,7 +1660,18 @@ export default function PlanDetailPage() {
     setAiTrainerInput('');
     setAiTrainerError(null);
     setAiTrainerStatus(null);
-  }, []);
+    setProposalDetailsOpen(false);
+    setHasUnread(false);
+  }, [aiCoachSurface, emitPlanEditEvent]);
+
+  const handleRequestClearAiChat = useCallback(() => {
+    const hasConversation = aiChatTurns.some((turn) => turn.text !== AI_GREETING);
+    if (!hasConversation) return;
+    if (!window.confirm('Clear the current AI coach conversation? This will reset the live coaching thread.')) {
+      return;
+    }
+    clearAiChat();
+  }, [aiChatTurns, clearAiChat]);
 
   // Close modal on Escape
   useEffect(() => {
@@ -1556,11 +1681,15 @@ export default function PlanDetailPage() {
         setBannerModalOpen(false);
         return;
       }
+      if (chatOpen) {
+        closeAiCoach('escape_key');
+        return;
+      }
       setSelectedActivity(null);
     };
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
-  }, [bannerModalOpen]);
+  }, [bannerModalOpen, chatOpen, closeAiCoach]);
 
   useEffect(() => {
     if (!selectedActivity) return;
@@ -1773,6 +1902,148 @@ export default function PlanDetailPage() {
       '--plan-banner-focus-y': `${Math.round(planBannerFocus * 100)}%`
     } as any)
     : undefined;
+  const hasLiveConversation = aiChatTurns.some((turn) => turn.text !== AI_GREETING);
+
+  const renderAiProposalCard = (turn: AiChatTurn) => {
+    if (!turn.proposal) return null;
+
+    const isActiveProposal = turn.id === activeProposalTurnId;
+    const appliedRows = new Set(aiAppliedByTurn[turn.id] || []);
+    const isApplied = turn.proposalState === 'applied';
+    const isSuperseded = turn.proposalState === 'superseded';
+    const allRowsApplied = appliedRows.size >= turn.proposal.changes.length;
+
+    return (
+      <section
+        className={`ai-widget-proposal-card${isApplied ? ' is-applied' : ''}${isSuperseded ? ' is-superseded' : ''}`}
+        aria-label="Coach recommendation"
+      >
+        <div className="ai-widget-proposal-card-head">
+          <strong>Recommendation</strong>
+          {turn.proposalState && turn.proposalState !== 'active' ? (
+            <span className={`ai-widget-proposal-state state-${turn.proposalState}`}>
+              {turn.proposalState === 'applied' ? 'Applied' : 'Replaced'}
+            </span>
+          ) : null}
+        </div>
+
+        {isApplied ? (
+          <p className="ai-widget-proposal-summary">
+            This recommendation has already been applied to your plan.
+          </p>
+        ) : (
+          <>
+            {turn.proposal.followUpQuestion ? (
+              <p className="ai-widget-proposal-followup">
+                {humanizeAiText(turn.proposal.followUpQuestion, aiChangeLookup)}
+              </p>
+            ) : null}
+
+            {turn.proposal.requiresClarification && isActiveProposal ? (
+              <label className="ai-widget-proposal-clarification">
+                <span>{turn.proposal.clarificationPrompt || 'Add the missing context before applying this adjustment.'}</span>
+                <textarea
+                  value={aiTrainerClarification}
+                  onChange={(e) => setAiTrainerClarification(e.target.value)}
+                  rows={3}
+                  placeholder="Add the context your coach needs…"
+                  disabled={aiTrainerLoading || aiTrainerApplying}
+                />
+              </label>
+            ) : null}
+
+            {turn.proposal.changes.length > 0 ? (
+              <div className="ai-widget-proposal-changes">
+                {turn.proposal.changes.map((change, index) => {
+                  const rowApplied = appliedRows.has(index);
+                  return (
+                    <div
+                      key={`${turn.id}-change-${index}`}
+                      className={`ai-widget-proposal-change${rowApplied ? ' is-applied' : ''}`}
+                    >
+                      <span className="ai-widget-proposal-change-dot" />
+                      <span className="ai-widget-proposal-change-label">
+                        {humanizeAiText(change.reason, aiChangeLookup)}
+                      </span>
+                      {isActiveProposal ? (
+                        <button
+                          type="button"
+                          className="ai-widget-proposal-apply-one"
+                          onClick={() => applyAiAdjustment(index)}
+                          disabled={aiTrainerLoading || aiTrainerApplying || rowApplied}
+                        >
+                          {rowApplied ? 'Applied' : 'Apply'}
+                        </button>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : null}
+
+            {isActiveProposal ? (
+              <div className="ai-widget-proposal-actions">
+                {turn.proposal.changes.length > 1 ? (
+                  <button
+                    type="button"
+                    className="dash-btn-primary ai-widget-proposal-apply-all"
+                    onClick={() => applyAiAdjustment()}
+                    disabled={aiTrainerLoading || aiTrainerApplying || allRowsApplied}
+                  >
+                    Apply all
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  className="ai-widget-proposal-details-toggle"
+                  onClick={() => setProposalDetailsOpen((prev) => !prev)}
+                  aria-expanded={proposalDetailsOpen}
+                >
+                  {proposalDetailsOpen ? 'Hide details' : 'Show details'}
+                </button>
+              </div>
+            ) : null}
+
+            {proposalDetailsOpen && isActiveProposal && turn.proposal.riskFlags && turn.proposal.riskFlags.length > 0 ? (
+              <ul className="ai-widget-proposal-risks">
+                {turn.proposal.riskFlags.map((flag, index) => (
+                  <li key={`${turn.id}-risk-${index}`}>{flag}</li>
+                ))}
+              </ul>
+            ) : null}
+          </>
+        )}
+      </section>
+    );
+  };
+
+  const renderAiTurn = (turn: AiChatTurn) => {
+    const label = turn.role === 'athlete' ? 'You' : turn.role === 'coach' ? 'Coach' : 'Plan update';
+    const bubbleText = turn.proposalState === 'applied'
+      ? (
+        <span className="ai-widget-bubble-applied-note">
+          Suggestion applied
+          {turn.createdAt
+            ? ` on ${new Date(turn.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+            : ''}
+          .
+        </span>
+      )
+      : humanizeAiText(turn.text, aiChangeLookup);
+
+    return (
+      <article
+        key={turn.id}
+        className={`ai-widget-message ai-widget-message--${turn.role}`}
+      >
+        <div className={`ai-widget-bubble ai-widget-bubble--${turn.role}`}>
+          <div className="ai-widget-bubble-label">{label}</div>
+          {bubbleText}
+        </div>
+        {turn.role === 'coach' ? renderAiProposalCard(turn) : null}
+      </article>
+    );
+  };
 
   return (
     <main
@@ -1882,17 +2153,9 @@ export default function PlanDetailPage() {
                             body: JSON.stringify({ trigger: 'edit_session_end', editSessionId: sessionId }),
                           })
                             .then((r) => r.json())
-                            .then((data: { coachMessage?: import('@/lib/plan-chat-types').ChatMessage }) => {
+                            .then((data: { coachMessage?: ChatMessage }) => {
                               if (data.coachMessage) {
-                                setChatMessages((prev) => [...prev, data.coachMessage!]);
-                                // Also show in the floating widget thread
-                                setAiChatTurns((prev) => [...prev, {
-                                  id: data.coachMessage!.id,
-                                  role: 'coach' as const,
-                                  text: data.coachMessage!.content,
-                                  createdAt: new Date(data.coachMessage!.createdAt).getTime(),
-                                }]);
-                                if (!chatOpen) { setChatOpen(true); setHasUnread(false); } else { setHasUnread(true); }
+                                appendPersistedCoachMessage(data.coachMessage, 'edit_session_end');
                               }
                             })
                             .catch(() => {});
@@ -2736,139 +2999,65 @@ export default function PlanDetailPage() {
 
       {/* ─── Floating AI Coach Widget ─────────────────────────────────── */}
       {planId && (
-        <div className="ai-widget">
+        <div
+          className={`ai-widget ${isAiCoachMobile ? 'ai-widget--mobile' : 'ai-widget--desktop'}${chatOpen ? ' is-open' : ' is-closed'}`}
+        >
+          {isAiCoachMobile && chatOpen ? (
+            <div
+              className="ai-widget-scrim"
+              aria-hidden="true"
+              onClick={() => closeAiCoach('scrim')}
+            />
+          ) : null}
+
           {chatOpen ? (
-            <div className="ai-widget-panel">
-              {/* Header */}
-              <div className="ai-widget-header">
+            <section
+              className="ai-widget-panel"
+              role={isAiCoachMobile ? 'dialog' : undefined}
+              aria-modal={isAiCoachMobile ? 'true' : undefined}
+              aria-labelledby="ai-coach-title"
+            >
+              {isAiCoachMobile ? <div className="ai-widget-sheet-handle" aria-hidden="true" /> : null}
+
+              <header className="ai-widget-header">
                 <div className="ai-widget-header-title">
-                  <span>🏃</span>
                   <div>
-                    <div>AI Coach</div>
-                    <div className="ai-widget-header-subtitle">Plan adjustments &amp; advice</div>
+                    <div id="ai-coach-title">Coach</div>
+                    <div className="ai-widget-header-subtitle">Plan adjustments and advice</div>
                   </div>
                 </div>
                 <div className="ai-widget-header-actions">
                   <button
                     type="button"
                     className="ai-widget-header-btn"
-                    onClick={() => { setChatOpen(false); }}
-                    title="Minimise"
-                    aria-label="Minimise coach chat"
+                    onClick={() => closeAiCoach('header_close')}
+                    aria-label="Close coach chat"
                   >
-                    —
-                  </button>
-                  <button
-                    type="button"
-                    className="ai-widget-header-btn"
-                    onClick={clearAiChat}
-                    disabled={aiTrainerLoading || aiTrainerApplying}
-                    title="Clear chat"
-                    aria-label="Clear chat history"
-                  >
-                    ✕
+                    Close
                   </button>
                 </div>
-              </div>
+              </header>
 
-              {/* Message thread */}
               <div className="ai-widget-thread" ref={widgetThreadRef}>
                 {aiChatTurns.length === 0 ? (
                   <p className="ai-widget-thread-empty">
-                    Tell me what changed this week — a missed session, travel, or fatigue — and I&apos;ll adjust your plan.
+                    Tell me what changed this week, and I&apos;ll suggest a safe plan adjustment.
                   </p>
                 ) : (
-                  aiChatTurns.map((turn) => (
-                    <div
-                      key={turn.id}
-                      className={`ai-widget-bubble ai-widget-bubble--${turn.role}`}
-                    >
-                      <div className="ai-widget-bubble-label">
-                        {turn.role === 'athlete' ? 'You' : turn.role === 'coach' ? 'Coach' : ''}
-                      </div>
-                      {turn.proposalState === 'applied' ? (
-                        <span style={{ opacity: 0.6, fontStyle: 'italic' }}>
-                          Suggestion applied{turn.createdAt ? ` — ${new Date(turn.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : ''}
-                        </span>
-                      ) : (
-                        humanizeAiText(turn.text, aiChangeLookup)
-                      )}
-                    </div>
-                  ))
+                  aiChatTurns.map(renderAiTurn)
                 )}
               </div>
 
-              {/* Active proposal block */}
-              {aiTrainerProposal && (
-                <div className="ai-widget-proposal">
-                  <p className="ai-widget-proposal-reply">
-                    {humanizeAiText(aiTrainerProposal.coachReply, aiChangeLookup)}
-                  </p>
-                  {aiTrainerProposal.followUpQuestion && (
-                    <p className="ai-widget-proposal-followup">
-                      {humanizeAiText(aiTrainerProposal.followUpQuestion, aiChangeLookup)}
-                    </p>
-                  )}
-                  {aiTrainerProposal.changes.length > 0 && (
-                    <div className="ai-widget-proposal-changes">
-                      {aiTrainerProposal.changes.map((change, i) => (
-                        <div key={i} className="ai-widget-proposal-change">
-                          <span className="ai-widget-proposal-change-dot" />
-                          <span className="ai-widget-proposal-change-label">
-                            {humanizeAiText(change.reason, aiChangeLookup)}
-                          </span>
-                          <button
-                            type="button"
-                            className="ai-widget-proposal-apply-one"
-                            onClick={() => applyAiAdjustment(i)}
-                            disabled={aiTrainerLoading || aiTrainerApplying || aiTrainerAppliedRows.has(i)}
-                          >
-                            Apply
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  <div className="ai-widget-proposal-actions">
-                    {aiTrainerProposal.changes.length > 1 && (
-                      <button
-                        type="button"
-                        className="dash-btn-primary"
-                        style={{ fontSize: '12px', padding: '5px 12px' }}
-                        onClick={() => applyAiAdjustment()}
-                        disabled={aiTrainerLoading || aiTrainerApplying}
-                      >
-                        Apply all
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      className="ai-widget-proposal-details-toggle"
-                      onClick={() => setProposalDetailsOpen((p) => !p)}
-                    >
-                      {proposalDetailsOpen ? '▾ Hide details' : '▸ Show details'}
-                    </button>
-                  </div>
-                  {proposalDetailsOpen && aiTrainerProposal.riskFlags && aiTrainerProposal.riskFlags.length > 0 && (
-                    <ul style={{ fontSize: '11px', color: 'var(--d-muted)', paddingLeft: '16px', margin: 0 }}>
-                      {aiTrainerProposal.riskFlags.map((flag, i) => (
-                        <li key={i}>⚠ {flag}</li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              )}
-
-              {/* Status message */}
               {aiTrainerStatus && (
-                <p style={{ fontSize: '11px', color: 'var(--d-muted)', padding: '4px 12px 0', margin: 0 }}>
+                <p className="ai-widget-status">
                   {humanizeAiText(aiTrainerStatus, aiChangeLookup)}
                 </p>
               )}
+              {aiTrainerError && <p className="ai-widget-error">{aiTrainerError}</p>}
 
-              {/* Input row */}
               <div className="ai-widget-input-row">
                 <textarea
+                  ref={aiCoachInputRef}
                   className="ai-widget-input"
                   value={aiTrainerInput}
                   onChange={(e) => setAiTrainerInput(e.target.value)}
@@ -2880,6 +3069,9 @@ export default function PlanDetailPage() {
                   }}
                   placeholder="Ask your coach…"
                   rows={1}
+                  enterKeyHint="send"
+                  autoCapitalize="sentences"
+                  spellCheck
                   disabled={aiTrainerLoading || aiTrainerApplying}
                 />
                 <button
@@ -2888,23 +3080,37 @@ export default function PlanDetailPage() {
                   onClick={() => void generateAiAdjustment()}
                   disabled={aiTrainerLoading || aiTrainerApplying || !aiTrainerInput.trim()}
                 >
-                  {aiTrainerLoading ? '…' : 'Send'}
+                  {aiTrainerLoading ? 'Sending…' : 'Send'}
                 </button>
               </div>
-              {aiTrainerError && <p className="ai-widget-error">{aiTrainerError}</p>}
-            </div>
-          ) : null}
 
-          {/* Pill button — always visible */}
-          <button
-            type="button"
-            className="ai-widget-pill"
-            onClick={() => { setChatOpen(true); setHasUnread(false); }}
-            aria-label="Open AI coach chat"
-          >
-            🏃 Coach
-            {hasUnread && <span className="ai-widget-unread-dot" />}
-          </button>
+              <footer className="ai-widget-footer">
+                {hasLiveConversation ? (
+                  <button
+                    type="button"
+                    className="ai-widget-secondary-action"
+                    onClick={handleRequestClearAiChat}
+                    disabled={aiTrainerLoading || aiTrainerApplying}
+                  >
+                    Clear conversation
+                  </button>
+                ) : <span />}
+                {!isAiCoachMobile ? (
+                  <span className="ai-widget-footer-note">Press Shift+Enter for a new line.</span>
+                ) : null}
+              </footer>
+            </section>
+          ) : (
+            <button
+              type="button"
+              className="ai-widget-pill"
+              onClick={() => openAiCoach('launcher_pill')}
+              aria-label="Open coach chat"
+            >
+              Coach
+              {hasUnread && <span className="ai-widget-unread-dot" />}
+            </button>
+          )}
         </div>
       )}
 
