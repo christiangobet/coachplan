@@ -13,15 +13,28 @@ const handler = clerkMiddleware(async (auth, req) => {
 });
 
 export default async function middleware(req: NextRequest, event: NextFetchEvent) {
+  const pathname = req.nextUrl.pathname;
+
   if (!hasClerkEnv) {
-    return NextResponse.next();
+    const res = NextResponse.next();
+    res.headers.set('x-pathname', pathname);
+    return res;
   }
 
   try {
-    return await handler(req, event);
+    const res = await handler(req, event);
+    if (res) {
+      res.headers.set('x-pathname', pathname);
+      return res;
+    }
+    const fallback = NextResponse.next();
+    fallback.headers.set('x-pathname', pathname);
+    return fallback;
   } catch (error) {
     console.error('Middleware auth failure', error);
-    return NextResponse.next();
+    const errRes = NextResponse.next();
+    errRes.headers.set('x-pathname', pathname);
+    return errRes;
   }
 }
 

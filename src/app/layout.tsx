@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Suspense } from "react";
 import { UserRole } from "@prisma/client";
 import { ClerkProvider } from "@clerk/nextjs";
+import { headers } from "next/headers";
 import { getCurrentUserRoleContext, getRoleHomePath, getRoleLabel } from "@/lib/user-roles";
 import Header from "@/components/Header";
 import MobileNav from "@/components/MobileNav";
@@ -50,6 +51,9 @@ export default async function RootLayout({
   const hasClerkEnv = Boolean(
     process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY && process.env.CLERK_SECRET_KEY
   );
+  const headersList = await headers();
+  const pathname = headersList.get("x-pathname") || "";
+  const isLandingPage = pathname === "/";
   const roleContext = await getCurrentUserRoleContext();
   const currentRole = roleContext?.currentRole || "ATHLETE";
   const isAccountInactive = !!(roleContext && !roleContext.isActive);
@@ -63,16 +67,18 @@ export default async function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <script dangerouslySetInnerHTML={{ __html: `(function(){var t=localStorage.getItem('theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark');})();` }} />
       <body>
-        <Header
-          brand="MyTrainingPlan"
-          brandHref={signedInHome}
-          roleChip={isSignedIn ? getRoleLabel(currentRole) : undefined}
-          roleChipClass={isSignedIn ? `env-chip-${currentRole.toLowerCase()}` : undefined}
-          navItems={navItems}
-          roleSwitchHref={hasMultiRole ? "/select-role" : null}
-          isSignedIn={isSignedIn}
-          isAccountInactive={isAccountInactive}
-        />
+        {!isLandingPage && (
+          <Header
+            brand="MyTrainingPlan"
+            brandHref={signedInHome}
+            roleChip={isSignedIn ? getRoleLabel(currentRole) : undefined}
+            roleChipClass={isSignedIn ? `env-chip-${currentRole.toLowerCase()}` : undefined}
+            navItems={navItems}
+            roleSwitchHref={hasMultiRole ? "/select-role" : null}
+            isSignedIn={isSignedIn}
+            isAccountInactive={isAccountInactive}
+          />
+        )}
         {isAccountInactive ? (
           <main className="account-disabled-shell">
             <section className="account-disabled-card">
@@ -85,7 +91,7 @@ export default async function RootLayout({
         ) : (
           children
         )}
-        {!isAccountInactive && (
+        {!isLandingPage && !isAccountInactive && (
           <Suspense fallback={null}>
             <MobileNav />
           </Suspense>
