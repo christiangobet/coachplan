@@ -98,7 +98,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 30px;
+  min-height: 44px;
+  min-width: 44px;
   border-radius: 8px;
   border: 1px solid var(--d-border);
   background: var(--d-raised);
