@@ -4338,9 +4338,11 @@
 
 .ai-widget--mobile.is-closed {
   position: fixed;
-  left: 12px;
-  right: 12px;
+  right: 16px;
+  left: auto;
   bottom: calc(12px + 56px + env(safe-area-inset-bottom));
+  display: flex;
+  justify-content: flex-end;
 }
 
 .ai-widget--mobile.is-open {
@@ -4870,8 +4872,11 @@
 
 @media (max-width: 768px) {
   .ai-widget-pill {
-    width: 100%;
-    border-radius: 16px;
+    width: auto;
+    min-width: 140px;
+    align-self: flex-end;
+    padding: 0 20px;
+    border-radius: 999px;
     box-shadow: 0 8px 24px rgba(15, 23, 42, 0.14);
   }
 
