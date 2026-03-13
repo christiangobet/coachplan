@@ -4919,4 +4919,27 @@
     grid-column: 2;
     justify-self: start;
   }
+
+  /* Filter chip rows become single-line horizontal scroll strips */
+  .plans-lib-segmented {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
+  }
+  .plans-lib-segmented::-webkit-scrollbar {
+    display: none;
+  }
+
+  .plans-lib-filter-row {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
+  }
+  .plans-lib-filter-row::-webkit-scrollbar {
+    display: none;
+  }
 }
