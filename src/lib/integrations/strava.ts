@@ -217,7 +217,10 @@ function isLockedPlanDay(
 }
 
 function buildStravaRedirectUri(origin: string) {
-  return `${origin}/api/integrations/strava/callback`;
+  const base = process.env.APP_URL
+    ? new URL(process.env.APP_URL).origin
+    : origin;
+  return `${base}/api/integrations/strava/callback`;
 }
 
 function parseStravaTokenResponse(raw: unknown): StravaTokenResponse {
