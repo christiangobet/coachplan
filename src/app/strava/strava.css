@@ -84,4 +84,13 @@
     font-size: 12px;
     padding-left: 14px;
   }
+
+  /* Reduce import row helper text to prevent overflow at 390px */
+  .dash-day-action-meta,
+  .dash-day-reopen-link {
+    font-size: 11px;
+    line-height: 1.4;
+    white-space: normal;
+    word-break: break-word;
+  }
 }
