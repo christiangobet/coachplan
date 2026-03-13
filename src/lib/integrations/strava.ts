@@ -9,7 +9,6 @@ import { resolveDistanceUnitFromActivity } from '@/lib/unit-display';
 import { evaluateStravaEquivalence } from '@/lib/integrations/strava-equivalence';
 import { refreshPerformanceSnapshotForUser } from '@/lib/performance-snapshot';
 import { logger } from '@/lib/logger';
-import { buildAbsoluteAppUrl } from '@/lib/app-origin';
 
 /**
  * Fetch wrapper with exponential backoff that respects Strava's rate limits.
@@ -218,7 +217,7 @@ function isLockedPlanDay(
 }
 
 function buildStravaRedirectUri(origin: string) {
-  return buildAbsoluteAppUrl('/api/integrations/strava/callback', origin);
+  return `${origin}/api/integrations/strava/callback`;
 }
 
 function parseStravaTokenResponse(raw: unknown): StravaTokenResponse {

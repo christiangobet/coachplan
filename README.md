@@ -34,7 +34,6 @@ cp .env.example .env.local
 Optional integrations/parsing:
 - `OPENAI_API_KEY` (or other provider keys)
 - `STRAVA_CLIENT_ID`, `STRAVA_CLIENT_SECRET`
-- `APP_URL` (recommended for stable OAuth callbacks, especially Strava)
 
 5. Start app:
 
@@ -43,8 +42,6 @@ npm run dev
 ```
 
 App URL: `http://localhost:3001`
-
-For OAuth integrations such as Strava, set `APP_URL` to the canonical public app origin you registered with the provider, for example `https://www.mytrainingplan.io`. This prevents callback URLs from changing based on preview, tunnel, or localhost hosts.
 
 ## Key commands
 
