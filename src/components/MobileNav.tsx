@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useSearchParams, useRouter } from 'next/navigation';
+import { useAuth } from '@clerk/nextjs';
 import styles from './MobileNav.module.css';
 
 type NavTab = { href: string; label: string; icon: ReactNode; match: string[] };
@@ -86,6 +87,15 @@ export default function MobileNav() {
   useEffect(() => {
     TABS.forEach((tab) => router.prefetch(tab.href));
   }, [router]);
+
+  const { isSignedIn } = useAuth();
+
+  const PUBLIC_ROUTES = ['/', '/sign-in', '/sign-up', '/auth/resolve-role', '/select-role'];
+  const isPublicRoute = PUBLIC_ROUTES.some(
+    (r) => pathname === r || pathname.startsWith(r + '/')
+  );
+
+  if (!isSignedIn || isPublicRoute) return null;
 
   function buildHref(base: string) {
     return planId ? `${base}?plan=${planId}` : base;

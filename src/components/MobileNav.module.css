@@ -10,8 +10,8 @@
     left: 0;
     right: 0;
     z-index: 200;
-    background: #fff;
-    border-top: 1px solid #e5e5e5;
+    background: var(--d-raised, #fff);
+    border-top: 1px solid var(--d-border, #e5e5e5);
     padding-bottom: env(safe-area-inset-bottom);
     box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.08);
   }
