@@ -1636,6 +1636,11 @@
 }
 
 @media (max-width: 640px) {
+  .cal-month-card {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
   .cal-weekdays,
   .cal-grid {
     min-width: 560px;
@@ -1712,8 +1717,8 @@
 @media (max-width: 480px) {
   .cal-weekdays,
   .cal-grid {
-    min-width: 490px;
-    grid-template-columns: repeat(7, minmax(64px, 1fr));
+    min-width: 420px;
+    grid-template-columns: repeat(7, minmax(58px, 1fr));
   }
 
   .cal-day {
