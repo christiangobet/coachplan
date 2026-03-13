@@ -3070,6 +3070,24 @@ details[open] .day-log-instructions-toggle::before {
 }
 
 @media (max-width: 768px) {
+  /* Promote today's workout above plan hero on mobile */
+  .dash-center {
+    display: flex;
+    flex-direction: column;
+  }
+  .dash-page-heading {
+    order: 0;
+  }
+  .dash-activation-banner {
+    order: 1;
+  }
+  .dash-hero {
+    order: 2;
+  }
+  .dash-plan-summary {
+    order: 3;
+  }
+
   .dash-grid {
     grid-template-columns: 1fr;
     padding: var(--d-space-2) var(--d-space-2) var(--d-space-6);
