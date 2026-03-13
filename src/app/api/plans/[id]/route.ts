@@ -4,6 +4,7 @@ import { PlanStatus, Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { alignWeeksToRaceDate, alignWeeksToStartDate } from '@/lib/clone-plan';
 import { buildPlanBanner } from '@/lib/plan-banner';
+import { ensureUserFromAuth } from '@/lib/user-sync';
 
 const ACTIVITY_ORDER_BY = [{ sessionOrder: 'asc' as const }, { id: 'asc' as const }];
 type WeekDateAnchor = 'RACE_DATE' | 'START_DATE';
@@ -52,8 +53,12 @@ async function appendPlanPresentation<T extends { id: string; sourceId?: string 
 }
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const [user, { id }] = await Promise.all([currentUser(), params]);
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const [authUser, { id }] = await Promise.all([currentUser(), params]);
+  if (!authUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const user = await ensureUserFromAuth(authUser, {
+    defaultRole: 'ATHLETE',
+    defaultCurrentRole: 'ATHLETE'
+  });
 
   // Fetch user profile and plan tree in parallel
   const [profile, plan] = await Promise.all([
@@ -84,8 +89,12 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 }
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const user = await currentUser();
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const authUser = await currentUser();
+  if (!authUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const user = await ensureUserFromAuth(authUser, {
+    defaultRole: 'ATHLETE',
+    defaultCurrentRole: 'ATHLETE'
+  });
   const profile = await prisma.user.findUnique({
     where: { id: user.id },
     select: { units: true }

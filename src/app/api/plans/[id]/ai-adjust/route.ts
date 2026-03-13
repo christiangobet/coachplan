@@ -1,15 +1,17 @@
 import { NextResponse } from 'next/server';
 import { currentUser } from '@clerk/nextjs/server';
-import { ActivityPriority, ActivityType, Units } from '@prisma/client';
+import { ActivityPriority, ActivityType, Prisma, Units } from '@prisma/client';
 import { createHash, randomUUID } from 'node:crypto';
 import { prisma } from '@/lib/prisma';
 import { getDefaultAiModel, openaiJsonSchema } from '@/lib/openai';
 import { ensureUserFromAuth } from '@/lib/user-sync';
 import { getDayDateFromWeekStart, resolveWeekBounds } from '@/lib/plan-dates';
 import { isDayClosed } from '@/lib/day-status';
+import { buildPlanBanner } from '@/lib/plan-banner';
 
 import {
-  applyAdjustmentProposal,
+  applyAdjustmentProposalInTransaction,
+  AppliedChangeResult,
   PlanAdjustmentProposal,
   sanitizeProposalAgainstLockedDays,
   buildLockStateFromPlan,
@@ -41,6 +43,9 @@ const QUALITY_RUN_SUBTYPES = new Set([
   'race',
   'fast-finish'
 ]);
+
+const ACTIVITY_ORDER_BY = [{ sessionOrder: 'asc' as const }, { id: 'asc' as const }];
+type PlanQueryClient = Prisma.TransactionClient | typeof prisma;
 
 function buildApplyToken(planId: string, proposal: PlanAdjustmentProposal): string {
   const payload = JSON.stringify({
@@ -475,31 +480,99 @@ function parseProposal(raw: unknown): PlanAdjustmentProposal | null {
   };
 }
 
-async function appendSourcePlanName<T extends { sourceId?: string | null }>(plan: T) {
-  if (!plan.sourceId) {
-    return { ...plan, sourcePlanName: null };
-  }
-  const sourcePlan = await prisma.trainingPlan.findUnique({
-    where: { id: plan.sourceId },
-    select: { name: true }
-  });
-  return { ...plan, sourcePlanName: sourcePlan?.name || null };
+async function appendPlanPresentation<
+  T extends { id: string; sourceId?: string | null; bannerImageId?: string | null }
+>(plan: T, client: PlanQueryClient = prisma) {
+  const [sourcePlan, bannerImage] = await Promise.all([
+    plan.sourceId
+      ? client.trainingPlan.findUnique({
+        where: { id: plan.sourceId },
+        select: { name: true }
+      })
+      : Promise.resolve(null),
+    plan.bannerImageId
+      ? client.planImage.findUnique({
+        where: { id: plan.bannerImageId },
+        select: { focusY: true }
+      })
+      : Promise.resolve(null)
+  ]);
+
+  return {
+    ...plan,
+    sourcePlanName: sourcePlan?.name || null,
+    banner: buildPlanBanner(plan.id, plan.bannerImageId, bannerImage?.focusY ?? null),
+  };
 }
 
 type PlanForContext = Awaited<ReturnType<typeof loadPlanForUser>>;
 
-async function loadPlanForUser(planId: string, userId: string) {
-  const plan = await prisma.trainingPlan.findUnique({
+async function loadPlanForUser(planId: string, userId: string, client: PlanQueryClient = prisma) {
+  const plan = await client.trainingPlan.findUnique({
     where: { id: planId },
     include: {
-      weeks: { include: { days: { include: { activities: true } } } },
-      days: { include: { activities: true } },
-      activities: true
+      weeks: {
+        orderBy: { weekIndex: 'asc' },
+        include: {
+          days: {
+            orderBy: { dayOfWeek: 'asc' },
+            include: {
+              activities: {
+                orderBy: ACTIVITY_ORDER_BY
+              }
+            }
+          }
+        }
+      },
+      days: {
+        orderBy: [
+          { week: { weekIndex: 'asc' } },
+          { dayOfWeek: 'asc' }
+        ],
+        include: {
+          activities: {
+            orderBy: ACTIVITY_ORDER_BY
+          }
+        }
+      },
+      activities: {
+        orderBy: ACTIVITY_ORDER_BY
+      }
     }
   });
   if (!plan) return null;
   if (plan.ownerId !== userId && plan.athleteId !== userId) return null;
   return plan;
+}
+
+function getChangeResultActivityId(changeResult: AppliedChangeResult): string | null {
+  switch (changeResult.op) {
+    case 'move_activity':
+    case 'edit_activity':
+    case 'add_activity':
+    case 'delete_activity':
+      return changeResult.activityId;
+    default:
+      return null;
+  }
+}
+
+function getChangeResultFromDayId(changeResult: AppliedChangeResult): string | null {
+  if (changeResult.op === 'move_activity') {
+    return changeResult.fromDayId;
+  }
+  return null;
+}
+
+function getChangeResultToDayId(changeResult: AppliedChangeResult): string | null {
+  switch (changeResult.op) {
+    case 'move_activity':
+      return changeResult.toDayId;
+    case 'add_activity':
+      return changeResult.dayId;
+    default:
+      return null;
+  }
 }
 
 function buildPlanContext(plan: NonNullable<PlanForContext>) {
@@ -1463,61 +1536,105 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   }
 
   try {
-    const result = await applyAdjustmentProposal(plan.id, proposalToApply);
+    const applyOutcome = await prisma.$transaction(async (tx) => {
+      const existingPatch = await tx.planChangeLog.findFirst({
+        where: {
+          planId: plan.id,
+          patchId: proposalToApply.patchId
+        },
+        select: { id: true }
+      });
+      if (existingPatch) {
+        return { duplicate: true as const };
+      }
 
-    // Log each applied change to PlanChangeLog
-    await Promise.all(
-      proposalToApply.changes.map((change) =>
-        prisma.planChangeLog.create({
-          data: {
-            planId: plan.id,
-            source: 'ai_applied',
-            changeType: change.op,
-            activityId: 'activityId' in change ? (change as { activityId: string }).activityId : null,
-            fromDayId: null,
-            toDayId:
-              'targetDayId' in change
-                ? (change as { targetDayId: string }).targetDayId
-                : 'dayId' in change
-                  ? (change as { dayId: string }).dayId
-                  : null,
-          },
-        })
-      )
-    );
+      const result = await applyAdjustmentProposalInTransaction(tx, plan.id, proposalToApply);
+      if (result.changeResults.length === 0) {
+        throw new Error(proposalToApply.summary || 'No changes were applied.');
+      }
 
-    // Mark most recent active coach message as applied (best-effort)
-    try {
-      const activeCoachMsg = await prisma.planChatMessage.findFirst({
+      await Promise.all(
+        result.changeResults.map((changeResult) =>
+          tx.planChangeLog.create({
+            data: {
+              planId: plan.id,
+              patchId: proposalToApply.patchId,
+              source: 'ai_applied',
+              changeType: changeResult.op,
+              activityId: getChangeResultActivityId(changeResult),
+              fromDayId: getChangeResultFromDayId(changeResult),
+              toDayId: getChangeResultToDayId(changeResult),
+            },
+          })
+        )
+      );
+
+      const activeCoachMsg = await tx.planChatMessage.findFirst({
         where: { planId: plan.id, role: 'coach' },
         orderBy: { createdAt: 'desc' },
       });
       if (activeCoachMsg) {
         const meta = (activeCoachMsg.metadata as Record<string, unknown>) ?? {};
         if (meta.state === 'active') {
-          await prisma.planChatMessage.update({
+          await tx.planChatMessage.update({
             where: { id: activeCoachMsg.id },
             data: { metadata: { ...meta, state: 'applied' } },
           });
         }
       }
-    } catch {
-      // Non-critical: don't fail the apply if message update fails
+
+      const refreshed = await loadPlanForUser(plan.id, user.id, tx);
+      if (!refreshed) {
+        throw new Error('Plan refresh failed after apply');
+      }
+
+      return {
+        duplicate: false as const,
+        result,
+        plan: await appendPlanPresentation(refreshed, tx)
+      };
+    }, {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable
+    });
+
+    if (applyOutcome.duplicate) {
+      return NextResponse.json(
+        { error: 'This AI adjustment has already been applied.', patchId: proposalToApply.patchId },
+        { status: 409 }
+      );
     }
 
-    const refreshed = await loadPlanForUser(plan.id, user.id);
-    if (!refreshed) {
-      return NextResponse.json({ error: 'Plan refresh failed after apply' }, { status: 500 });
-    }
     return NextResponse.json({
       applied: true,
       patchId: proposalToApply.patchId,
-      appliedCount: result.appliedCount,
-      extendedWeeks: result.extendedWeeks,
+      appliedCount: applyOutcome.result.appliedCount,
+      extendedWeeks: applyOutcome.result.extendedWeeks,
       summary: proposalToApply.summary,
-      plan: await appendSourcePlanName(refreshed)
+      applyResults: applyOutcome.result.changeResults,
+      viewerUnits: user.units === 'KM' ? 'KM' : 'MILES',
+      plan: applyOutcome.plan
     });
   } catch (error: unknown) {
+    if (
+      typeof error === 'object'
+      && error !== null
+      && 'code' in error
+      && (error as { code?: string }).code === 'P2034'
+    ) {
+      const duplicatePatch = await prisma.planChangeLog.findFirst({
+        where: {
+          planId: plan.id,
+          patchId: proposalToApply.patchId
+        },
+        select: { id: true }
+      });
+      if (duplicatePatch) {
+        return NextResponse.json(
+          { error: 'This AI adjustment has already been applied.', patchId: proposalToApply.patchId },
+          { status: 409 }
+        );
+      }
+    }
     const messageText = error instanceof Error ? error.message : 'Failed to apply adjustments';
     return NextResponse.json({ error: messageText }, { status: 400 });
   }

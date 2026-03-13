@@ -321,6 +321,50 @@ type AiTrainerProposal = {
   changes: AiTrainerChange[];
 };
 
+type AiApplyResult =
+  | {
+    op: 'move_activity';
+    changeIndex: number;
+    activityId: string;
+    fromDayId: string;
+    toDayId: string;
+    targetIndex: number;
+    sessionOrder: number;
+  }
+  | {
+    op: 'edit_activity';
+    changeIndex: number;
+    activityId: string;
+    dayId: string;
+  }
+  | {
+    op: 'add_activity';
+    changeIndex: number;
+    activityId: string;
+    dayId: string;
+    sessionOrder: number;
+  }
+  | {
+    op: 'delete_activity';
+    changeIndex: number;
+    activityId: string;
+    dayId: string;
+  }
+  | {
+    op: 'extend_plan';
+    changeIndex: number;
+    weeksAdded: number;
+    newWeekCount: number;
+  }
+  | {
+    op: 'reanchor_subtype_weekly';
+    changeIndex: number;
+    movedActivityIds: string[];
+    movedCount: number;
+    targetDayOfWeek: number;
+    fromDayOfWeek: number | null;
+  };
+
 type AiProposalState = 'active' | 'superseded' | 'applied';
 
 type AiChatTurn = {
@@ -710,11 +754,29 @@ export default function PlanDetailPage() {
     }
   }, []);
 
+  const syncPlanViewState = useCallback((payload: { plan?: any; viewerUnits?: string | null }) => {
+    if (!payload?.plan) return;
+    if (payload.viewerUnits === 'KM' || payload.viewerUnits === 'MILES') {
+      setViewerUnits(payload.viewerUnits);
+    }
+    setPlan(payload.plan);
+    setSelectedActivity((prev: any) => {
+      if (!prev) return prev;
+      const located = locateActivityInPlan(payload.plan, prev.id);
+      if (!located) return null;
+      return {
+        ...located.activity,
+        dayDateISO: located.dayDateISO || prev.dayDateISO || null
+      };
+    });
+    setError(null);
+  }, []);
+
   const loadPlan = useCallback(async () => {
     if (!planId) return;
     try {
       // Fetch plan data first — render immediately without waiting for Strava
-      const res = await fetch(`/api/plans/${planId}`);
+      const res = await fetch(`/api/plans/${planId}`, { cache: 'no-store' });
       const text = await res.text();
       let data: any = null;
       try {
@@ -727,24 +789,13 @@ export default function PlanDetailPage() {
         setError(data?.error || 'Failed to load plan.');
         return;
       }
-      setViewerUnits(data?.viewerUnits === 'KM' ? 'KM' : 'MILES');
-      setPlan(data.plan);
-      setSelectedActivity((prev: any) => {
-        if (!prev) return prev;
-        const located = locateActivityInPlan(data.plan, prev.id);
-        if (!located) return null;
-        return {
-          ...located.activity,
-          dayDateISO: located.dayDateISO || prev.dayDateISO || null
-        };
-      });
-      setError(null);
+      syncPlanViewState(data);
       // Load Strava markers in background — they overlay after plan is already visible
       loadStravaMarkers(planId).catch(() => {});
     } catch (err: any) {
       setError(err?.message || 'Failed to load plan.');
     }
-  }, [loadStravaMarkers, planId]);
+  }, [loadStravaMarkers, planId, syncPlanViewState]);
 
   const handleDeleteLastWeek = useCallback(async (week: any) => {
     if (!planId || !week?.id) return;
@@ -1590,6 +1641,34 @@ export default function PlanDetailPage() {
       if (!res.ok) {
         throw new Error(data?.error || 'Failed to apply plan adjustments.');
       }
+      const refreshedPlan = data?.plan;
+      if (!refreshedPlan) {
+        throw new Error('Plan refresh failed after apply.');
+      }
+      const applyResults = (Array.isArray(data?.applyResults) ? data.applyResults : []) as AiApplyResult[];
+      if (applyResults.length === 0) {
+        throw new Error('The server did not confirm any applied plan changes.');
+      }
+      const addActivityIndexes = targetIndexes.filter(
+        (idx) => aiTrainerProposal.changes[idx]?.op === 'add_activity'
+      );
+      for (const idx of addActivityIndexes) {
+        const matchingResult = applyResults.find(
+          (result): result is Extract<AiApplyResult, { op: 'add_activity' }> =>
+            result.op === 'add_activity' && result.changeIndex === idx
+        );
+        if (!matchingResult) {
+          throw new Error('The server did not confirm the new activity created by this AI adjustment.');
+        }
+        if (!locateActivityInPlan(refreshedPlan, matchingResult.activityId)) {
+          throw new Error('The refreshed plan is missing a newly created AI activity. Please reload and try again.');
+        }
+      }
+      syncPlanViewState({
+        plan: refreshedPlan,
+        viewerUnits: data?.viewerUnits
+      });
+
       const appliedRowIndexes = typeof changeIndex === 'number'
         ? [...targetIndexes]
         : aiTrainerProposal.changes.map((_, idx) => idx);
@@ -1629,7 +1708,7 @@ export default function PlanDetailPage() {
         changeCount: appliedRowIndexes.length
       });
       setSelectedActivity(null);
-      await loadPlan();
+      loadPlan().catch(() => {});
     } catch (err: unknown) {
       const classified = classifyAiError(err instanceof Error ? err.message : 'Failed to apply plan adjustments.');
       setAiTrainerError(classified.summary);
@@ -1647,7 +1726,7 @@ export default function PlanDetailPage() {
     } finally {
       setAiTrainerApplyingTarget(null);
     }
-  }, [aiCoachSurface, aiTrainerClarification, aiTrainerInput, aiTrainerProposal, aiTrainerAppliedRows, aiAppliedByTurn, activeProposalTurn, emitPlanEditEvent, loadPlan, planId]);
+  }, [aiCoachSurface, aiTrainerClarification, aiTrainerInput, aiTrainerProposal, aiTrainerAppliedRows, aiAppliedByTurn, activeProposalTurn, emitPlanEditEvent, loadPlan, planId, syncPlanViewState]);
 
   const clearAiChat = useCallback(() => {
     emitPlanEditEvent('ai_coach_clear_requested', {

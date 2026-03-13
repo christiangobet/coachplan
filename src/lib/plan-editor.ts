@@ -1,5 +1,5 @@
 
-import { ActivityPriority, ActivityType, Units } from '@prisma/client';
+import { ActivityPriority, ActivityType, Prisma, Units } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { resolveWeekBounds } from '@/lib/plan-dates';
 import { isDayMarkedDone } from '@/lib/day-status';
@@ -118,6 +118,56 @@ export type PlanAdjustmentProposal = {
     changes: PlanAdjustmentChange[];
 };
 
+export type AppliedChangeResult =
+    | {
+        op: 'move_activity';
+        changeIndex: number;
+        activityId: string;
+        fromDayId: string;
+        toDayId: string;
+        targetIndex: number;
+        sessionOrder: number;
+    }
+    | {
+        op: 'edit_activity';
+        changeIndex: number;
+        activityId: string;
+        dayId: string;
+    }
+    | {
+        op: 'add_activity';
+        changeIndex: number;
+        activityId: string;
+        dayId: string;
+        sessionOrder: number;
+    }
+    | {
+        op: 'delete_activity';
+        changeIndex: number;
+        activityId: string;
+        dayId: string;
+    }
+    | {
+        op: 'extend_plan';
+        changeIndex: number;
+        weeksAdded: number;
+        newWeekCount: number;
+    }
+    | {
+        op: 'reanchor_subtype_weekly';
+        changeIndex: number;
+        movedActivityIds: string[];
+        movedCount: number;
+        targetDayOfWeek: number;
+        fromDayOfWeek: number | null;
+    };
+
+export type ApplyAdjustmentProposalResult = {
+    appliedCount: number;
+    extendedWeeks: number;
+    changeResults: AppliedChangeResult[];
+};
+
 export type ActivityLockInfo = {
     dayId: string;
     completed: boolean;
@@ -129,9 +179,11 @@ export type PlanLockState = {
     activityById: Map<string, ActivityLockInfo>;
 };
 
+type PlanEditorClient = Prisma.TransactionClient | typeof prisma;
+
 // Helper function to load lock state
-export async function loadLockStateForPlan(planId: string): Promise<PlanLockState> {
-    const planDays = await prisma.planDay.findMany({
+async function loadLockStateForPlanWithClient(client: PlanEditorClient, planId: string): Promise<PlanLockState> {
+    const planDays = await client.planDay.findMany({
         where: { planId },
         select: {
             id: true,
@@ -164,6 +216,10 @@ export async function loadLockStateForPlan(planId: string): Promise<PlanLockStat
     }
 
     return { dayIdSet, lockedDayIdSet, activityById };
+}
+
+export async function loadLockStateForPlan(planId: string): Promise<PlanLockState> {
+    return loadLockStateForPlanWithClient(prisma, planId);
 }
 
 export interface PlanWithStructure {
@@ -295,7 +351,7 @@ function clampIndex(index: number, min: number, max: number) {
 }
 
 async function orderedActivityIdsForDay(
-    tx: Parameters<typeof prisma.$transaction>[0] extends (arg: infer T) => Promise<unknown> ? T : never,
+    tx: PlanEditorClient,
     dayId: string
 ) {
     const activities = await tx.planActivity.findMany({
@@ -307,7 +363,7 @@ async function orderedActivityIdsForDay(
 }
 
 async function applyDaySessionOrder(
-    tx: Parameters<typeof prisma.$transaction>[0] extends (arg: infer T) => Promise<unknown> ? T : never,
+    tx: PlanEditorClient,
     dayId: string,
     activityIds: string[]
 ) {
@@ -323,8 +379,12 @@ async function applyDaySessionOrder(
 }
 
 // Core application logic
-export async function applyAdjustmentProposal(planId: string, proposal: PlanAdjustmentProposal) {
-    const planMeta = await prisma.trainingPlan.findUnique({
+async function applyAdjustmentProposalWithClient(
+    tx: Prisma.TransactionClient,
+    planId: string,
+    proposal: PlanAdjustmentProposal
+): Promise<ApplyAdjustmentProposalResult> {
+    const planMeta = await tx.trainingPlan.findUnique({
         where: { id: planId },
         select: {
             raceDate: true,
@@ -341,12 +401,12 @@ export async function applyAdjustmentProposal(planId: string, proposal: PlanAdju
             ? 'KM'
             : 'MILES';
 
-    const lockState = await loadLockStateForPlan(planId);
+    const lockState = await loadLockStateForPlanWithClient(tx, planId);
     const dayIdSet = lockState.dayIdSet;
     const lockedDayIdSet = lockState.lockedDayIdSet;
     const activityById = lockState.activityById;
     const activityIdSet = new Set(activityById.keys());
-    const initialWeekIndexes = await prisma.planWeek.findMany({
+    const initialWeekIndexes = await tx.planWeek.findMany({
         where: { planId },
         select: { weekIndex: true }
     });
@@ -357,14 +417,15 @@ export async function applyAdjustmentProposal(planId: string, proposal: PlanAdju
 
     let appliedCount = 0;
     let extendedWeeks = 0;
+    const changeResults: AppliedChangeResult[] = [];
 
-    await prisma.$transaction(async (tx) => {
-        for (const change of proposal.changes) {
-            if (change.op === 'extend_plan') {
-                const requestedStart = isoDateToLocalDate(change.newStartDate);
-                if (!requestedStart) {
-                    throw new Error(`Invalid newStartDate: ${change.newStartDate}`);
-                }
+    for (let changeIndex = 0; changeIndex < proposal.changes.length; changeIndex += 1) {
+        const change = proposal.changes[changeIndex];
+        if (change.op === 'extend_plan') {
+            const requestedStart = isoDateToLocalDate(change.newStartDate);
+            if (!requestedStart) {
+                throw new Error(`Invalid newStartDate: ${change.newStartDate}`);
+            }
 
                 const weeks = await tx.planWeek.findMany({
                     where: { planId },
@@ -443,10 +504,16 @@ export async function applyAdjustmentProposal(planId: string, proposal: PlanAdju
                 });
                 extendedWeeks += weeksToAdd;
                 appliedCount += 1;
-                continue;
-            }
+                changeResults.push({
+                    op: 'extend_plan',
+                    changeIndex,
+                    weeksAdded: weeksToAdd,
+                    newWeekCount: effectiveWeekCount
+                });
+            continue;
+        }
 
-            if (change.op === 'move_activity') {
+        if (change.op === 'move_activity') {
                 if (!activityIdSet.has(change.activityId)) {
                     throw new Error(`Activity not found in plan: ${change.activityId}`);
                 }
@@ -498,10 +565,19 @@ export async function applyAdjustmentProposal(planId: string, proposal: PlanAdju
                     dayId: change.targetDayId
                 });
                 appliedCount += 1;
-                continue;
-            }
+                changeResults.push({
+                    op: 'move_activity',
+                    changeIndex,
+                    activityId: change.activityId,
+                    fromDayId: sourceDayId,
+                    toDayId: change.targetDayId,
+                    targetIndex,
+                    sessionOrder: targetIndex + 1
+                });
+            continue;
+        }
 
-            if (change.op === 'reanchor_subtype_weekly') {
+        if (change.op === 'reanchor_subtype_weekly') {
                 const targetDay = Number(change.targetDayOfWeek);
                 if (!Number.isInteger(targetDay) || targetDay < 1 || targetDay > 7) {
                     throw new Error('reanchor_subtype_weekly.targetDayOfWeek must be an integer between 1 and 7.');
@@ -546,6 +622,7 @@ export async function applyAdjustmentProposal(planId: string, proposal: PlanAdju
                 }
 
                 let movedForThisChange = 0;
+                const movedActivityIds: string[] = [];
                 for (const week of weeks) {
                     if (week.weekIndex < startWeekIndex) continue;
 
@@ -581,10 +658,13 @@ export async function applyAdjustmentProposal(planId: string, proposal: PlanAdju
                     if (!selectedActivityId || !selectedFromDayId) continue;
                     if (selectedFromDayId === targetDayEntry.id) continue;
 
-                    await tx.planActivity.update({
-                        where: { id: selectedActivityId },
-                        data: { dayId: targetDayEntry.id }
-                    });
+                    const sourceIds = await orderedActivityIdsForDay(tx, selectedFromDayId);
+                    const sourceWithoutMoved = sourceIds.filter((id) => id !== selectedActivityId);
+                    const destinationIds = await orderedActivityIdsForDay(tx, targetDayEntry.id);
+                    destinationIds.push(selectedActivityId);
+
+                    await applyDaySessionOrder(tx, selectedFromDayId, sourceWithoutMoved);
+                    await applyDaySessionOrder(tx, targetDayEntry.id, destinationIds);
                     const lockInfo = activityById.get(selectedActivityId);
                     if (lockInfo) {
                         activityById.set(selectedActivityId, {
@@ -593,13 +673,24 @@ export async function applyAdjustmentProposal(planId: string, proposal: PlanAdju
                         });
                     }
                     movedForThisChange += 1;
+                    movedActivityIds.push(selectedActivityId);
                 }
 
                 appliedCount += movedForThisChange;
+                if (movedForThisChange > 0) {
+                    changeResults.push({
+                        op: 'reanchor_subtype_weekly',
+                        changeIndex,
+                        movedActivityIds,
+                        movedCount: movedForThisChange,
+                        targetDayOfWeek: targetDay,
+                        fromDayOfWeek: fromDay
+                    });
+                }
                 continue;
-            }
+        }
 
-            if (change.op === 'delete_activity') {
+        if (change.op === 'delete_activity') {
                 if (!activityIdSet.has(change.activityId)) {
                     throw new Error(`Activity not found in plan: ${change.activityId}`);
                 }
@@ -613,11 +704,21 @@ export async function applyAdjustmentProposal(planId: string, proposal: PlanAdju
                 await tx.planActivity.delete({
                     where: { id: change.activityId }
                 });
+                const reorderedIds = await orderedActivityIdsForDay(tx, activity.dayId);
+                await applyDaySessionOrder(tx, activity.dayId, reorderedIds);
+                activityIdSet.delete(change.activityId);
+                activityById.delete(change.activityId);
                 appliedCount += 1;
-                continue;
-            }
+                changeResults.push({
+                    op: 'delete_activity',
+                    changeIndex,
+                    activityId: change.activityId,
+                    dayId: activity.dayId
+                });
+            continue;
+        }
 
-            if (change.op === 'edit_activity') {
+        if (change.op === 'edit_activity') {
                 if (!activityIdSet.has(change.activityId)) {
                     throw new Error(`Activity not found in plan: ${change.activityId}`);
                 }
@@ -713,10 +814,16 @@ export async function applyAdjustmentProposal(planId: string, proposal: PlanAdju
                     data
                 });
                 appliedCount += 1;
-                continue;
-            }
+                changeResults.push({
+                    op: 'edit_activity',
+                    changeIndex,
+                    activityId: change.activityId,
+                    dayId: activity.dayId
+                });
+            continue;
+        }
 
-            if (change.op === 'add_activity') {
+        if (change.op === 'add_activity') {
                 if (!dayIdSet.has(change.dayId)) {
                     throw new Error(`Day not found in plan: ${change.dayId}`);
                 }
@@ -754,7 +861,7 @@ export async function applyAdjustmentProposal(planId: string, proposal: PlanAdju
                     ? maxSessionOrder + 1
                     : existingDayActivities.length + 1;
 
-                await tx.planActivity.create({
+                const createdActivity = await tx.planActivity.create({
                     data: {
                         planId: planId,
                         dayId: change.dayId,
@@ -774,13 +881,39 @@ export async function applyAdjustmentProposal(planId: string, proposal: PlanAdju
                         completed: false
                     }
                 });
+                activityIdSet.add(createdActivity.id);
+                activityById.set(createdActivity.id, {
+                    dayId: change.dayId,
+                    completed: false
+                });
                 appliedCount += 1;
-                continue;
-            }
+                changeResults.push({
+                    op: 'add_activity',
+                    changeIndex,
+                    activityId: createdActivity.id,
+                    dayId: change.dayId,
+                    sessionOrder
+                });
+            continue;
         }
-    });
+    }
 
-    return { appliedCount, extendedWeeks };
+    return { appliedCount, extendedWeeks, changeResults };
+}
+
+export async function applyAdjustmentProposalInTransaction(
+    tx: Prisma.TransactionClient,
+    planId: string,
+    proposal: PlanAdjustmentProposal
+): Promise<ApplyAdjustmentProposalResult> {
+    return applyAdjustmentProposalWithClient(tx, planId, proposal);
+}
+
+export async function applyAdjustmentProposal(
+    planId: string,
+    proposal: PlanAdjustmentProposal
+): Promise<ApplyAdjustmentProposalResult> {
+    return prisma.$transaction((tx) => applyAdjustmentProposalWithClient(tx, planId, proposal));
 }
 
 export function isChangeAllowed(change: PlanAdjustmentChange, lockState: PlanLockState): boolean {

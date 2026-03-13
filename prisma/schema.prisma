@@ -187,6 +187,7 @@ model PlanChangeLog {
   plan          TrainingPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
   source        String       // "manual_drag" | "ai_applied" | "manual_edit"
   changeType    String       // "move_activity" | "edit_activity" | "add_activity" | "delete_activity"
+  patchId       String?
   activityId    String?
   fromDayId     String?
   toDayId       String?
@@ -197,6 +198,7 @@ model PlanChangeLog {
 
   @@index([planId, createdAt])
   @@index([planId, editSessionId])
+  @@index([planId, patchId])
 }
 
 model PlanSourceDocument {
