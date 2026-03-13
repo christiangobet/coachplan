@@ -763,7 +763,7 @@ export default function ProfilePage() {
                     <button className="cta secondary" type="button" onClick={syncStravaNow} disabled={busyProvider === 'STRAVA'}>
                       Sync now
                     </button>
-                    <button className="cta secondary" type="button" onClick={disconnectStrava} disabled={busyProvider === 'STRAVA'}>
+                    <button className="cta secondary" type="button" data-action="disconnect" onClick={disconnectStrava} disabled={busyProvider === 'STRAVA'}>
                       Disconnect
                     </button>
                     <button className="cta secondary" type="button" onClick={startStravaConnect} disabled={busyProvider === 'STRAVA'}>

@@ -271,6 +271,18 @@
   gap: 0.5rem;
 }
 
+/* Destructive action: visually distinguish Disconnect */
+.profile-strava-actions [data-action="disconnect"] {
+  color: #b42318;
+  border-color: rgba(180, 35, 24, 0.4);
+  background: rgba(180, 35, 24, 0.04);
+}
+
+.profile-strava-actions [data-action="disconnect"]:hover {
+  background: rgba(180, 35, 24, 0.1);
+  border-color: #b42318;
+}
+
 .profile-integration-status {
   font-size: 0.78rem;
   color: var(--d-muted);
