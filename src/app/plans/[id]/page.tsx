@@ -521,6 +521,7 @@ export default function PlanDetailPage() {
   const [isAiCoachMobile, setIsAiCoachMobile] = useState(
     () => (typeof window === 'undefined' ? false : window.matchMedia('(max-width: 768px)').matches)
   );
+  const [isAiCoachKeyboardOpen, setIsAiCoachKeyboardOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [hasUnread, setHasUnread] = useState(false);
   const widgetThreadRef = useRef<HTMLDivElement>(null);
@@ -1285,8 +1286,16 @@ export default function PlanDetailPage() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
+    const detectKeyboardOpen = (nextHeight: number) => {
+      if (!chatOpen || !isAiCoachMobile) return false;
+      const viewportDelta = window.innerHeight - nextHeight;
+      return viewportDelta > 140;
+    };
+
     const setViewportHeight = () => {
       const nextHeight = Math.round(window.visualViewport?.height ?? window.innerHeight);
+      const keyboardOpen = detectKeyboardOpen(nextHeight);
+      setIsAiCoachKeyboardOpen((prev) => (prev === keyboardOpen ? prev : keyboardOpen));
       if (nextHeight === aiCoachViewportHeightRef.current) return;
       aiCoachViewportHeightRef.current = nextHeight;
       document.documentElement.style.setProperty('--ai-coach-viewport-height', `${nextHeight}px`);
@@ -1302,7 +1311,17 @@ export default function PlanDetailPage() {
       window.visualViewport?.removeEventListener('resize', setViewportHeight);
       window.visualViewport?.removeEventListener('scroll', setViewportHeight);
     };
-  }, []);
+  }, [chatOpen, isAiCoachMobile]);
+
+  useEffect(() => {
+    if (!isAiCoachMobile || !chatOpen || !isAiCoachKeyboardOpen) return;
+    emitPlanEditEvent('ai_coach_keyboard_opened', {
+      surface: aiCoachSurface
+    });
+    emitPlanEditEvent('ai_coach_keyboard_layout_compacted', {
+      surface: aiCoachSurface
+    });
+  }, [aiCoachSurface, chatOpen, emitPlanEditEvent, isAiCoachKeyboardOpen, isAiCoachMobile]);
 
   useEffect(() => {
     if (!sourceToggleStorageKey || typeof window === 'undefined') return;
@@ -3136,7 +3155,7 @@ export default function PlanDetailPage() {
       {/* ─── Floating AI Coach Widget ─────────────────────────────────── */}
       {planId && (
         <div
-          className={`ai-widget ${isAiCoachMobile ? 'ai-widget--mobile' : 'ai-widget--desktop'}${chatOpen ? ' is-open' : ' is-closed'}`}
+          className={`ai-widget ${isAiCoachMobile ? 'ai-widget--mobile' : 'ai-widget--desktop'}${chatOpen ? ' is-open' : ' is-closed'}${isAiCoachKeyboardOpen ? ' is-keyboard-open' : ''}`}
         >
           {isAiCoachMobile && chatOpen ? (
             <div
