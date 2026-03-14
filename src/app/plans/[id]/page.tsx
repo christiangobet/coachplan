@@ -2378,7 +2378,7 @@ export default function PlanDetailPage() {
               </div>
             </details>
             <details className="pcal-inline-panel">
-              <summary className="pcal-inline-panel-summary">Coach History</summary>
+              <summary className="pcal-inline-panel-summary">💬 Conversation History</summary>
               <div className="pcal-inline-panel-body">
                 <div className="pcal-ai-history">
                   {coachHistoryMessages.length === 0 ? (
