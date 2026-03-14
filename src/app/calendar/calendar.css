@@ -1816,8 +1816,8 @@
 @media (max-width: 480px) {
   .cal-weekdays,
   .cal-grid {
-    min-width: 420px;
-    grid-template-columns: repeat(7, minmax(58px, 1fr));
+    min-width: 532px;
+    grid-template-columns: repeat(7, minmax(72px, 1fr));
   }
 
   .cal-day {
