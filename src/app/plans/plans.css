@@ -4449,31 +4449,55 @@
   flex-wrap: wrap;
 }
 
-.day-log-route-trigger {
-  display: inline-flex;
-  align-items: center;
-  justify-content: space-between;
+.day-log-inline-route {
+  margin-top: 12px;
+  border: 1px solid rgba(252, 76, 2, 0.16);
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(252, 76, 2, 0.07) 0%, rgba(252, 76, 2, 0.02) 100%);
+  padding: 12px;
+  display: grid;
   gap: 10px;
-  width: 100%;
-  min-height: 40px;
-  border-radius: 12px;
-  border: 1px solid rgba(252, 76, 2, 0.18);
-  background: linear-gradient(180deg, rgba(252, 76, 2, 0.08) 0%, rgba(252, 76, 2, 0.03) 100%);
-  padding: 8px 10px;
-  color: inherit;
-  text-align: left;
-  cursor: pointer;
 }
 
-.day-log-route-trigger-label {
-  font-size: 12px;
+.day-log-inline-route-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.day-log-inline-route-kicker {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 11px;
   font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
   color: #b54708;
 }
 
-.day-log-route-trigger-meta {
+.day-log-inline-route-head h5 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--d-text);
+}
+
+.day-log-inline-route-meta {
   font-size: 11px;
   color: var(--d-text-mid);
+  white-space: nowrap;
+}
+
+.day-log-inline-route-map {
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid rgba(252, 76, 2, 0.12);
+}
+
+.day-log-inline-route-map .dash-route-map,
+.day-log-inline-route-map .dash-route-map-shell {
+  min-height: 180px;
 }
 
 .dash-route-sheet-layer {
@@ -4679,13 +4703,17 @@
   --ai-athlete-bubble-border: rgba(252, 124, 77, 0.32);
 }
 
-[data-theme="dark"] .day-log-route-trigger {
+[data-theme="dark"] .day-log-inline-route {
   border-color: rgba(252, 124, 77, 0.24);
   background: linear-gradient(180deg, rgba(252, 76, 2, 0.18) 0%, rgba(252, 76, 2, 0.08) 100%);
 }
 
-[data-theme="dark"] .day-log-route-trigger-label {
+[data-theme="dark"] .day-log-inline-route-kicker {
   color: #ffd4c3;
+}
+
+[data-theme="dark"] .day-log-inline-route-map {
+  border-color: rgba(255, 255, 255, 0.08);
 }
 
 [data-theme="dark"] .dash-route-sheet-close,

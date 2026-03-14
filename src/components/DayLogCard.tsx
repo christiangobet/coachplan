@@ -13,7 +13,7 @@ import {
   type DistanceUnit,
 } from '@/lib/unit-display';
 import { buildStravaRoutePreview, type StravaRoutePreview } from '@/lib/strava-route';
-import ActivityRouteSheet from '@/components/ActivityRouteSheet';
+import RouteMap from '@/components/RouteMap';
 import SessionFlowStrip from '@/components/SessionFlowStrip';
 import ExternalSportIcon from '@/components/ExternalSportIcon';
 import StravaIcon from '@/components/StravaIcon';
@@ -201,6 +201,18 @@ function formatSyncedStravaDistance(
   return `${formatDistanceNumber(converted.value)} ${distanceUnitLabel(converted.unit)}`;
 }
 
+function buildSyncedActivityRoutePreview(activity: SyncedStravaActivity): StravaRoutePreview | null {
+  return buildStravaRoutePreview({
+    name: activity.name,
+    sportType: activity.sportType,
+    startTime: activity.startTime || new Date().toISOString(),
+    distanceM: activity.distanceM,
+    movingTimeSec: activity.movingTimeSec ?? activity.durationSec,
+    elevationGainM: activity.elevationGainM,
+    raw: activity.raw,
+  });
+}
+
 // ── ActivityRow ───────────────────────────────────────────────────────────────
 
 function ActivityRow({
@@ -376,7 +388,6 @@ export default function DayLogCard({
   );
   const [syncedActivitiesBusy, setSyncedActivitiesBusy] = useState(false);
   const [syncedActivitiesError, setSyncedActivitiesError] = useState<string | null>(null);
-  const [selectedRouteActivityId, setSelectedRouteActivityId] = useState<string | null>(null);
 
   // Per-activity form state
   const [forms, setForms] = useState<Record<string, ActivityFormState>>(() => {
@@ -414,24 +425,13 @@ export default function DayLogCard({
     setSyncedActivitiesBusy(false);
   }, [syncedStravaActivities]);
 
-  const selectedRouteActivity = useMemo(
-    () => syncedActivities.find((activity) => activity.id === selectedRouteActivityId) || null,
-    [selectedRouteActivityId, syncedActivities]
-  );
-  const selectedRoutePreview: StravaRoutePreview | null = useMemo(
-    () => (selectedRouteActivity
-      ? buildStravaRoutePreview({
-        name: selectedRouteActivity.name,
-        sportType: selectedRouteActivity.sportType,
-        startTime: selectedRouteActivity.startTime || new Date().toISOString(),
-        distanceM: selectedRouteActivity.distanceM,
-        movingTimeSec: selectedRouteActivity.movingTimeSec ?? selectedRouteActivity.durationSec,
-        elevationGainM: selectedRouteActivity.elevationGainM,
-        raw: selectedRouteActivity.raw,
-      })
-      : null),
-    [selectedRouteActivity]
-  );
+  const primaryRoutePreview: StravaRoutePreview | null = useMemo(() => {
+    for (const activity of syncedActivities) {
+      const preview = buildSyncedActivityRoutePreview(activity);
+      if (preview) return preview;
+    }
+    return null;
+  }, [syncedActivities]);
 
   const loadSyncedActivities = useCallback(async () => {
     if (!showSyncedStravaSection || Array.isArray(syncedStravaActivities)) return;
@@ -885,36 +885,29 @@ export default function DayLogCard({
                       </span>
                     )}
                   </div>
-                  {buildStravaRoutePreview({
-                    name: activity.name,
-                    sportType: activity.sportType,
-                    startTime: activity.startTime || new Date().toISOString(),
-                    distanceM: activity.distanceM,
-                    movingTimeSec: activity.movingTimeSec ?? activity.durationSec,
-                    elevationGainM: activity.elevationGainM,
-                    raw: activity.raw,
-                  }) ? (
-                    <button
-                      type="button"
-                      className="day-log-route-trigger"
-                      onClick={() => setSelectedRouteActivityId(activity.id)}
-                    >
-                      <span className="day-log-route-trigger-label">View route</span>
-                      <span className="day-log-route-trigger-meta">Imported from Strava</span>
-                    </button>
-                  ) : null}
                 </div>
               ))}
             </div>
           )}
+          {primaryRoutePreview ? (
+            <section className="day-log-inline-route" aria-label="Strava route preview">
+              <div className="day-log-inline-route-head">
+                <div>
+                  <span className="day-log-inline-route-kicker">Route</span>
+                  <h5>{primaryRoutePreview.name || 'Workout route'}</h5>
+                </div>
+                <span className="day-log-inline-route-meta">Imported from Strava</span>
+              </div>
+              <div className="day-log-inline-route-map">
+                <RouteMap
+                  routePoints={primaryRoutePreview.routePoints}
+                  ariaLabel={primaryRoutePreview.name ? `${primaryRoutePreview.name} route preview` : 'Route preview'}
+                />
+              </div>
+            </section>
+          ) : null}
         </div>
       )}
-      <ActivityRouteSheet
-        isOpen={Boolean(selectedRouteActivity && selectedRoutePreview)}
-        routePreview={selectedRoutePreview}
-        viewerUnits={viewerUnits}
-        onClose={() => setSelectedRouteActivityId(null)}
-      />
 
       {/* Per-activity forms — grouped by sessionGroupId */}
       {(() => {
