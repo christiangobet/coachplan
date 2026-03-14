@@ -6,6 +6,7 @@ import { headers } from "next/headers";
 import { getCurrentUserRoleContext, getRoleHomePath, getRoleLabel } from "@/lib/user-roles";
 import Header from "@/components/Header";
 import MobileNav from "@/components/MobileNav";
+import "leaflet/dist/leaflet.css";
 import "./globals.css";
 
 export const metadata: Metadata = {

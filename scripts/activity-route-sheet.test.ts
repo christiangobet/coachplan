@@ -16,10 +16,17 @@ test("activity route sheet exposes mobile dialog semantics and route metadata", 
   assert.match(source, /aria-modal="true"/);
   assert.match(source, /Imported from Strava/);
   assert.match(source, /Route preview/);
+  assert.match(source, /RouteMap/);
 });
 
 test("activity route sheet handles missing geometry gracefully", async () => {
   const source = await readWorkspaceFile("src/components/ActivityRouteSheet.tsx");
 
   assert.match(source, /Route map unavailable for this activity/);
+});
+
+test("route sheet uses a dedicated map component instead of the svg-only trace", async () => {
+  const source = await readWorkspaceFile("src/components/ActivityRouteSheet.tsx");
+
+  assert.doesNotMatch(source, /<svg[\s\S]*dash-route-map-line/);
 });

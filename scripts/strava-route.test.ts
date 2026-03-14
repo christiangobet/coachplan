@@ -99,5 +99,7 @@ test("buildStravaRoutePreview reads geometry and metrics from Strava raw payload
   assert.equal(preview?.distanceM, 12800);
   assert.equal(preview?.movingTimeSec, 4980);
   assert.equal(preview?.elevationGainM, 640);
+  assert.equal(preview?.routePoints.length, 3);
+  assert.deepEqual(preview?.routePoints[0], { lat: 38.5, lng: -120.2 });
   assert.equal(preview?.svgPoints.length, 3);
 });

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import type { StravaRoutePreview } from '@/lib/strava-route';
 import {
   convertDistanceForDisplay,
@@ -8,6 +9,11 @@ import {
   formatDistanceNumber,
   type DistanceUnit,
 } from '@/lib/unit-display';
+
+const RouteMap = dynamic(() => import('./RouteMap'), {
+  ssr: false,
+  loading: () => <div className="dash-route-map-loading">Loading route map…</div>,
+});
 
 function formatRouteDate(value: string) {
   const parsed = new Date(value);
@@ -26,11 +32,6 @@ function formatMovingTime(value: number | null) {
   const minutes = totalMinutes % 60;
   if (hours > 0) return `${hours}h ${minutes}m`;
   return `${minutes} min`;
-}
-
-function buildPolylinePoints(routePreview: StravaRoutePreview | null) {
-  if (!routePreview || routePreview.svgPoints.length < 2) return '';
-  return routePreview.svgPoints.map((point) => `${point.x},${point.y}`).join(' ');
 }
 
 export default function ActivityRouteSheet({
@@ -55,7 +56,6 @@ export default function ActivityRouteSheet({
 
   if (!isOpen) return null;
 
-  const routePoints = buildPolylinePoints(routePreview);
   const distance = routePreview?.distanceM
     ? convertDistanceForDisplay(routePreview.distanceM / 1000, 'KM', viewerUnits)
     : null;
@@ -94,27 +94,12 @@ export default function ActivityRouteSheet({
         </div>
 
         <div className="dash-route-sheet-body">
-          {routePreview && routePoints ? (
+          {routePreview && routePreview.routePoints.length >= 2 ? (
             <div className="dash-route-map-card">
-              <svg
-                className="dash-route-map"
-                viewBox="0 0 100 100"
-                preserveAspectRatio="xMidYMid meet"
-                role="img"
-                aria-label={routePreview.name ? `${routePreview.name} route preview` : 'Route preview'}
-              >
-                <polyline
-                  className="dash-route-map-line"
-                  points={routePoints}
-                />
-                <circle className="dash-route-map-start" cx={routePreview.svgPoints[0].x} cy={routePreview.svgPoints[0].y} r="2.6" />
-                <circle
-                  className="dash-route-map-end"
-                  cx={routePreview.svgPoints[routePreview.svgPoints.length - 1].x}
-                  cy={routePreview.svgPoints[routePreview.svgPoints.length - 1].y}
-                  r="2.6"
-                />
-              </svg>
+              <RouteMap
+                routePoints={routePreview.routePoints}
+                ariaLabel={routePreview.name ? `${routePreview.name} route preview` : 'Route preview'}
+              />
             </div>
           ) : (
             <div className="dash-route-map-fallback">

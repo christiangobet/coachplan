@@ -1,4 +1,4 @@
-type RoutePoint = {
+export type RoutePoint = {
   lat: number;
   lng: number;
 };
@@ -17,6 +17,7 @@ export type StravaRoutePreview = {
   movingTimeSec: number | null;
   elevationGainM: number | null;
   polyline: string;
+  routePoints: RoutePoint[];
   svgPoints: SvgPoint[];
 };
 
@@ -131,6 +132,7 @@ export function buildStravaRoutePreview(input: {
     movingTimeSec: typeof input.movingTimeSec === "number" ? input.movingTimeSec : null,
     elevationGainM: typeof input.elevationGainM === "number" ? input.elevationGainM : null,
     polyline,
+    routePoints: decoded,
     svgPoints,
   };
 }
