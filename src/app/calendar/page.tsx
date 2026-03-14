@@ -419,7 +419,24 @@ export default async function CalendarPage({
           include: {
             days: {
               orderBy: { dayOfWeek: "asc" },
-              include: { activities: true }
+              include: {
+                activities: {
+                  include: {
+                    externalActivities: {
+                      select: {
+                        name: true,
+                        sportType: true,
+                        startTime: true,
+                        distanceM: true,
+                        movingTimeSec: true,
+                        elevationGainM: true,
+                        durationSec: true,
+                        raw: true,
+                      },
+                    },
+                  },
+                },
+              }
             }
           }
         }

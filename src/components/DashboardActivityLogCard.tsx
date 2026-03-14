@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import CompleteWorkoutButton from '@/components/CompleteWorkoutButton';
+import ActivityRouteSheet from '@/components/ActivityRouteSheet';
 import type { DayStatus } from '@/lib/day-status';
 import type { LogActivity } from '@/lib/log-activity';
 
@@ -91,11 +92,16 @@ export default function DashboardActivityLogCard({
     initialDayStatus !== 'OPEN' || activities.length === 0
   );
   const [expandedNotes, setExpandedNotes] = useState<Record<string, boolean>>({});
+  const [selectedRouteActivityId, setSelectedRouteActivityId] = useState<string | null>(null);
 
 
   const hasActivities = activities.length > 0;
   const completedCount = useMemo(() => activities.filter((activity) => activity.completed).length, [activities]);
   const remainingCount = Math.max(0, activities.length - completedCount);
+  const selectedRouteActivity = useMemo(
+    () => activities.find((activity) => activity.id === selectedRouteActivityId) || null,
+    [activities, selectedRouteActivityId]
+  );
 
   useEffect(() => {
     setDayStatus(initialDayStatus);
@@ -125,6 +131,7 @@ export default function DashboardActivityLogCard({
   const closeCard = () => {
     setOpen(false);
     setDayError(null);
+    setSelectedRouteActivityId(null);
     if (typeof window !== 'undefined' && window.location.hash === hashTarget) {
       window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
     }
@@ -283,6 +290,22 @@ export default function DashboardActivityLogCard({
                         </div>
                       )}
 
+                      {activity.completed && activity.routePreview?.hasRoute && (
+                        <button
+                          type="button"
+                          className="dash-activity-route-trigger"
+                          onClick={() => setSelectedRouteActivityId(activity.id)}
+                        >
+                          <span className="dash-activity-route-trigger-copy">
+                            <span className="dash-activity-route-trigger-label">View route</span>
+                            <span className="dash-activity-route-trigger-meta">
+                              Imported from Strava
+                            </span>
+                          </span>
+                          <span className="dash-activity-route-trigger-arrow" aria-hidden="true">↗</span>
+                        </button>
+                      )}
+
                       <div className="dash-activity-log-item-actions">
                         <CompleteWorkoutButton
                           activityId={activity.id}
@@ -415,6 +438,12 @@ export default function DashboardActivityLogCard({
           </div>
         </>
       )}
+      <ActivityRouteSheet
+        isOpen={Boolean(selectedRouteActivity)}
+        routePreview={selectedRouteActivity?.routePreview ?? null}
+        viewerUnits={viewerUnits}
+        onClose={() => setSelectedRouteActivityId(null)}
+      />
     </section>
   );
 }

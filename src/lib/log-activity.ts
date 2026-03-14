@@ -5,7 +5,8 @@ import {
   formatDistanceNumber,
   resolveDistanceUnitFromActivity,
   type DistanceUnit,
-} from '@/lib/unit-display';
+} from './unit-display';
+import { buildStravaRoutePreview, type StravaRoutePreview } from './strava-route';
 
 export type LogActivity = {
   id: string;
@@ -27,6 +28,7 @@ export type LogActivity = {
   structure: unknown;
   sessionGroupId: string | null;
   sessionOrder: number | null;
+  routePreview: StravaRoutePreview | null;
 };
 
 export function buildPlannedMetricParts(activity: any, viewerUnits: DistanceUnit): string[] {
@@ -77,6 +79,7 @@ export function buildLogActivities(rawActivities: any[], viewerUnits: DistanceUn
       const displayPlannedDistance = convertDistanceForDisplay(activity.distance, plannedSourceUnit, viewerUnits);
       const displayActualDistance = convertDistanceForDisplay(activity.actualDistance, actualSourceUnit, viewerUnits);
       const displayActualPace = convertPaceForDisplay(activity.actualPace, viewerUnits, actualSourceUnit);
+      const matchedExternal = Array.isArray(activity.externalActivities) ? activity.externalActivities[0] : null;
       return {
         id: activity.id,
         title: activity.title || null,
@@ -104,6 +107,17 @@ export function buildLogActivities(rawActivities: any[], viewerUnits: DistanceUn
         structure: activity.structure ?? null,
         sessionGroupId: activity.sessionGroupId ?? null,
         sessionOrder: activity.sessionOrder ?? null,
+        routePreview: matchedExternal
+          ? buildStravaRoutePreview({
+            name: matchedExternal.name ?? null,
+            sportType: matchedExternal.sportType ?? null,
+            startTime: matchedExternal.startTime,
+            distanceM: matchedExternal.distanceM ?? null,
+            movingTimeSec: matchedExternal.movingTimeSec ?? matchedExternal.durationSec ?? null,
+            elevationGainM: matchedExternal.elevationGainM ?? null,
+            raw: matchedExternal.raw,
+          })
+          : null,
       };
     });
 }
