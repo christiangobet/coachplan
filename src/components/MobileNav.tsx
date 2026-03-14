@@ -5,9 +5,27 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useSearchParams, useRouter } from 'next/navigation';
 import { useAuth } from '@clerk/nextjs';
+import {
+  appendPlanQueryToHref,
+  extractPlanIdFromPathname,
+  SELECTED_PLAN_COOKIE,
+} from '@/lib/plan-selection';
 import styles from './MobileNav.module.css';
 
-type NavTab = { href: string; label: string; icon: ReactNode; match: string[] };
+type NavTab = {
+  href: string;
+  label: string;
+  icon: ReactNode;
+  match: string[];
+  planOnly?: boolean;
+};
+
+function resolveTabHref(tab: NavTab, contextualPlanId: string | null) {
+  if (tab.planOnly) {
+    return contextualPlanId ? tab.href.replace(':planId', contextualPlanId) : '/plans';
+  }
+  return appendPlanQueryToHref(tab.href, contextualPlanId);
+}
 
 function Icon({ children }: { children: ReactNode }) {
   return (
@@ -17,6 +35,23 @@ function Icon({ children }: { children: ReactNode }) {
       {children}
     </svg>
   );
+}
+
+function readSelectedPlanCookie() {
+  if (typeof document === 'undefined') return null;
+  const prefix = `${SELECTED_PLAN_COOKIE}=`;
+  const rawCookie = document.cookie
+    .split(';')
+    .map((item) => item.trim())
+    .find((item) => item.startsWith(prefix));
+  if (!rawCookie) return null;
+  const value = rawCookie.slice(prefix.length);
+  if (!value) return null;
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
 }
 
 const TABS: NavTab[] = [
@@ -42,7 +77,7 @@ const TABS: NavTab[] = [
     ),
   },
   {
-    href: '/plans', label: 'Plans', match: ['/plans'],
+    href: '/plans/:planId', label: 'Plan by Week', match: ['/plans'], planOnly: true,
     icon: (
       <Icon>
         {/* Document with lines */}
@@ -78,15 +113,23 @@ export default function MobileNav() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const router = useRouter();
-  const planId = searchParams.get('plan') ?? '';
+  const contextualPlanId =
+    extractPlanIdFromPathname(pathname)
+    || searchParams.get('plan')
+    || readSelectedPlanCookie();
 
   // Optimistic: show tapped tab as active immediately, before navigation settles
   const [pendingNav, setPendingNav] = useState<{ href: string; fromPath: string } | null>(null);
 
+  const resolvedTabs = TABS.map((tab) => ({
+    ...tab,
+    href: resolveTabHref(tab, contextualPlanId),
+  }));
+
   // Prefetch all tab routes on mount so navigation is instant
   useEffect(() => {
-    TABS.forEach((tab) => router.prefetch(tab.href));
-  }, [router]);
+    TABS.forEach((tab) => router.prefetch(resolveTabHref(tab, contextualPlanId)));
+  }, [contextualPlanId, router]);
 
   const { isSignedIn } = useAuth();
 
@@ -97,10 +140,6 @@ export default function MobileNav() {
 
   if (!isSignedIn || isPublicRoute) return null;
 
-  function buildHref(base: string) {
-    return planId ? `${base}?plan=${planId}` : base;
-  }
-
   function isActive(tab: NavTab) {
     if (pendingNav?.href === tab.href && pendingNav.fromPath === pathname) return true;
     return tab.match.some((m) => pathname === m || pathname.startsWith(m + '/'));
@@ -108,10 +147,10 @@ export default function MobileNav() {
 
   return (
     <nav className={styles.nav} aria-label="Mobile navigation">
-      {TABS.map((tab) => (
+      {resolvedTabs.map((tab) => (
         <Link
           key={tab.href}
-          href={buildHref(tab.href)}
+          href={tab.href}
           className={`${styles.tab}${isActive(tab) ? ` ${styles.active}` : ''}`}
           onClick={() => setPendingNav({ href: tab.href, fromPath: pathname })}
         >

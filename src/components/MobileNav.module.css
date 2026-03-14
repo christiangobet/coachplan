@@ -51,6 +51,9 @@
     font-weight: 700;
     letter-spacing: 0.03em;
     text-transform: uppercase;
-    white-space: nowrap;
+    line-height: 1.05;
+    max-width: 60px;
+    text-align: center;
+    white-space: normal;
   }
 }

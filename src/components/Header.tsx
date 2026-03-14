@@ -12,7 +12,7 @@ import {
     SELECTED_PLAN_COOKIE
 } from '@/lib/plan-selection';
 
-type NavItem = { href: string; label: string };
+type NavItem = { href: string; label: string; planOnly?: boolean };
 
 function readSelectedPlanCookie() {
     if (typeof document === 'undefined') return null;
@@ -29,6 +29,14 @@ function readSelectedPlanCookie() {
     } catch {
         return value;
     }
+}
+
+function buildNavHref(item: NavItem, contextualPlanId: string | null) {
+    if (item.planOnly) {
+        if (!contextualPlanId) return null;
+        return item.href.replace(':planId', contextualPlanId);
+    }
+    return appendPlanQueryToHref(item.href, contextualPlanId);
 }
 
 export default function Header({
@@ -97,14 +105,19 @@ export default function Header({
                         {isAccountInactive && (
                             <span className="nav-account-disabled">Account Deactivated</span>
                         )}
-                        {!isAccountInactive && navItems.map((item) => (
-                            <Link
-                                key={item.href}
-                                href={appendPlanQueryToHref(item.href, contextualPlanId)}
-                            >
-                                {item.label}
-                            </Link>
-                        ))}
+                        {!isAccountInactive && navItems.map((item) => {
+                            if (item.planOnly && !contextualPlanId) return null;
+                            const href = buildNavHref(item, contextualPlanId);
+                            if (!href) return null;
+                            return (
+                                <Link
+                                    key={item.href}
+                                    href={href}
+                                >
+                                    {item.label}
+                                </Link>
+                            );
+                        })}
                         {!isAccountInactive && roleSwitchHref && (
                             <Link className="nav-role-switch" href={roleSwitchHref}>Switch Role</Link>
                         )}
@@ -133,16 +146,21 @@ export default function Header({
                 <>
                     <div className="mobile-overlay" onClick={() => setMenuOpen(false)} />
                     <nav className="mobile-menu">
-                        {!isAccountInactive && navItems.map((item) => (
-                            <Link
-                                key={item.href}
-                                className="mobile-nav-link"
-                                href={appendPlanQueryToHref(item.href, contextualPlanId)}
-                                onClick={() => setMenuOpen(false)}
-                            >
-                                {item.label}
-                            </Link>
-                        ))}
+                        {!isAccountInactive && navItems.map((item) => {
+                            if (item.planOnly && !contextualPlanId) return null;
+                            const href = buildNavHref(item, contextualPlanId);
+                            if (!href) return null;
+                            return (
+                                <Link
+                                    key={item.href}
+                                    className="mobile-nav-link"
+                                    href={href}
+                                    onClick={() => setMenuOpen(false)}
+                                >
+                                    {item.label}
+                                </Link>
+                            );
+                        })}
                         {!isAccountInactive && roleSwitchHref && (
                             <Link
                                 className="mobile-nav-link mobile-nav-role"

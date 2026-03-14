@@ -18,7 +18,7 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
-type TopNavItem = { href: string; label: string };
+type TopNavItem = { href: string; label: string; planOnly?: boolean };
 const SHELLLESS_PREFIXES = ['/sign-in', '/sign-up', '/auth/resolve-role', '/select-role'];
 const PUBLIC_SHELLLESS_PATHS = new Set(['/', '/privacy', '/terms']);
 
@@ -44,6 +44,7 @@ function navItemsForRole(role: UserRole): TopNavItem[] {
   return [
     { href: "/dashboard", label: "Today" },
     { href: "/calendar", label: "Training Calendar" },
+    { href: "/plans/:planId", label: "Plan by Week", planOnly: true },
     { href: "/strava", label: "Import Strava" },
     { href: "/progress", label: "Progress" },
     { href: "/plans", label: "Plans Library" },
