@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import StravaConnectButton from '@/components/StravaConnectButton';
+import { getStravaPanelActions } from '@/lib/athlete-flow-ui';
 
 type IntegrationProvider = 'STRAVA' | 'GARMIN';
 
@@ -44,6 +45,13 @@ export default function StravaSyncPanel({ compact = false }: { compact?: boolean
     () => accounts.find((account) => account.provider === 'STRAVA') || null,
     [accounts]
   );
+  const connected = Boolean(strava?.connected);
+  const actionSet = getStravaPanelActions(connected);
+  const guidance = !capability.stravaConfigured
+    ? 'Set STRAVA_CLIENT_ID and STRAVA_CLIENT_SECRET to enable athlete sync.'
+    : connected
+      ? 'Best next step: sync from your plan start, then review the day-by-day matches below.'
+      : 'Connect Strava to pull activities straight into today, calendar, and progress.';
 
   async function load() {
     try {
@@ -143,18 +151,18 @@ export default function StravaSyncPanel({ compact = false }: { compact?: boolean
     <div className={`dash-card dash-sync-card${compact ? ' compact' : ''}`} data-debug-id="SSP">
       <div className="dash-card-header">
         <span className="dash-card-title">Strava Sync</span>
-        <span className={`dash-sync-state ${strava?.connected ? 'connected' : 'disconnected'}`}>
-          {strava?.connected ? 'Connected' : 'Not connected'}
+        <span className={`dash-sync-state ${connected ? 'connected' : 'disconnected'}`}>
+          {connected ? 'Connected' : 'Not connected'}
         </span>
       </div>
 
       <div className="dash-sync-meta">
         <span>Athlete: {strava?.providerUsername || 'Not linked'}</span>
-        <span>Last sync: {formatDate(strava?.lastSyncAt)}</span>
+        <span>Last sync: {connected ? formatDate(strava?.lastSyncAt) : 'Connect Strava first'}</span>
       </div>
 
       <div className="dash-sync-actions">
-        {!strava?.connected ? (
+        {actionSet.includes('connect') ? (
           <StravaConnectButton
             className="dash-sync-btn"
             onClick={connectStrava}
@@ -163,7 +171,7 @@ export default function StravaSyncPanel({ compact = false }: { compact?: boolean
         ) : (
           <>
             <button
-              className="dash-sync-btn"
+              className="dash-sync-btn dash-sync-btn--primary"
               type="button"
               onClick={syncNow}
               disabled={busy}
@@ -171,28 +179,18 @@ export default function StravaSyncPanel({ compact = false }: { compact?: boolean
               Sync now
             </button>
             <button
-              className="dash-sync-btn"
+              className="dash-sync-btn dash-sync-btn--danger"
               type="button"
               onClick={disconnectStrava}
               disabled={busy}
             >
               Disconnect
             </button>
-            <button
-              className="dash-sync-btn dash-sync-btn--reconnect"
-              type="button"
-              onClick={connectStrava}
-              disabled={busy}
-            >
-              Reconnect
-            </button>
           </>
         )}
       </div>
 
-      {!capability.stravaConfigured && (
-        <p className="dash-sync-note">Set STRAVA_CLIENT_ID and STRAVA_CLIENT_SECRET in .env</p>
-      )}
+      <p className="dash-sync-guidance">{guidance}</p>
       {status && <p className="dash-sync-note">{status}</p>}
     </div>
   );

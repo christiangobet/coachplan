@@ -42,7 +42,7 @@ export default function StravaDaySyncButton({
     }
   };
 
-  const label = state === 'syncing' ? 'Syncing…' : state === 'done' ? 'Synced' : 'Sync Day Log';
+  const label = state === 'syncing' ? 'Importing…' : state === 'done' ? 'Imported' : 'Import Strava for this day';
 
   return (
     <button

@@ -4,6 +4,7 @@ import { currentUser } from "@clerk/nextjs/server";
 import AthleteSidebar from "@/components/AthleteSidebar";
 import StravaSyncPanel from "@/components/StravaSyncPanel";
 import StravaActivityMatchTable from "@/components/StravaActivityMatchTable";
+import { buildCalendarDayDetailsHref } from "@/lib/athlete-flow-ui";
 import { getFirstName } from "@/lib/display-name";
 import { appendPlanQueryToHref } from "@/lib/plan-selection";
 import "../dashboard/dashboard.css";
@@ -24,6 +25,10 @@ export default async function StravaPage({
   const params = (await searchParams) || {};
   const selectedPlanId = typeof params.plan === "string" ? params.plan : "";
   const name = getFirstName(user.fullName || user.firstName || "Athlete");
+  const today = new Date();
+  const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  const todayCalendarHref = buildCalendarDayDetailsHref(todayIso, selectedPlanId || null);
+  const todayDashboardHref = `${appendPlanQueryToHref("/dashboard", selectedPlanId)}#dash-activity-log-card`;
 
   return (
     <main className="dash strava-page">
@@ -45,7 +50,7 @@ export default async function StravaPage({
         <section className="dash-center">
           <div className="dash-page-heading">
             <h1>Import Strava</h1>
-            <p>Review day-level completion, import status, and Strava match quality before importing.</p>
+            <p>Sync first, review the day-level matches, then jump back into today or the calendar when you are ready to log.</p>
           </div>
 
           <div className="strava-mobile-sync">
@@ -73,8 +78,11 @@ export default async function StravaPage({
                 <span className="dash-card-title">Shortcuts</span>
               </div>
               <div className="strava-links">
-                <Link className="dash-connect-btn" href={appendPlanQueryToHref("/calendar", selectedPlanId)}>
-                  Open Training Calendar
+                <Link className="dash-connect-btn" href={todayDashboardHref}>
+                  Open today&apos;s log
+                </Link>
+                <Link className="dash-connect-btn" href={todayCalendarHref}>
+                  Open today&apos;s day card
                 </Link>
                 <Link className="dash-connect-btn" href={appendPlanQueryToHref("/progress", selectedPlanId)}>
                   Open Progress

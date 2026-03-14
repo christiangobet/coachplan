@@ -12,6 +12,7 @@
     "lint": "eslint",
     "audit:auth": "node scripts/save-audit-auth-state.mjs",
     "audit:auth:onboarding": "node scripts/save-audit-auth-state.mjs --profile onboarding-athlete --start-path /sign-up",
+    "audit:mobile:refresh-auth": "node scripts/refresh-audit-mobile-session.mjs",
     "audit:screens": "node scripts/capture-audit.mjs",
     "audit:screens:onboarding": "node scripts/capture-audit.mjs --profile onboarding-athlete --out-dir artifacts/audit-shots-onboarding",
     "audit:screens:manual": "node scripts/capture-audit-manual.mjs",

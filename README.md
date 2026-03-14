@@ -51,6 +51,7 @@ App URL: `http://localhost:3001`
 - `npm run build` — production build
 - `npm run verify` — Prisma generate + typecheck + build
 - `npm run test:parser-i18n` — parser normalization checks
+- `npm run audit:mobile:refresh-auth` — open a headed login, save Playwright auth state, then run the signed-in mobile audit
 - `npm run make-admin -- <email>` — promote user to admin
 
 ## Product flow (current)

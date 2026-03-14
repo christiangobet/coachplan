@@ -1,38 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { chromium } from "playwright";
-
-function parseArgs(argv) {
-  const args = {};
-  for (let i = 0; i < argv.length; i += 1) {
-    const token = argv[i];
-    if (!token.startsWith("--")) continue;
-    const key = token.slice(2);
-    const next = argv[i + 1];
-    if (!next || next.startsWith("--")) args[key] = true;
-    else {
-      args[key] = next;
-      i += 1;
-    }
-  }
-  return args;
-}
-
-function pickArg(args, ...keys) {
-  for (const key of keys) {
-    if (args[key] !== undefined) return args[key];
-  }
-  return undefined;
-}
-
-function normalizeProfile(raw) {
-  const cleaned = String(raw || "default")
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9_-]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  return cleaned || "default";
-}
+import { normalizeProfile, parseArgs, pickArg } from "./lib/audit-workflow.mjs";
 
 const cli = parseArgs(process.argv.slice(2));
 const profile = normalizeProfile(pickArg(cli, "profile") || process.env.AUDIT_PROFILE || "default");

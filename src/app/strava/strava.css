@@ -42,6 +42,18 @@
   justify-content: flex-start;
 }
 
+.strava-links .dash-connect-btn:first-child {
+  background: var(--d-orange);
+  border-color: #d84302;
+  color: #fff;
+}
+
+.strava-links .dash-connect-btn:first-child:hover {
+  background: #d84302;
+  border-color: #bd3a02;
+  color: #fff;
+}
+
 @media (max-width: 1080px) {
   .strava-secondary-grid {
     grid-template-columns: 1fr;

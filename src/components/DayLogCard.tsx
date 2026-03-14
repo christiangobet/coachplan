@@ -819,7 +819,7 @@ export default function DayLogCard({
             onClick={syncFromStrava}
             disabled={syncBusy}
           >
-            {syncBusy ? 'Syncing…' : '↻ Sync from Strava'}
+            {syncBusy ? 'Importing…' : '↻ Import from Strava'}
           </button>
         </div>
       )}

@@ -1,38 +1,13 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { chromium, devices } from "playwright";
-
-function parseArgs(argv) {
-  const args = {};
-  for (let i = 0; i < argv.length; i += 1) {
-    const token = argv[i];
-    if (!token.startsWith("--")) continue;
-    const key = token.slice(2);
-    const next = argv[i + 1];
-    if (!next || next.startsWith("--")) args[key] = true;
-    else {
-      args[key] = next;
-      i += 1;
-    }
-  }
-  return args;
-}
-
-function pickArg(args, ...keys) {
-  for (const key of keys) {
-    if (args[key] !== undefined) return args[key];
-  }
-  return undefined;
-}
-
-function normalizeProfile(raw) {
-  const cleaned = String(raw || "default")
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9_-]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  return cleaned || "default";
-}
+import {
+  getAuditNavigationWaitUntil,
+  normalizeProfile,
+  parseArgs,
+  parseAuditVariants,
+  pickArg,
+} from "./lib/audit-workflow.mjs";
 
 const cli = parseArgs(process.argv.slice(2));
 const profile = normalizeProfile(pickArg(cli, "profile") || process.env.AUDIT_PROFILE || "default");
@@ -43,6 +18,9 @@ const STORAGE_STATE =
   pickArg(cli, "storageState", "storage-state") || process.env.PLAYWRIGHT_STORAGE_STATE || undefined;
 const NO_AUTH = Boolean(pickArg(cli, "no-auth", "noAuth"));
 const EXPLICIT_PLAN_ID = pickArg(cli, "planId", "plan-id");
+const variantNames = parseAuditVariants(
+  pickArg(cli, "variants", "variant") || process.env.AUDIT_VARIANTS
+);
 
 function routeSet(planId) {
   const parseReviewRoute = planId ? `/plans/${planId}/review?fromUpload=1` : "/plans";
@@ -58,7 +36,7 @@ function routeSet(planId) {
   ];
 }
 
-const variants = [
+const allVariants = [
   {
     name: "desktop",
     contextOptions: {
@@ -74,6 +52,7 @@ const variants = [
     },
   },
 ];
+const variants = allVariants.filter((variant) => variantNames.includes(variant.name));
 
 async function run() {
   let storageStateToUse = STORAGE_STATE;
@@ -105,7 +84,7 @@ async function run() {
 
       for (const [name, route] of routes) {
         const url = new URL(route, BASE_URL).toString();
-        await page.goto(url, { waitUntil: "networkidle" });
+        await page.goto(url, { waitUntil: getAuditNavigationWaitUntil() });
         await page.screenshot({
           path: path.join(variantDir, `${name}.png`),
           fullPage: true,

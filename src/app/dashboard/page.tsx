@@ -143,30 +143,30 @@ export default async function DashboardPage({
           <div className="dash-empty-steps">
             <div className="dash-empty-step">
               <span className="dash-empty-num">01</span>
-              <h3>Get a plan in</h3>
-              <p>Open Plans Management to upload a PDF or start from a template.</p>
+              <h3>Upload your training plan</h3>
+              <p>Start with the PDF you already have. Upload once, then review the parsed week-by-week schedule.</p>
               <div className="dash-empty-actions">
-                <Link className="dash-empty-cta" href="/plans">Open Plans Management</Link>
-                <Link className="dash-empty-cta-outline" href="/plans">Templates</Link>
+                <Link className="dash-empty-cta" href="/upload">Upload training plan</Link>
+                <Link className="dash-empty-cta-outline" href="/plans">Browse templates</Link>
               </div>
             </div>
             <div className="dash-empty-step">
               <span className="dash-empty-num">02</span>
-              <h3>Review and publish</h3>
-              <p>Confirm parsed workouts and activate the plan.</p>
+              <h3>Review and activate</h3>
+              <p>Confirm the parsed workouts, set your anchor date, and publish one plan to unlock Today and Calendar.</p>
               <div className="dash-empty-actions">
-                <Link className="dash-empty-cta-outline" href="/plans">Open Plans Management</Link>
+                <Link className="dash-empty-cta-outline" href="/plans">Open plans</Link>
               </div>
             </div>
             <div className="dash-empty-step">
               <span className="dash-empty-num">03</span>
               <h3>Do today’s workout</h3>
-              <p>Log actual distance, time, and pace right from dashboard.</p>
+              <p>Once a plan is active, log distance, time, and pace right from dashboard or the calendar day card.</p>
             </div>
             <div className="dash-empty-step">
               <span className="dash-empty-num">Optional</span>
               <h3>Coach and integrations</h3>
-              <p>Connect Strava or invite a coach after your plan is running.</p>
+              <p>Connect Strava or invite a coach after your plan is live and your daily flow is in place.</p>
               <div className="dash-empty-actions">
                 <Link className="dash-empty-cta-outline" href="/profile">Profile setup</Link>
                 <Link className="dash-empty-cta-outline" href="/coach">Coach workspace</Link>
@@ -191,29 +191,28 @@ export default async function DashboardPage({
           <div className="dash-empty-steps">
             <div className="dash-empty-step">
               <span className="dash-empty-num">01</span>
-              <h3>Review parsed plan</h3>
+              <h3>Review your draft</h3>
               <p>
                 {latestDraftPlan
-                  ? `Open "${latestDraftPlan.name}" and confirm the parse.`
-                  : "Open plans and verify your uploaded draft."}
+                  ? `Open "${latestDraftPlan.name}" and confirm the workouts before publishing it.`
+                  : "Open plans and verify your uploaded draft before publishing."}
               </p>
               <div className="dash-empty-actions">
                 <Link
                   className="dash-empty-cta"
                   href={latestDraftPlan ? `/plans/${latestDraftPlan.id}/review?fromUpload=1` : "/plans"}
                 >
-                  Open Review
+                  Open draft review
                 </Link>
-                <Link className="dash-empty-cta-outline" href="/plans">Plans Management</Link>
+                <Link className="dash-empty-cta-outline" href="/upload">Upload another plan</Link>
               </div>
             </div>
             <div className="dash-empty-step">
               <span className="dash-empty-num">02</span>
-              <h3>Activate and launch</h3>
-              <p>Publish one plan. Today and Training Calendar unlock once a plan is active.</p>
+              <h3>Activate your plan</h3>
+              <p>Publish one plan to unlock Today, calendar day cards, and day-by-day logging.</p>
               <div className="dash-empty-actions">
-                <Link className="dash-empty-cta-outline" href="/dashboard">Refresh Today</Link>
-                <Link className="dash-empty-cta-outline" href="/plans">Go to Plans Management</Link>
+                <Link className="dash-empty-cta-outline" href="/plans">Open plans</Link>
               </div>
             </div>
           </div>

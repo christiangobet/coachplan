@@ -714,6 +714,32 @@ details[open] .day-log-instructions-toggle::before {
   margin: 0 -24px -24px;
 }
 
+.dash-log-collapsed-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 24px 14px;
+}
+
+.dash-log-collapsed-meta p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--d-text-mid);
+}
+
+.dash-log-collapsed-link {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--d-orange) !important;
+}
+
+.dash-log-collapsed-link:hover {
+  color: #d84302 !important;
+}
+
 .dash-log-collapsed .dash-btn-secondary {
   display: flex;
   width: 100%;
@@ -2586,19 +2612,33 @@ details[open] .day-log-instructions-toggle::before {
   color: var(--d-orange);
 }
 
+.dash-sync-btn--primary {
+  background: var(--d-orange);
+  border-color: #d84302;
+  color: #fff;
+}
+
+.dash-sync-btn--primary:hover {
+  background: #d84302;
+  border-color: #bd3a02;
+  color: #fff;
+}
+
+.dash-sync-btn--danger {
+  border-color: rgba(231, 76, 60, 0.22);
+  background: rgba(231, 76, 60, 0.06);
+  color: var(--d-red);
+}
+
+.dash-sync-btn--danger:hover {
+  border-color: rgba(231, 76, 60, 0.35);
+  background: rgba(231, 76, 60, 0.1);
+  color: #c0392b;
+}
+
 .dash-sync-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-}
-
-.dash-sync-btn--reconnect {
-  color: var(--d-muted);
-  font-size: 12px;
-}
-
-.dash-sync-btn--reconnect:hover {
-  border-color: var(--d-border);
-  color: var(--d-text-mid);
 }
 
 .strava-connect-btn {
@@ -2649,6 +2689,13 @@ details[open] .day-log-instructions-toggle::before {
   margin: var(--d-space-1) 0 0;
   font-size: 12px;
   color: var(--d-muted);
+}
+
+.dash-sync-guidance {
+  margin: 10px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--d-text-mid);
 }
 
 /* Daily Import Table */
@@ -3808,6 +3855,12 @@ details[open] .day-log-instructions-toggle::before {
   /* Log button must bleed to the new 14px edge */
   .dash-log-collapsed {
     margin: 0 -14px -14px;
+  }
+
+  .dash-log-collapsed-meta {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 0 14px 12px;
   }
 
   /* Log fields: 1-col on small phones */
