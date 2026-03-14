@@ -25,24 +25,78 @@ function serializeConversation(messages: Awaited<ReturnType<typeof getRecentMess
   }).join('\n');
 }
 
-export async function handleAthleteMessage(
-  planId: string,
-  content: string
-): Promise<ChatMessage> {
-  // Mark any existing active coach messages as superseded
+function toChatMessage(record: {
+  id: string;
+  planId: string;
+  role: string;
+  content: string;
+  metadata: Prisma.JsonValue | null;
+  createdAt: Date;
+}): ChatMessage {
+  return {
+    id: record.id,
+    planId: record.planId,
+    role: record.role as ChatMessage['role'],
+    content: record.content,
+    metadata: record.metadata as MessageMetadata | null,
+    createdAt: record.createdAt.toISOString(),
+  };
+}
+
+async function supersedeActiveCoachMessages(planId: string) {
   const activeMessages = await prisma.planChatMessage.findMany({
     where: { planId, role: 'coach' },
     select: { id: true, metadata: true },
   });
-  for (const msg of activeMessages) {
-    const meta = (msg.metadata as MessageMetadata | null) ?? {};
-    if (meta.state === 'active') {
-      await prisma.planChatMessage.update({
-        where: { id: msg.id },
-        data: { metadata: { ...meta, state: 'superseded' } },
-      });
-    }
+
+  await Promise.all(
+    activeMessages.map(async (msg) => {
+      const meta = (msg.metadata as MessageMetadata | null) ?? {};
+      if (meta.state === 'active') {
+        await prisma.planChatMessage.update({
+          where: { id: msg.id },
+          data: { metadata: { ...meta, state: 'superseded' } },
+        });
+      }
+    })
+  );
+}
+
+export async function persistAiAdjustmentConversation(
+  planId: string,
+  args: {
+    athleteContent: string;
+    coachContent: string;
+    coachMetadata?: MessageMetadata | null;
   }
+) {
+  await supersedeActiveCoachMessages(planId);
+
+  const [athleteMessage, coachMessage] = await prisma.$transaction([
+    prisma.planChatMessage.create({
+      data: { planId, role: 'athlete', content: args.athleteContent },
+    }),
+    prisma.planChatMessage.create({
+      data: {
+        planId,
+        role: 'coach',
+        content: args.coachContent,
+        metadata: (args.coachMetadata ?? { state: 'active' }) as unknown as Prisma.InputJsonValue,
+      },
+    }),
+  ]);
+
+  return {
+    athleteMessage: toChatMessage(athleteMessage),
+    coachMessage: toChatMessage(coachMessage),
+  };
+}
+
+export async function handleAthleteMessage(
+  planId: string,
+  content: string
+): Promise<ChatMessage> {
+  await supersedeActiveCoachMessages(planId);
 
   // Save athlete message
   await prisma.planChatMessage.create({
@@ -101,15 +155,7 @@ export async function handleAthleteMessage(
   const saved = await prisma.planChatMessage.create({
     data: { planId, role: 'coach', content: replyContent, metadata: metadata as unknown as Prisma.InputJsonValue },
   });
-
-  return {
-    id: saved.id,
-    planId: saved.planId,
-    role: 'coach',
-    content: saved.content,
-    metadata: saved.metadata as MessageMetadata,
-    createdAt: saved.createdAt.toISOString(),
-  };
+  return toChatMessage(saved);
 }
 
 export async function handleDragDrop(
@@ -174,15 +220,7 @@ export async function handleDragDrop(
   const saved = await prisma.planChatMessage.create({
     data: { planId, role: 'coach', content: replyContent, metadata: { state: 'active' } as unknown as Prisma.InputJsonValue },
   });
-
-  return {
-    id: saved.id,
-    planId: saved.planId,
-    role: 'coach',
-    content: saved.content,
-    metadata: saved.metadata as MessageMetadata,
-    createdAt: saved.createdAt.toISOString(),
-  };
+  return toChatMessage(saved);
 }
 
 export async function handleEditSessionEnd(
@@ -235,13 +273,5 @@ export async function handleEditSessionEnd(
   const saved = await prisma.planChatMessage.create({
     data: { planId, role: 'coach', content, metadata: { state: 'active' } as unknown as Prisma.InputJsonValue },
   });
-
-  return {
-    id: saved.id,
-    planId: saved.planId,
-    role: 'coach',
-    content: saved.content,
-    metadata: saved.metadata as MessageMetadata,
-    createdAt: saved.createdAt.toISOString(),
-  };
+  return toChatMessage(saved);
 }

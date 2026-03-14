@@ -8,6 +8,11 @@ import { ensureUserFromAuth } from '@/lib/user-sync';
 import { getDayDateFromWeekStart, resolveWeekBounds } from '@/lib/plan-dates';
 import { isDayClosed } from '@/lib/day-status';
 import { buildPlanBanner } from '@/lib/plan-banner';
+import {
+  collectDurationJumpDiagnostics,
+  rewriteCoachReplyAsRecommendation
+} from '@/lib/ai-trainer-proposal-integrity';
+import { persistAiAdjustmentConversation } from '@/lib/plan-chat-ai';
 
 import {
   applyAdjustmentProposalInTransaction,
@@ -732,6 +737,22 @@ type WeekMetrics = {
   plannedDurationMin: number;
 };
 
+function countBackToBackHardPairs(hardDays: number[]) {
+  let count = 0;
+  for (let i = 1; i < hardDays.length; i += 1) {
+    if (hardDays[i] === hardDays[i - 1] + 1) count += 1;
+  }
+  return count;
+}
+
+function hasHardDayBeforeLongRun(week: WeekMetrics) {
+  return Boolean(week.longRunDayOfWeek && week.hardDays.includes(Math.max(1, week.longRunDayOfWeek - 1)));
+}
+
+function hasHardDayAfterLongRun(week: WeekMetrics) {
+  return Boolean(week.longRunDayOfWeek && week.hardDays.includes(Math.min(7, week.longRunDayOfWeek + 1)));
+}
+
 type InvariantWeekDelta = {
   weekIndex: number;
   before: {
@@ -1044,39 +1065,61 @@ function scoreProposalCandidate(message: string, context: PlanContext, proposal:
   const simulatedDays = simulateProposalDays(context, proposal);
   const baseWeeks = computeWeekMetricsFromDays(context.days);
   const weeks = computeWeekMetricsFromDays(simulatedDays);
+  const baseWeekByIndex = new Map(baseWeeks.map((week) => [week.weekIndex, week]));
+  const touchedWeekIndexes = new Set(getTouchedWeekIndexes(context, proposal));
   const baseHardByWeek = new Map(baseWeeks.map((week) => [week.weekIndex, week.hardDays.length]));
   let score = proposal.changes.length * 0.6;
   const diagnostics: string[] = [];
 
   for (const week of weeks) {
+    const baseWeek = baseWeekByIndex.get(week.weekIndex);
+    const weekTouched = touchedWeekIndexes.has(week.weekIndex);
     if (week.restDays === 0) {
       score += 25;
-      diagnostics.push(`Week ${week.weekIndex} has no rest day.`);
+      if (weekTouched && (baseWeek?.restDays ?? 0) > 0) {
+        diagnostics.push(`Week ${week.weekIndex} has no rest day.`);
+      }
     }
     if (week.hardDays.length > 2) {
       const extraHard = week.hardDays.length - 2;
       score += extraHard * 15;
-      diagnostics.push(`Week ${week.weekIndex} has ${week.hardDays.length} hard days.`);
+      if (weekTouched && week.hardDays.length > (baseWeek?.hardDays.length ?? 0)) {
+        diagnostics.push(`Week ${week.weekIndex} has ${week.hardDays.length} hard days.`);
+      }
     }
-    for (let i = 1; i < week.hardDays.length; i += 1) {
-      if (week.hardDays[i] === week.hardDays[i - 1] + 1) {
-        score += 10;
+    const backToBackPairCount = countBackToBackHardPairs(week.hardDays);
+    if (backToBackPairCount > 0) {
+      score += backToBackPairCount * 10;
+      if (weekTouched && backToBackPairCount > countBackToBackHardPairs(baseWeek?.hardDays || [])) {
         diagnostics.push(`Week ${week.weekIndex} has back-to-back hard days.`);
       }
     }
-    if (week.longRunDayOfWeek && week.hardDays.includes(Math.max(1, week.longRunDayOfWeek - 1))) {
+    const baseWeekForNeighbors = baseWeek || {
+      weekIndex: week.weekIndex,
+      restDays: 0,
+      hardDays: [],
+      longRunDayOfWeek: null,
+      plannedDurationMin: 0
+    };
+    if (hasHardDayBeforeLongRun(week)) {
       score += 8;
-      diagnostics.push(`Week ${week.weekIndex} has a hard day before long run.`);
+      if (weekTouched && !hasHardDayBeforeLongRun(baseWeekForNeighbors)) {
+        diagnostics.push(`Week ${week.weekIndex} has a hard day before long run.`);
+      }
     }
-    if (week.longRunDayOfWeek && week.hardDays.includes(Math.min(7, week.longRunDayOfWeek + 1))) {
+    if (hasHardDayAfterLongRun(week)) {
       score += 8;
-      diagnostics.push(`Week ${week.weekIndex} has a hard day after long run.`);
+      if (weekTouched && !hasHardDayAfterLongRun(baseWeekForNeighbors)) {
+        diagnostics.push(`Week ${week.weekIndex} has a hard day after long run.`);
+      }
     }
     if (INJURY_OR_ILLNESS_PATTERN.test(message)) {
       const baselineHard = baseHardByWeek.get(week.weekIndex) || 0;
       if (week.hardDays.length > baselineHard) {
         score += 18;
-        diagnostics.push(`Week ${week.weekIndex} increases hard-load during illness/injury context.`);
+        if (weekTouched) {
+          diagnostics.push(`Week ${week.weekIndex} increases hard-load during illness/injury context.`);
+        }
       }
     }
   }
@@ -1089,9 +1132,14 @@ function scoreProposalCandidate(message: string, context: PlanContext, proposal:
     if (deltaRatio > 0.2) {
       const penalty = Math.min(40, (deltaRatio - 0.2) * 100);
       score += penalty;
-      diagnostics.push(`Week ${weeks[i].weekIndex} duration jump exceeds 20%.`);
     }
   }
+
+  diagnostics.push(...collectDurationJumpDiagnostics({
+    baseWeeks,
+    proposedWeeks: weeks,
+    touchedWeekIndexes
+  }));
 
   return { score, diagnostics };
 }
@@ -1258,6 +1306,8 @@ async function generateAdjustmentProposal(message: string, plan: NonNullable<Pla
       '- Use minimal but sufficient changes: include companion edits when a single move would create poor weekly balance.',
       '- If critical details are missing for major changes, ask one concise follow-up question and reduce confidence.',
       '- Explain reasoning in coaching terms for each change reason.',
+      '- coachReply must describe a recommendation, not a completed edit. Do not say you already updated, changed, renamed, or applied the plan.',
+      '- Use future/proposal tense such as "I recommend", "I suggest", or "We should".',
       'Coach reply format (single concise response):',
       '1) Quick assessment',
       '2) Risks if unchanged',
@@ -1437,6 +1487,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       const candidateSelected = selectBestProposalCandidate(message, context, safetyAdjusted);
       const withInvariantReport: PlanAdjustmentProposal = {
         ...candidateSelected.proposal,
+        coachReply: rewriteCoachReplyAsRecommendation(candidateSelected.proposal.coachReply),
         invariantReport: buildInvariantReport(
           context,
           candidateSelected.proposal,
@@ -1450,8 +1501,18 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         return NextResponse.json({ error: guardrailError }, { status: 422 });
       }
       const enveloped = withPatchEnvelope(plan.id, clarified);
+      const persistedConversation = await persistAiAdjustmentConversation(plan.id, {
+        athleteContent: message,
+        coachContent: enveloped.coachReply,
+        coachMetadata: {
+          state: 'active',
+          proposal: enveloped,
+        },
+      });
       return NextResponse.json({
         proposal: enveloped,
+        athleteMessage: persistedConversation.athleteMessage,
+        coachMessage: persistedConversation.coachMessage,
         plan: {
           id: plan.id,
           name: plan.name,

@@ -29,6 +29,11 @@ import type { PlanSummary } from '@/lib/types/plan-summary';
 import { buildLogActivities, type LogActivity } from '@/lib/log-activity';
 import { PLAN_IMAGE_MAX_COUNT, PLAN_IMAGE_MAX_FILE_BYTES } from '@/lib/plan-banner';
 import type { ChatMessage } from '@/lib/plan-chat-types';
+import {
+  formatCoachHistoryTimestamp,
+  mergeChatHistoryMessages,
+  orderCoachHistoryMessages
+} from '@/lib/plan-chat-history';
 import '../plans.css';
 import './review/review.css';
 import '../../dashboard/dashboard.css';
@@ -663,7 +668,7 @@ export default function PlanDetailPage() {
   }, [aiCoachSurface, chatOpen, emitPlanEditEvent]);
 
   const appendPersistedCoachMessage = useCallback((message: ChatMessage, source: string) => {
-    setChatMessages((prev) => [...prev, message]);
+    setChatMessages((prev) => mergeChatHistoryMessages(prev, [message]));
     setAiChatTurns((prev) => [...prev, chatMessageToAiTurn(message)]);
     noteCoachMessageReceived(source, { role: message.role });
   }, [noteCoachMessageReceived]);
@@ -1551,20 +1556,52 @@ export default function PlanDetailPage() {
       if (!proposal) {
         throw new Error('No new proposal was generated.');
       }
+      const persistedAthleteMessage = (data?.athleteMessage || null) as ChatMessage | null;
+      const persistedCoachMessage = (data?.coachMessage || null) as ChatMessage | null;
+      const athleteTurnId = persistedAthleteMessage?.id || nextTurnId();
+      const coachTurnId = persistedCoachMessage?.id || nextTurnId();
+      const athleteTurnCreatedAt = persistedAthleteMessage
+        ? new Date(persistedAthleteMessage.createdAt).getTime()
+        : Date.now();
+      const coachTurnCreatedAt = persistedCoachMessage
+        ? new Date(persistedCoachMessage.createdAt).getTime()
+        : Date.now();
 
-      const coachTurnId = nextTurnId();
       const coachTurn: AiChatTurn = {
         id: coachTurnId,
         role: 'coach',
         text: proposal.coachReply || proposal.summary || 'New recommendation generated.',
-        createdAt: Date.now(),
+        createdAt: coachTurnCreatedAt,
         requestMessage: message,
         proposal,
         proposalState: 'active'
       };
+      const persistedAthleteTurn: AiChatTurn = {
+        id: athleteTurnId,
+        role: 'athlete',
+        text: message,
+        createdAt: athleteTurnCreatedAt,
+      };
+      setChatMessages((prev) => {
+        const superseded = prev.map((existing) =>
+          existing.role === 'coach' && existing.metadata?.state === 'active'
+            ? {
+              ...existing,
+              metadata: {
+                ...(existing.metadata || {}),
+                state: 'superseded' as const
+              }
+            }
+            : existing
+        );
+        return mergeChatHistoryMessages(
+          superseded,
+          [persistedAthleteMessage, persistedCoachMessage].filter((entry): entry is ChatMessage => Boolean(entry))
+        );
+      });
       setAiChatTurns((prev) => {
         const greetingOnly = keepOnlyGreeting(prev);
-        return [...greetingOnly, athleteTurn, coachTurn];
+        return [...greetingOnly, persistedAthleteTurn, coachTurn];
       });
       noteCoachMessageReceived('ai_adjust_response', {
         role: 'coach',
@@ -1698,6 +1735,19 @@ export default function PlanDetailPage() {
             turn.id === activeProposalTurn.id
               ? { ...turn, proposalState: 'applied' as AiProposalState }
               : turn
+          )
+        );
+        setChatMessages((prev) =>
+          prev.map((message) =>
+            message.id === activeProposalTurn.id
+              ? {
+                ...message,
+                metadata: {
+                  ...(message.metadata || {}),
+                  state: 'applied'
+                }
+              }
+              : message
           )
         );
         setActiveProposalTurnId(null);
@@ -2124,6 +2174,8 @@ export default function PlanDetailPage() {
     );
   };
 
+  const coachHistoryMessages = orderCoachHistoryMessages(chatMessages);
+
   return (
     <main
       className={`pcal${showDesktopSourcePane ? ' with-source-pane' : ''}`}
@@ -2310,20 +2362,25 @@ export default function PlanDetailPage() {
               <summary className="pcal-inline-panel-summary">Coach History</summary>
               <div className="pcal-inline-panel-body">
                 <div className="pcal-ai-history">
-                  {chatMessages.length === 0 ? (
+                  {coachHistoryMessages.length === 0 ? (
                     <p className="pcal-ai-trainer-status">Your coaching conversations will appear here.</p>
                   ) : (
-                    chatMessages.map((msg) => (
+                    coachHistoryMessages.map((msg) => (
                       <article key={msg.id} className={`pcal-ai-turn role-${msg.role}`}>
                         <div className="pcal-ai-turn-head">
-                          <strong>
+                          <span className="pcal-ai-turn-author">
                             {msg.role === 'athlete' ? 'You' : msg.role === 'coach' ? 'Coach' : 'System'}
-                          </strong>
-                          {msg.metadata?.state && msg.metadata.state !== 'active' && (
-                            <span className={`pcal-ai-turn-state state-${msg.metadata.state}`}>
-                              {msg.metadata.state === 'applied' ? 'Applied' : 'History'}
-                            </span>
-                          )}
+                          </span>
+                          <div className="pcal-ai-turn-meta">
+                            <time className="pcal-ai-turn-date" dateTime={msg.createdAt}>
+                              {formatCoachHistoryTimestamp(msg.createdAt)}
+                            </time>
+                            {msg.metadata?.state && msg.metadata.state !== 'active' && (
+                              <span className={`pcal-ai-turn-state state-${msg.metadata.state}`}>
+                                {msg.metadata.state === 'applied' ? 'Applied' : 'History'}
+                              </span>
+                            )}
+                          </div>
                         </div>
                         <p>{msg.content}</p>
                       </article>

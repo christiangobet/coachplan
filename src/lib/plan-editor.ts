@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { resolveWeekBounds } from '@/lib/plan-dates';
 import { isDayMarkedDone } from '@/lib/day-status';
 import { deriveStructuredIntensityTargets } from '@/lib/intensity-targets';
+import { sanitizeProposalAfterLockedChanges } from '@/lib/ai-trainer-proposal-integrity';
 import {
     convertDistanceValue,
     normalizePaceForStorage,
@@ -958,12 +959,8 @@ export function sanitizeProposalAgainstLockedDays(
         return proposal;
     }
 
-    const lockNote = `${removed} proposed change(s) were removed because completed days are locked.`;
-    const riskFlags = [lockNote, ...(proposal.riskFlags || [])].slice(0, 6);
-    return {
-        ...proposal,
-        summary: nextChanges.length === 0 ? 'No applicable changes: completed days are locked.' : proposal.summary,
-        riskFlags,
-        changes: nextChanges
-    };
+    return sanitizeProposalAfterLockedChanges(proposal, {
+        removedCount: removed,
+        remainingChanges: nextChanges
+    });
 }
