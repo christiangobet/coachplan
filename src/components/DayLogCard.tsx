@@ -12,6 +12,8 @@ import {
   resolveDistanceUnitFromActivity,
   type DistanceUnit,
 } from '@/lib/unit-display';
+import { buildStravaRoutePreview, type StravaRoutePreview } from '@/lib/strava-route';
+import ActivityRouteSheet from '@/components/ActivityRouteSheet';
 import SessionFlowStrip from '@/components/SessionFlowStrip';
 import ExternalSportIcon from '@/components/ExternalSportIcon';
 import StravaIcon from '@/components/StravaIcon';
@@ -62,7 +64,10 @@ type SyncedStravaActivity = {
   sportType: string | null;
   startTime: string | null;
   distanceM: number | null;
+  movingTimeSec: number | null;
   durationSec: number | null;
+  elevationGainM: number | null;
+  raw?: unknown;
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -371,6 +376,7 @@ export default function DayLogCard({
   );
   const [syncedActivitiesBusy, setSyncedActivitiesBusy] = useState(false);
   const [syncedActivitiesError, setSyncedActivitiesError] = useState<string | null>(null);
+  const [selectedRouteActivityId, setSelectedRouteActivityId] = useState<string | null>(null);
 
   // Per-activity form state
   const [forms, setForms] = useState<Record<string, ActivityFormState>>(() => {
@@ -408,6 +414,25 @@ export default function DayLogCard({
     setSyncedActivitiesBusy(false);
   }, [syncedStravaActivities]);
 
+  const selectedRouteActivity = useMemo(
+    () => syncedActivities.find((activity) => activity.id === selectedRouteActivityId) || null,
+    [selectedRouteActivityId, syncedActivities]
+  );
+  const selectedRoutePreview: StravaRoutePreview | null = useMemo(
+    () => (selectedRouteActivity
+      ? buildStravaRoutePreview({
+        name: selectedRouteActivity.name,
+        sportType: selectedRouteActivity.sportType,
+        startTime: selectedRouteActivity.startTime || new Date().toISOString(),
+        distanceM: selectedRouteActivity.distanceM,
+        movingTimeSec: selectedRouteActivity.movingTimeSec ?? selectedRouteActivity.durationSec,
+        elevationGainM: selectedRouteActivity.elevationGainM,
+        raw: selectedRouteActivity.raw,
+      })
+      : null),
+    [selectedRouteActivity]
+  );
+
   const loadSyncedActivities = useCallback(async () => {
     if (!showSyncedStravaSection || Array.isArray(syncedStravaActivities)) return;
     if (!dateISO || !planId) {
@@ -437,7 +462,10 @@ export default function DayLogCard({
             sportType: typeof activity?.sportType === 'string' ? activity.sportType : null,
             startTime: typeof activity?.startTime === 'string' ? activity.startTime : null,
             distanceM: typeof activity?.distanceM === 'number' ? activity.distanceM : null,
+            movingTimeSec: typeof activity?.movingTimeSec === 'number' ? activity.movingTimeSec : null,
             durationSec: typeof activity?.durationSec === 'number' ? activity.durationSec : null,
+            elevationGainM: typeof activity?.elevationGainM === 'number' ? activity.elevationGainM : null,
+            raw: activity?.raw
           }))
           .filter((activity: SyncedStravaActivity) => activity.id.length > 0)
         : [];
@@ -857,12 +885,36 @@ export default function DayLogCard({
                       </span>
                     )}
                   </div>
+                  {buildStravaRoutePreview({
+                    name: activity.name,
+                    sportType: activity.sportType,
+                    startTime: activity.startTime || new Date().toISOString(),
+                    distanceM: activity.distanceM,
+                    movingTimeSec: activity.movingTimeSec ?? activity.durationSec,
+                    elevationGainM: activity.elevationGainM,
+                    raw: activity.raw,
+                  }) ? (
+                    <button
+                      type="button"
+                      className="day-log-route-trigger"
+                      onClick={() => setSelectedRouteActivityId(activity.id)}
+                    >
+                      <span className="day-log-route-trigger-label">View route</span>
+                      <span className="day-log-route-trigger-meta">Imported from Strava</span>
+                    </button>
+                  ) : null}
                 </div>
               ))}
             </div>
           )}
         </div>
       )}
+      <ActivityRouteSheet
+        isOpen={Boolean(selectedRouteActivity && selectedRoutePreview)}
+        routePreview={selectedRoutePreview}
+        viewerUnits={viewerUnits}
+        onClose={() => setSelectedRouteActivityId(null)}
+      />
 
       {/* Per-activity forms — grouped by sessionGroupId */}
       {(() => {

@@ -193,7 +193,9 @@ export async function GET(req: Request) {
     sportType: string | null;
     startTime: string;
     distanceM: number | null;
+    movingTimeSec: number | null;
     durationSec: number | null;
+    elevationGainM: number | null;
     avgHeartRate: number | null;
     calories: number | null;
     matchedPlanActivityId: string | null;
@@ -202,6 +204,7 @@ export async function GET(req: Request) {
     equivalenceNote: string | null;
     equivalenceConfidence: number | null;
     loadRatio: number | null;
+    raw: unknown;
   }>>();
 
   for (const external of externalActivities) {
@@ -214,7 +217,9 @@ export async function GET(req: Request) {
       sportType: external.sportType,
       startTime: external.startTime.toISOString(),
       distanceM: external.distanceM ?? null,
+      movingTimeSec: external.movingTimeSec ?? null,
       durationSec: external.durationSec ?? null,
+      elevationGainM: external.elevationGainM ?? null,
       avgHeartRate: external.avgHeartRate ?? null,
       calories: external.calories ?? null,
       matchedPlanActivityId: external.matchedPlanActivityId ?? null,
@@ -222,7 +227,8 @@ export async function GET(req: Request) {
       equivalenceOverride: external.equivalenceOverride ?? null,
       equivalenceNote: external.equivalenceNote ?? null,
       equivalenceConfidence: external.equivalenceConfidence ?? null,
-      loadRatio: external.loadRatio ?? null
+      loadRatio: external.loadRatio ?? null,
+      raw: external.raw
     });
     stravaByDate.set(key, row);
   }
