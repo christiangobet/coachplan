@@ -1,7 +1,10 @@
 import { redirect } from 'next/navigation';
 import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
-import { getCurrentUserRoleContext, getRoleHomePath } from '@/lib/user-roles';
+import { resolveCurrentUserRoleContext } from '@/lib/user-roles';
+import { decideResolveRoleAction } from '@/lib/auth/resolve-role';
+import styles from '../../auth.module.css';
+import ResolveRoleRecovery from './ResolveRoleRecovery';
 
 type ResolveRoleSearchParams = {
   retry?: string;
@@ -15,31 +18,51 @@ export default async function ResolveRolePage({
   const params = (await searchParams) || {};
   const retryCountRaw = Number(params.retry || '0');
   const retryCount = Number.isFinite(retryCountRaw) ? retryCountRaw : 0;
-  const roleContext = await getCurrentUserRoleContext();
-  if (!roleContext) {
-    const { userId } = await auth();
-    if (userId && retryCount < 3) {
-      redirect(`/auth/resolve-role?retry=${retryCount + 1}`);
-    }
-    redirect('/sign-in');
+  const [{ userId }, resolution] = await Promise.all([auth(), resolveCurrentUserRoleContext()]);
+  const action = decideResolveRoleAction({
+    roleContext: resolution.context,
+    userId,
+    retryCount,
+    failure: resolution.failure
+  });
+
+  console.info('[resolve-role]', {
+    retryCount,
+    authUserPresent: Boolean(userId),
+    failure: resolution.failure,
+    durationMs: resolution.durationMs,
+    action: action.type,
+    destination:
+      action.type === 'redirect' || action.type === 'retry' || action.type === 'update-and-redirect'
+        ? action.href
+        : undefined,
+    reason: action.reason
+  });
+
+  if (action.type === 'retry' || action.type === 'redirect') {
+    redirect(action.href);
   }
-  if (!roleContext.isActive) redirect('/sign-in');
 
-  if (roleContext.availableRoles.length > 1) {
-    if (roleContext.currentRole && roleContext.availableRoles.includes(roleContext.currentRole)) {
-      redirect(getRoleHomePath(roleContext.currentRole));
-    }
-    redirect(getRoleHomePath(roleContext.availableRoles[0]));
-  }
-
-  const selectedRole = roleContext.availableRoles[0] || roleContext.currentRole;
-
-  if (roleContext.currentRole !== selectedRole) {
+  if (action.type === 'update-and-redirect') {
     await prisma.user.update({
-      where: { id: roleContext.userId },
-      data: { currentRole: selectedRole }
+      where: { id: resolution.context!.userId },
+      data: { currentRole: action.role }
     });
+    redirect(action.href);
   }
 
-  redirect(getRoleHomePath(selectedRole));
+  return (
+    <main className={styles.authPage}>
+      <div className={styles.authShell}>
+        <section className={styles.formPane}>
+          <div className={styles.formCard}>
+            <ResolveRoleRecovery
+              retryHref={action.retryHref}
+              signInHref={action.signInHref}
+            />
+          </div>
+        </section>
+      </div>
+    </main>
+  );
 }

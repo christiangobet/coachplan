@@ -22,6 +22,12 @@ export type UserRoleContext = {
   isActive: boolean;
 };
 
+export type UserRoleContextResolution = {
+  context: UserRoleContext | null;
+  failure: 'signed_out' | 'auth_unavailable' | 'sync_failed' | null;
+  durationMs: number;
+};
+
 export function getRoleHomePath(role: UserRole): string {
   return ROLE_HOME[role];
 }
@@ -56,15 +62,28 @@ async function inferRolesFromData(userId: string): Promise<Set<UserRole>> {
   return inferred;
 }
 
-export async function getCurrentUserRoleContext(): Promise<UserRoleContext | null> {
+export async function resolveCurrentUserRoleContext(): Promise<UserRoleContextResolution> {
+  const startedAt = Date.now();
   let authUser;
   try {
     authUser = await currentUser();
   } catch (error) {
     console.error('Failed to read Clerk user context', error);
-    return null;
+    const resolution: UserRoleContextResolution = {
+      context: null,
+      failure: 'auth_unavailable',
+      durationMs: Date.now() - startedAt
+    };
+    console.warn('[user-roles] auth_unavailable', { durationMs: resolution.durationMs });
+    return resolution;
   }
-  if (!authUser) return null;
+  if (!authUser) {
+    return {
+      context: null,
+      failure: 'signed_out',
+      durationMs: Date.now() - startedAt
+    };
+  }
 
   let dbUser;
   try {
@@ -74,20 +93,38 @@ export async function getCurrentUserRoleContext(): Promise<UserRoleContext | nul
     });
   } catch (error) {
     console.error('Failed to sync user role context', error);
-    return null;
+    const resolution: UserRoleContextResolution = {
+      context: null,
+      failure: 'sync_failed',
+      durationMs: Date.now() - startedAt
+    };
+    console.warn('[user-roles] sync_failed', {
+      durationMs: resolution.durationMs,
+      authUserId: authUser.id
+    });
+    return resolution;
   }
 
   if (!dbUser.isActive) {
-    return {
-      userId: dbUser.id,
-      email: dbUser.email,
-      name: dbUser.name,
-      role: dbUser.role,
-      currentRole: dbUser.currentRole,
-      availableRoles: [dbUser.currentRole],
-      hasBothRoles: dbUser.hasBothRoles,
-      isActive: false
+    const resolution: UserRoleContextResolution = {
+      context: {
+        userId: dbUser.id,
+        email: dbUser.email,
+        name: dbUser.name,
+        role: dbUser.role,
+        currentRole: dbUser.currentRole,
+        availableRoles: [dbUser.currentRole],
+        hasBothRoles: dbUser.hasBothRoles,
+        isActive: false
+      },
+      failure: null,
+      durationMs: Date.now() - startedAt
     };
+    console.info('[user-roles] resolved_inactive_user', {
+      userId: dbUser.id,
+      durationMs: resolution.durationMs
+    });
+    return resolution;
   }
 
   const roles = new Set<UserRole>([dbUser.role, dbUser.currentRole]);
@@ -111,14 +148,31 @@ export async function getCurrentUserRoleContext(): Promise<UserRoleContext | nul
     ? dbUser.currentRole
     : availableRoles[0];
 
-  return {
-    userId: dbUser.id,
-    email: dbUser.email,
-    name: dbUser.name,
-    role: dbUser.role,
-    currentRole,
-    availableRoles,
-    hasBothRoles: dbUser.hasBothRoles,
-    isActive: true
+  const resolution: UserRoleContextResolution = {
+    context: {
+      userId: dbUser.id,
+      email: dbUser.email,
+      name: dbUser.name,
+      role: dbUser.role,
+      currentRole,
+      availableRoles,
+      hasBothRoles: dbUser.hasBothRoles,
+      isActive: true
+    },
+    failure: null,
+    durationMs: Date.now() - startedAt
   };
+  if (resolution.durationMs > 250) {
+    console.info('[user-roles] slow_resolution', {
+      userId: dbUser.id,
+      durationMs: resolution.durationMs,
+      availableRoles: availableRoles.length
+    });
+  }
+  return resolution;
+}
+
+export async function getCurrentUserRoleContext(): Promise<UserRoleContext | null> {
+  const resolution = await resolveCurrentUserRoleContext();
+  return resolution.context;
 }

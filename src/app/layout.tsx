@@ -19,6 +19,14 @@ export const viewport: Viewport = {
 };
 
 type TopNavItem = { href: string; label: string };
+const SHELLLESS_PREFIXES = ['/sign-in', '/sign-up', '/auth/resolve-role', '/select-role'];
+const PUBLIC_SHELLLESS_PATHS = new Set(['/', '/privacy', '/terms']);
+
+function shouldSkipRoleResolution(pathname: string) {
+  if (!pathname) return false;
+  if (PUBLIC_SHELLLESS_PATHS.has(pathname)) return true;
+  return SHELLLESS_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+}
 
 function navItemsForRole(role: UserRole): TopNavItem[] {
   if (role === "COACH") {
@@ -53,8 +61,9 @@ export default async function RootLayout({
   );
   const headersList = await headers();
   const pathname = headersList.get("x-pathname") || "";
+  const skipRoleResolution = shouldSkipRoleResolution(pathname);
   const isLandingPage = pathname === "/";
-  const roleContext = await getCurrentUserRoleContext();
+  const roleContext = skipRoleResolution ? null : await getCurrentUserRoleContext();
   const currentRole = roleContext?.currentRole || "ATHLETE";
   const isAccountInactive = !!(roleContext && !roleContext.isActive);
   const navItems = isAccountInactive ? [] : navItemsForRole(currentRole);
@@ -63,11 +72,12 @@ export default async function RootLayout({
     ? getRoleHomePath(currentRole)
     : "/auth/resolve-role";
   const isSignedIn = !!roleContext;
+  const showAppChrome = !skipRoleResolution && !isLandingPage;
   const content = (
     <html lang="en" suppressHydrationWarning>
       <script dangerouslySetInnerHTML={{ __html: `(function(){var t=localStorage.getItem('theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark');})();` }} />
       <body>
-        {!isLandingPage && (
+        {showAppChrome && (
           <Header
             brand="MyTrainingPlan"
             brandHref={signedInHome}
@@ -91,7 +101,7 @@ export default async function RootLayout({
         ) : (
           children
         )}
-        {!isLandingPage && !isAccountInactive && (
+        {showAppChrome && !isAccountInactive && (
           <Suspense fallback={null}>
             <MobileNav />
           </Suspense>
