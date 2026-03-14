@@ -13,6 +13,9 @@
   --d-muted: #9b9ba3;
   --d-orange: #fc4c02;
   --d-orange-soft: rgba(252, 76, 2, 0.08);
+  --ai-athlete-bubble-bg: #ffd7c8;
+  --ai-athlete-bubble-text: #9c3200;
+  --ai-athlete-bubble-border: rgba(252, 76, 2, 0.2);
   --d-green: #2ecc71;
   --d-green-soft: rgba(46, 204, 113, 0.08);
   --d-red: #e74c3c;
@@ -44,6 +47,9 @@
   --d-muted: #9b9ba3;
   --d-orange: #fc4c02;
   --d-orange-soft: rgba(252, 76, 2, 0.08);
+  --ai-athlete-bubble-bg: #ffd7c8;
+  --ai-athlete-bubble-text: #9c3200;
+  --ai-athlete-bubble-border: rgba(252, 76, 2, 0.2);
   --d-green: #2ecc71;
   --d-green-soft: rgba(46, 204, 113, 0.08);
   --d-red: #e74c3c;
@@ -2155,8 +2161,9 @@
 }
 
 .pcal-ai-turn.role-athlete {
-  border-color: rgba(252, 76, 2, 0.3);
-  background: rgba(252, 76, 2, 0.08);
+  border-color: var(--ai-athlete-bubble-border);
+  background: var(--ai-athlete-bubble-bg);
+  color: var(--ai-athlete-bubble-text);
   justify-self: end;
   border-top-right-radius: 6px;
 }
@@ -2263,7 +2270,11 @@
 }
 
 .pcal-ai-turn.role-athlete .pcal-ai-turn-author {
-  color: var(--d-orange);
+  color: var(--ai-athlete-bubble-text);
+}
+
+.pcal-ai-turn.role-athlete p {
+  color: var(--ai-athlete-bubble-text);
 }
 
 .pcal-ai-turn.role-system .pcal-ai-turn-head {
@@ -4446,6 +4457,14 @@
   background: var(--d-bg);
 }
 
+[data-theme="dark"] .plans-page-shell,
+[data-theme="dark"] .pcal,
+[data-theme="dark"] .plans-page {
+  --ai-athlete-bubble-bg: rgba(252, 76, 2, 0.2);
+  --ai-athlete-bubble-text: #ffd4c3;
+  --ai-athlete-bubble-border: rgba(252, 124, 77, 0.32);
+}
+
 /* Plan library cards */
 [data-theme="dark"] .plan-card {
   background: var(--d-raised);
@@ -4748,10 +4767,15 @@
 }
 
 .ai-widget-bubble--athlete {
-  background: var(--d-orange);
-  color: #fff;
+  background: var(--ai-athlete-bubble-bg);
+  color: var(--ai-athlete-bubble-text);
+  border: 1px solid var(--ai-athlete-bubble-border);
   border-top-right-radius: 6px;
   align-self: flex-end;
+}
+
+.ai-widget-bubble--athlete .ai-widget-bubble-label {
+  opacity: 0.78;
 }
 
 .ai-widget-bubble--system {
