@@ -68,9 +68,12 @@ export async function persistAiAdjustmentConversation(
     athleteContent: string;
     coachContent: string;
     coachMetadata?: MessageMetadata | null;
+    supersedeActive?: boolean;
   }
 ) {
-  await supersedeActiveCoachMessages(planId);
+  if (args.supersedeActive !== false) {
+    await supersedeActiveCoachMessages(planId);
+  }
 
   const [athleteMessage, coachMessage] = await prisma.$transaction([
     prisma.planChatMessage.create({

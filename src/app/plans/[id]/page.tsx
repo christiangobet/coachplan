@@ -543,6 +543,28 @@ export default function PlanDetailPage() {
     if (!activeProposalTurnId) return new Set<number>();
     return new Set(aiAppliedByTurn[activeProposalTurnId] || []);
   }, [aiAppliedByTurn, activeProposalTurnId]);
+  const activeCurrentWeekIndex = useMemo(() => {
+    if (!plan || plan.status !== 'ACTIVE') return null;
+    const weeks = [...(plan.weeks || [])].sort((a: any, b: any) => a.weekIndex - b.weekIndex);
+    const allWeekIndexes = weeks.map((week: any) => week.weekIndex);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    for (const week of weeks) {
+      const bounds = resolveWeekBounds({
+        weekIndex: week.weekIndex,
+        weekStartDate: week.startDate,
+        weekEndDate: week.endDate,
+        raceDate: plan.raceDate,
+        weekCount: plan.weekCount,
+        allWeekIndexes
+      });
+      if (bounds.startDate && bounds.endDate && today >= bounds.startDate && today <= bounds.endDate) {
+        return week.weekIndex as number;
+      }
+    }
+    return null;
+  }, [plan]);
 
   // -- Source PDF State --
   const [isWideScreen, setIsWideScreen] = useState(
@@ -1564,15 +1586,24 @@ export default function PlanDetailPage() {
       const res = await fetch(`/api/plans/${planId}/ai-adjust`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message })
+        body: JSON.stringify({
+          message,
+          currentWeekIndex: activeCurrentWeekIndex
+        })
       });
       const data = await res.json().catch(() => null);
       if (!res.ok) {
         throw new Error(data?.error || 'Failed to generate adjustment proposal.');
       }
 
+      const replyMode =
+        data?.replyMode === 'status_check'
+          ? 'status_check'
+          : data?.replyMode === 'activity_feedback'
+            ? 'activity_feedback'
+            : 'adjustment_request';
       const proposal = (data?.proposal || null) as AiTrainerProposal | null;
-      if (!proposal) {
+      if (!proposal && replyMode === 'adjustment_request') {
         throw new Error('No new proposal was generated.');
       }
       const persistedAthleteMessage = (data?.athleteMessage || null) as ChatMessage | null;
@@ -1589,11 +1620,17 @@ export default function PlanDetailPage() {
       const coachTurn: AiChatTurn = {
         id: coachTurnId,
         role: 'coach',
-        text: proposal.coachReply || proposal.summary || 'New recommendation generated.',
+        text: typeof persistedCoachMessage?.content === 'string' && persistedCoachMessage.content.trim().length > 0
+          ? persistedCoachMessage.content
+          : typeof data?.coachReply === 'string'
+          ? data.coachReply
+          : proposal?.coachReply || proposal?.summary || 'New recommendation generated.',
         createdAt: coachTurnCreatedAt,
         requestMessage: message,
-        proposal,
-        proposalState: 'active'
+        ...(proposal ? {
+          proposal,
+          proposalState: 'active' as AiProposalState
+        } : {})
       };
       const persistedAthleteTurn: AiChatTurn = {
         id: athleteTurnId,
@@ -1624,12 +1661,18 @@ export default function PlanDetailPage() {
       });
       noteCoachMessageReceived('ai_adjust_response', {
         role: 'coach',
-        hasProposal: true
+        hasProposal: Boolean(proposal)
       });
-      setActiveProposalTurnId(coachTurnId);
-      setAiAppliedByTurn({ [coachTurnId]: [] });
       setProposalDetailsOpen(false);
-      setAiTrainerStatus(proposal.summary || 'New recommendation generated.');
+      if (proposal) {
+        setActiveProposalTurnId(coachTurnId);
+        setAiAppliedByTurn({ [coachTurnId]: [] });
+        setAiTrainerStatus(proposal.summary || 'New recommendation generated.');
+      } else {
+        setActiveProposalTurnId(null);
+        setAiAppliedByTurn({});
+        setAiTrainerStatus(typeof data?.summary === 'string' ? data.summary : 'Current-week feedback ready.');
+      }
     } catch (err: unknown) {
       const classified = classifyAiError(err instanceof Error ? err.message : 'Failed to generate adjustment proposal.');
       setAiTrainerError(classified.summary);
@@ -1651,7 +1694,7 @@ export default function PlanDetailPage() {
     } finally {
       setAiTrainerLoading(false);
     }
-  }, [aiCoachSurface, aiTrainerInput, emitPlanEditEvent, noteCoachMessageReceived, planId]);
+  }, [activeCurrentWeekIndex, aiCoachSurface, aiTrainerInput, emitPlanEditEvent, noteCoachMessageReceived, planId]);
 
   const applyAiAdjustment = useCallback(async (changeIndex?: number) => {
     if (!planId || !aiTrainerProposal || !activeProposalTurn) return;
@@ -1977,23 +2020,6 @@ export default function PlanDetailPage() {
       loggedTotal: Math.round(loggedTotal * 10) / 10
     };
   });
-  const activeCurrentWeekIndex = (() => {
-    if (plan.status !== 'ACTIVE') return null;
-    for (const week of weeks) {
-      const bounds = resolveWeekBounds({
-        weekIndex: week.weekIndex,
-        weekStartDate: week.startDate,
-        weekEndDate: week.endDate,
-        raceDate: plan.raceDate,
-        weekCount: plan.weekCount,
-        allWeekIndexes
-      });
-      if (bounds.startDate && bounds.endDate && today >= bounds.startDate && today <= bounds.endDate) {
-        return week.weekIndex as number;
-      }
-    }
-    return null;
-  })();
   const formatDisplayDistance = (value: number | null | undefined, sourceUnit: string | null | undefined) => {
     const converted = toDisplayDistance(value, sourceUnit);
     if (!converted) return null;

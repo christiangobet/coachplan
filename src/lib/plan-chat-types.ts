@@ -10,6 +10,7 @@ export type ProposalState = 'active' | 'applied' | 'superseded';
 export interface MessageMetadata {
   proposal?: PlanAdjustmentProposal;
   state?: ProposalState;
+  intent?: 'adjustment_request' | 'status_check' | 'activity_feedback';
   changeLogIds?: string[];
   // For system messages that describe a move
   moveDescription?: string;

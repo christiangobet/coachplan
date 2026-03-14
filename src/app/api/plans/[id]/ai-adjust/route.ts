@@ -13,6 +13,12 @@ import {
   rewriteCoachReplyAsRecommendation
 } from '@/lib/ai-trainer-proposal-integrity';
 import { persistAiAdjustmentConversation } from '@/lib/plan-chat-ai';
+import {
+  buildActivityFeedbackScope,
+  buildWeekStatusScope,
+  detectAiCoachIntent,
+  type AiCoachIntent,
+} from '@/lib/ai-coach-intent';
 
 import {
   applyAdjustmentProposalInTransaction,
@@ -31,6 +37,7 @@ type PlanAdjustRequestBody = {
   proposal?: unknown;
   changeIndexes?: unknown;
   clarificationResponse?: unknown;
+  currentWeekIndex?: unknown;
 };
 
 const PLAN_PATCH_SCHEMA_VERSION = 'coachplan.plan_patch.v1';
@@ -669,8 +676,11 @@ function buildPlanContext(plan: NonNullable<PlanForContext>) {
           subtype: activity.subtype ?? null,
           completed: activity.completed,
           duration: activity.duration ?? null,
+          actualDuration: activity.actualDuration ?? null,
           distance: activity.distance ?? null,
+          actualDistance: activity.actualDistance ?? null,
           distanceUnit: activity.distanceUnit ?? null,
+          actualPace: activity.actualPace ?? null,
           priority: activity.priority ?? null,
           mustDo: activity.mustDo
         }))
@@ -775,6 +785,20 @@ type InvariantReport = {
   candidateScore: number;
   summaryFlags: string[];
   weeks: InvariantWeekDelta[];
+};
+
+type StatusCheckReply = {
+  coachReply: string;
+  summary: string;
+  confidence: 'low' | 'medium' | 'high';
+  followUpQuestion?: string;
+};
+
+type ActivityFeedbackReply = {
+  coachReply: string;
+  summary: string;
+  confidence: 'low' | 'medium' | 'high';
+  followUpQuestion?: string;
 };
 
 function isLikelyHardRunText(text: string | null | undefined) {
@@ -1442,6 +1466,109 @@ async function generateAdjustmentProposal(message: string, plan: NonNullable<Pla
   });
 }
 
+async function generateStatusCheckReply(
+  message: string,
+  plan: NonNullable<PlanForContext>,
+  currentWeekIndex: number | null
+) {
+  const context = buildPlanContext(plan);
+  const weekScope = buildWeekStatusScope(context, currentWeekIndex);
+  const model = getDefaultAiModel();
+
+  const result = await openaiJsonSchema<StatusCheckReply>({
+    model,
+    input: [
+      'You are an experienced endurance running coach.',
+      'The athlete is asking for coaching feedback, not asking you to edit the plan.',
+      'Answer about the focused current week first and stay anchored to that week unless the athlete explicitly asks about a different week.',
+      'Do not discuss unrelated future weeks.',
+      'Do not propose plan edits or change operations unless the athlete explicitly asks for adjustments.',
+      'Keep the reply concise, practical, and athlete-friendly.',
+      'Coach reply format:',
+      '1) Quick assessment of this week so far',
+      '2) One useful coaching observation',
+      '3) Optional next-step cue only if relevant',
+      `Athlete feedback: ${message}`,
+      `Focused week status JSON: ${JSON.stringify(weekScope)}`,
+      `Plan context JSON: ${JSON.stringify({
+        plan: context.plan,
+        todayISO: context.todayISO,
+        currentWeekIndex: weekScope.weekIndex,
+      })}`
+    ].join('\n'),
+    schema: {
+      name: 'coach_status_reply',
+      strict: true,
+      schema: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['coachReply', 'summary', 'confidence'],
+        properties: {
+          coachReply: { type: 'string', minLength: 12, maxLength: 800 },
+          summary: { type: 'string', minLength: 6, maxLength: 180 },
+          confidence: { type: 'string', enum: ['low', 'medium', 'high'] },
+          followUpQuestion: { type: 'string', maxLength: 180 }
+        }
+      }
+    }
+  });
+
+  return {
+    result,
+    weekScope,
+  };
+}
+
+async function generateActivityFeedbackReply(
+  message: string,
+  plan: NonNullable<PlanForContext>,
+  currentWeekIndex: number | null
+) {
+  const context = buildPlanContext(plan);
+  const activityScope = buildActivityFeedbackScope(message, context, currentWeekIndex);
+  const model = getDefaultAiModel();
+
+  const result = await openaiJsonSchema<ActivityFeedbackReply>({
+    model,
+    input: [
+      'You are an experienced endurance running coach.',
+      'The athlete is asking for interpretation of a completed or logged workout, not asking you to adjust the plan.',
+      'Answer the athlete’s question directly using the focused recorded activity context first.',
+      'Do not mention locked days or inability to edit unless the athlete explicitly asks for a change.',
+      'Do not return plan adjustments or change operations.',
+      'If the athlete asks whether an activity counts as strength, quality, recovery, or similar, answer in practical coaching terms and explain briefly why.',
+      'Keep the reply concise, practical, and athlete-friendly.',
+      `Athlete feedback: ${message}`,
+      `Focused activity feedback JSON: ${JSON.stringify(activityScope)}`,
+      `Plan context JSON: ${JSON.stringify({
+        plan: context.plan,
+        todayISO: context.todayISO,
+        currentWeekIndex: activityScope.currentWeekIndex,
+      })}`
+    ].join('\n'),
+    schema: {
+      name: 'coach_activity_feedback_reply',
+      strict: true,
+      schema: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['coachReply', 'summary', 'confidence'],
+        properties: {
+          coachReply: { type: 'string', minLength: 12, maxLength: 800 },
+          summary: { type: 'string', minLength: 6, maxLength: 180 },
+          confidence: { type: 'string', enum: ['low', 'medium', 'high'] },
+          followUpQuestion: { type: 'string', maxLength: 180 }
+        }
+      }
+    }
+  });
+
+  return {
+    result,
+    activityScope,
+  };
+}
+
 
 
 
@@ -1474,7 +1601,69 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   const apply = Boolean(body.apply);
   if (!apply) {
+    const currentWeekIndex = parseInteger(body.currentWeekIndex);
+    const intent: AiCoachIntent = detectAiCoachIntent(message);
     try {
+      if (intent === 'activity_feedback') {
+        const feedbackReply = await generateActivityFeedbackReply(message, plan, currentWeekIndex);
+        const coachContent = feedbackReply.result.followUpQuestion
+          ? `${feedbackReply.result.coachReply}\n\n${feedbackReply.result.followUpQuestion}`
+          : feedbackReply.result.coachReply;
+        const persistedConversation = await persistAiAdjustmentConversation(plan.id, {
+          athleteContent: message,
+          coachContent,
+          coachMetadata: {
+            intent: 'activity_feedback',
+          },
+          supersedeActive: false,
+        });
+        return NextResponse.json({
+          replyMode: 'activity_feedback',
+          coachReply: feedbackReply.result.coachReply,
+          summary: feedbackReply.result.summary,
+          confidence: feedbackReply.result.confidence,
+          followUpQuestion: feedbackReply.result.followUpQuestion,
+          currentWeekIndex: feedbackReply.activityScope.currentWeekIndex,
+          athleteMessage: persistedConversation.athleteMessage,
+          coachMessage: persistedConversation.coachMessage,
+          plan: {
+            id: plan.id,
+            name: plan.name,
+            status: plan.status
+          }
+        });
+      }
+
+      if (intent === 'status_check') {
+        const statusReply = await generateStatusCheckReply(message, plan, currentWeekIndex);
+        const coachContent = statusReply.result.followUpQuestion
+          ? `${statusReply.result.coachReply}\n\n${statusReply.result.followUpQuestion}`
+          : statusReply.result.coachReply;
+        const persistedConversation = await persistAiAdjustmentConversation(plan.id, {
+          athleteContent: message,
+          coachContent,
+          coachMetadata: {
+            intent: 'status_check',
+          },
+          supersedeActive: false,
+        });
+        return NextResponse.json({
+          replyMode: 'status_check',
+          coachReply: statusReply.result.coachReply,
+          summary: statusReply.result.summary,
+          confidence: statusReply.result.confidence,
+          followUpQuestion: statusReply.result.followUpQuestion,
+          currentWeekIndex: statusReply.weekScope.weekIndex,
+          athleteMessage: persistedConversation.athleteMessage,
+          coachMessage: persistedConversation.coachMessage,
+          plan: {
+            id: plan.id,
+            name: plan.name,
+            status: plan.status
+          }
+        });
+      }
+
       const proposal = await generateAdjustmentProposal(message, plan);
       const parsed = parseProposal(proposal);
       if (!parsed) {
@@ -1505,11 +1694,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         athleteContent: message,
         coachContent: enveloped.coachReply,
         coachMetadata: {
+          intent: 'adjustment_request',
           state: 'active',
           proposal: enveloped,
         },
       });
       return NextResponse.json({
+        replyMode: 'adjustment_request',
         proposal: enveloped,
         athleteMessage: persistedConversation.athleteMessage,
         coachMessage: persistedConversation.coachMessage,
