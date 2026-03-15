@@ -59,18 +59,20 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 30px;
+  min-height: 44px;
   padding: 0 12px;
   border-radius: 999px;
   font-size: 12px;
   font-weight: 700;
   color: var(--d-text-mid);
   text-decoration: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .cal-view-pill.active {
-  background: var(--d-raised);
-  color: var(--d-text);
+  background: var(--d-text);
+  color: var(--d-raised);
   box-shadow: var(--d-shadow);
 }
 
@@ -193,6 +195,8 @@
   font-size: 12px;
   font-weight: 700;
   padding: 0 10px;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .cal-month-btn:hover {
@@ -282,7 +286,7 @@
 .cal-plan-pill {
   display: inline-flex;
   align-items: center;
-  min-height: 32px;
+  min-height: 44px;
   border-radius: 999px;
   border: 1px solid var(--d-border);
   background: var(--d-raised);
@@ -290,6 +294,9 @@
   font-size: 12px;
   font-weight: 600;
   padding: 0 12px;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .dash-plan-summary.has-banner .cal-plan-pill {
@@ -612,7 +619,7 @@
   min-width: 30px;
   height: 18px;
   border-radius: 999px;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.04em;
   padding: 0 6px;
@@ -710,7 +717,7 @@
 }
 
 .cal-day-dist {
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 700;
   color: var(--d-muted);
   letter-spacing: 0.02em;
@@ -718,7 +725,7 @@
 
 .cal-pace-badge {
   display: inline-block;
-  font-size: 9.5px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.03em;
   color: var(--d-orange);
@@ -735,7 +742,7 @@
   width: fit-content;
   padding: 1px 6px;
   border-radius: 999px;
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 700;
   line-height: 1.25;
   color: #a33f07;
@@ -818,7 +825,7 @@
 }
 
 .cal-strava-pill-more {
-  font-size: 10px;
+  font-size: 11px;
   color: #fc4c02;
 }
 
@@ -897,14 +904,16 @@
   display: none;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  min-width: 44px;
+  min-height: 44px;
   border-radius: 50%;
   border: 1px solid var(--d-border);
   background: var(--d-raised);
   color: var(--d-text-mid);
   font-size: 14px;
   font-weight: 700;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .cal-detail-close:hover {
@@ -1033,7 +1042,7 @@
   align-items: center;
   justify-content: center;
   width: fit-content;
-  min-height: 32px;
+  min-height: 44px;
   border-radius: 999px;
   border: 1px solid var(--d-border);
   padding: 0 12px;
@@ -1043,6 +1052,8 @@
   font-weight: 700;
   cursor: pointer;
   user-select: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .cal-selected-plan-toggle::-webkit-details-marker {
@@ -1108,7 +1119,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 34px;
+  min-height: 44px;
   border-radius: 9px;
   border: 1px solid var(--d-border);
   background: var(--d-raised);
@@ -1117,6 +1128,8 @@
   font-weight: 700;
   color: var(--d-text-mid);
   text-decoration: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .cal-links .cal-strava-sync-btn {
@@ -1188,7 +1201,7 @@
   border: 1px solid var(--d-border);
   border-radius: 8px;
   padding: 0 10px;
-  font-size: 13px;
+  font-size: 16px;
   color: var(--d-text);
   background: var(--d-raised);
 }
@@ -1279,7 +1292,7 @@
   background: var(--d-raised);
   color: var(--d-text);
   font-family: inherit;
-  font-size: 13px;
+  font-size: 16px;
   line-height: 1.4;
   padding: 8px 10px;
   resize: vertical;
@@ -1365,7 +1378,7 @@
   align-items: center;
   padding: 2px 8px;
   border-radius: 999px;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.03em;
   white-space: nowrap;
@@ -2012,4 +2025,10 @@
 }
 [data-theme="dark"] .cal-day-toggle .dash-sync-btn.is-warning {
   color: #fbbf24;
+}
+
+/* Active view pill */
+[data-theme="dark"] .cal-view-pill.active {
+  background: var(--d-text);
+  color: var(--d-raised);
 }

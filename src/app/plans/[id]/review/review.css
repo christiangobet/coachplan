@@ -41,8 +41,8 @@
   grid-column: 1;
   position: sticky;
   top: 70px;
-  height: calc(100vh - 84px);
-  max-height: calc(100vh - 84px);
+  height: calc(100dvh - 84px);
+  max-height: calc(100dvh - 84px);
   overflow: hidden;
 }
 
@@ -680,12 +680,12 @@
   font-family: inherit;
   font-size: 13px;
   color: #1d2f4d;
-  min-height: 34px;
+  min-height: 44px;
 }
 
 .review-field textarea {
   resize: vertical;
-  min-height: 38px;
+  min-height: 44px;
   line-height: 1.35;
 }
 
@@ -820,7 +820,7 @@
   justify-content: flex-start;
   flex-wrap: wrap;
   gap: 6px;
-  min-height: 36px;
+  min-height: 44px;
 }
 
 .review-delete-btn {
@@ -999,7 +999,7 @@
 }
 
 .review-col-type-highlight select {
-  min-height: 34px;
+  min-height: 44px;
   font-size: 13px;
   font-weight: 700;
   border-color: #cad8ee;
@@ -1033,7 +1033,7 @@
 }
 
 .review-day-notes textarea {
-  min-height: 34px;
+  min-height: 44px;
   max-height: 92px;
 }
 
@@ -1068,8 +1068,8 @@
 
 .review-field-inline input,
 .review-field-inline select {
-  height: 36px;
-  min-height: 36px;
+  height: 44px;
+  min-height: 44px;
   line-height: 1.2;
   font-size: 13px;
   padding: 7px 10px;

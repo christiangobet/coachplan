@@ -28,7 +28,6 @@ import StravaDaySyncButton from "@/components/StravaDaySyncButton";
 import CalendarDayTapHandler from "@/components/CalendarDayTapHandler";
 import StravaIcon from "@/components/StravaIcon";
 import PlanSummarySection from "@/components/PlanSummarySection";
-import CalendarMobileDoubleTap from "@/components/CalendarMobileDoubleTap";
 import type { PlanSummary } from "@/lib/types/plan-summary";
 import "../dashboard/dashboard.css";
 import "./calendar.css";
@@ -1024,7 +1023,6 @@ export default async function CalendarPage({
               })}
             </div>
             </div>{/* cal-month-scroll */}
-            <CalendarMobileDoubleTap />
           </div>
 
           <div className="dash-card cal-type-glossary" aria-label="Activity type glossary">
