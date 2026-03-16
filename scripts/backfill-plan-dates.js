@@ -51,15 +51,15 @@ function parseArgs(argv) {
 
 function startOfDay(date) {
   const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
+  d.setUTCHours(0, 0, 0, 0);
   return d;
 }
 
 function getRaceWeekSunday(raceDate) {
   const sunday = startOfDay(raceDate);
-  const dayOfWeek = sunday.getDay(); // 0 = Sunday
+  const dayOfWeek = sunday.getUTCDay(); // 0 = Sunday
   if (dayOfWeek !== 0) {
-    sunday.setDate(sunday.getDate() + (7 - dayOfWeek));
+    sunday.setUTCDate(sunday.getUTCDate() + (7 - dayOfWeek));
   }
   return sunday;
 }
@@ -75,9 +75,9 @@ function resolveTotalWeeks(plan) {
 function computeWeekBounds(raceSunday, totalWeeks, weekIndex) {
   const weeksFromEnd = totalWeeks - weekIndex;
   const endDate = new Date(raceSunday);
-  endDate.setDate(endDate.getDate() - weeksFromEnd * 7);
+  endDate.setUTCDate(endDate.getUTCDate() - weeksFromEnd * 7);
   const startDate = new Date(endDate);
-  startDate.setDate(startDate.getDate() - 6);
+  startDate.setUTCDate(startDate.getUTCDate() - 6);
   return { startDate, endDate };
 }
 

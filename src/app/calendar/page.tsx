@@ -126,12 +126,12 @@ const ACTIVITY_TYPE_ABBR: Record<ActivityType, string> = {
 
 function normalizeDate(value: Date) {
   const d = new Date(value);
-  d.setHours(0, 0, 0, 0);
+  d.setUTCHours(0, 0, 0, 0);
   return d;
 }
 
 function getIsoDay(value: Date) {
-  const day = value.getDay();
+  const day = value.getUTCDay();
   return day === 0 ? 7 : day;
 }
 
@@ -152,9 +152,9 @@ function getTypeAbbr(type: string) {
 }
 
 function dateKey(value: Date) {
-  const yyyy = value.getFullYear();
-  const mm = String(value.getMonth() + 1).padStart(2, "0");
-  const dd = String(value.getDate()).padStart(2, "0");
+  const yyyy = value.getUTCFullYear();
+  const mm = String(value.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(value.getUTCDate()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
 }
 
@@ -163,8 +163,8 @@ function dateKeyUtc(value: Date) {
 }
 
 function monthParam(value: Date) {
-  const yyyy = value.getFullYear();
-  const mm = String(value.getMonth() + 1).padStart(2, "0");
+  const yyyy = value.getUTCFullYear();
+  const mm = String(value.getUTCMonth() + 1).padStart(2, "0");
   return `${yyyy}-${mm}`;
 }
 
@@ -174,21 +174,21 @@ function parseMonthParam(value: string | undefined) {
   const year = Number(yearStr);
   const month = Number(monthStr);
   if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) return null;
-  const d = new Date(year, month - 1, 1);
+  const d = new Date(`${yearStr}-${monthStr}-01T00:00:00.000Z`);
   return normalizeDate(d);
 }
 
 function parseDateParam(value: string | undefined) {
   if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
-  const parsed = new Date(`${value}T00:00:00`);
+  const parsed = new Date(`${value}T00:00:00.000Z`);
   if (Number.isNaN(parsed.getTime())) return null;
   return normalizeDate(parsed);
 }
 
 function addMonths(value: Date, delta: number) {
   const d = normalizeDate(value);
-  d.setDate(1);
-  d.setMonth(d.getMonth() + delta);
+  d.setUTCDate(1);
+  d.setUTCMonth(d.getUTCMonth() + delta);
   return d;
 }
 

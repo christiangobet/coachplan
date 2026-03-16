@@ -96,14 +96,14 @@ function formatBytes(value: number) {
 function formatWeekRange(startDate: Date | null, endDate: Date | null): string | null {
   if (!startDate) return null;
   const s = new Date(startDate);
-  s.setHours(0, 0, 0, 0);
+  s.setUTCHours(0, 0, 0, 0);
 
   let e = endDate ? new Date(endDate) : null;
   if (!e) {
     e = new Date(s);
-    e.setDate(e.getDate() + 6);
+    e.setUTCDate(e.getUTCDate() + 6);
   }
-  e.setHours(0, 0, 0, 0);
+  e.setUTCHours(0, 0, 0, 0);
 
   const sameYear = s.getFullYear() === e.getFullYear();
   const fmtStart = (d: Date) =>
@@ -184,15 +184,15 @@ function resolveActivityDistanceSourceUnit(
 }
 
 function toLocalDateKey(date: Date) {
-  const yyyy = date.getFullYear();
-  const mm = String(date.getMonth() + 1).padStart(2, '0');
-  const dd = String(date.getDate()).padStart(2, '0');
+  const yyyy = date.getUTCFullYear();
+  const mm = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(date.getUTCDate()).padStart(2, '0');
   return `${yyyy}-${mm}-${dd}`;
 }
 
 function formatLocalDateKey(value: string | null | undefined) {
   if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
-  const parsed = new Date(`${value}T00:00:00`);
+  const parsed = new Date(`${value}T00:00:00.000Z`);
   if (Number.isNaN(parsed.getTime())) return null;
   return parsed.toLocaleDateString('en-US', {
     weekday: 'long',

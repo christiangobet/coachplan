@@ -4,7 +4,7 @@ function normalizeDate(input: DateInput): Date | null {
   if (!input) return null;
   const d = input instanceof Date ? new Date(input) : new Date(input);
   if (Number.isNaN(d.getTime())) return null;
-  d.setHours(0, 0, 0, 0);
+  d.setUTCHours(0, 0, 0, 0);
   return d;
 }
 
@@ -12,8 +12,8 @@ export function getDayDateFromWeekStart(weekStartDate: DateInput, dayOfWeek: num
   const start = normalizeDate(weekStartDate);
   if (!start) return null;
   const d = new Date(start);
-  d.setDate(d.getDate() + (dayOfWeek - 1));
-  d.setHours(0, 0, 0, 0);
+  d.setUTCDate(d.getUTCDate() + (dayOfWeek - 1));
+  d.setUTCHours(0, 0, 0, 0);
   return d;
 }
 
@@ -21,9 +21,9 @@ function getRaceWeekSunday(raceDate: DateInput): Date | null {
   const race = normalizeDate(raceDate);
   if (!race) return null;
   const sunday = new Date(race);
-  const dayOfWeek = sunday.getDay();
-  if (dayOfWeek !== 0) sunday.setDate(sunday.getDate() + (7 - dayOfWeek));
-  sunday.setHours(0, 0, 0, 0);
+  const dayOfWeek = sunday.getUTCDay();
+  if (dayOfWeek !== 0) sunday.setUTCDate(sunday.getUTCDate() + (7 - dayOfWeek));
+  sunday.setUTCHours(0, 0, 0, 0);
   return sunday;
 }
 
@@ -53,8 +53,8 @@ export function resolveWeekBounds(input: ResolveWeekBoundsInput): ResolvedWeekBo
   if (storedStart) {
     if (storedEnd) return { startDate: storedStart, endDate: storedEnd, source: 'stored' };
     const derivedEnd = new Date(storedStart);
-    derivedEnd.setDate(derivedEnd.getDate() + 6);
-    derivedEnd.setHours(0, 0, 0, 0);
+    derivedEnd.setUTCDate(derivedEnd.getUTCDate() + 6);
+    derivedEnd.setUTCHours(0, 0, 0, 0);
     return { startDate: storedStart, endDate: derivedEnd, source: 'stored' };
   }
 
@@ -66,11 +66,11 @@ export function resolveWeekBounds(input: ResolveWeekBoundsInput): ResolvedWeekBo
 
   const weeksFromEnd = totalWeeks - input.weekIndex;
   const endDate = new Date(raceSunday);
-  endDate.setDate(endDate.getDate() - weeksFromEnd * 7);
-  endDate.setHours(0, 0, 0, 0);
+  endDate.setUTCDate(endDate.getUTCDate() - weeksFromEnd * 7);
+  endDate.setUTCHours(0, 0, 0, 0);
   const startDate = new Date(endDate);
-  startDate.setDate(startDate.getDate() - 6);
-  startDate.setHours(0, 0, 0, 0);
+  startDate.setUTCDate(startDate.getUTCDate() - 6);
+  startDate.setUTCHours(0, 0, 0, 0);
 
   return { startDate, endDate, source: 'derived' };
 }

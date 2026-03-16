@@ -134,19 +134,20 @@ export async function alignWeeksToRaceDate(
   totalWeeks: number,
   raceDate: Date
 ): Promise<void> {
-  // Find the Sunday of race week (race week ends on Sunday)
+  // Find the Sunday of race week (race week ends on Sunday) — all ops in UTC
   const raceSunday = new Date(raceDate);
-  const dayOfWeek = raceSunday.getDay(); // 0=Sunday
+  raceSunday.setUTCHours(0, 0, 0, 0);
+  const dayOfWeek = raceSunday.getUTCDay(); // 0=Sunday
   if (dayOfWeek !== 0) {
-    raceSunday.setDate(raceSunday.getDate() + (7 - dayOfWeek));
+    raceSunday.setUTCDate(raceSunday.getUTCDate() + (7 - dayOfWeek));
   }
 
   for (let i = totalWeeks; i >= 1; i--) {
     const weeksFromEnd = totalWeeks - i;
     const endDate = new Date(raceSunday);
-    endDate.setDate(endDate.getDate() - weeksFromEnd * 7);
+    endDate.setUTCDate(endDate.getUTCDate() - weeksFromEnd * 7);
     const startDate = new Date(endDate);
-    startDate.setDate(startDate.getDate() - 6); // Monday
+    startDate.setUTCDate(startDate.getUTCDate() - 6); // Monday
 
     await prisma.planWeek.updateMany({
       where: { planId, weekIndex: i },
@@ -165,14 +166,14 @@ export async function alignWeeksToStartDate(
   startDate: Date
 ): Promise<void> {
   const normalizedStart = new Date(startDate);
-  normalizedStart.setHours(0, 0, 0, 0);
+  normalizedStart.setUTCHours(0, 0, 0, 0);
 
   for (let i = 1; i <= totalWeeks; i++) {
     const weekStart = new Date(normalizedStart);
-    weekStart.setDate(weekStart.getDate() + (i - 1) * 7);
+    weekStart.setUTCDate(weekStart.getUTCDate() + (i - 1) * 7);
 
     const weekEnd = new Date(weekStart);
-    weekEnd.setDate(weekEnd.getDate() + 6);
+    weekEnd.setUTCDate(weekEnd.getUTCDate() + 6);
 
     await prisma.planWeek.updateMany({
       where: { planId, weekIndex: i },
