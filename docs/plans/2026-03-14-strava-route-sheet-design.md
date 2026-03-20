@@ -1,5 +1,7 @@
 # Strava Route Sheet Design
 
+> **Status: COMPLETED** — implemented and merged to main
+
 ## Summary
 
 Add a route preview entry point to the athlete's daily activity log and open the route in a mobile-first bottom sheet when tapped.

@@ -1,5 +1,7 @@
 # Performance Snapshot — Configurable Lookback Window
 
+> **Status: COMPLETED** — implemented and merged to main
+
 **Date:** 2026-03-10
 **Status:** Approved — ready for implementation
 

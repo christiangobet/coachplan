@@ -1,5 +1,7 @@
 # Strava Route Sheet Implementation Plan
 
+> **Status: COMPLETED** — implemented and merged to main
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Show a Strava route entry point in the athlete's daily activity log and open the route in a mobile-first bottom sheet for completed workouts that have stored route geometry.

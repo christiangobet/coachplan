@@ -1,5 +1,7 @@
 # Athlete iPhone UX Audit Implementation Plan
 
+> **Status: COMPLETED** — implemented and merged to main
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Audit the athlete-facing CoachPlan experience on iPhone Safari and produce a prioritized backlog of UI/UX issues that block or degrade core athlete tasks.

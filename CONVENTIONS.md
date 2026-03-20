@@ -1,5 +1,9 @@
 # MyTrainingPlan — UI & Code Conventions
 
+> **Design system primary reference:** `design-system/coachplan/MASTER.md`
+> That file covers: color tokens, typography, dark mode, iOS Safari quirks, component CSS patterns, anti-patterns, and pre-delivery checklist.
+> This file covers: per-page responsive layout models and engineering guardrails unique to this codebase.
+
 This is the implementation-facing UI convention file for current app behavior.
 Use this with `AI_DESIGN_RULES.md` before changing UI.
 

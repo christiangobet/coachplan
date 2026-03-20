@@ -1,5 +1,7 @@
 # Audit Auth Refresh Mobile Implementation Plan
 
+> **Status: COMPLETED** — implemented and merged to main
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Add one command that refreshes the Playwright signed-in auth state and then immediately runs the mobile audit flow.

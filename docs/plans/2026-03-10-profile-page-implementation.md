@@ -1,5 +1,7 @@
 # Profile Page Redesign — Implementation Plan
 
+> **Status: COMPLETED** — implemented and merged to main
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Replace the current settings-only profile page with a two-column layout — identity (avatar, race goal, training stats, Strava) on the left; settings (personal, pace zones, coach) on the right.

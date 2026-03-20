@@ -1,5 +1,7 @@
 # AI Trainer Proposal Integrity Implementation Plan
 
+> **Status: COMPLETED** — implemented and merged to main
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Make AI Trainer proposals truthful and scoped so rename-only requests do not claim unapplied edits and do not surface unrelated whole-plan warning flags.

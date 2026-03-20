@@ -1,5 +1,7 @@
 # Athlete iPhone Audit Findings
 
+> **Status: COMPLETED** — implemented and merged to main
+
 > Audit date: 2026-03-13
 > Viewports: iPhone 13 Pro `390x844`
 > Browser: Playwright (Mobile Safari emulation)

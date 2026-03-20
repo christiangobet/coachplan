@@ -1,5 +1,7 @@
 # Coach History Conversation UI Plan
 
+> **Status: COMPLETED** — implemented and merged to main
+
 ## Summary
 
 Make Coach History on the plan detail page feel like a readable conversation archive on iPhone and desktop:

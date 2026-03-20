@@ -1,6 +1,6 @@
 # MyTrainingPlan — Implementation Status & Handover
 
-> Last updated: 2026-03-07
+> Last updated: 2026-03-20
 > Scope: status synced to current codebase implementation
 
 ---
@@ -70,6 +70,33 @@ Current end-to-end flow:
 - Dashboard uses 3 -> 2 -> 1 behavior by breakpoint.
 - Calendar, plan view, and strava pages have dedicated responsive behavior and mobile adaptations.
 - Mobile navigation is present; iPhone-width behavior has targeted fixes for day panels and cards.
+
+### AI trainer (coach conversation)
+- Conversation history is persisted and displayed in the coach panel.
+- Compact mobile FAB opens a full-screen conversation sheet.
+- Intent routing distinguishes plan-modification proposals from general chat.
+- Proposal integrity: AI responses that attempt to modify plans are validated before applying.
+
+### Strava route sheets
+- OpenStreetMap inline map rendering is embedded in plan day panels and daily log views.
+- Route metadata (distance, elevation, polyline) is fetched and cached from Strava activities.
+
+### UTC-safe date operations
+- All calendar date math now uses UTC operations throughout.
+- Fixes a 1-day shift bug on production where server timezone caused off-by-one in plan-day alignment.
+
+### iOS/UX pass
+- Calendar day columns widened for iPhone viewports.
+- Tap targets audited and enlarged across key interactive elements.
+- Mobile nav added to public-facing routes.
+- Keyboard compact sheet: input fields no longer obscured by software keyboard on iOS.
+
+### Performance
+- Two-stage plan fetch on dashboard and progress pages: metadata loads first, day-level data deferred.
+
+### Athlete beta flow
+- Polished onboarding experience for athlete beta users.
+- Audit workflow implemented for reviewing athlete plan usage.
 
 ---
 

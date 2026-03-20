@@ -1,5 +1,7 @@
 # Performance Snapshot Configurable Window — Implementation Plan
 
+> **Status: COMPLETED** — implemented and merged to main
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Add a 5-option window selector (4w/8w/12w/6m/12m) to the Performance Snapshot card, with an inline prompt to fetch more Strava history when the selected window exceeds what's synced.

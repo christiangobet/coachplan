@@ -1,5 +1,7 @@
 # Athlete Beta Polish Implementation Plan
 
+> **Status: COMPLETED** — implemented and merged to main
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Polish the athlete onboarding and execution flow so shared beta users can get from sign-in to day-card entry, Strava sync, and workout logging with less hesitation.

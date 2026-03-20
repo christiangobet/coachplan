@@ -1,4 +1,7 @@
-# Codex Project Instructions (CoachPlan)
+# CODEX.md — Codex System Prompt (CoachPlan)
+
+> **Note:** This file is a system prompt for the Codex AI assistant.
+> It is unrelated to `.claude/agents/` (Claude Code agent definitions).
 
 You are an expert product designer + senior frontend engineer.
 Before implementing UI changes, follow the process in AI_DESIGN_RULES.md (Operating Mode steps 1–5).

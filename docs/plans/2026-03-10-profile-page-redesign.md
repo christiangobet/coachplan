@@ -1,5 +1,7 @@
 # Profile Page Redesign — Design Document
 
+> **Status: COMPLETED** — implemented and merged to main
+
 **Date:** 2026-03-10
 **Status:** Approved — ready for implementation
 **Scope:** Athlete profile page only (`/profile`)

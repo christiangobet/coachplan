@@ -39,13 +39,14 @@ Training plan management app for endurance athletes and coaches.
 - `src/lib/` — domain logic (roles, parsing, integrations)
 - `prisma/schema.prisma` — source of truth for data model
 - `scripts/` — parser/testing/admin utilities
+- `design-system/coachplan/MASTER.md` — canonical visual + component design system (tokens, dark mode, iOS quirks, anti-patterns, pre-delivery checklist)
 
 ## Operational notes
 
 - Keep `.env.local` aligned with `.env.example`.
 - Garmin routes currently return `501 NOT_CONFIGURED` until partner credentials are available.
 - Use `PROJECT_PLAN.md` as the current handover/status document.
-- For visual changes, follow `AI_DESIGN_RULES.md` and `CONVENTIONS.md`.
+- For visual changes, follow `AI_DESIGN_RULES.md`; use `design-system/coachplan/MASTER.md` as primary design reference and `CONVENTIONS.md` for per-page layout model details.
 
 ## End-of-session handover
 

@@ -1,5 +1,7 @@
 # Calendar Mobile Width Implementation Plan
 
+> **Status: COMPLETED** — implemented and merged to main
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Make the iPhone calendar grid feel less cramped by keeping the horizontally scrollable month view wider at the smallest breakpoint.
