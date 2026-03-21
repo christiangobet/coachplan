@@ -828,7 +828,7 @@ export default async function CalendarPage({
   const weekLabel = weekLabelParts.join(" · ");
 
   return (
-    <main className={`dash cal-page${hasSelectedDate ? ' cal-day-open' : ''}`} data-debug-id="TRL">
+    <main className={`dash cal-page${hasSelectedDate && !isWeekView ? ' cal-day-open' : ''}`} data-debug-id="TRL">
       <SelectedPlanCookie planId={selectedPlan.id} />
       <CalendarDayTapHandler />
       <div className="dash-grid">
@@ -942,12 +942,80 @@ export default async function CalendarPage({
 
           <div className="dash-card cal-month-card">
             {isWeekView ? (
-              <WeekStrip
-                days={weekDays}
-                weekLabel={weekLabel}
-                prevWeekHref={prevWeekHref}
-                nextWeekHref={nextWeekHref}
-              />
+              <>
+                <WeekStrip
+                  days={weekDays}
+                  weekLabel={weekLabel}
+                  prevWeekHref={prevWeekHref}
+                  nextWeekHref={nextWeekHref}
+                />
+                {hasSelectedDate && (
+                  <div className="wsd-detail">
+                    <div className="cal-detail-header">
+                      <span className="cal-detail-date">
+                        {selectedDateKey === dateKey(today) ? "TODAY · " : ""}
+                        {selectedDate.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }).toUpperCase()}
+                      </span>
+                      <div className="cal-detail-head-actions">
+                        <div className="cal-detail-badges">
+                          {selectedDayDone && <span className="cal-detail-badge status-done">✓ Done</span>}
+                          {selectedDayMissed && <span className="cal-detail-badge status-missed">✗ Missed</span>}
+                          {selectedDayPartial && <span className="cal-detail-badge status-partial">≈ Partial</span>}
+                        </div>
+                        <Link className="cal-detail-close" href={buildWeekHref(weekMonday, selectedPlan.id, null, returnToParam)} aria-label="Close selected day panel">
+                          ✕
+                        </Link>
+                      </div>
+                    </div>
+                    <div className="cal-day-details-body">
+                      {selectedPlanActivities.length === 0 && (
+                        <p className="cal-day-empty">No planned activities on this day.</p>
+                      )}
+                      {selectedPlanActivities.length > 0 && (
+                        <DayLogCard
+                          dayId={selectedDayInfo?.dayId || null}
+                          dateISO={selectedDateKey}
+                          planId={selectedPlan.id}
+                          activities={buildLogActivities(selectedPlanActivities, viewerUnits)}
+                          viewerUnits={viewerUnits}
+                          dayStatus={selectedDayStatus}
+                          missedReason={selectedDayInfo?.missedReason || null}
+                          stravaConnected={Boolean(stravaAccount)}
+                          enabled={selectedIsPastOrToday}
+                          showSyncedStravaSection={false}
+                          successRedirectHref={buildWeekHref(weekMonday, selectedPlan.id, null, returnToParam)}
+                        />
+                      )}
+                      {selectedIsPastOrToday && selectedExternalLogs.length > 0 && (
+                        <div className="cal-day-detail-section">
+                          <div className="cal-day-detail-section-header">
+                            <h4>Logged Activities</h4>
+                            {stravaAccount && <StravaDaySyncButton dateISO={selectedDateKey} planId={selectedPlan.id} className="cal-strava-sync-btn" />}
+                          </div>
+                          {selectedExternalLogs.map((log) => {
+                            const matchLevel = resolveMatchLevel(log);
+                            const isMatched = Boolean(log.matchedPlanActivityId);
+                            return (
+                              <div key={log.id} className={logItemClass(matchLevel)}>
+                                <div className="cal-day-detail-item-head">
+                                  <ExternalSportIcon provider={log.provider} sportType={log.sportType} className="cal-log-sport-icon" />
+                                  <span className="cal-log-name">{log.name}</span>
+                                  <span className={matchBadgeClass(matchLevel, isMatched)}>{matchBadgeLabel(matchLevel, isMatched)}</span>
+                                </div>
+                                <div className="cal-day-detail-item-meta">
+                                  {log.startTimeLabel && <span>{log.startTimeLabel}</span>}
+                                  {log.distanceM != null && log.distanceM > 0 && <span>{formatDistanceMeters(log.distanceM, viewerUnits)}</span>}
+                                  {log.durationSec != null && log.durationSec > 0 && <span>{formatDurationSeconds(log.durationSec)}</span>}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </>
             ) : (
               <>
             <div className="cal-month-nav-row">
