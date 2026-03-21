@@ -1268,7 +1268,7 @@ export default async function CalendarPage({
         </section>
 
         <aside className="dash-right cal-right" data-debug-id="TSB">
-          {hasSelectedDate && <div id="day-details-card" className="dash-card cal-info-card cal-day-details-card is-open" data-debug-id="TDL">
+          {hasSelectedDate && !isWeekView && <div id="day-details-card" className="dash-card cal-info-card cal-day-details-card is-open" data-debug-id="TDL">
 
             {/* Header: date + status */}
             <div className="cal-detail-header">
