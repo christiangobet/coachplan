@@ -29,6 +29,8 @@ import CalendarDayTapHandler from "@/components/CalendarDayTapHandler";
 import StravaIcon from "@/components/StravaIcon";
 import PlanSummarySection from "@/components/PlanSummarySection";
 import type { PlanSummary } from "@/lib/types/plan-summary";
+import WeekStrip from "@/components/WeekStrip";
+import type { WeekStripDay } from "@/components/WeekStrip";
 import "../dashboard/dashboard.css";
 import "./calendar.css";
 
@@ -42,6 +44,8 @@ type CalendarSearchParams = {
   month?: string;
   date?: string;
   returnTo?: string;
+  view?: string;   // "week" | "month" (default "month")
+  week?: string;   // YYYY-MM-DD of the Monday — only used when view=week
 };
 
 type ActivityType =
@@ -190,6 +194,37 @@ function addMonths(value: Date, delta: number) {
   d.setUTCDate(1);
   d.setUTCMonth(d.getUTCMonth() + delta);
   return d;
+}
+
+/** Returns the ISO Monday (Mon=1) of the week containing `value`. */
+function getWeekMonday(value: Date): Date {
+  const d = normalizeDate(value);
+  const isoDay = getIsoDay(d); // 1=Mon … 7=Sun
+  d.setUTCDate(d.getUTCDate() - (isoDay - 1));
+  return d;
+}
+
+/** Add `delta` weeks to `value`. */
+function addWeeks(value: Date, delta: number): Date {
+  const d = normalizeDate(value);
+  d.setUTCDate(d.getUTCDate() + delta * 7);
+  return d;
+}
+
+/** Build the URL for week view: preserves plan, date, and returnTo. */
+function buildWeekHref(
+  weekMonday: Date,
+  planId: string,
+  selectedDate?: string | null,
+  returnTo?: string | null
+): string {
+  const params = new URLSearchParams();
+  params.set("view", "week");
+  params.set("week", dateKey(weekMonday));
+  if (planId) params.set("plan", planId);
+  if (selectedDate) params.set("date", selectedDate);
+  if (returnTo) params.set("returnTo", returnTo);
+  return `/calendar?${params.toString()}`;
 }
 
 function formatMonthLabel(value: Date) {
@@ -357,6 +392,9 @@ export default async function CalendarPage({
   const requestedReturnTo = typeof params.returnTo === "string" ? params.returnTo : "";
   const returnToDashboard = requestedReturnTo === "dashboard";
   const returnToParam = returnToDashboard ? "dashboard" : null;
+  const requestedView = typeof params.view === "string" ? params.view : "month";
+  const isWeekView = requestedView === "week";
+  const requestedWeek = typeof params.week === "string" ? params.week : undefined;
   const cookiePlanId = cookieStore.get(SELECTED_PLAN_COOKIE)?.value || "";
 
   // Resolve the target plan ID — URL param wins, then cookie
@@ -657,6 +695,15 @@ export default async function CalendarPage({
   const dashboardReturnHref = returnToDashboard ? `/dashboard?plan=${encodeURIComponent(selectedPlan.id)}` : null;
   const collapseCardHref = dashboardReturnHref ?? buildCalendarHref(monthStart, selectedPlan.id, null, returnToParam);
 
+  // Week view: resolve the Monday of the displayed week
+  const parsedWeekParam = parseDateParam(requestedWeek);
+  const weekMonday = isWeekView
+    ? (parsedWeekParam ? getWeekMonday(parsedWeekParam) : getWeekMonday(today))
+    : getWeekMonday(today);
+
+  const prevWeekHref = buildWeekHref(addWeeks(weekMonday, -1), selectedPlan.id, selectedDateKey, returnToParam);
+  const nextWeekHref = buildWeekHref(addWeeks(weekMonday, 1), selectedPlan.id, selectedDateKey, returnToParam);
+
   // externalActivitiesRaw already fetched in stage 3 (parallel with plan load)
 
   const externalByDate = new Map<string, DayExternalLog[]>();
@@ -711,6 +758,75 @@ export default async function CalendarPage({
     selectedPlan.id,
     "Adjust this week around my schedule, recovery, and available training time."
   );
+
+  // Activity type → single-char strip code
+  const STRIP_CODE: Record<string, string> = {
+    RUN: "R",
+    CROSS_TRAIN: "C",
+    STRENGTH: "S",
+    MOBILITY: "M",
+    YOGA: "Y",
+    HIKE: "H",
+    REST: "—",
+    OTHER: "?"
+  };
+
+  const DAY_LETTERS = ["M", "T", "W", "T", "F", "S", "S"];
+
+  const weekDays: WeekStripDay[] = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(weekMonday);
+    d.setUTCDate(weekMonday.getUTCDate() + i);
+    const key = dateKey(d);
+    const dayActivities = activitiesByDate.get(key) || [];
+    const dayLogs = externalByDate.get(key) || [];
+    const dayInfo = dayInfoByDate.get(key) || null;
+    const inPlan = planDateKeys.has(key);
+
+    const manualStatus = dayInfo?.manualStatus || "OPEN";
+    const autoDone = dayActivities.length > 0 && dayActivities.every((a) => a.completed);
+    const status: WeekStripDay["status"] = inPlan
+      ? (autoDone ? "DONE" : manualStatus as "DONE" | "MISSED" | "PARTIAL" | "OPEN")
+      : null;
+
+    const primary = dayActivities.find((a) => a.type !== "REST") || dayActivities[0] || null;
+    const activityCode = primary ? (STRIP_CODE[primary.type] ?? "?") : "—";
+
+    const hasStrava = dayLogs.some((l) => l.provider === "STRAVA");
+
+    const href = buildWeekHref(weekMonday, selectedPlan.id, key, returnToParam);
+
+    return {
+      dateISO: key,
+      dayLetter: DAY_LETTERS[i],
+      dateNum: d.getUTCDate(),
+      activityCode,
+      status,
+      hasStrava,
+      isToday: key === dateKey(today),
+      isSelected: key === selectedDateKey,
+      inPlan,
+      href,
+    };
+  });
+
+  const weekLabelParts: string[] = [formatMonthLabel(weekMonday)];
+  const displayedPlanWeek = weeks.find((week) => {
+    const bounds = resolveWeekBounds({
+      weekIndex: week.weekIndex,
+      weekStartDate: week.startDate,
+      weekEndDate: week.endDate,
+      raceDate: selectedPlan.raceDate,
+      weekCount: selectedPlan.weekCount,
+      allWeekIndexes
+    });
+    if (!bounds.startDate || !bounds.endDate) return false;
+    return weekMonday >= bounds.startDate && weekMonday <= bounds.endDate;
+  });
+  if (displayedPlanWeek) {
+    weekLabelParts.push(`Week ${displayedPlanWeek.weekIndex}`);
+  }
+  const weekLabel = weekLabelParts.join(" · ");
+
   return (
     <main className={`dash cal-page${hasSelectedDate ? ' cal-day-open' : ''}`} data-debug-id="TRL">
       <SelectedPlanCookie planId={selectedPlan.id} />
@@ -727,8 +843,39 @@ export default async function CalendarPage({
             <div className="cal-header-actions">
               <div className="cal-view-toggle" aria-label="Plan views">
                 <Link className="cal-view-pill" href={`/plans/${selectedPlan.id}`}>Plan</Link>
-                <span className="cal-view-pill active">Training Calendar</span>
+                {isWeekView ? (
+                  <Link
+                    className="cal-view-pill"
+                    href={buildCalendarHref(monthStart, selectedPlan.id, selectedDateKey, returnToParam)}
+                  >
+                    Training Calendar
+                  </Link>
+                ) : (
+                  <span className="cal-view-pill active">Training Calendar</span>
+                )}
                 <Link className="cal-view-pill" href="/strava">Import Strava</Link>
+              </div>
+              <div className="cal-view-mode-toggle" aria-label="Calendar layout">
+                {isWeekView ? (
+                  <Link
+                    className="cal-mode-pill"
+                    href={buildCalendarHref(monthStart, selectedPlan.id, selectedDateKey, returnToParam)}
+                  >
+                    Month
+                  </Link>
+                ) : (
+                  <span className="cal-mode-pill active">Month</span>
+                )}
+                {isWeekView ? (
+                  <span className="cal-mode-pill active">Week</span>
+                ) : (
+                  <Link
+                    className="cal-mode-pill"
+                    href={buildWeekHref(weekMonday, selectedPlan.id, selectedDateKey, returnToParam)}
+                  >
+                    Week
+                  </Link>
+                )}
               </div>
             </div>
           </div>
@@ -794,6 +941,15 @@ export default async function CalendarPage({
           </details>
 
           <div className="dash-card cal-month-card">
+            {isWeekView ? (
+              <WeekStrip
+                days={weekDays}
+                weekLabel={weekLabel}
+                prevWeekHref={prevWeekHref}
+                nextWeekHref={nextWeekHref}
+              />
+            ) : (
+              <>
             <div className="cal-month-nav-row">
               <div className="cal-month-nav">
                 <Link className="cal-month-btn" href={prevMonthHref} aria-label="Previous month">
@@ -1023,6 +1179,8 @@ export default async function CalendarPage({
               })}
             </div>
             </div>{/* cal-month-scroll */}
+              </>
+            )}
           </div>
 
           <div className="dash-card cal-type-glossary" aria-label="Activity type glossary">
