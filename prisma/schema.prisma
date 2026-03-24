@@ -81,6 +81,7 @@ model User {
   athletePlans TrainingPlan[] @relation("AthletePlan")
   externalAccounts ExternalAccount[]
   externalActivities ExternalActivity[]
+  pushSubscriptions PushSubscription[]
 }
 
 model CoachAthlete {
@@ -422,4 +423,14 @@ model PlanImage {
   selectedByPlans TrainingPlan[] @relation("SelectedPlanBanner")
 
   @@index([planId, createdAt])
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
