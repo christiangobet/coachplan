@@ -27,7 +27,12 @@ const QUOTES = [
 ];
 
 export default function NotificationToggle() {
-  const [state, setState] = useState<State>("loading");
+  const [state, setState] = useState<State>(() => {
+    if (typeof window === "undefined") return "loading";
+    if (!("Notification" in window) || !("serviceWorker" in navigator)) return "unsupported";
+    const perm = Notification.permission;
+    return perm === "default" ? "prompt" : (perm as State);
+  });
   const [subscribed, setSubscribed] = useState(false);
   const [prefs, setPrefs] = useState<Prefs>({
     notifPrevDayHour: 18,
@@ -40,15 +45,11 @@ export default function NotificationToggle() {
   );
 
   useEffect(() => {
-    if (!("Notification" in window) || !("serviceWorker" in navigator)) {
-      setState("unsupported");
-      return;
-    }
-    const perm = Notification.permission;
-    setState(perm === "default" ? "prompt" : perm as State);
+    if (state === "unsupported") return;
     navigator.serviceWorker.ready.then((reg) =>
       reg.pushManager.getSubscription().then((sub) => setSubscribed(!!sub))
     );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Load prefs from server once subscribed
