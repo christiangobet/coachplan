@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 
-import { decodeVapidPublicKey } from "@/lib/push-client";
+import { decodeVapidPublicKey, fetchVapidPublicKey } from "@/lib/push-client";
 
 type State = "unsupported" | "denied" | "prompt" | "granted" | "loading";
 
@@ -104,9 +104,10 @@ export default function NotificationToggle() {
       const permission = await Notification.requestPermission();
       if (permission !== "granted") { setState("denied"); return; }
       const reg = await navigator.serviceWorker.ready;
+      const publicKey = await fetchVapidPublicKey();
       const sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: decodeVapidPublicKey(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!),
+        applicationServerKey: decodeVapidPublicKey(publicKey),
       });
       await fetch("/api/push/subscribe", {
         method: "POST",

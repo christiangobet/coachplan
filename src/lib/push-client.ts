@@ -16,3 +16,19 @@ export function decodeVapidPublicKey(base64UrlString: string): Uint8Array<ArrayB
 
   return output;
 }
+
+export async function fetchVapidPublicKey(): Promise<string> {
+  const response = await fetch("/api/push/vapid-key", { cache: "no-store" });
+
+  if (!response.ok) {
+    throw new Error("Could not load VAPID public key.");
+  }
+
+  const payload = (await response.json()) as { publicKey?: string };
+
+  if (!payload.publicKey) {
+    throw new Error("Missing valid VAPID public key.");
+  }
+
+  return payload.publicKey;
+}
