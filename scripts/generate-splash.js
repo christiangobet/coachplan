@@ -29,12 +29,14 @@ const SIZES = [
 
 const OUT_DIR = path.join(__dirname, '../public/splash');
 
+const ICON_DATA_URL = 'data:image/png;base64,' +
+  fs.readFileSync(path.join(__dirname, '../public/icons/icon-512.png')).toString('base64');
+
 function buildHtml(w, h) {
   // Scale font/icon sizes relative to the narrower dimension so it looks
   // right on all screen sizes (small phones to large iPads).
   const base = Math.min(w, h);
   const iconSize   = Math.round(base * 0.18);
-  const iconRadius = Math.round(iconSize * 0.25);
   const wordSize   = Math.round(base * 0.045);
   const tagSize    = Math.round(base * 0.022);
   const glowR      = Math.round(base * 0.28);
@@ -59,13 +61,6 @@ function buildHtml(w, h) {
   const cx = Math.round(w / 2);
   const cy = Math.round(h / 2);
 
-  // Triangle icon vertices (centered)
-  const triH = Math.round(iconSize * 0.55);
-  const triW = Math.round(iconSize * 0.65);
-  const t1x = cx, t1y = cy - triH;
-  const t2x = cx + triW, t2y = cy + triH;
-  const t3x = cx - triW, t3y = cy + triH;
-
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -89,11 +84,6 @@ function buildHtml(w, h) {
     <linearGradient id="barGrad" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="#fc4c02" stop-opacity="0.55"/>
       <stop offset="100%" stop-color="#fc4c02" stop-opacity="0.08"/>
-    </linearGradient>
-    <!-- icon gradient -->
-    <linearGradient id="iconGrad" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#fc4c02"/>
-      <stop offset="100%" stop-color="#c93600"/>
     </linearGradient>
     <!-- radial glow behind icon -->
     <radialGradient id="iconGlow" cx="50%" cy="50%" r="50%">
@@ -120,11 +110,6 @@ function buildHtml(w, h) {
       <stop offset="25%" stop-color="#070c16" stop-opacity="0"/>
       <stop offset="100%" stop-color="#070c16" stop-opacity="0.65"/>
     </radialGradient>
-    <!-- icon rounded rect clip -->
-    <clipPath id="iconClip">
-      <rect x="${cx - Math.round(iconSize/2)}" y="${cy - Math.round(iconSize/2)}"
-            width="${iconSize}" height="${iconSize}" rx="${iconRadius}"/>
-    </clipPath>
   </defs>
 
   <!-- Base background -->
@@ -165,23 +150,10 @@ function buildHtml(w, h) {
   <ellipse cx="${cx}" cy="${cy}" rx="${glowR}" ry="${glowR}"
     fill="url(#iconGlow)"/>
 
-  <!-- Icon box background -->
-  <rect x="${cx - Math.round(iconSize/2)}" y="${cy - Math.round(iconSize/2)}"
-        width="${iconSize}" height="${iconSize}" rx="${iconRadius}"
-        fill="url(#iconGrad)"/>
-
-  <!-- Icon box shadow approximation (subtle darker rect behind) -->
-  <rect x="${cx - Math.round(iconSize/2) + Math.round(base*0.005)}"
-        y="${cy - Math.round(iconSize/2) + Math.round(base*0.015)}"
-        width="${iconSize}" height="${iconSize}" rx="${iconRadius}"
-        fill="rgba(0,0,0,0.3)" style="filter:blur(${Math.round(base*0.02)}px)"/>
-
-  <!-- Triangle logo mark (re-drawn on top) -->
-  <rect x="${cx - Math.round(iconSize/2)}" y="${cy - Math.round(iconSize/2)}"
-        width="${iconSize}" height="${iconSize}" rx="${iconRadius}"
-        fill="url(#iconGrad)"/>
-  <polygon points="${t1x},${t1y} ${t2x},${t2y} ${t3x},${t3y}"
-           fill="white" opacity="0.92"/>
+  <!-- Real app icon -->
+  <image href="${ICON_DATA_URL}"
+    x="${cx - Math.round(iconSize/2)}" y="${cy - Math.round(iconSize/2)}"
+    width="${iconSize}" height="${iconSize}"/>
 
   <!-- Wordmark -->
   <text x="${cx}" y="${cy + Math.round(iconSize/2) + Math.round(base*0.065)}"
