@@ -12,11 +12,27 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "MyTrainingPlan",
   description: "Upload training plans, align to race day, and track progress.",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    title: "MyTrainingPlan",
+    statusBarStyle: "default",
+  },
+  icons: {
+    icon: [
+      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [
+      { url: "/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+    ],
+  },
 };
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  themeColor: "#fc4c02",
 };
 
 type TopNavItem = { href: string; label: string; planOnly?: boolean };
