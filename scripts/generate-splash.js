@@ -153,7 +153,8 @@ function buildHtml(w, h) {
   <!-- Real app icon -->
   <image href="${ICON_DATA_URL}"
     x="${cx - Math.round(iconSize/2)}" y="${cy - Math.round(iconSize/2)}"
-    width="${iconSize}" height="${iconSize}"/>
+    width="${iconSize}" height="${iconSize}"
+    preserveAspectRatio="xMidYMid meet"/>
 
   <!-- Wordmark -->
   <text x="${cx}" y="${cy + Math.round(iconSize/2) + Math.round(base*0.065)}"
