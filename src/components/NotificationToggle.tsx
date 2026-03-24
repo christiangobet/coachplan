@@ -70,14 +70,21 @@ export default function NotificationToggle() {
   }, [subscribed]);
 
   async function savePrefs(next: Prefs) {
+    const prev = prefs;
     setPrefs(next);
     setSaving(true);
-    await fetch("/api/me", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(next),
-    }).catch(() => {});
-    setSaving(false);
+    try {
+      const res = await fetch("/api/me", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(next),
+      });
+      if (!res.ok) throw new Error();
+    } catch {
+      setPrefs(prev);
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function subscribe() {
