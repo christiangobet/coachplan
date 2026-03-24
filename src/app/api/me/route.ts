@@ -3,6 +3,10 @@ import { currentUser } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
 import { ensureUserFromAuth } from '@/lib/user-sync';
 
+function validHour(v: unknown): number | undefined {
+  return typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= 23 ? v : undefined;
+}
+
 export async function GET() {
   const user = await currentUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -35,9 +39,9 @@ export async function PUT(req: Request) {
       role: body.role || undefined,
       currentRole: body.role || undefined,
       hasBothRoles: body.hasBothRoles ?? undefined,
-      notifPrevDayHour:    typeof body.notifPrevDayHour === 'number'    ? body.notifPrevDayHour    : undefined,
+      notifPrevDayHour:    validHour(body.notifPrevDayHour),
       notifSameDayEnabled: typeof body.notifSameDayEnabled === 'boolean' ? body.notifSameDayEnabled : undefined,
-      notifSameDayHour:    typeof body.notifSameDayHour === 'number'    ? body.notifSameDayHour    : undefined,
+      notifSameDayHour:    validHour(body.notifSameDayHour),
     }
   });
 
