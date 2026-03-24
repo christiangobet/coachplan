@@ -9,16 +9,14 @@ async function readWorkspaceFile(relativePath: string) {
   return readFile(path.join(workspaceRoot, relativePath), "utf8");
 }
 
-test("dashboard and calendar activity queries include matched external route data", async () => {
+test("dashboard and calendar avoid shipping full raw external payloads in their initial plan queries", async () => {
   const dashboardSource = await readWorkspaceFile("src/app/dashboard/page.tsx");
   const calendarSource = await readWorkspaceFile("src/app/calendar/page.tsx");
+  const calendarRawSelections = calendarSource.match(/raw:\s*true/g) ?? [];
 
-  assert.match(dashboardSource, /externalActivities:/);
-  assert.match(calendarSource, /externalActivities:/);
-  assert.match(dashboardSource, /movingTimeSec/);
-  assert.match(calendarSource, /movingTimeSec/);
-  assert.match(dashboardSource, /elevationGainM/);
-  assert.match(calendarSource, /elevationGainM/);
-  assert.match(dashboardSource, /raw: true/);
-  assert.match(calendarSource, /raw: true/);
+  assert.doesNotMatch(dashboardSource, /externalActivities:/);
+  assert.doesNotMatch(dashboardSource, /raw:\s*true/);
+  assert.match(calendarSource, /externalActivitiesSummary/);
+  assert.match(calendarSource, /selectedExternalActivityRows/);
+  assert.equal(calendarRawSelections.length, 1);
 });

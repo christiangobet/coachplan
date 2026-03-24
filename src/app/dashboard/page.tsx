@@ -22,6 +22,7 @@ import DashboardDayLogShell from "@/components/DashboardDayLogShell";
 import { buildLogActivities, buildPlannedMetricParts } from "@/lib/log-activity";
 import DashboardTrainingLogStatus, { type StatusFeedItem } from "@/components/DashboardTrainingLogStatus";
 import PlanSummarySection from "@/components/PlanSummarySection";
+import ScreenPerfProbe from "@/components/ScreenPerfProbe";
 import type { PlanSummary } from "@/lib/types/plan-summary";
 import "./dashboard.css";
 
@@ -250,22 +251,7 @@ export default async function DashboardPage({
             days: {
               orderBy: { dayOfWeek: "asc" },
               include: {
-                activities: {
-                  include: {
-                    externalActivities: {
-                      select: {
-                        name: true,
-                        sportType: true,
-                        startTime: true,
-                        distanceM: true,
-                        movingTimeSec: true,
-                        elevationGainM: true,
-                        durationSec: true,
-                        raw: true,
-                      },
-                    },
-                  },
-                },
+                activities: true,
               }
             }
           }
@@ -658,6 +644,11 @@ export default async function DashboardPage({
 
   return (
     <main className="dash" data-debug-id="DSH">
+      <ScreenPerfProbe
+        screen="dashboard"
+        actionSelector=".dash-btn-primary, .dash-btn-secondary, .dash-log-collapsed-link, a[href^='/calendar']"
+        suppressesMobilePrefetch
+      />
       <SelectedPlanCookie planId={activePlan.id} />
       <div className="dash-atmosphere" />
       <div className="dash-topo" />

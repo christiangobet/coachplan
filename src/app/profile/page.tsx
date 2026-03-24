@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import StravaConnectButton from '@/components/StravaConnectButton';
 import NotificationToggle from '@/components/NotificationToggle';
+import ScreenPerfProbe from '@/components/ScreenPerfProbe';
+import { isCoarsePointerDevice, scheduleIdleTask } from '@/lib/client-runtime';
 import '../dashboard/dashboard.css';
 import './profile.css';
 
@@ -86,6 +88,25 @@ type PerformanceSnapshotResponse = {
   cached?: boolean;
   dataAvailableDays?: number;
   requestedDays?: number;
+};
+
+type ProfileBootstrapResponse = {
+  user?: {
+    email?: string;
+    name?: string;
+    createdAt?: string;
+    hasBothRoles?: boolean;
+    units?: 'MILES' | 'KM';
+    goalRaceDate?: string | null;
+    paceTargets?: PaceTargets;
+    role?: 'ATHLETE' | 'COACH';
+  } | null;
+  coaches?: Array<{ id: string; name: string }>;
+  stats?: ProfileStats | null;
+  integrations?: {
+    accounts?: IntegrationAccount[];
+    capability?: IntegrationCapability;
+  } | null;
 };
 
 // ── Constants ──────────────────────────────────────────────────────────────────
@@ -218,6 +239,8 @@ function emitProfileEvent(event: string, detail: Record<string, unknown> = {}) {
 export default function ProfilePage() {
   const searchParams = useSearchParams();
   const paceZonesSectionRef = useRef<HTMLDivElement>(null);
+  const performanceCardRef = useRef<HTMLDivElement>(null);
+  const snapshotRequestedRef = useRef(false);
 
   // User data
   const [email, setEmail] = useState('');
@@ -246,6 +269,10 @@ export default function ProfilePage() {
   });
   const [integrationStatus, setIntegrationStatus] = useState<string | null>(null);
   const [busyProvider, setBusyProvider] = useState<IntegrationProvider | null>(null);
+  const stravaAccount = useMemo(
+    () => integrationAccounts.find((a) => a.provider === 'STRAVA') ?? null,
+    [integrationAccounts]
+  );
 
   // Stats (async)
   const [stats, setStats] = useState<ProfileStats | null>(null);
@@ -275,6 +302,43 @@ export default function ProfilePage() {
       garminConfigured: Boolean(data?.capability?.garminConfigured)
     });
   }
+
+  const applyBootstrapPayload = useCallback((payload: ProfileBootstrapResponse | null) => {
+    const userData = payload?.user;
+    const coachData = payload?.coaches;
+    const statsData = payload?.stats;
+    const integrations = payload?.integrations;
+
+    if (userData?.email) setEmail(userData.email);
+    if (userData?.name) setName(userData.name);
+    if (userData?.createdAt) setCreatedAt(userData.createdAt);
+    if (typeof userData?.hasBothRoles === 'boolean') setHasBothRoles(userData.hasBothRoles);
+    if (userData?.units === 'MILES' || userData?.units === 'KM') setUnits(userData.units);
+    if (userData?.goalRaceDate) setGoalRaceDate(userData.goalRaceDate.slice(0, 10));
+    if (userData?.role === 'ATHLETE' || userData?.role === 'COACH') setRole(userData.role);
+    if (userData?.paceTargets) {
+      setPaceTargets(userData.paceTargets);
+      const rg = userData.paceTargets?.raceGoal as Record<string, unknown> | undefined;
+      if (rg?.raceDistanceKm && typeof rg.raceDistanceKm === 'number') {
+        const known = RACE_DISTANCES.find(
+          (d) => d.km > 0 && Math.abs(d.km - (rg.raceDistanceKm as number)) < 0.1
+        );
+        setSelectedDistanceKey(known ? known.key : 'CUSTOM');
+        if (!known) setCustomDistanceKm(String(rg.raceDistanceKm));
+      }
+      if (rg?.goalTimeSec && typeof rg.goalTimeSec === 'number') {
+        setGoalTimeStr(formatGoalTime(rg.goalTimeSec as number));
+      }
+    }
+
+    setCoaches(coachData || []);
+    if (statsData) setStats(statsData);
+    if (integrations?.accounts) setIntegrationAccounts(integrations.accounts);
+    setIntegrationCapability({
+      stravaConfigured: Boolean(integrations?.capability?.stravaConfigured),
+      garminConfigured: Boolean(integrations?.capability?.garminConfigured)
+    });
+  }, []);
 
   const loadPerformanceSnapshot = useCallback(async (forceRefresh = false, windowDays?: number) => {
     if (forceRefresh) setPerformanceRefreshing(true);
@@ -358,39 +422,51 @@ export default function ProfilePage() {
   }, [snapshotWindowDays]);
 
   useEffect(() => {
-    // Load user + stats + integrations in parallel
-    Promise.all([
-      fetch('/api/me').then((r) => r.json()),
-      fetch('/api/coaches').then((r) => r.json()),
-      loadIntegrationStatus(),
-      fetch('/api/me/stats').then((r) => r.json())
-    ]).then(([userData, coachData, , statsData]) => {
-      if (userData?.email) setEmail(userData.email);
-      if (userData?.name) setName(userData.name);
-      if (userData?.createdAt) setCreatedAt(userData.createdAt);
-      if (userData?.hasBothRoles) setHasBothRoles(userData.hasBothRoles);
-      if (userData?.units === 'MILES' || userData?.units === 'KM') setUnits(userData.units);
-      if (userData?.goalRaceDate) setGoalRaceDate(userData.goalRaceDate.slice(0, 10));
-      if (userData?.role === 'ATHLETE' || userData?.role === 'COACH') setRole(userData.role);
-      if (userData?.paceTargets) {
-        setPaceTargets(userData.paceTargets);
-        const rg = userData.paceTargets?.raceGoal as Record<string, unknown> | undefined;
-        if (rg?.raceDistanceKm && typeof rg.raceDistanceKm === 'number') {
-          const known = RACE_DISTANCES.find(
-            (d) => d.km > 0 && Math.abs(d.km - (rg.raceDistanceKm as number)) < 0.1
-          );
-          setSelectedDistanceKey(known ? known.key : 'CUSTOM');
-          if (!known) setCustomDistanceKm(String(rg.raceDistanceKm));
-        }
-        if (rg?.goalTimeSec && typeof rg.goalTimeSec === 'number') {
-          setGoalTimeStr(formatGoalTime(rg.goalTimeSec as number));
-        }
-      }
-      setCoaches(coachData?.coaches || []);
-      if (statsData?.totalPlans !== undefined) setStats(statsData);
-    });
-    void loadPerformanceSnapshot();
-  }, [loadPerformanceSnapshot]);
+    fetch('/api/profile/bootstrap', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((data) => applyBootstrapPayload(data as ProfileBootstrapResponse))
+      .catch(() => {});
+  }, [applyBootstrapPayload]);
+
+  useEffect(() => {
+    if (!stravaAccount?.connected) {
+      setPerformanceStatus('disconnected');
+      setPerformanceSnapshot(null);
+      setPerformanceCached(false);
+      setPerformanceReason('Connect Strava to estimate performance.');
+      snapshotRequestedRef.current = false;
+      return;
+    }
+
+    const requestSnapshot = () => {
+      if (snapshotRequestedRef.current) return;
+      snapshotRequestedRef.current = true;
+      void loadPerformanceSnapshot();
+    };
+
+    if (!isCoarsePointerDevice()) {
+      requestSnapshot();
+      return;
+    }
+
+    let cancelIdle = scheduleIdleTask(requestSnapshot);
+    let observer: IntersectionObserver | null = null;
+
+    if (typeof window !== 'undefined' && typeof IntersectionObserver !== 'undefined' && performanceCardRef.current) {
+      observer = new IntersectionObserver((entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) return;
+        cancelIdle();
+        requestSnapshot();
+        observer?.disconnect();
+      }, { rootMargin: '180px 0px' });
+      observer.observe(performanceCardRef.current);
+    }
+
+    return () => {
+      cancelIdle();
+      observer?.disconnect();
+    };
+  }, [loadPerformanceSnapshot, stravaAccount?.connected]);
 
   useEffect(() => {
     const integration = searchParams.get('integration');
@@ -399,6 +475,7 @@ export default function ProfilePage() {
     if (integration === 'strava_connected') {
       setIntegrationStatus('Strava connected successfully.');
       loadIntegrationStatus();
+      snapshotRequestedRef.current = false;
       void loadPerformanceSnapshot(true);
     }
     if (integrationWarning === 'sync_failed') {
@@ -410,11 +487,6 @@ export default function ProfilePage() {
   }, [searchParams, loadPerformanceSnapshot]);
 
   // ── Derived state ─────────────────────────────────────────────────────────────
-
-  const stravaAccount = useMemo(
-    () => integrationAccounts.find((a) => a.provider === 'STRAVA') ?? null,
-    [integrationAccounts]
-  );
 
   const resolvedDistKm =
     selectedDistanceKey === 'CUSTOM'
@@ -623,6 +695,11 @@ export default function ProfilePage() {
 
   return (
     <main className="dash">
+      <ScreenPerfProbe
+        screen="profile"
+        actionSelector=".profile-performance-refresh-btn, .profile-race-edit-btn, .cta, .profile-units-toggle button"
+        suppressesMobilePrefetch
+      />
       <div className="dash-grid" style={{ maxWidth: 1000, margin: '0 auto', padding: '1.5rem 1rem' }}>
 
         {/* Page header */}
@@ -820,7 +897,7 @@ export default function ProfilePage() {
             </div>
 
             {/* Performance snapshot card */}
-            <div className="dash-card profile-performance-card">
+            <div className="dash-card profile-performance-card" ref={performanceCardRef}>
               <div className="profile-performance-header">
                 <h3>Performance Snapshot (Estimated)</h3>
                 <button

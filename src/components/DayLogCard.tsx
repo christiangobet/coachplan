@@ -442,7 +442,7 @@ export default function DayLogCard({
     setSyncedActivitiesBusy(true);
     setSyncedActivitiesError(null);
     try {
-      const res = await fetch(`/api/integrations/strava/review?plan=${encodeURIComponent(planId)}`, {
+      const res = await fetch(`/api/integrations/strava/review?plan=${encodeURIComponent(planId)}&date=${encodeURIComponent(dateISO)}`, {
         cache: 'no-store'
       });
       const body = await res.json().catch(() => ({}));

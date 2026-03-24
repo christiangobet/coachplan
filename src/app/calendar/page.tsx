@@ -34,6 +34,7 @@ import type { WeekStripDay } from "@/components/WeekStrip";
 import { buildStravaRoutePreview, extractStravaActivityPhoto } from "@/lib/strava-route";
 import { mapStravaSportTypeToVisualCode } from "@/lib/integrations/external-sport-visuals";
 import CalendarRouteMap from "@/components/CalendarRouteMap";
+import ScreenPerfProbe from "@/components/ScreenPerfProbe";
 import "../dashboard/dashboard.css";
 import "./calendar.css";
 
@@ -486,7 +487,7 @@ export default async function CalendarPage({
   earlyGridEnd.setUTCHours(23, 59, 59, 999);
 
   // Stage 3: parallel — full plan tree + banner + source name + external activities
-  const [selectedPlan, sourcePlanNameResult, selectedBannerImage, externalActivitiesRaw] = await Promise.all([
+  const [selectedPlan, sourcePlanNameResult, selectedBannerImage, externalActivitiesSummary] = await Promise.all([
     prisma.trainingPlan.findUnique({
       where: { id: selectedPlanMeta.id },
       include: {
@@ -496,22 +497,7 @@ export default async function CalendarPage({
             days: {
               orderBy: { dayOfWeek: "asc" },
               include: {
-                activities: {
-                  include: {
-                    externalActivities: {
-                      select: {
-                        name: true,
-                        sportType: true,
-                        startTime: true,
-                        distanceM: true,
-                        movingTimeSec: true,
-                        elevationGainM: true,
-                        durationSec: true,
-                        raw: true,
-                      },
-                    },
-                  },
-                },
+                activities: true,
               }
             }
           }
@@ -531,7 +517,7 @@ export default async function CalendarPage({
         id: true, provider: true, name: true, sportType: true, startTime: true,
         distanceM: true, durationSec: true, avgHeartRate: true, calories: true,
         matchedPlanActivityId: true, equivalence: true, equivalenceOverride: true,
-        equivalenceNote: true, loadRatio: true, raw: true
+        equivalenceNote: true, loadRatio: true
       }
     }),
   ]);
@@ -738,11 +724,11 @@ export default async function CalendarPage({
   const prevWeekHref = buildWeekHref(addWeeks(weekMonday, -1), selectedPlan.id, selectedDateKey, returnToParam);
   const nextWeekHref = buildWeekHref(addWeeks(weekMonday, 1), selectedPlan.id, selectedDateKey, returnToParam);
 
-  // externalActivitiesRaw already fetched in stage 3 (parallel with plan load)
+  // Calendar shell uses summary-only external logs; selected-day media is fetched separately.
 
   const externalByDate = new Map<string, DayExternalLog[]>();
-  for (const item of externalActivitiesRaw) {
-    const key = getExternalDateKey(item.raw, item.startTime);
+  for (const item of externalActivitiesSummary) {
+    const key = getExternalDateKey(null, item.startTime);
     const row = externalByDate.get(key) || [];
     row.push({
       id: item.id,
@@ -750,7 +736,69 @@ export default async function CalendarPage({
       name: item.name || item.sportType || "External activity",
       sportType: item.sportType,
       startTime: item.startTime,
-      startTimeLabel: parseExternalRawTimeLabel(item.raw),
+      startTimeLabel: formatClock(item.startTime),
+      distanceM: item.distanceM ?? null,
+      durationSec: item.durationSec ?? null,
+      avgHeartRate: item.avgHeartRate ?? null,
+      calories: item.calories ?? null,
+      matchedPlanActivityId: item.matchedPlanActivityId ?? null,
+      equivalence: item.equivalence ?? null,
+      equivalenceOverride: item.equivalenceOverride ?? null,
+      equivalenceNote: item.equivalenceNote ?? null,
+      loadRatio: item.loadRatio ?? null,
+      raw: null,
+    });
+    externalByDate.set(key, row);
+  }
+
+  const selectedDate = parsedRequestedDate || defaultSelectedDate;
+  const selectedDayInfo = dayInfoByDate.get(selectedDateKey) || null;
+  const selectedPlanActivities = activitiesByDate.get(selectedDateKey) || [];
+  const selectedIsPastOrToday = selectedDate.getTime() <= today.getTime();
+  const selectedDayWindowStart = new Date(selectedDate);
+  selectedDayWindowStart.setUTCDate(selectedDayWindowStart.getUTCDate() - 1);
+  selectedDayWindowStart.setUTCHours(0, 0, 0, 0);
+  const selectedDayWindowEnd = new Date(selectedDate);
+  selectedDayWindowEnd.setUTCDate(selectedDayWindowEnd.getUTCDate() + 1);
+  selectedDayWindowEnd.setUTCHours(23, 59, 59, 999);
+  const selectedExternalActivityRows = selectedIsPastOrToday
+    ? await prisma.externalActivity.findMany({
+      where: {
+        userId: user.id,
+        startTime: {
+          gte: selectedDayWindowStart,
+          lte: selectedDayWindowEnd
+        }
+      },
+      orderBy: { startTime: "asc" },
+      select: {
+        id: true,
+        provider: true,
+        name: true,
+        sportType: true,
+        startTime: true,
+        distanceM: true,
+        durationSec: true,
+        avgHeartRate: true,
+        calories: true,
+        matchedPlanActivityId: true,
+        equivalence: true,
+        equivalenceOverride: true,
+        equivalenceNote: true,
+        loadRatio: true,
+        raw: true
+      }
+    })
+    : [];
+  const selectedExternalLogs = selectedExternalActivityRows
+    .filter((item) => getExternalDateKey(item.raw, item.startTime) === selectedDateKey)
+    .map((item) => ({
+      id: item.id,
+      provider: item.provider,
+      name: item.name || item.sportType || "External activity",
+      sportType: item.sportType,
+      startTime: item.startTime,
+      startTimeLabel: parseExternalRawTimeLabel(item.raw) || formatClock(item.startTime),
       distanceM: item.distanceM ?? null,
       durationSec: item.durationSec ?? null,
       avgHeartRate: item.avgHeartRate ?? null,
@@ -761,15 +809,7 @@ export default async function CalendarPage({
       equivalenceNote: item.equivalenceNote ?? null,
       loadRatio: item.loadRatio ?? null,
       raw: item.raw ?? null,
-    });
-    externalByDate.set(key, row);
-  }
-
-  const selectedDate = parsedRequestedDate || defaultSelectedDate;
-  const selectedDayInfo = dayInfoByDate.get(selectedDateKey) || null;
-  const selectedPlanActivities = activitiesByDate.get(selectedDateKey) || [];
-  const selectedExternalLogs = externalByDate.get(selectedDateKey) || [];
-  const selectedIsPastOrToday = selectedDate.getTime() <= today.getTime();
+    }));
   const selectedManualStatus = selectedDayInfo?.manualStatus || 'OPEN';
   const selectedDayAutoDone = selectedPlanActivities.length > 0 && selectedPlanActivities.every((activity) => activity.completed);
   const selectedDayExplicitlyOpen = selectedDayInfo?.explicitlyOpen ?? false;
@@ -902,6 +942,11 @@ export default async function CalendarPage({
 
   return (
     <main className={`dash cal-page${hasSelectedDate && !isWeekView ? ' cal-day-open' : ''}`} data-debug-id="TRL">
+      <ScreenPerfProbe
+        screen="calendar"
+        actionSelector=".cal-grid a, .cal-view-pill, .cal-month-btn, .wsd-day-link"
+        suppressesMobilePrefetch
+      />
       <SelectedPlanCookie planId={selectedPlan.id} />
       <CalendarDayTapHandler />
       <div className="dash-grid">

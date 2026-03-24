@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import dynamic from 'next/dynamic';
 import { useParams, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import { useUser } from '@clerk/nextjs';
@@ -20,11 +21,10 @@ import {
 import { inferPaceBucketFromText, parseStructuredPaceTarget } from '@/lib/intensity-targets';
 import ActivityForm, { ActivityFormData } from '@/components/PlanEditor/ActivityForm';
 import DayLogCard from '@/components/DayLogCard';
-import PlanSourcePdfPane from '@/components/PlanSourcePdfPane';
-import PlanGuidePanel from '@/components/PlanGuidePanel';
 import PlanSummarySection from '@/components/PlanSummarySection';
 import ExternalSportIcon from '@/components/ExternalSportIcon';
 import StravaIcon from '@/components/StravaIcon';
+import ScreenPerfProbe from '@/components/ScreenPerfProbe';
 import type { PlanSummary } from '@/lib/types/plan-summary';
 import { buildLogActivities, type LogActivity } from '@/lib/log-activity';
 import { PLAN_IMAGE_MAX_COUNT, PLAN_IMAGE_MAX_FILE_BYTES } from '@/lib/plan-banner';
@@ -34,9 +34,19 @@ import {
   mergeChatHistoryMessages,
   orderCoachHistoryMessages
 } from '@/lib/plan-chat-history';
+import { emitCoachplanAnalytics, isCoarsePointerDevice } from '@/lib/client-runtime';
 import '../plans.css';
 import './review/review.css';
 import '../../dashboard/dashboard.css';
+
+const PlanSourcePdfPane = dynamic(() => import('@/components/PlanSourcePdfPane'), {
+  ssr: false,
+  loading: () => <p className="pcal-muted">Loading source PDF…</p>,
+});
+
+const PlanGuidePanel = dynamic(() => import('@/components/PlanGuidePanel'), {
+  loading: () => <p className="pcal-muted">Loading plan guide…</p>,
+});
 
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const ACTIVITY_TYPE_ABBR: Record<string, string> = {
@@ -509,6 +519,8 @@ export default function PlanDetailPage() {
     createAiGreetingTurn()
   ]);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatHistoryLoaded, setChatHistoryLoaded] = useState(false);
+  const [conversationHistoryOpen, setConversationHistoryOpen] = useState(false);
   const [activeProposalTurnId, setActiveProposalTurnId] = useState<string | null>(null);
   const [aiAppliedByTurn, setAiAppliedByTurn] = useState<Record<string, number[]>>({});
   const [aiTrainerLoading, setAiTrainerLoading] = useState(false);
@@ -572,7 +584,7 @@ export default function PlanDetailPage() {
   );
   // Detect touch-primary devices (iPad, phone). pointer:coarse = no fine mouse pointer.
   // On these devices we use touch drag exclusively and disable HTML5 draggable to avoid conflict.
-  const isTouchPrimary = typeof window === 'undefined' ? false : window.matchMedia('(pointer: coarse)').matches;
+  const isTouchPrimary = isCoarsePointerDevice();
   const [showSourcePdf, setShowSourcePdf] = useState(false);
   const [sourceDocumentChecked, setSourceDocumentChecked] = useState(false);
   const [sourceDocument, setSourceDocument] = useState<SourceDocumentMeta>({
@@ -1138,6 +1150,19 @@ export default function PlanDetailPage() {
     }
   }, [loadPlan, planId]);
 
+  useEffect(() => {
+    if (!isTouchPrimary || !planId) return;
+    emitCoachplanAnalytics({
+      event: 'plan_mobile_refresh_mode',
+      planId,
+      mode: 'focus_visibility',
+    });
+  }, [isTouchPrimary, planId]);
+
+  useEffect(() => {
+    setChatHistoryLoaded(false);
+  }, [planId]);
+
   // Touch drag support for iOS/iPadOS (HTML5 drag events don't fire on touch devices)
   useEffect(() => {
     if (!isEditMode) return;
@@ -1185,18 +1210,19 @@ export default function PlanDetailPage() {
     };
   }, [isEditMode, moveActivity]);
 
-  // Load chat history on mount
   useEffect(() => {
     if (!planId) return;
+    if (!chatOpen && !conversationHistoryOpen) return;
+    if (chatHistoryLoaded) return;
     fetch(`/api/plans/${planId}/chat?limit=50`)
       .then((r) => r.json())
       .then((data: { messages?: ChatMessage[] }) => {
         if (data.messages) setChatMessages(data.messages);
+        setChatHistoryLoaded(true);
       })
       .catch(() => {}); // non-critical
-  }, [planId]);
+  }, [chatHistoryLoaded, chatOpen, conversationHistoryOpen, planId]);
 
-  // Cross-device sync: poll /version every 30s, reload plan only if fingerprint changed
   const lastKnownVersionRef = useRef<string | null>(null);
   useEffect(() => {
     if (!planId) return;
@@ -1212,9 +1238,24 @@ export default function PlanDetailPage() {
         lastKnownVersionRef.current = version;
       } catch { /* non-critical */ }
     };
+    if (isTouchPrimary) {
+      const refreshOnVisibility = () => {
+        if (document.hidden) return;
+        void poll();
+      };
+      document.addEventListener('visibilitychange', refreshOnVisibility);
+      window.addEventListener('focus', refreshOnVisibility);
+      window.addEventListener('pageshow', refreshOnVisibility);
+      return () => {
+        document.removeEventListener('visibilitychange', refreshOnVisibility);
+        window.removeEventListener('focus', refreshOnVisibility);
+        window.removeEventListener('pageshow', refreshOnVisibility);
+      };
+    }
+
     const interval = setInterval(poll, 30_000);
     return () => clearInterval(interval);
-  }, [planId, loadPlan]);
+  }, [isTouchPrimary, planId, loadPlan]);
 
   useEffect(() => {
     if (!bannerModalOpen) return;
@@ -1243,12 +1284,11 @@ export default function PlanDetailPage() {
       if (target.closest('.pcal-chat-panel')) return;
       if (target.closest('.pcal-cell')) return;
       setSelectedDay(null);
-      void loadPlan();
     };
 
     document.addEventListener('pointerdown', onPointerDown);
     return () => document.removeEventListener('pointerdown', onPointerDown);
-  }, [loadPlan, selectedDay]);
+  }, [selectedDay]);
 
   useEffect(() => {
     fetch('/api/integrations/accounts')
@@ -2226,6 +2266,11 @@ export default function PlanDetailPage() {
       className={`pcal${showDesktopSourcePane ? ' with-source-pane' : ''}`}
       style={showDesktopSourcePane ? { '--pcal-source-width': `${sourcePaneWidth}px` } as React.CSSProperties : undefined}
     >
+      <ScreenPerfProbe
+        screen="plan_detail"
+        actionSelector=".pcal-view-pill, .pcal-cell, .ai-widget-pill, .pcal-inline-panel summary"
+        suppressesMobilePrefetch
+      />
       <SelectedPlanCookie planId={plan.status === 'ACTIVE' ? plan.id : null} />
 
       {showDesktopSourcePane && (
@@ -2403,7 +2448,10 @@ export default function PlanDetailPage() {
                 )}
               </div>
             </details>
-            <details className="pcal-inline-panel">
+            <details
+              className="pcal-inline-panel"
+              onToggle={(event) => setConversationHistoryOpen((event.currentTarget as HTMLDetailsElement).open)}
+            >
               <summary className="pcal-inline-panel-summary">💬 Conversation History</summary>
               <div className="pcal-inline-panel-body">
                 <div className="pcal-ai-history">

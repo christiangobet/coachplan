@@ -68,6 +68,7 @@ export async function GET(req: Request) {
   if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
   const url = new URL(req.url);
   const requestedPlanId = url.searchParams.get('plan')?.trim() || '';
+  const requestedDateKey = url.searchParams.get('date')?.trim() || '';
   const cookieStore = await cookies();
   const cookiePlanId = cookieStore.get(SELECTED_PLAN_COOKIE)?.value || '';
 
@@ -173,14 +174,26 @@ export async function GET(req: Request) {
   fallbackStart.setDate(fallbackStart.getDate() - 21);
   const windowStart = planStart && planStart <= today ? planStart : fallbackStart;
   const windowEnd = today;
+  const requestedDate = requestedDateKey ? fromDateKey(requestedDateKey) : null;
+  const requestedWindowStart = requestedDate ? new Date(requestedDate) : null;
+  const requestedWindowEnd = requestedDate ? new Date(requestedDate) : null;
+
+  if (requestedWindowStart) {
+    requestedWindowStart.setDate(requestedWindowStart.getDate() - 1);
+    requestedWindowStart.setHours(0, 0, 0, 0);
+  }
+  if (requestedWindowEnd) {
+    requestedWindowEnd.setDate(requestedWindowEnd.getDate() + 1);
+    requestedWindowEnd.setHours(23, 59, 59, 999);
+  }
 
   const externalActivities = await prisma.externalActivity.findMany({
     where: {
       userId: access.context.userId,
       provider: 'STRAVA',
       startTime: {
-        gte: windowStart,
-        lte: new Date(windowEnd.getTime() + (24 * 60 * 60 * 1000) - 1)
+        gte: requestedWindowStart ?? windowStart,
+        lte: requestedWindowEnd ?? new Date(windowEnd.getTime() + (24 * 60 * 60 * 1000) - 1)
       }
     },
     orderBy: [{ startTime: 'desc' }]
@@ -209,6 +222,7 @@ export async function GET(req: Request) {
 
   for (const external of externalActivities) {
     const key = getStravaDateKeyFromRaw(external.raw, external.startTime);
+    if (requestedDateKey && key !== requestedDateKey) continue;
     const row = stravaByDate.get(key) || [];
     row.push({
       id: external.id,
@@ -248,8 +262,10 @@ export async function GET(req: Request) {
   }
 
   const allDateKeys = new Set<string>([...planByDate.keys(), ...stravaByDate.keys()]);
+  if (requestedDateKey) allDateKeys.add(requestedDateKey);
   const sortedKeys = [...allDateKeys]
     .filter((key) => {
+      if (requestedDateKey) return key === requestedDateKey;
       const parsed = fromDateKey(key);
       if (!parsed) return false;
       return parsed >= windowStart && parsed <= windowEnd;

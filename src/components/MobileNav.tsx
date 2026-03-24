@@ -1,7 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useSearchParams, useRouter } from 'next/navigation';
 import { useAuth } from '@clerk/nextjs';
@@ -10,6 +10,7 @@ import {
   extractPlanIdFromPathname,
   SELECTED_PLAN_COOKIE,
 } from '@/lib/plan-selection';
+import { emitCoachplanAnalytics, isCoarsePointerDevice } from '@/lib/client-runtime';
 import styles from './MobileNav.module.css';
 
 type NavTab = {
@@ -113,6 +114,7 @@ export default function MobileNav() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const router = useRouter();
+  const preparedRoutesRef = useRef<Set<string>>(new Set());
   const contextualPlanId =
     extractPlanIdFromPathname(pathname)
     || searchParams.get('plan')
@@ -126,10 +128,25 @@ export default function MobileNav() {
     href: resolveTabHref(tab, contextualPlanId),
   }));
 
-  // Prefetch all tab routes on mount so navigation is instant
+  const prepareRoute = useCallback((href: string, source: 'touch' | 'hover' | 'focus') => {
+    if (!href || preparedRoutesRef.current.has(href)) return;
+    preparedRoutesRef.current.add(href);
+    router.prefetch(href);
+    emitCoachplanAnalytics({
+      event: 'mobile_nav_prefetch_prepared',
+      context: 'mobile_nav',
+      href,
+      source,
+    });
+  }, [router]);
+
   useEffect(() => {
-    TABS.forEach((tab) => router.prefetch(resolveTabHref(tab, contextualPlanId)));
-  }, [contextualPlanId, router]);
+    if (!isCoarsePointerDevice()) return;
+    emitCoachplanAnalytics({
+      event: 'mobile_nav_prefetch_suppressed',
+      context: 'mobile_nav',
+    });
+  }, []);
 
   const { isSignedIn } = useAuth();
 
@@ -151,8 +168,18 @@ export default function MobileNav() {
         <Link
           key={tab.href}
           href={tab.href}
+          prefetch={false}
           className={`${styles.tab}${isActive(tab) ? ` ${styles.active}` : ''}`}
           onClick={() => setPendingNav({ href: tab.href, fromPath: pathname })}
+          onTouchStart={() => prepareRoute(tab.href, 'touch')}
+          onMouseEnter={() => {
+            if (isCoarsePointerDevice()) return;
+            prepareRoute(tab.href, 'hover');
+          }}
+          onFocus={() => {
+            if (isCoarsePointerDevice()) return;
+            prepareRoute(tab.href, 'focus');
+          }}
         >
           <span className={styles.icon}>{tab.icon}</span>
           <span className={styles.label}>{tab.label}</span>
