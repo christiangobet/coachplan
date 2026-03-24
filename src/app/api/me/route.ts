@@ -28,10 +28,16 @@ export async function PUT(req: Request) {
       name: body.name,
       units: body.units,
       paceTargets: body.paceTargets,
-      goalRaceDate: body.goalRaceDate ? new Date(body.goalRaceDate) : null,
+      // Only set null when goalRaceDate is explicitly provided and falsy — not when absent
+      goalRaceDate: body.goalRaceDate !== undefined
+        ? (body.goalRaceDate ? new Date(body.goalRaceDate) : null)
+        : undefined,
       role: body.role || undefined,
       currentRole: body.role || undefined,
-      hasBothRoles: body.hasBothRoles ?? undefined
+      hasBothRoles: body.hasBothRoles ?? undefined,
+      notifPrevDayHour:    typeof body.notifPrevDayHour === 'number'    ? body.notifPrevDayHour    : undefined,
+      notifSameDayEnabled: typeof body.notifSameDayEnabled === 'boolean' ? body.notifSameDayEnabled : undefined,
+      notifSameDayHour:    typeof body.notifSameDayHour === 'number'    ? body.notifSameDayHour    : undefined,
     }
   });
 
