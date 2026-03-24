@@ -44,7 +44,8 @@ export default function NotificationToggle() {
       setState("unsupported");
       return;
     }
-    setState(Notification.permission as State);
+    const perm = Notification.permission;
+    setState(perm === "default" ? "prompt" : perm as State);
     navigator.serviceWorker.ready.then((reg) =>
       reg.pushManager.getSubscription().then((sub) => setSubscribed(!!sub))
     );
@@ -96,7 +97,8 @@ export default function NotificationToggle() {
       setSubscribed(true);
       setState("granted");
     } catch {
-      setState(Notification.permission as State);
+      const perm = Notification.permission;
+      setState(perm === "default" ? "prompt" : perm as State);
     }
   }
 
