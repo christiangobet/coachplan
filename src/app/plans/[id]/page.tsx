@@ -2267,7 +2267,7 @@ export default function PlanDetailPage() {
       )}
 
       <div className={showDesktopSourcePane ? 'pcal-main-column' : undefined}>
-      <div className={`pcal-layout${showDesktopSourcePane ? ' pdf-open' : ''}${selectedDay ? ' day-open' : ''}${isEditMode ? ' edit-mode' : ''}`} data-debug-id="PLD">
+      <div className={`pcal-layout${showDesktopSourcePane ? ' pdf-open' : ''}${selectedDay ? ' day-open' : ''}${isEditMode ? ' edit-mode' : ''}${chatOpen ? ' chat-open' : ''}`} data-debug-id="PLD">
         <AthleteSidebar
           name={getFirstName(user?.fullName || user?.firstName || 'Athlete')}
           active="plan-view"
@@ -2662,9 +2662,9 @@ export default function PlanDetailPage() {
                                 : dayDate.getDate()}
                             </span>
                           )}
-                          {dayDone && <span className="pcal-cell-day-check" title="Day completed">✓</span>}
-                          {dayMissed && <span className="pcal-cell-day-check pcal-cell-day-check--missed" title="Day missed">✗</span>}
-                          {dayPartial && <span className="pcal-cell-day-check pcal-cell-day-check--partial" title="Day partial">≈</span>}
+                          {dayDone && <span className="pcal-cell-day-check" aria-label="Day completed">✓</span>}
+                          {dayMissed && <span className="pcal-cell-day-check pcal-cell-day-check--missed" aria-label="Day missed">✗</span>}
+                          {dayPartial && <span className="pcal-cell-day-check pcal-cell-day-check--partial" aria-label="Day partial">≈</span>}
                           {isToday && <span className="pcal-cell-today-badge">Today</span>}
                           {activities.length === 0 && !isEditMode && (
                             <span className="pcal-cell-empty" />

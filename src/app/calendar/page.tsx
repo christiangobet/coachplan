@@ -1183,7 +1183,7 @@ export default async function CalendarPage({
                     data-day-href={dayHref}
                     data-debug-id="TCD"
                   >
-                    <Link className="cal-day-hit" href={dayHref} aria-label={`Open ${key}`}>
+                    <Link className="cal-day-hit" href={dayHref} aria-label={`Open ${new Date(key + 'T00:00:00Z').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' })}`}>
                       <div className="cal-day-head">
                         <span className="cal-day-number">{date.getUTCDate()}</span>
                         <div className="cal-day-head-badges">
