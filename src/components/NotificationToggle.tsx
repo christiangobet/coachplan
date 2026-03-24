@@ -26,6 +26,13 @@ const QUOTES = [
   "Champions aren't made on race day — they're made in the daily grind.",
 ];
 
+function isIosNonPwa(): boolean {
+  if (typeof window === "undefined") return false;
+  const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  const isStandalone = (navigator as Navigator & { standalone?: boolean }).standalone === true;
+  return isIos && !isStandalone;
+}
+
 export default function NotificationToggle() {
   const [state, setState] = useState<State>(() => {
     if (typeof window === "undefined") return "loading";
@@ -135,6 +142,14 @@ export default function NotificationToggle() {
         Notifications blocked — enable in iOS Settings.
       </p>
     );
+
+  if (isIosNonPwa()) {
+    return (
+      <p style={{ fontSize: 13, color: "var(--d-muted)" }}>
+        To enable reminders, add this app to your Home Screen first: tap the Share button in Safari, then &ldquo;Add to Home Screen&rdquo;.
+      </p>
+    );
+  }
 
   if (!subscribed) {
     return (
