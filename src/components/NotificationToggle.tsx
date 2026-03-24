@@ -3,9 +3,41 @@ import { useState, useEffect } from "react";
 
 type State = "unsupported" | "denied" | "prompt" | "granted" | "loading";
 
+type Prefs = {
+  notifPrevDayHour: number;
+  notifSameDayEnabled: boolean;
+  notifSameDayHour: number;
+};
+
+const HOUR_OPTIONS = Array.from({ length: 19 }, (_, i) => i + 5); // 5..23
+
+function fmtHour(h: number) {
+  if (h === 0) return "12:00 AM";
+  if (h < 12) return `${h}:00 AM`;
+  if (h === 12) return "12:00 PM";
+  return `${h - 12}:00 PM`;
+}
+
+const QUOTES = [
+  "Consistency is everything. Your future self will thank you.",
+  "Reminders help athletes show up even on tired days. You've got this.",
+  "Small daily commitments compound into big race-day results. Keep going!",
+  "You're one of the athletes who actually follows through. That's rare.",
+  "Champions aren't made on race day — they're made in the daily grind.",
+];
+
 export default function NotificationToggle() {
   const [state, setState] = useState<State>("loading");
   const [subscribed, setSubscribed] = useState(false);
+  const [prefs, setPrefs] = useState<Prefs>({
+    notifPrevDayHour: 18,
+    notifSameDayEnabled: false,
+    notifSameDayHour: 7,
+  });
+  const [saving, setSaving] = useState(false);
+  const [quote] = useState(
+    () => QUOTES[Math.floor(Math.random() * QUOTES.length)]
+  );
 
   useEffect(() => {
     if (!("Notification" in window) || !("serviceWorker" in navigator)) {
@@ -17,6 +49,34 @@ export default function NotificationToggle() {
       reg.pushManager.getSubscription().then((sub) => setSubscribed(!!sub))
     );
   }, []);
+
+  // Load prefs from server once subscribed
+  useEffect(() => {
+    if (!subscribed) return;
+    fetch("/api/me")
+      .then((r) => r.json())
+      .then((u) => {
+        if (typeof u.notifPrevDayHour === "number") {
+          setPrefs({
+            notifPrevDayHour: u.notifPrevDayHour,
+            notifSameDayEnabled: !!u.notifSameDayEnabled,
+            notifSameDayHour: u.notifSameDayHour ?? 7,
+          });
+        }
+      })
+      .catch(() => {});
+  }, [subscribed]);
+
+  async function savePrefs(next: Prefs) {
+    setPrefs(next);
+    setSaving(true);
+    await fetch("/api/me", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(next),
+    }).catch(() => {});
+    setSaving(false);
+  }
 
   async function subscribe() {
     setState("loading");
@@ -57,12 +117,105 @@ export default function NotificationToggle() {
   }
 
   if (state === "unsupported") return null;
-  if (state === "loading") return <button className="dash-btn-ghost" disabled>Notifications…</button>;
-  if (state === "denied") return <p style={{ fontSize: 13, color: "var(--d-muted)" }}>Notifications blocked — enable in iOS Settings.</p>;
+  if (state === "loading")
+    return <button className="dash-btn-ghost" disabled>Notifications…</button>;
+  if (state === "denied")
+    return (
+      <p style={{ fontSize: 13, color: "var(--d-muted)" }}>
+        Notifications blocked — enable in iOS Settings.
+      </p>
+    );
+
+  if (!subscribed) {
+    return (
+      <button className="dash-btn-ghost" onClick={subscribe}>
+        Enable workout reminders
+      </button>
+    );
+  }
+
+  const selectStyle: React.CSSProperties = {
+    fontSize: 13,
+    padding: "2px 6px",
+    borderRadius: 6,
+    border: "1px solid var(--d-border)",
+    background: "var(--d-raised)",
+    color: "var(--d-text)",
+  };
 
   return (
-    <button className="dash-btn-ghost" onClick={subscribed ? unsubscribe : subscribe}>
-      {subscribed ? "Disable workout reminders" : "Enable workout reminders"}
-    </button>
+    <div style={{ display: "grid", gap: 12 }}>
+      {/* Encouraging message */}
+      <p style={{ fontSize: 13, color: "var(--d-orange)", fontStyle: "italic", margin: 0 }}>
+        {quote}
+      </p>
+
+      {/* Evening (prev-day) reminder */}
+      <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
+        <span style={{ color: "var(--d-text)", flex: 1 }}>Evening reminder (night before)</span>
+        <select
+          value={prefs.notifPrevDayHour}
+          onChange={(e) =>
+            savePrefs({ ...prefs, notifPrevDayHour: Number(e.target.value) })
+          }
+          style={selectStyle}
+        >
+          {HOUR_OPTIONS.map((h) => (
+            <option key={h} value={h}>
+              {fmtHour(h)} UTC
+            </option>
+          ))}
+        </select>
+      </label>
+
+      {/* Same-day toggle */}
+      <label
+        style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer" }}
+      >
+        <input
+          type="checkbox"
+          checked={prefs.notifSameDayEnabled}
+          onChange={(e) =>
+            savePrefs({ ...prefs, notifSameDayEnabled: e.target.checked })
+          }
+          style={{ accentColor: "var(--d-orange)", width: 16, height: 16, flexShrink: 0 }}
+        />
+        <span style={{ color: "var(--d-text)" }}>Morning reminder (day of workout)</span>
+      </label>
+
+      {/* Same-day hour picker — only shown when enabled */}
+      {prefs.notifSameDayEnabled && (
+        <label
+          style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, paddingLeft: 24 }}
+        >
+          <span style={{ color: "var(--d-text-mid)", flex: 1 }}>Morning time</span>
+          <select
+            value={prefs.notifSameDayHour}
+            onChange={(e) =>
+              savePrefs({ ...prefs, notifSameDayHour: Number(e.target.value) })
+            }
+            style={selectStyle}
+          >
+            {HOUR_OPTIONS.map((h) => (
+              <option key={h} value={h}>
+                {fmtHour(h)} UTC
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+
+      {saving && (
+        <p style={{ fontSize: 12, color: "var(--d-muted)", margin: 0 }}>Saving…</p>
+      )}
+
+      <button
+        className="dash-btn-ghost"
+        style={{ fontSize: 12, color: "var(--d-muted)", alignSelf: "start" }}
+        onClick={unsubscribe}
+      >
+        Disable reminders
+      </button>
+    </div>
   );
 }
