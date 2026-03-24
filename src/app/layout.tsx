@@ -96,6 +96,8 @@ export default async function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <script dangerouslySetInnerHTML={{ __html: `(function(){var t=localStorage.getItem('theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark');})();` }} />
       <head>
+        {/* Required for iOS standalone / fullscreen PWA mode */}
+        <meta name="apple-mobile-web-app-capable" content="yes" />
         {/* iOS Splash Screens */}
         <link rel="apple-touch-startup-image" href="/splash/splash-640x1136.png"   media="(device-width: 320px) and (device-height: 568px) and (-webkit-device-pixel-ratio: 2)" />
         <link rel="apple-touch-startup-image" href="/splash/splash-750x1334.png"   media="(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2)" />
