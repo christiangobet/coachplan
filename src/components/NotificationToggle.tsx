@@ -1,6 +1,8 @@
 "use client";
 import { useState, useEffect } from "react";
 
+import { decodeVapidPublicKey } from "@/lib/push-client";
+
 type State = "unsupported" | "denied" | "prompt" | "granted" | "loading";
 
 type Prefs = {
@@ -25,17 +27,6 @@ const QUOTES = [
   "You're one of the athletes who actually follows through. That's rare.",
   "Champions aren't made on race day — they're made in the daily grind.",
 ];
-
-function urlBase64ToUint8Array(base64String: string): ArrayBuffer {
-  // Strip any characters that aren't valid base64url (handles quotes, whitespace, etc.)
-  const str = base64String.replace(/[^A-Za-z0-9\-_]/g, "");
-  const padding = "=".repeat((4 - (str.length % 4)) % 4);
-  const base64 = (str + padding).replace(/-/g, "+").replace(/_/g, "/");
-  const rawData = window.atob(base64);
-  const output = new Uint8Array(rawData.length);
-  for (let i = 0; i < rawData.length; i++) output[i] = rawData.charCodeAt(i);
-  return output.buffer as ArrayBuffer;
-}
 
 function isIosNonPwa(): boolean {
   if (typeof window === "undefined") return false;
@@ -115,7 +106,7 @@ export default function NotificationToggle() {
       const reg = await navigator.serviceWorker.ready;
       const sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!),
+        applicationServerKey: decodeVapidPublicKey(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!),
       });
       await fetch("/api/push/subscribe", {
         method: "POST",
