@@ -1,0 +1,4 @@
+-- AlterTable
+ALTER TABLE "User" ADD COLUMN     "notifPrevDayHour" INTEGER NOT NULL DEFAULT 18,
+ADD COLUMN     "notifSameDayEnabled" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN     "notifSameDayHour" INTEGER NOT NULL DEFAULT 7;

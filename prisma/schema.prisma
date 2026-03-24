@@ -75,6 +75,10 @@ model User {
   goalRaceDate DateTime?
   createdAt    DateTime @default(now())
 
+  notifPrevDayHour    Int     @default(18)
+  notifSameDayEnabled Boolean @default(false)
+  notifSameDayHour    Int     @default(7)
+
   athleteLinks CoachAthlete[] @relation("Athlete")
   coachLinks   CoachAthlete[] @relation("Coach")
   ownedPlans   TrainingPlan[] @relation("PlanOwner")
