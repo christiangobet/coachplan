@@ -31,8 +31,45 @@ import PlanSummarySection from "@/components/PlanSummarySection";
 import type { PlanSummary } from "@/lib/types/plan-summary";
 import WeekStrip from "@/components/WeekStrip";
 import type { WeekStripDay } from "@/components/WeekStrip";
+import { buildStravaRoutePreview, extractStravaActivityPhoto } from "@/lib/strava-route";
+import { mapStravaSportTypeToVisualCode } from "@/lib/integrations/external-sport-visuals";
+import CalendarRouteMap from "@/components/CalendarRouteMap";
 import "../dashboard/dashboard.css";
 import "./calendar.css";
+
+// Royalty-free Unsplash photos per sport type (shown when no GPS route is available)
+// All URLs verified returning HTTP 200 image/jpeg
+const SPORT_PHOTO: Record<string, { url: string; alt: string }> = {
+  RUN:           { url: "https://images.unsplash.com/photo-1571008887538-b36bb32f4571?auto=format&fit=crop&w=600&h=320&q=75", alt: "Runner on road" },
+  TRAIL_RUN:     { url: "https://images.unsplash.com/photo-1502904550040-7534597429ae?auto=format&fit=crop&w=600&h=320&q=75", alt: "Trail runner in mountains" },
+  TREADMILL_RUN: { url: "https://images.unsplash.com/photo-1519834785169-98be25ec3f84?auto=format&fit=crop&w=600&h=320&q=75", alt: "Running on treadmill" },
+  WALK:          { url: "https://images.unsplash.com/photo-1476480862126-209bfaa8edc8?auto=format&fit=crop&w=600&h=320&q=75", alt: "Person walking outdoors" },
+  BIKE:          { url: "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?auto=format&fit=crop&w=600&h=320&q=75", alt: "Cyclist on road" },
+  VIRTUAL_RIDE:  { url: "https://images.unsplash.com/photo-1526506118085-60ce8714f8c5?auto=format&fit=crop&w=600&h=320&q=75", alt: "Indoor cycling" },
+  SWIM:          { url: "https://images.unsplash.com/photo-1530549387789-4c1017266635?auto=format&fit=crop&w=600&h=320&q=75", alt: "Swimmer in pool" },
+  HIKE:          { url: "https://images.unsplash.com/photo-1551632811-561732d1e306?auto=format&fit=crop&w=600&h=320&q=75", alt: "Hiker on mountain trail" },
+  YOGA_MOBILITY: { url: "https://images.unsplash.com/photo-1545389336-cf090694435e?auto=format&fit=crop&w=600&h=320&q=75", alt: "Yoga pose" },
+  STRENGTH:      { url: "https://images.unsplash.com/photo-1517836357463-d25dfeac3438?auto=format&fit=crop&w=600&h=320&q=75", alt: "Weight training" },
+  CROSS_TRAIN:   { url: "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=600&h=320&q=75", alt: "Cross training workout" },
+  SKI:           { url: "https://images.unsplash.com/photo-1599058945522-28d584b6f0ff?auto=format&fit=crop&w=600&h=320&q=75", alt: "Skier on slopes" },
+  REST:          { url: "https://images.unsplash.com/photo-1520877880798-5ee004e3f11e?auto=format&fit=crop&w=600&h=320&q=75", alt: "Rest and recovery" },
+  OTHER:         { url: "https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?auto=format&fit=crop&w=600&h=320&q=75", alt: "Fitness activity" },
+};
+
+function getSportPhotoUrl(sportType: string | null, provider: string, raw: unknown): { url: string; isActivityPhoto: boolean } | null {
+  if (provider !== "STRAVA") return null;
+  const activityPhoto = extractStravaActivityPhoto(raw);
+  if (activityPhoto) return { url: activityPhoto, isActivityPhoto: true };
+  const code = mapStravaSportTypeToVisualCode(sportType);
+  const stock = SPORT_PHOTO[code];
+  if (!stock) return null;
+  return { url: stock.url, isActivityPhoto: false };
+}
+
+function getSportPhotoAlt(sportType: string | null): string {
+  const code = mapStravaSportTypeToVisualCode(sportType);
+  return SPORT_PHOTO[code]?.alt ?? "Activity";
+}
 
 const PACE_BUCKET_SHORT: Record<string, string> = {
   RECOVERY: 'RE', EASY: 'EZ', LONG: 'LR', RACE: 'RP',
@@ -97,6 +134,7 @@ type DayExternalLog = {
   equivalenceOverride: string | null;
   equivalenceNote: string | null;
   loadRatio: number | null;
+  raw: unknown;
 };
 
 type DayInfo = {
@@ -104,6 +142,7 @@ type DayInfo = {
   manualStatus: DayStatus;
   explicitlyOpen: boolean;
   missedReason: string | null;
+  rawText: string | null;
 };
 
 const WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -438,13 +477,13 @@ export default async function CalendarPage({
 
   // Compute approximate grid range from params for early external activities fetch
   const earlyMonthStart = normalizeDate(parseMonthParam(requestedMonth) || new Date());
-  earlyMonthStart.setDate(1);
-  const earlyMonthEnd = normalizeDate(new Date(earlyMonthStart.getFullYear(), earlyMonthStart.getMonth() + 1, 0));
+  earlyMonthStart.setUTCDate(1);
+  const earlyMonthEnd = normalizeDate(new Date(Date.UTC(earlyMonthStart.getUTCFullYear(), earlyMonthStart.getUTCMonth() + 1, 0)));
   const earlyGridStart = normalizeDate(new Date(earlyMonthStart));
-  earlyGridStart.setDate(earlyGridStart.getDate() - (getIsoDay(earlyGridStart) - 1));
+  earlyGridStart.setUTCDate(earlyGridStart.getUTCDate() - (getIsoDay(earlyGridStart) - 1));
   const earlyGridEnd = normalizeDate(new Date(earlyMonthEnd));
-  earlyGridEnd.setDate(earlyGridEnd.getDate() + (7 - getIsoDay(earlyGridEnd)));
-  earlyGridEnd.setHours(23, 59, 59, 999);
+  earlyGridEnd.setUTCDate(earlyGridEnd.getUTCDate() + (7 - getIsoDay(earlyGridEnd)));
+  earlyGridEnd.setUTCHours(23, 59, 59, 999);
 
   // Stage 3: parallel — full plan tree + banner + source name + external activities
   const [selectedPlan, sourcePlanNameResult, selectedBannerImage, externalActivitiesRaw] = await Promise.all([
@@ -588,7 +627,8 @@ export default async function CalendarPage({
           dayId: day.id,
           manualStatus: getDayStatus(day.notes),
           explicitlyOpen: isDayExplicitlyOpen(day.notes),
-          missedReason: getDayMissedReason(day.notes)
+          missedReason: getDayMissedReason(day.notes),
+          rawText: day.rawText ?? null,
         });
       }
 
@@ -656,27 +696,21 @@ export default async function CalendarPage({
   const requestedMonthDate = parseMonthParam(requestedMonth);
   const defaultMonth =
     requestedMonthDate
-    || (
-      planStartDate && planEndDate && today >= planStartDate && today <= planEndDate
-        ? new Date(today.getFullYear(), today.getMonth(), 1)
-        : planStartDate
-          ? new Date(planStartDate.getFullYear(), planStartDate.getMonth(), 1)
-          : new Date(today.getFullYear(), today.getMonth(), 1)
-    );
+    || new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1));
   const monthStart = normalizeDate(defaultMonth);
-  monthStart.setDate(1);
-  const monthEnd = normalizeDate(new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0));
+  monthStart.setUTCDate(1);
+  const monthEnd = normalizeDate(new Date(Date.UTC(monthStart.getUTCFullYear(), monthStart.getUTCMonth() + 1, 0)));
 
   const gridStart = normalizeDate(monthStart);
-  gridStart.setDate(gridStart.getDate() - (getIsoDay(gridStart) - 1));
+  gridStart.setUTCDate(gridStart.getUTCDate() - (getIsoDay(gridStart) - 1));
   const gridEnd = normalizeDate(monthEnd);
-  gridEnd.setDate(gridEnd.getDate() + (7 - getIsoDay(gridEnd)));
+  gridEnd.setUTCDate(gridEnd.getUTCDate() + (7 - getIsoDay(gridEnd)));
 
   const dayCells: Date[] = [];
   const cursor = new Date(gridStart);
   while (cursor <= gridEnd) {
     dayCells.push(new Date(cursor));
-    cursor.setDate(cursor.getDate() + 1);
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
   }
 
   const parsedRequestedDate = parseDateParam(requestedDate);
@@ -726,6 +760,7 @@ export default async function CalendarPage({
       equivalenceOverride: item.equivalenceOverride ?? null,
       equivalenceNote: item.equivalenceNote ?? null,
       loadRatio: item.loadRatio ?? null,
+      raw: item.raw ?? null,
     });
     externalByDate.set(key, row);
   }
@@ -744,10 +779,10 @@ export default async function CalendarPage({
   const selectedDayPartial = selectedDayStatus === 'PARTIAL';
 
   const monthWorkoutCount = dayCells
-    .filter((date) => date.getMonth() === monthStart.getMonth() && date.getFullYear() === monthStart.getFullYear())
+    .filter((date) => date.getUTCMonth() === monthStart.getUTCMonth() && date.getUTCFullYear() === monthStart.getUTCFullYear())
     .reduce((sum, date) => sum + (activitiesByDate.get(dateKey(date))?.length || 0), 0);
   const monthCompletedCount = dayCells
-    .filter((date) => date.getMonth() === monthStart.getMonth() && date.getFullYear() === monthStart.getFullYear())
+    .filter((date) => date.getUTCMonth() === monthStart.getUTCMonth() && date.getUTCFullYear() === monthStart.getUTCFullYear())
     .reduce((sum, date) => sum + (activitiesByDate.get(dateKey(date))?.filter((a) => a.completed).length || 0), 0);
   const monthCompletionPct = monthWorkoutCount > 0
     ? Math.round((monthCompletedCount / monthWorkoutCount) * 100)
@@ -791,8 +826,35 @@ export default async function CalendarPage({
     const primary = dayActivities.find((a) => a.type !== "REST") || dayActivities[0] || null;
     const activityCode = primary ? (STRIP_CODE[primary.type] ?? "?") : "—";
 
-    const hasStrava = dayLogs.some((l) => l.provider === "STRAVA");
+    // Deduplicated type abbreviations for all non-REST activities (max 3)
+    const seenTypes = new Set<string>();
+    const activityTypes: string[] = [];
+    for (const a of dayActivities) {
+      const abbr = ACTIVITY_TYPE_ABBR[a.type as ActivityType] ?? "OTH";
+      if (!seenTypes.has(abbr) && activityTypes.length < 3) {
+        seenTypes.add(abbr);
+        activityTypes.push(abbr);
+      }
+    }
 
+    // Total planned distance across all activities
+    let totalDistKm = 0;
+    for (const a of dayActivities) {
+      if (a.distance && a.distance > 0) {
+        const srcUnit = resolveDistanceUnitFromActivity({ distanceUnit: a.distanceUnit, paceTarget: a.paceTarget, actualPace: a.actualPace, fallbackUnit: viewerUnits }) || viewerUnits;
+        const conv = convertDistanceForDisplay(a.distance, srcUnit, viewerUnits);
+        if (conv) totalDistKm += conv.value;
+      }
+    }
+    const distanceLabel = totalDistKm > 0
+      ? `${formatDistanceNumber(totalDistKm)} ${distanceUnitLabel(viewerUnits)}`
+      : null;
+
+    // Total planned duration
+    const totalDurMin = dayActivities.reduce((s, a) => s + (a.duration ?? 0), 0);
+    const durationLabel = !distanceLabel && totalDurMin > 0 ? `${totalDurMin} min` : null;
+
+    const hasStrava = dayLogs.some((l) => l.provider === "STRAVA");
     const href = buildWeekHref(weekMonday, selectedPlan.id, key, returnToParam);
 
     return {
@@ -800,6 +862,9 @@ export default async function CalendarPage({
       dayLetter: DAY_LETTERS[i],
       dateNum: d.getUTCDate(),
       activityCode,
+      activityTypes,
+      distanceLabel,
+      durationLabel,
       status,
       hasStrava,
       isToday: key === dateKey(today),
@@ -827,6 +892,14 @@ export default async function CalendarPage({
   }
   const weekLabel = weekLabelParts.join(" · ");
 
+  const todayDateKey = dateKey(today);
+  const todayMonthStart = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1));
+  const todayMonthHref = buildCalendarHref(todayMonthStart, selectedPlan.id, todayDateKey, returnToParam);
+  const todayWeekHref = buildWeekHref(getWeekMonday(today), selectedPlan.id, todayDateKey, returnToParam);
+  const isOnToday = isWeekView
+    ? dateKey(weekMonday) === dateKey(getWeekMonday(today))
+    : monthParam(monthStart) === monthParam(todayMonthStart);
+
   return (
     <main className={`dash cal-page${hasSelectedDate && !isWeekView ? ' cal-day-open' : ''}`} data-debug-id="TRL">
       <SelectedPlanCookie planId={selectedPlan.id} />
@@ -835,51 +908,6 @@ export default async function CalendarPage({
         <AthleteSidebar active="calendar" name={name} selectedPlanId={selectedPlan.id} />
 
         <section className="dash-center" data-debug-id="TCB">
-          <div className="cal-header">
-            <div className="dash-page-heading">
-              <h1>Training Calendar</h1>
-              <p>Month-by-month execution aligned to your active plan.</p>
-            </div>
-            <div className="cal-header-actions">
-              <div className="cal-view-toggle" aria-label="Plan views">
-                <Link className="cal-view-pill" href={`/plans/${selectedPlan.id}`}>Plan</Link>
-                {isWeekView ? (
-                  <Link
-                    className="cal-view-pill"
-                    href={buildCalendarHref(monthStart, selectedPlan.id, selectedDateKey, returnToParam)}
-                  >
-                    Training Calendar
-                  </Link>
-                ) : (
-                  <span className="cal-view-pill active">Training Calendar</span>
-                )}
-                <Link className="cal-view-pill" href="/strava">Import Strava</Link>
-              </div>
-              <div className="cal-view-mode-toggle" aria-label="Calendar layout">
-                {isWeekView ? (
-                  <Link
-                    className="cal-mode-pill"
-                    href={buildCalendarHref(monthStart, selectedPlan.id, selectedDateKey, returnToParam)}
-                  >
-                    Month
-                  </Link>
-                ) : (
-                  <span className="cal-mode-pill active">Month</span>
-                )}
-                {isWeekView ? (
-                  <span className="cal-mode-pill active">Week</span>
-                ) : (
-                  <Link
-                    className="cal-mode-pill"
-                    href={buildWeekHref(weekMonday, selectedPlan.id, selectedDateKey, returnToParam)}
-                  >
-                    Week
-                  </Link>
-                )}
-              </div>
-            </div>
-          </div>
-
           <div
             className={`dash-card dash-plan-summary cal-plan-summary-card${selectedPlanBanner ? ' has-banner' : ''}`}
             style={
@@ -891,21 +919,14 @@ export default async function CalendarPage({
                 : undefined
             }
           >
-            <div className="dash-greeting-meta">
-              <div className="dash-greeting-meta-item">
-                <span className="dash-greeting-meta-label">Plan</span>
-                <span className="dash-greeting-meta-value">{planDisplayName}</span>
+            <div className="cal-banner-row">
+              <div className="cal-banner-meta">
+                <span className="cal-banner-plan-name">{planDisplayName}</span>
+                {raceName && <><span className="cal-banner-sep">·</span><span className="cal-banner-meta-value">{raceName}</span></>}
+                {raceDateStr && <><span className="cal-banner-sep">·</span><span className="cal-banner-meta-value">{raceDateStr}</span></>}
               </div>
-              <div className="dash-greeting-meta-item">
-                <span className="dash-greeting-meta-label">Race Name</span>
-                <span className="dash-greeting-meta-value">{raceName}</span>
-              </div>
-              <div className="dash-greeting-meta-item">
-                <span className="dash-greeting-meta-label">Race Date</span>
-                <span className="dash-greeting-meta-value">{raceDateStr}</span>
-              </div>
+              <a className="cal-banner-view-plan" href={`/plans/${selectedPlan.id}`}>View Plan</a>
             </div>
-            <a className="dash-greeting-edit-link" href={`/plans/${selectedPlan.id}`}>View Plan</a>
             {jumpToPlans.length > 0 && (
               <div className="cal-plan-switch cal-plan-switch--nested">
                 <span>JUMP TO</span>
@@ -941,6 +962,37 @@ export default async function CalendarPage({
           </details>
 
           <div className="dash-card cal-month-card">
+            <div className="cal-grid-controls">
+              <div className="cal-grid-controls-left">
+                <div className="cal-view-toggle" aria-label="Plan views">
+                  <Link className="cal-view-pill" href={`/plans/${selectedPlan.id}`}>Plan</Link>
+                  <span className="cal-view-pill active">Training Calendar</span>
+                </div>
+                <div className="cal-view-toggle">
+                  <Link
+                    className={`cal-view-pill${!isWeekView ? " active" : ""}`}
+                    href={buildCalendarHref(monthStart, selectedPlan.id, selectedDateKey, returnToParam)}
+                  >Month</Link>
+                  <Link
+                    className={`cal-view-pill${isWeekView ? " active" : ""}`}
+                    href={buildWeekHref(weekMonday, selectedPlan.id, selectedDateKey, returnToParam)}
+                  >Week</Link>
+                </div>
+              </div>
+              {isWeekView ? (
+                <div className="cal-month-nav">
+                  <Link className="cal-month-btn" href={prevWeekHref} aria-label="Previous week">&larr; Prev</Link>
+                  <strong>{weekLabel}</strong>
+                  <Link className="cal-month-btn" href={nextWeekHref} aria-label="Next week">Next &rarr;</Link>
+                </div>
+              ) : (
+                <div className="cal-month-nav">
+                  <Link className="cal-month-btn" href={prevMonthHref} aria-label="Previous month">&larr; Prev</Link>
+                  <strong>{formatMonthLabel(monthStart)}</strong>
+                  <Link className="cal-month-btn" href={nextMonthHref} aria-label="Next month">Next &rarr;</Link>
+                </div>
+              )}
+            </div>
             {isWeekView ? (
               <>
                 <WeekStrip
@@ -968,6 +1020,9 @@ export default async function CalendarPage({
                       </div>
                     </div>
                     <div className="cal-day-details-body">
+                      {selectedDayInfo?.rawText && (
+                        <div className="cal-day-raw-note">{selectedDayInfo.rawText}</div>
+                      )}
                       {selectedPlanActivities.length === 0 && (
                         <p className="cal-day-empty">No planned activities on this day.</p>
                       )}
@@ -992,24 +1047,63 @@ export default async function CalendarPage({
                             <h4>Logged Activities</h4>
                             {stravaAccount && <StravaDaySyncButton dateISO={selectedDateKey} planId={selectedPlan.id} className="cal-strava-sync-btn" />}
                           </div>
+                          <div className="cal-log-items-grid">
                           {selectedExternalLogs.map((log) => {
                             const matchLevel = resolveMatchLevel(log);
                             const isMatched = Boolean(log.matchedPlanActivityId);
+                            const routePreview = buildStravaRoutePreview({
+                              name: log.name,
+                              sportType: log.sportType,
+                              startTime: log.startTime,
+                              distanceM: log.distanceM,
+                              movingTimeSec: log.durationSec,
+                              elevationGainM: null,
+                              raw: log.raw,
+                            });
                             return (
                               <div key={log.id} className={logItemClass(matchLevel)}>
-                                <div className="cal-day-detail-item-head">
-                                  <ExternalSportIcon provider={log.provider} sportType={log.sportType} className="cal-log-sport-icon" />
-                                  <span className="cal-log-name">{log.name}</span>
-                                  <span className={matchBadgeClass(matchLevel, isMatched)}>{matchBadgeLabel(matchLevel, isMatched)}</span>
+                                <div className="cal-day-detail-title">
+                                  <strong className="cal-day-log-title">
+                                    <ExternalSportIcon provider={log.provider} sportType={log.sportType} className="cal-day-log-icon" />
+                                    <span>{log.name}</span>
+                                  </strong>
+                                  <span className="cal-day-log-provider">
+                                    {log.provider === 'STRAVA'
+                                      ? <StravaIcon size={13} className="cal-day-log-provider-icon" />
+                                      : formatProviderName(log.provider)}
+                                    {' · '}{log.startTimeLabel || formatClock(log.startTime)}
+                                  </span>
                                 </div>
-                                <div className="cal-day-detail-item-meta">
-                                  {log.startTimeLabel && <span>{log.startTimeLabel}</span>}
-                                  {log.distanceM != null && log.distanceM > 0 && <span>{formatDistanceMeters(log.distanceM, viewerUnits)}</span>}
-                                  {log.durationSec != null && log.durationSec > 0 && <span>{formatDurationSeconds(log.durationSec)}</span>}
+                                <div className="cal-day-detail-meta">
+                                  <span>{formatDistanceMeters(log.distanceM, viewerUnits)} · {formatDurationSeconds(log.durationSec)}{log.avgHeartRate ? ` · HR ${log.avgHeartRate} bpm` : ''}</span>
+                                  {log.calories ? <span>{Math.round(log.calories)} kcal</span> : null}
+                                </div>
+                                {routePreview ? (
+                                  <CalendarRouteMap
+                                    routePoints={routePreview.routePoints}
+                                    ariaLabel={routePreview.name ? `${routePreview.name} route` : 'Activity route'}
+                                  />
+                                ) : (() => {
+                                  const photo = getSportPhotoUrl(log.sportType, log.provider, log.raw);
+                                  return photo ? (
+                                    <div className={`cal-log-activity-photo${photo.isActivityPhoto ? ' is-activity-photo' : ''}`}>
+                                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                                      <img src={photo.url} alt={getSportPhotoAlt(log.sportType)} loading="lazy" />
+                                    </div>
+                                  ) : null;
+                                })()}
+                                <div className="cal-day-log-match-row">
+                                  <span className={matchBadgeClass(matchLevel, isMatched)}>
+                                    {matchBadgeLabel(matchLevel, isMatched)}
+                                  </span>
+                                  {log.equivalenceNote && (
+                                    <span className="cal-day-log-match-note">{log.equivalenceNote}</span>
+                                  )}
                                 </div>
                               </div>
                             );
                           })}
+                          </div>
                         </div>
                       )}
                     </div>
@@ -1018,17 +1112,7 @@ export default async function CalendarPage({
               </>
             ) : (
               <>
-            <div className="cal-month-nav-row">
-              <div className="cal-month-nav">
-                <Link className="cal-month-btn" href={prevMonthHref} aria-label="Previous month">
-                  &larr; Prev
-                </Link>
-                <strong>{formatMonthLabel(monthStart)}</strong>
-                <Link className="cal-month-btn" href={nextMonthHref} aria-label="Next month">
-                  Next &rarr;
-                </Link>
-              </div>
-            </div>
+
             <div className="cal-month-scroll">
             <div className="cal-weekdays">
               {WEEKDAY_LABELS.map((label) => (
@@ -1044,7 +1128,7 @@ export default async function CalendarPage({
                 const dayInfo = dayInfoByDate.get(key) || null;
                 const isToday = key === dateKey(today);
                 const isSelected = key === selectedDateKey;
-                const isOutMonth = date.getMonth() !== monthStart.getMonth();
+                const isOutMonth = date.getUTCMonth() !== monthStart.getUTCMonth();
                 const inPlan = planDateKeys.has(key);
                 const dayManualStatus = dayInfo?.manualStatus || 'OPEN';
                 const dayAutoDone = dayActivities.length > 0 && dayActivities.every((activity) => activity.completed);
@@ -1101,7 +1185,7 @@ export default async function CalendarPage({
                   >
                     <Link className="cal-day-hit" href={dayHref} aria-label={`Open ${key}`}>
                       <div className="cal-day-head">
-                        <span className="cal-day-number">{date.getDate()}</span>
+                        <span className="cal-day-number">{date.getUTCDate()}</span>
                         <div className="cal-day-head-badges">
                           {dayDone && <span className="cal-day-check" title="Day completed">✓</span>}
                           {dayMissed && <span className="cal-day-check missed" title="Day closed as missed">✗</span>}
@@ -1317,9 +1401,19 @@ export default async function CalendarPage({
                   <h4>Logged Activities</h4>
                   {stravaAccount && <StravaDaySyncButton dateISO={selectedDateKey} planId={selectedPlan.id} className="cal-strava-sync-btn" />}
                 </div>
+                <div className="cal-log-items-grid">
                 {selectedExternalLogs.map((log) => {
                   const matchLevel = resolveMatchLevel(log);
                   const isMatched = Boolean(log.matchedPlanActivityId);
+                  const routePreview = buildStravaRoutePreview({
+                    name: log.name,
+                    sportType: log.sportType,
+                    startTime: log.startTime,
+                    distanceM: log.distanceM,
+                    movingTimeSec: log.durationSec,
+                    elevationGainM: null,
+                    raw: log.raw,
+                  });
                   return (
                     <div key={log.id} className={logItemClass(matchLevel)}>
                       <div className="cal-day-detail-title">
@@ -1342,6 +1436,20 @@ export default async function CalendarPage({
                         <span>{formatDistanceMeters(log.distanceM, viewerUnits)} · {formatDurationSeconds(log.durationSec)}{log.avgHeartRate ? ` · HR ${log.avgHeartRate} bpm` : ''}</span>
                         {log.calories ? <span>{Math.round(log.calories)} kcal</span> : null}
                       </div>
+                      {routePreview ? (
+                        <CalendarRouteMap
+                          routePoints={routePreview.routePoints}
+                          ariaLabel={routePreview.name ? `${routePreview.name} route` : 'Activity route'}
+                        />
+                      ) : (() => {
+                        const photo = getSportPhotoUrl(log.sportType, log.provider, log.raw);
+                        return photo ? (
+                          <div className={`cal-log-activity-photo${photo.isActivityPhoto ? ' is-activity-photo' : ''}`}>
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={photo.url} alt={getSportPhotoAlt(log.sportType)} loading="lazy" />
+                          </div>
+                        ) : null;
+                      })()}
                       <div className="cal-day-log-match-row">
                         <span className={matchBadgeClass(matchLevel, isMatched)}>
                           {matchBadgeLabel(matchLevel, isMatched)}
@@ -1353,6 +1461,7 @@ export default async function CalendarPage({
                     </div>
                   );
                 })}
+                </div>
               </div>
             )}
 

@@ -2277,7 +2277,7 @@ export default function PlanDetailPage() {
         <section className="pcal-main" data-debug-id="PCG">
           {/* Header */}
           <div
-            className={`pcal-header${planBannerUrl ? ' has-banner' : ''}`}
+            className={`dash-card pcal-header${planBannerUrl ? ' has-banner' : ''}`}
             id="plan-overview"
             style={planHeaderStyle}
           >

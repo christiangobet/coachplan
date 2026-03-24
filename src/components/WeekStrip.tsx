@@ -7,6 +7,9 @@ export type WeekStripDay = {
   dayLetter: string;
   dateNum: number;
   activityCode: string;
+  activityTypes: string[];   // all type codes for the day, e.g. ["RUN","STR"]
+  distanceLabel: string | null;
+  durationLabel: string | null;
   status: "DONE" | "MISSED" | "PARTIAL" | "OPEN" | null;
   hasStrava: boolean;
   isToday: boolean;
@@ -25,11 +28,6 @@ type WeekStripProps = {
 export default function WeekStrip({ days, weekLabel, prevWeekHref, nextWeekHref }: WeekStripProps) {
   return (
     <div className="week-strip">
-      <div className="week-strip-nav">
-        <Link className="week-strip-nav-btn" href={prevWeekHref} aria-label="Previous week">← Prev</Link>
-        <span className="week-strip-label">{weekLabel}</span>
-        <Link className="week-strip-nav-btn" href={nextWeekHref} aria-label="Next week">Next →</Link>
-      </div>
       <div className="week-strip-cells">
         {days.map((day) => {
           const cellClass = [
@@ -45,8 +43,22 @@ export default function WeekStrip({ days, weekLabel, prevWeekHref, nextWeekHref 
             <Link key={day.dateISO} className={cellClass} href={day.href} aria-label={`Go to ${new Date(day.dateISO + "T00:00:00Z").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" })}`}>
               <span className="wsc-letter">{day.dayLetter}</span>
               <span className="wsc-date">{day.dateNum}</span>
-              <span className="wsc-code">{day.inPlan ? day.activityCode : ""}</span>
-              <span className="wsc-status-dot" aria-hidden="true" />
+              {day.inPlan && day.activityTypes.length > 0 ? (
+                <span className="wsc-types">
+                  {day.activityTypes.map((t) => (
+                    <span key={t} className={`wsc-type-badge wsc-type-${t.toLowerCase()}`}>{t}</span>
+                  ))}
+                </span>
+              ) : (
+                <span className="wsc-code">{day.inPlan ? day.activityCode : ""}</span>
+              )}
+              {day.inPlan && (day.distanceLabel || day.durationLabel) && (
+                <span className="wsc-metric">{day.distanceLabel ?? day.durationLabel}</span>
+              )}
+              <span className="wsc-footer">
+                <span className="wsc-status-dot" aria-hidden="true" />
+                {day.hasStrava && <span className="wsc-strava-dot" aria-label="Strava logged" />}
+              </span>
             </Link>
           );
         })}

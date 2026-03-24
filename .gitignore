@@ -53,6 +53,7 @@ next-env.d.ts
 # local tooling artifacts
 .claude/
 .playwright-mcp/
+.auth/
 .env*.local
 
 # git worktrees

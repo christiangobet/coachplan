@@ -29,6 +29,25 @@ function normalizeText(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
+/** Extract the primary activity photo URL from Strava's raw JSON.
+ *  Strava stores photos.primary.urls keyed by pixel size ("100", "600", etc.).
+ *  Returns the largest available URL, or null if no photo is attached. */
+export function extractStravaActivityPhoto(raw: unknown): string | null {
+  if (!isRecord(raw)) return null;
+  const photos = isRecord(raw.photos) ? raw.photos : null;
+  if (!photos) return null;
+  const primary = isRecord(photos.primary) ? photos.primary : null;
+  if (!primary) return null;
+  const urls = isRecord(primary.urls) ? primary.urls : null;
+  if (!urls) return null;
+  // Prefer largest size available: 600 > 1200 > 400 > 100
+  for (const size of ["1200", "600", "400", "100"]) {
+    const url = normalizeText(urls[size]);
+    if (url) return url;
+  }
+  return null;
+}
+
 export function extractStravaPolyline(raw: unknown): string | null {
   if (!isRecord(raw)) return null;
   const map = isRecord(raw.map) ? raw.map : null;

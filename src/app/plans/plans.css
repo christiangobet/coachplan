@@ -1669,14 +1669,14 @@
 }
 
 .pcal-header.has-banner {
-  padding: 18px 20px 0;
+  padding: 16px 20px 0;
   border-radius: 16px;
   border: 1px solid rgba(15, 36, 66, 0.2);
   overflow: hidden;
   background: linear-gradient(145deg, rgba(21, 36, 64, 0.9), rgba(252, 76, 2, 0.72));
   display: flex;
   flex-direction: column;
-  min-height: 220px;
+  min-height: 160px;
 }
 
 .pcal-header.has-banner::before {
@@ -2674,11 +2674,13 @@
   display: flex;
   align-items: center;
   gap: 24px;
-  padding: 14px 20px 10px;
-  background: var(--d-raised);
-  border-radius: var(--d-radius) var(--d-radius) 0 0;
-  box-shadow: var(--d-shadow);
-  margin-top: 20px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--d-border-light);
+}
+
+.pcal-header.has-banner .pcal-stats {
+  border-top-color: rgba(255, 255, 255, 0.15);
 }
 
 .pcal-stat {
@@ -2705,7 +2707,8 @@
   border-radius: 0 0 var(--d-radius) var(--d-radius);
   background: var(--d-border-light);
   overflow: hidden;
-  margin-bottom: 20px;
+  margin-top: 10px;
+  margin-bottom: 0;
 }
 
 .pcal-stat-bar-fill {

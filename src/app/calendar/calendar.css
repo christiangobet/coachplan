@@ -272,7 +272,59 @@
 
 .cal-plan-summary-card {
   display: grid;
-  gap: 10px;
+  gap: 8px;
+}
+
+.cal-banner-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.cal-banner-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.cal-banner-plan-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--d-text);
+}
+
+.cal-banner-sep {
+  font-size: 13px;
+  color: var(--d-muted);
+}
+
+.cal-banner-meta-value {
+  font-size: 13px;
+  color: var(--d-text-mid);
+}
+
+.cal-banner-view-plan {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--d-orange);
+  white-space: nowrap;
+  text-decoration: none;
+  flex-shrink: 0;
+}
+
+/* Banner overlay variants */
+.dash-plan-summary.has-banner .cal-banner-plan-name,
+.dash-plan-summary.has-banner .cal-banner-sep,
+.dash-plan-summary.has-banner .cal-banner-meta-value {
+  color: rgba(248, 250, 252, 0.95);
+}
+
+.dash-plan-summary.has-banner .cal-banner-view-plan {
+  color: #fff;
 }
 
 .cal-plan-switch {
@@ -410,6 +462,43 @@
 .cal-month-card {
   display: grid;
   gap: 10px;
+}
+
+.cal-grid-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 4px;
+  flex-wrap: wrap;
+}
+
+.cal-grid-controls-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.cal-today-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--d-text-mid);
+  background: var(--d-raised);
+  border: 1px solid var(--d-border);
+  text-decoration: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.cal-today-btn:hover {
+  border-color: var(--d-text-mid);
 }
 
 .cal-month-scroll {
@@ -2182,6 +2271,64 @@
 
 .week-strip-cell:not(.wsc-in-plan) .wsc-date { color: var(--d-muted); font-weight: 400; }
 
+/* Activity type badges row */
+.wsc-types {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  justify-content: center;
+}
+
+.wsc-type-badge {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: var(--d-bg);
+  border: 1px solid var(--d-border-light);
+  color: var(--d-text-mid);
+  line-height: 1.4;
+}
+
+.wsc-type-badge.wsc-type-run  { color: var(--d-orange); background: rgba(252,76,2,0.08); border-color: rgba(252,76,2,0.2); }
+.wsc-type-badge.wsc-type-str  { color: #5f4fd2; background: rgba(108,92,231,0.1); border-color: rgba(108,92,231,0.2); }
+.wsc-type-badge.wsc-type-xt   { color: #0a73be; background: rgba(9,132,227,0.1); border-color: rgba(9,132,227,0.2); }
+.wsc-type-badge.wsc-type-rst  { color: var(--d-green); background: rgba(15,138,71,0.1); border-color: rgba(15,138,71,0.2); }
+.wsc-type-badge.wsc-type-mob  { color: #cc6b0d; background: rgba(230,126,34,0.1); border-color: rgba(230,126,34,0.2); }
+.wsc-type-badge.wsc-type-yog  { color: var(--d-green); background: rgba(15,138,71,0.1); border-color: rgba(15,138,71,0.2); }
+.wsc-type-badge.wsc-type-hik  { color: #0d8a8b; background: rgba(14,165,166,0.1); border-color: rgba(14,165,166,0.2); }
+
+/* Planned metric (distance or duration) */
+.wsc-metric {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--d-text-mid);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+/* Footer row: status dot + strava dot */
+.wsc-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 8px;
+}
+
+.wsc-strava-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--d-orange);
+  opacity: 0.7;
+  flex-shrink: 0;
+}
+
 /* === Week Strip Inline Day Detail === */
 .wsd-detail {
   border-top: 1px solid var(--d-border-light);
@@ -2194,4 +2341,67 @@
 
 .wsd-detail .cal-day-details-body {
   padding: 0 16px 16px;
+}
+
+/* Day raw note (from plan PDF) */
+.cal-day-raw-note {
+  font-size: 12px;
+  color: var(--d-text-mid);
+  line-height: 1.5;
+  padding: 10px 12px;
+  background: var(--d-bg);
+  border-left: 3px solid var(--d-border);
+  border-radius: 0 var(--d-radius) var(--d-radius) 0;
+  margin-bottom: 4px;
+}
+
+/* Grid for log items — single col on narrow, 2-col on wide */
+.cal-log-items-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+@media (min-width: 900px) {
+  .cal-log-items-grid:has(.cal-day-detail-item:nth-child(2)) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Route map inside a log item — matches day-log-inline-route-map sizing */
+.cal-log-route-map {
+  margin-top: 4px;
+}
+
+.cal-log-route-map .dash-route-map,
+.cal-log-route-map .dash-route-map-shell,
+.cal-log-route-map .cal-log-route-map-loading {
+  min-height: 160px;
+}
+
+/* Sport photo placeholder — same size / shape as the map */
+.cal-log-activity-photo {
+  margin-top: 4px;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid rgba(252, 76, 2, 0.12);
+  height: 160px;
+}
+
+.cal-log-activity-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Real activity photo gets a slightly stronger orange border */
+.cal-log-activity-photo.is-activity-photo {
+  border-color: rgba(252, 76, 2, 0.35);
+}
+
+[data-theme="dark"] .cal-day-raw-note {
+  background: rgba(255,255,255,0.04);
+  border-color: var(--d-border);
+  color: var(--d-muted);
 }
