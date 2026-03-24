@@ -27,7 +27,8 @@ const QUOTES = [
 ];
 
 function urlBase64ToUint8Array(base64String: string): ArrayBuffer {
-  const str = base64String.trim();
+  // Strip any characters that aren't valid base64url (handles quotes, whitespace, etc.)
+  const str = base64String.replace(/[^A-Za-z0-9\-_]/g, "");
   const padding = "=".repeat((4 - (str.length % 4)) % 4);
   const base64 = (str + padding).replace(/-/g, "+").replace(/_/g, "/");
   const rawData = window.atob(base64);
