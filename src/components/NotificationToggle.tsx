@@ -9,7 +9,7 @@ type Prefs = {
   notifSameDayHour: number;
 };
 
-const HOUR_OPTIONS = Array.from({ length: 19 }, (_, i) => i + 5); // 5..23
+const HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => i); // 0..23
 
 function fmtHour(h: number) {
   if (h === 0) return "12:00 AM";
