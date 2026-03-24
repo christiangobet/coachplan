@@ -47,6 +47,7 @@ export default function NotificationToggle() {
     notifSameDayHour: 7,
   });
   const [saving, setSaving] = useState(false);
+  const [subError, setSubError] = useState<string | null>(null);
   const [quote] = useState(
     () => QUOTES[Math.floor(Math.random() * QUOTES.length)]
   );
@@ -96,6 +97,7 @@ export default function NotificationToggle() {
 
   async function subscribe() {
     setState("loading");
+    setSubError(null);
     try {
       const permission = await Notification.requestPermission();
       if (permission !== "granted") { setState("denied"); return; }
@@ -111,9 +113,10 @@ export default function NotificationToggle() {
       });
       setSubscribed(true);
       setState("granted");
-    } catch {
+    } catch (err) {
       const perm = Notification.permission;
       setState(perm === "default" ? "prompt" : perm as State);
+      setSubError(err instanceof Error ? err.message : String(err));
     }
   }
 
@@ -153,9 +156,16 @@ export default function NotificationToggle() {
 
   if (!subscribed) {
     return (
-      <button className="dash-btn-ghost" onClick={subscribe}>
-        Enable workout reminders
-      </button>
+      <div style={{ display: "grid", gap: 6 }}>
+        <button className="dash-btn-ghost" onClick={subscribe}>
+          Enable workout reminders
+        </button>
+        {subError && (
+          <p style={{ fontSize: 12, color: "var(--d-muted)", margin: 0 }}>
+            Could not enable: {subError}
+          </p>
+        )}
+      </div>
     );
   }
 
