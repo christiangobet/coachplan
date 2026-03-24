@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import StravaConnectButton from '@/components/StravaConnectButton';
+import NotificationToggle from '@/components/NotificationToggle';
 import '../dashboard/dashboard.css';
 import './profile.css';
 
@@ -1068,6 +1069,17 @@ export default function ProfilePage() {
                 {coachStatus && <span className="profile-save-tick" style={{ marginTop: '0.4rem', display: 'block' }}>{coachStatus}</span>}
               </div>
             )}
+
+            {/* Notifications */}
+            <div className="dash-card" style={{ display: 'grid', gap: 8 }}>
+              <div>
+                <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Workout Reminders</h3>
+                <p style={{ fontSize: 13, color: 'var(--d-muted)', marginBottom: 10 }}>
+                  Get notified the evening before your scheduled workouts.
+                </p>
+                <NotificationToggle />
+              </div>
+            </div>
 
           </div>
         </div>
