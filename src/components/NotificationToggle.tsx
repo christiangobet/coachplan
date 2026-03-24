@@ -26,6 +26,15 @@ const QUOTES = [
   "Champions aren't made on race day — they're made in the daily grind.",
 ];
 
+function urlBase64ToUint8Array(base64String: string): Uint8Array {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = window.atob(base64);
+  const output = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; i++) output[i] = rawData.charCodeAt(i);
+  return output;
+}
+
 function isIosNonPwa(): boolean {
   if (typeof window === "undefined") return false;
   const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
@@ -104,7 +113,7 @@ export default function NotificationToggle() {
       const reg = await navigator.serviceWorker.ready;
       const sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
+        applicationServerKey: urlBase64ToUint8Array(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!),
       });
       await fetch("/api/push/subscribe", {
         method: "POST",
