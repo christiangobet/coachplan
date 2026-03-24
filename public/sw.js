@@ -1,7 +1,7 @@
 // MyTrainingPlan — Service Worker
 // Strategy: cache-first for static assets, network-first for pages/API
 
-const CACHE_VERSION = 'v1';
+const CACHE_VERSION = 'v2';
 const STATIC_CACHE = `mtp-static-${CACHE_VERSION}`;
 const PAGE_CACHE   = `mtp-pages-${CACHE_VERSION}`;
 
@@ -87,4 +87,31 @@ self.addEventListener('fetch', (event) => {
         .catch(() => caches.match(request))
     );
   }
+});
+
+// ── Push notifications ─────────────────────────────────────────────────────
+self.addEventListener('push', (event) => {
+  const data = event.data?.json() ?? {};
+  const title = data.title || 'MyTrainingPlan';
+  const options = {
+    body: data.body || '',
+    icon: '/icons/icon-192.png',
+    badge: '/icons/icon-192.png',
+    tag: data.tag || 'mtp-notification',
+    renotify: true,
+    data: { url: data.url || '/dashboard' },
+  };
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const url = event.notification.data?.url || '/dashboard';
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+      const existing = list.find((c) => c.url.includes(url));
+      if (existing) return existing.focus();
+      return clients.openWindow(url);
+    })
+  );
 });
