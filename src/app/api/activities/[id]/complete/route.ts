@@ -60,7 +60,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     include: { plan: true }
   });
   if (!activity) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  if (activity.plan.athleteId !== user.id) {
+  if (activity.plan.athleteId !== user.id && activity.plan.ownerId !== user.id) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 

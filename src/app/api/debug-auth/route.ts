@@ -1,17 +1,23 @@
 import { NextResponse } from "next/server";
-import { auth, currentUser } from "@clerk/nextjs/server";
+import { auth } from "@clerk/nextjs/server";
+import { requireRoleApi } from "@/lib/role-guards";
 
 export async function GET() {
+  if (process.env.NODE_ENV === "production" && process.env.DEBUG_AUTH_ROUTE_ENABLED !== "1") {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  const access = await requireRoleApi('ADMIN');
+  if (!access.ok) {
+    return NextResponse.json({ error: access.error }, { status: access.status });
+  }
+
   const { userId, sessionId } = await auth();
-  const user = await currentUser();
 
   return NextResponse.json({
     userId: userId ?? null,
     sessionId: sessionId ?? null,
-    currentUserId: user?.id || null,
-    email: user?.primaryEmailAddress?.emailAddress || null,
-    name: user?.fullName || user?.firstName || null,
+    role: access.context.currentRole,
     hasClerkSecret: Boolean(process.env.CLERK_SECRET_KEY),
-    hasClerkPublishable: Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY),
   });
 }

@@ -15,6 +15,19 @@ function getWebhookVerifyToken() {
   return process.env.STRAVA_WEBHOOK_VERIFY_TOKEN || '';
 }
 
+function getExpectedSubscriptionId() {
+  const raw = process.env.STRAVA_WEBHOOK_SUBSCRIPTION_ID;
+  if (!raw) return null;
+  const parsed = parseInt(raw, 10);
+  if (!Number.isInteger(parsed) || parsed <= 0) return null;
+  return parsed;
+}
+
+function isJsonRequest(req: Request) {
+  const contentType = req.headers.get('content-type') || '';
+  return contentType.toLowerCase().includes('application/json');
+}
+
 function shouldDeactivateStravaAccount(payload: StravaWebhookPayload) {
   if (payload.object_type !== 'athlete') return false;
   if (payload.aspect_type === 'delete') return true;
@@ -43,23 +56,26 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  const expectedSubscriptionId = getExpectedSubscriptionId();
+  if (expectedSubscriptionId === null) {
+    return NextResponse.json({ error: 'STRAVA_WEBHOOK_SUBSCRIPTION_ID is not configured' }, { status: 503 });
+  }
+  if (!isJsonRequest(req)) {
+    return NextResponse.json({ error: 'Webhook requests must be application/json' }, { status: 415 });
+  }
+
   let payload: StravaWebhookPayload | null = null;
   try {
     payload = (await req.json()) as StravaWebhookPayload;
   } catch {
-    // Malformed JSON — acknowledge to prevent Strava retries
-    return NextResponse.json({ received: true });
+    return NextResponse.json({ error: 'Invalid JSON payload' }, { status: 400 });
   }
 
   if (!payload || typeof payload !== 'object') {
-    return NextResponse.json({ received: true });
+    return NextResponse.json({ error: 'Invalid webhook payload' }, { status: 400 });
   }
 
-  // Validate subscription_id if configured — rejects spoofed events from other apps
-  const expectedSubscriptionId = process.env.STRAVA_WEBHOOK_SUBSCRIPTION_ID
-    ? parseInt(process.env.STRAVA_WEBHOOK_SUBSCRIPTION_ID, 10)
-    : null;
-  if (expectedSubscriptionId !== null && payload.subscription_id !== expectedSubscriptionId) {
+  if (payload.subscription_id !== expectedSubscriptionId) {
     logger.warn({ subscription_id: payload.subscription_id }, '[strava-webhook] rejected: unexpected subscription_id');
     return new Response('Forbidden', { status: 403 });
   }

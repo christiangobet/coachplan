@@ -39,11 +39,31 @@ export async function POST(req: Request) {
   if (!template || !template.isTemplate) {
     return NextResponse.json({ error: 'Template not found' }, { status: 404 });
   }
+  if (!template.isPublic && template.ownerId !== access.context.userId) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+  if (athleteId !== access.context.userId) {
+    const link = await prisma.coachAthlete.findUnique({
+      where: {
+        coachId_athleteId: {
+          coachId: access.context.userId,
+          athleteId
+        }
+      },
+      select: { id: true }
+    });
+    if (!link) {
+      return NextResponse.json({ error: 'Coach-athlete link required' }, { status: 403 });
+    }
+  }
 
   const athlete = await prisma.user.findUnique({
     where: { id: athleteId },
     select: { goalRaceDate: true }
   });
+  if (!athlete) {
+    return NextResponse.json({ error: 'Linked athlete not found' }, { status: 404 });
+  }
   const resolvedRaceDate = explicitRaceDate || athlete?.goalRaceDate || null;
 
   const newPlan = await prisma.trainingPlan.create({

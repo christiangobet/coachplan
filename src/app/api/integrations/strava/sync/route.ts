@@ -6,7 +6,8 @@ import { prisma } from '@/lib/prisma';
 import { getDayDateFromWeekStart, resolveWeekBounds } from '@/lib/plan-dates';
 import { pickSelectedPlan, SELECTED_PLAN_COOKIE } from '@/lib/plan-selection';
 import { logger } from '@/lib/logger';
-import { rateLimit } from '@/lib/rate-limit';
+
+const STRAVA_SYNC_COOLDOWN_MS = 2 * 60 * 1000;
 
 function parseLookbackDays(raw: unknown) {
   if (raw === undefined || raw === null || raw === '') return 30;
@@ -69,13 +70,27 @@ export async function POST(req: Request) {
   const access = await requireRoleApi('ATHLETE');
   if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
 
-  // Rate limit: 30 syncs per hour per user
-  const rl = rateLimit(`strava-sync:${access.context.userId}`, 30, 60 * 60 * 1000);
-  if (!rl.allowed) {
-    return NextResponse.json(
-      { error: `Too many sync requests. Try again in ${Math.ceil(rl.retryAfterMs / 60000)} minutes.` },
-      { status: 429 }
-    );
+  const stravaAccount = await prisma.externalAccount.findUnique({
+    where: {
+      userId_provider: {
+        userId: access.context.userId,
+        provider: 'STRAVA'
+      }
+    },
+    select: {
+      lastSyncAt: true
+    }
+  });
+
+  if (stravaAccount?.lastSyncAt) {
+    const elapsedMs = Date.now() - stravaAccount.lastSyncAt.getTime();
+    if (elapsedMs < STRAVA_SYNC_COOLDOWN_MS) {
+      const retryAfterMs = STRAVA_SYNC_COOLDOWN_MS - elapsedMs;
+      return NextResponse.json(
+        { error: `Too many sync requests. Try again in ${Math.ceil(retryAfterMs / 1000)} seconds.` },
+        { status: 429 }
+      );
+    }
   }
 
   const cookieStore = await cookies();

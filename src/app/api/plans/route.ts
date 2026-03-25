@@ -31,7 +31,6 @@ import { normalizePaceForStorage } from '@/lib/unit-display';
 import { deriveSmartActivityTitle, isGenericActivityTitle } from '@/lib/activity-title';
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { pathToFileURL } from 'url';
-import { rateLimit } from '@/lib/rate-limit';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
@@ -63,6 +62,9 @@ const AI_WEEK_PARSE_MAX_DAYS = Math.floor(
 );
 const PARSE_MIN_QUALITY_SCORE = parseBoundedNumber(process.env.PARSE_MIN_QUALITY_SCORE, 30, 0, 100);
 const PARSE_MIN_DAY_COVERAGE = parseBoundedNumber(process.env.PARSE_MIN_DAY_COVERAGE, 0.12, 0, 1);
+const PLAN_UPLOAD_WINDOW_MS = 60 * 60 * 1000;
+const MAX_PLAN_UPLOADS_PER_WINDOW = 10;
+const PDF_MAGIC_PREFIX = '%PDF-';
 
 
 async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutMessage: string): Promise<T> {
@@ -1457,18 +1459,14 @@ function parseOptionalDateInput(input: unknown): { ok: true; value: Date | null 
   return { ok: true, value: parsed };
 }
 
+function looksLikePdfBuffer(buffer: Buffer) {
+  if (buffer.byteLength < PDF_MAGIC_PREFIX.length) return false;
+  return buffer.subarray(0, PDF_MAGIC_PREFIX.length).toString('ascii') === PDF_MAGIC_PREFIX;
+}
+
 export async function POST(req: Request) {
   const user = await currentUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-  // Rate limit: 10 plan uploads per hour per user
-  const rl = rateLimit(`plan-upload:${user.id}`, 10, 60 * 60 * 1000);
-  if (!rl.allowed) {
-    return NextResponse.json(
-      { error: `Too many uploads. Try again in ${Math.ceil(rl.retryAfterMs / 60000)} minutes.` },
-      { status: 429 }
-    );
-  }
   const dbUser = await prisma.user.findUnique({
     where: { id: user.id },
     select: { units: true }
@@ -1480,6 +1478,7 @@ export async function POST(req: Request) {
   let raceName: string | null = null;
   let raceDateInput: unknown = null;
   let file: File | null = null;
+  let uploadedPdfBuffer: Buffer | null = null;
 
   if (contentType.includes('multipart/form-data')) {
     const form = await req.formData();
@@ -1507,6 +1506,33 @@ export async function POST(req: Request) {
 
   const raceDate = parsedRaceDate.value;
 
+  if (file && file.size > 0) {
+    const recentUploadCount = await prisma.planSourceDocument.count({
+      where: {
+        createdAt: {
+          gte: new Date(Date.now() - PLAN_UPLOAD_WINDOW_MS)
+        },
+        plan: {
+          is: {
+            ownerId: user.id
+          }
+        }
+      }
+    });
+
+    if (recentUploadCount >= MAX_PLAN_UPLOADS_PER_WINDOW) {
+      return NextResponse.json(
+        { error: 'Too many uploads. Please wait before uploading another PDF.' },
+        { status: 429 }
+      );
+    }
+
+    uploadedPdfBuffer = Buffer.from(await file.arrayBuffer());
+    if (!looksLikePdfBuffer(uploadedPdfBuffer)) {
+      return NextResponse.json({ error: 'Uploaded file must be a valid PDF' }, { status: 400 });
+    }
+  }
+
   const plan = await prisma.trainingPlan.create({
     data: {
       name,
@@ -1526,21 +1552,24 @@ export async function POST(req: Request) {
 
     try {
       await fs.mkdir(uploadDir, { recursive: true });
-      const buffer = Buffer.from(await file.arrayBuffer());
+      const buffer = uploadedPdfBuffer;
+      if (!buffer) {
+        throw new Error('Uploaded file must be a valid PDF');
+      }
       const checksumSha256 = createHash('sha256').update(buffer).digest('hex');
       await prisma.planSourceDocument.upsert({
         where: { planId: plan.id },
         create: {
           planId: plan.id,
           fileName: file.name || `${name}.pdf`,
-          mimeType: file.type || 'application/pdf',
+          mimeType: 'application/pdf',
           fileSize: buffer.byteLength,
           checksumSha256,
           content: buffer
         },
         update: {
           fileName: file.name || `${name}.pdf`,
-          mimeType: file.type || 'application/pdf',
+          mimeType: 'application/pdf',
           fileSize: buffer.byteLength,
           checksumSha256,
           content: buffer

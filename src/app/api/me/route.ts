@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { currentUser } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
+import { SAFE_USER_RESPONSE_SELECT } from '@/lib/safe-user-response';
 import { ensureUserFromAuth } from '@/lib/user-sync';
 
 function validHour(v: unknown): number | undefined {
@@ -14,8 +15,13 @@ export async function GET() {
     defaultRole: 'ATHLETE',
     defaultCurrentRole: 'ATHLETE'
   });
+  const safeUser = await prisma.user.findUnique({
+    where: { id: dbUser.id },
+    select: SAFE_USER_RESPONSE_SELECT
+  });
+  if (!safeUser) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-  return NextResponse.json(dbUser);
+  return NextResponse.json(safeUser);
 }
 
 export async function PUT(req: Request) {
@@ -28,6 +34,7 @@ export async function PUT(req: Request) {
   const body = await req.json();
   const updated = await prisma.user.update({
     where: { id: dbUser.id },
+    select: SAFE_USER_RESPONSE_SELECT,
     data: {
       name: body.name,
       units: body.units,
@@ -36,9 +43,6 @@ export async function PUT(req: Request) {
       goalRaceDate: body.goalRaceDate !== undefined
         ? (body.goalRaceDate ? new Date(body.goalRaceDate) : null)
         : undefined,
-      role: body.role || undefined,
-      currentRole: body.role || undefined,
-      hasBothRoles: body.hasBothRoles ?? undefined,
       notifPrevDayHour:    validHour(body.notifPrevDayHour),
       notifSameDayEnabled: typeof body.notifSameDayEnabled === 'boolean' ? body.notifSameDayEnabled : undefined,
       notifSameDayHour:    validHour(body.notifSameDayHour),

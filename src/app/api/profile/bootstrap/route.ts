@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { ensureUserFromAuth } from '@/lib/user-sync';
 import { ALL_INTEGRATION_PROVIDERS } from '@/lib/integrations/providers';
 import { isStravaConfigured } from '@/lib/integrations/strava';
+import { SAFE_USER_RESPONSE_SELECT } from '@/lib/safe-user-response';
 
 export async function GET() {
   const user = await currentUser();
@@ -14,7 +15,11 @@ export async function GET() {
     defaultCurrentRole: 'ATHLETE'
   });
 
-  const [coaches, totalPlans, completedSessions, activeWeeks, accounts] = await Promise.all([
+  const [safeUser, coaches, totalPlans, completedSessions, activeWeeks, accounts] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: dbUser.id },
+      select: SAFE_USER_RESPONSE_SELECT
+    }),
     prisma.user.findMany({
       where: { role: 'COACH' },
       orderBy: { createdAt: 'desc' },
@@ -48,7 +53,7 @@ export async function GET() {
   const byProvider = new Map(accounts.map((account) => [account.provider, account]));
 
   return NextResponse.json({
-    user: dbUser,
+    user: safeUser,
     coaches,
     stats: {
       totalPlans,

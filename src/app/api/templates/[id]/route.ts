@@ -40,5 +40,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   });
 
   if (!template) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  if (!template.isPublic && template.ownerId !== user.id) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
   return NextResponse.json({ template });
 }
