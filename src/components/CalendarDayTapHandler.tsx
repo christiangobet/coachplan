@@ -11,7 +11,7 @@
  *
  * Architecture:
  *  - The server-rendered `.cal-day` divs carry `data-day-href` attributes.
- *  - CSS disables `pointer-events` on `.cal-day-hit` at mobile widths so the
+ *  - CSS disables `pointer-events` on `.cal-day-hit` at phone widths so the
  *    <Link> does not intercept touches — letting this handler see them.
  *  - This component mounts a single native `touchend` listener on the grid
  *    wrapper. It distinguishes a tap (dx<10, dy<10) from a swipe and pushes
@@ -21,18 +21,31 @@
 
 import { useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import { isPhoneViewport } from '@/lib/client-runtime';
 
 export default function CalendarDayTapHandler() {
   const router = useRouter();
   const startRef = useRef<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
+    const shouldHandleTouch = () =>
+      isPhoneViewport() && Boolean(document.querySelector('.cal-page.cal-month-view'));
+
     const onTouchStart = (e: TouchEvent) => {
+      if (!shouldHandleTouch()) {
+        startRef.current = null;
+        return;
+      }
       const t = e.touches[0];
       startRef.current = { x: t.clientX, y: t.clientY };
     };
 
     const onTouchEnd = (e: TouchEvent) => {
+      if (!shouldHandleTouch()) {
+        startRef.current = null;
+        return;
+      }
+
       const start = startRef.current;
       if (!start) return;
       const t = e.changedTouches[0];

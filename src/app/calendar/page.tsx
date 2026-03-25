@@ -957,7 +957,10 @@ export default async function CalendarPage({
     : monthParam(monthStart) === monthParam(todayMonthStart);
 
   return (
-    <main className={`dash cal-page${hasSelectedDate && !isWeekView ? ' cal-day-open' : ''}`} data-debug-id="TRL">
+    <main
+      className={`dash cal-page${!isWeekView ? ' cal-month-view' : ''}${hasSelectedDate && !isWeekView ? ' cal-day-open' : ''}`}
+      data-debug-id="TRL"
+    >
       <ScreenPerfProbe
         screen="calendar"
         actionSelector=".cal-grid a, .cal-view-pill, .cal-month-btn, .wsd-day-link"
