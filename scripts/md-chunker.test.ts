@@ -49,6 +49,9 @@ test("chunkMd returns single chunk when plan has fewer weeks than chunkSize", ()
   assert.ok(chunks[0].weekNumbers.includes(1));
   assert.ok(chunks[0].weekNumbers.includes(2));
   assert.ok(chunks[0].weekNumbers.includes(3));
+  // Body content must survive — catches regex bugs that strip rows
+  assert.ok(chunks[0].text.includes("| Mon | Easy run |"), "Week 1 body rows missing from chunk");
+  assert.ok(chunks[0].text.includes("| Mon | Long run |"), "Week 3 body rows missing from chunk");
 });
 
 test("chunkMd splits into multiple chunks when plan exceeds chunkSize", () => {

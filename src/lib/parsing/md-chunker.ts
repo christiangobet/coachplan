@@ -47,7 +47,7 @@ export function chunkMd(md: string, chunkSize = 5): MdChunk[] {
   const supplementary = extractSupplementary(md);
 
   const weekSections: Array<{ weekNumber: number; text: string }> = [];
-  const weekRegex = /^(## Week (\d+)[\s\S]*?)(?=^## Week \d+|\s*$)/gm;
+  const weekRegex = /^(## Week (\d+)(?:(?!^## Week \d)[\s\S])*)/gm;
 
   let match: RegExpExecArray | null;
   while ((match = weekRegex.exec(md)) !== null) {
