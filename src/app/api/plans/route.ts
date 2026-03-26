@@ -7,7 +7,7 @@ import os from 'os';
 import { createHash, randomUUID } from 'crypto';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
-import { parseWeekWithAI, maybeRunParserV4, maybeRunParserV5 } from '@/lib/ai-plan-parser';
+import { parseWeekWithAI, maybeRunParserV4, maybeRunParserV5, maybeRunVisionExtract } from '@/lib/ai-plan-parser';
 import { extractPlanGuide } from '@/lib/ai-guide-extractor';
 import { extractPdfText } from '@/lib/pdf/extract-text';
 import { FLAGS } from '@/lib/feature-flags';
@@ -1625,7 +1625,24 @@ export async function POST(req: Request) {
         // Draft upload/review mode: defer calendar date materialization until activation.
       }
 
-      if (!((FLAGS.PARSER_V5_PRIMARY && v5Data) || (FLAGS.PARSER_V4_PRIMARY && v4Data))) {
+      // Vision extract: PDF -> enriched MD -> simplified V4 parser (no guide needed - Claude reads the PDF directly).
+      let visionData: import('@/lib/schemas/program-json-v1').ProgramJsonV1 | null = null;
+      if (FLAGS.PARSER_VISION_EXTRACT) {
+        const { data: visionResult, parseWarning: visionWarning } = await maybeRunVisionExtract(buffer, plan.id);
+        visionData = visionResult;
+        if (visionWarning && !parseWarning) parseWarning = visionWarning;
+      }
+
+      if (FLAGS.PARSER_VISION_EXTRACT && visionData) {
+        const { weeksCreated, activitiesCreated } = await populatePlanFromV4(plan.id, visionData);
+        console.info('[VisionExtract] Populated plan from vision pipeline', {
+          planId: plan.id,
+          weeksCreated,
+          activitiesCreated
+        });
+      }
+
+      if (!((FLAGS.PARSER_V5_PRIMARY && v5Data) || (FLAGS.PARSER_V4_PRIMARY && v4Data) || (FLAGS.PARSER_VISION_EXTRACT && visionData))) {
 
       const parsed = await withTimeout(
         parsePdfToJson(plan.id, pdfPath, name),
