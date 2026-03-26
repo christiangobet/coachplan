@@ -1631,7 +1631,8 @@ export async function POST(req: Request) {
         const { data: visionResult, parseWarning: visionWarning } = await maybeRunVisionExtract(buffer, plan.id);
         visionData = visionResult;
         if (visionWarning && !parseWarning) parseWarning = visionWarning;
-        if (visionData) {
+        // Only populate from vision if V5/V4 primary haven't already done so
+        if (visionData && !(FLAGS.PARSER_V5_PRIMARY && v5Data) && !(FLAGS.PARSER_V4_PRIMARY && v4Data)) {
           const { weeksCreated, activitiesCreated } = await populatePlanFromV4(plan.id, visionData);
           console.info('[VisionExtract] Populated plan from vision pipeline', {
             planId: plan.id,
