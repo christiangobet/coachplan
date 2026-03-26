@@ -268,7 +268,9 @@ export default async function ParseDebugPage() {
                       margin: 0
                     }}
                   >
-                    {(artifact.json as { md: string }).md}
+                    {typeof artifact.json === 'object' && artifact.json !== null && 'md' in artifact.json
+                      ? (artifact.json as { md: string }).md
+                      : '[missing md field]'}
                   </pre>
                 ) : (
                   /* Raw JSON viewer */
