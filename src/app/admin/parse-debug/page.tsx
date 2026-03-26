@@ -252,6 +252,32 @@ export default async function ParseDebugPage() {
                     </div>
                   )}
 
+                {/* Extracted MD viewer — shown when artifact contains enriched plan Markdown */}
+                {artifact.artifactType === 'EXTRACTED_MD' && typeof (artifact.json as { md?: unknown }).md === 'string' && (
+                  <div style={{ marginBottom: 12 }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: '#5b21b6', marginBottom: 6 }}>
+                      Extracted Markdown
+                    </div>
+                    <pre
+                      style={{
+                        fontFamily: 'monospace',
+                        fontSize: 11,
+                        overflowX: 'auto',
+                        whiteSpace: 'pre-wrap',
+                        background: '#0d1117',
+                        color: '#e0e0e0',
+                        padding: '12px 14px',
+                        borderRadius: 8,
+                        maxHeight: 500,
+                        overflowY: 'auto',
+                        margin: 0
+                      }}
+                    >
+                      {(artifact.json as { md: string }).md}
+                    </pre>
+                  </div>
+                )}
+
                 {/* Raw JSON viewer */}
                 <pre
                   style={{
