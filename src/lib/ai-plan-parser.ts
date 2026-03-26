@@ -2,14 +2,18 @@ import { getDefaultAiModel, openaiJsonSchema } from "./openai";
 import type { ProgramDocumentProfile } from "./plan-document-profile";
 import { FLAGS } from "./feature-flags";
 import { extractPdfText } from "./pdf/extract-text";
+import { extractPlanMd } from "./pdf/pdf-to-md";
 import { runParserV4 } from "./parsing/plan-parser-v4";
 import { runParserV5 } from "./parsing/plan-parser-v5";
-import { parsePlanLengthFromGuide } from "./parsing/v4-pass-strategy";
+import { parsePlanLengthFromGuide, mergeWeeksFromPasses } from "./parsing/v4-pass-strategy";
+import { chunkMd } from "./parsing/md-chunker";
 import {
   createParseJob,
   updateParseJobStatus,
   saveParseArtifact
 } from "./parsing/parse-artifacts";
+import { ProgramJsonV1Schema, type ProgramJsonV1 } from "./schemas/program-json-v1";
+import { MD_PARSER_PROMPT } from "./prompts/plan-parser/md-parser-prompt";
 import { prisma } from "./prisma";
 
 const WEEK_SCHEMA = {
@@ -453,4 +457,108 @@ export async function maybeRunParserV5(
     parseWarning: result?.validationError ?? null,
     survey: result?.survey ?? null
   };
+}
+
+/**
+ * Vision extraction pipeline: PDF → enriched MD → simplified V4 parser.
+ * Only runs when FLAGS.PARSER_VISION_EXTRACT is true.
+ *
+ * Flow:
+ *   1. extractPlanMd() — Claude vision call, returns enriched plan.md
+ *   2. Store plan.md as ParseArtifact type "EXTRACTED_MD"
+ *   3. chunkMd() — split at ## Week N headers (5-week chunks)
+ *   4. runParserV4() per chunk with MD_PARSER_PROMPT
+ *   5. Merge results, return ProgramJsonV1
+ */
+export async function maybeRunVisionExtract(
+  pdfBuffer: Buffer,
+  planId?: string
+): Promise<{ data: ProgramJsonV1 | null; parseWarning: string | null; extractedMd: string | null }> {
+  if (!FLAGS.PARSER_VISION_EXTRACT) {
+    return { data: null, parseWarning: null, extractedMd: null };
+  }
+
+  // ── Step 1: PDF → enriched MD ─────────────────────────────────────────────
+  let planMd: string;
+  try {
+    planMd = await extractPlanMd(pdfBuffer);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[VisionExtract] extractPlanMd failed', { error: msg });
+    return { data: null, parseWarning: `Vision extraction failed: ${msg}`, extractedMd: null };
+  }
+
+  // ── Step 2: Store plan.md as artifact ────────────────────────────────────
+  let parseJobId: string | undefined;
+  if (FLAGS.PARSE_DUAL_WRITE) {
+    const job = await createParseJob({ planId, parserVersion: 'vision-v1' });
+    parseJobId = job.id;
+    await saveParseArtifact({
+      parseJobId: job.id,
+      artifactType: 'EXTRACTED_MD',
+      schemaVersion: '1',
+      json: { md: planMd },
+      validationOk: true
+    });
+  }
+
+  // ── Step 3: Chunk MD at ## Week N headers ─────────────────────────────────
+  const chunks = chunkMd(planMd, 5);
+  console.info('[VisionExtract] MD chunked', { chunks: chunks.length });
+
+  // ── Step 4: Run V4 parser on each chunk with simplified prompt ────────────
+  const passResults = await Promise.all(
+    chunks.map(async (chunk) => {
+      const result = await runParserV4(chunk.text, MD_PARSER_PROMPT);
+      return {
+        range: {
+          start: chunk.weekNumbers[0] ?? 0,
+          end: chunk.weekNumbers[chunk.weekNumbers.length - 1] ?? 0
+        },
+        data: result.data
+      };
+    })
+  );
+
+  const successfulPasses = passResults.filter(
+    (p): p is { range: { start: number; end: number }; data: ProgramJsonV1 } => p.data !== null
+  );
+
+  if (successfulPasses.length === 0) {
+    const warning = 'Vision pipeline: all V4 chunk passes failed';
+    if (parseJobId) await updateParseJobStatus(parseJobId, 'FAILED', warning);
+    return { data: null, parseWarning: warning, extractedMd: planMd };
+  }
+
+  // ── Step 5: Merge results ─────────────────────────────────────────────────
+  const mergedWeeks = mergeWeeksFromPasses(successfulPasses.map((p) => ({ data: p.data })));
+  const merged: ProgramJsonV1 = {
+    program: successfulPasses[0].data.program,
+    weeks: mergedWeeks,
+    quality_checks: { weeks_detected: mergedWeeks.length, missing_days: [], anomalies: [] }
+  };
+
+  const validation = ProgramJsonV1Schema.safeParse(merged);
+  const data = validation.success ? validation.data : null;
+  const parseWarning = !validation.success
+    ? `Vision pipeline validation failed: ${validation.error.message}`
+    : null;
+
+  if (parseJobId) {
+    await saveParseArtifact({
+      parseJobId,
+      artifactType: 'V4_OUTPUT',
+      schemaVersion: '1',
+      json: merged,
+      validationOk: validation.success
+    });
+    await updateParseJobStatus(
+      parseJobId,
+      validation.success ? 'SUCCESS' : 'FAILED',
+      parseWarning ?? undefined
+    );
+  }
+
+  console.info('[VisionExtract] Complete', { weeks: mergedWeeks.length, validated: validation.success });
+  return { data, parseWarning, extractedMd: planMd };
 }
