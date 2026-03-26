@@ -64,6 +64,10 @@ test("chunkMd splits into multiple chunks when plan exceeds chunkSize", () => {
   assert.deepEqual(chunks[0].weekNumbers, [1, 2, 3, 4, 5]);
   assert.deepEqual(chunks[1].weekNumbers, [6, 7, 8, 9, 10]);
   assert.deepEqual(chunks[2].weekNumbers, [11, 12]);
+  // Body rows must survive in every chunk
+  assert.ok(chunks[0].text.includes("| Mon | Easy run |"), "chunk 0 body rows missing");
+  assert.ok(chunks[1].text.includes("| Mon | Easy run |"), "chunk 1 body rows missing");
+  assert.ok(chunks[2].text.includes("| Mon | Easy run |"), "chunk 2 body rows missing");
 });
 
 test("every chunk includes supplementary sections as prefix", () => {
