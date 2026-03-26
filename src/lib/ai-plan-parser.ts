@@ -516,8 +516,16 @@ export async function maybeRunVisionExtract(
   // ── Step 4: Run V4 parser on each chunk with simplified prompt ─────────────
   const passResults = await Promise.all(
     chunks.map(async (chunk) => {
-      const result = await runParserV4(chunk.text, MD_PARSER_PROMPT);
-      return { data: result.data };
+      try {
+        const result = await runParserV4(chunk.text, MD_PARSER_PROMPT);
+        return { data: result.data };
+      } catch (err) {
+        console.error('[VisionExtract] runParserV4 chunk failed', {
+          weeks: chunk.weekNumbers,
+          error: err instanceof Error ? err.message : String(err)
+        });
+        return { data: null };
+      }
     })
   );
 
