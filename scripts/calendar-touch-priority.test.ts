@@ -91,3 +91,84 @@ test("calendar page shell marks month view explicitly when not in week view", as
   assert.notEqual(monthViewIndex, -1);
   assert.ok(shellIndex < monthViewIndex);
 });
+
+test("calendar month day links use route state instead of hash targeting", async () => {
+  const source = await readWorkspaceFile("src/app/calendar/page.tsx");
+
+  assert.match(source, /const dayHref = buildCalendarHref\(monthStart, selectedPlan\.id, key, returnToParam\);/);
+  assert.doesNotMatch(source, /const dayHref = `\$\{buildCalendarHref\(monthStart, selectedPlan\.id, key, returnToParam\)\}#day-details-card`;/);
+});
+
+test("calendar css keeps the day card in the side column on tablet widths", async () => {
+  const source = await readWorkspaceFile("src/app/calendar/calendar.css");
+  const tabletBlockMatch = source.match(/@media \(min-width: 769px\) \{[\s\S]*?\.cal-page\.cal-day-open \.cal-right \{\s*display:\s*block;[\s\S]*?\n\}/);
+
+  assert.match(source, /@media \(min-width: 769px\)/);
+  assert.match(source, /\.cal-page\.cal-day-open \.dash-grid \{\s*grid-template-columns:/);
+  assert.match(source, /\.cal-page\.cal-day-open \.cal-right \{\s*display:\s*block;/);
+  assert.ok(tabletBlockMatch);
+  assert.doesNotMatch(tabletBlockMatch?.[0] ?? "", /@media \(min-width: 901px\)/);
+});
+
+test("calendar close affordance stays visible outside the phone overlay", async () => {
+  const source = await readWorkspaceFile("src/app/calendar/calendar.css");
+
+  assert.match(source, /\.cal-detail-close \{\s*display:\s*inline-flex;/);
+  assert.doesNotMatch(source, /@media \(min-width: 769px\)[\s\S]*?\.cal-detail-close \{\s*display:\s*none;/);
+  assert.match(source, /@media \(max-width: 768px\)[\s\S]*?\.cal-day-details-card\.is-open \.cal-detail-close \{\s*display:\s*inline-flex;/);
+});
+
+test("calendar month layout opens from resolved selected date state", async () => {
+  const source = await readWorkspaceFile("src/app/calendar/page.tsx");
+
+  assert.match(source, /const selectedDateKey = parsedRequestedDate \? dateKey\(parsedRequestedDate\) : null;/);
+  assert.match(source, /const highlightedDateKey = selectedDateKey \|\| dateKey\(defaultSelectedDate\);/);
+  assert.match(source, /className=\{`dash cal-page\$\{!isWeekView \? ' cal-month-view' : ''\}\$\{selectedDateKey && !isWeekView \? ' cal-day-open' : ''\}`\}/);
+  assert.match(source, /\{selectedDateKey && !isWeekView && <div id="day-details-card"/);
+  assert.match(source, /buildCalendarHref\(addMonths\(monthStart, -1\), selectedPlan\.id, selectedDateKey, returnToParam\)/);
+  assert.match(source, /const monthToggleHref = buildCalendarHref\(/);
+  assert.match(source, /const selectedIsPastOrToday = selectedDateKey \? selectedDate\.getTime\(\) <= today\.getTime\(\) : false;/);
+  assert.match(source, /const selectedExternalActivityRows = selectedDateKey && selectedIsPastOrToday \?/);
+  assert.doesNotMatch(source, /buildCalendarHref\(.*highlightedDateKey.*returnToParam\)/);
+  assert.doesNotMatch(source, /buildWeekHref\(.*highlightedDateKey.*returnToParam\)/);
+});
+
+test("calendar month close link clears date on the calendar route", async () => {
+  const source = await readWorkspaceFile("src/app/calendar/page.tsx");
+
+  assert.match(source, /const collapseCardHref = buildCalendarHref\(monthStart, selectedPlan\.id, null, returnToParam\);/);
+  assert.doesNotMatch(source, /const collapseCardHref = dashboardReturnHref \?\? buildCalendarHref\(monthStart, selectedPlan\.id, null, returnToParam\);/);
+  assert.match(source, /<Link className="cal-detail-close" href=\{collapseCardHref\} aria-label="Close selected day panel">/);
+  assert.doesNotMatch(source, /href=\{dashboardReturnHref\}/);
+});
+
+test("calendar week view keeps week and selected date aligned across entry and pagination", async () => {
+  const source = await readWorkspaceFile("src/app/calendar/page.tsx");
+
+  assert.match(source, /const selectedDate = selectedDateKey \? parsedRequestedDate! : defaultSelectedDate;/);
+  assert.match(source, /const fallbackWeekMonday = parsedWeekParam \? getWeekMonday\(parsedWeekParam\) : getWeekMonday\(selectedDate\);/);
+  assert.match(source, /const selectedWeekMonday = selectedDateKey \? getWeekMonday\(selectedDate\) : fallbackWeekMonday;/);
+  assert.match(source, /\? \(selectedDateKey \? selectedWeekMonday : fallbackWeekMonday\)/);
+  assert.match(source, /const prevWeekSelectedDateKey = selectedDateKey \? dateKey\(addWeeks\(selectedDate, -1\)\) : null;/);
+  assert.match(source, /const nextWeekSelectedDateKey = selectedDateKey \? dateKey\(addWeeks\(selectedDate, 1\)\) : null;/);
+  assert.match(source, /const weekViewHref = buildWeekHref\(selectedWeekMonday, selectedPlan\.id, selectedDateKey, returnToParam\);/);
+  assert.match(source, /const prevWeekHref = buildWeekHref\(addWeeks\(weekMonday, -1\), selectedPlan\.id, prevWeekSelectedDateKey, returnToParam\);/);
+  assert.match(source, /const nextWeekHref = buildWeekHref\(addWeeks\(weekMonday, 1\), selectedPlan\.id, nextWeekSelectedDateKey, returnToParam\);/);
+  assert.match(source, /href=\{weekViewHref\}/);
+});
+
+test("calendar month toggle stays aligned with the selected date context", async () => {
+  const source = await readWorkspaceFile("src/app/calendar/page.tsx");
+
+  const monthToggleHrefIndex = source.indexOf("const monthToggleHref = buildCalendarHref(");
+  const monthToggleLinkIndex = source.indexOf("href={monthToggleHref}", monthToggleHrefIndex);
+
+  assert.notEqual(monthToggleHrefIndex, -1);
+  assert.notEqual(monthToggleLinkIndex, -1);
+  assert.ok(monthToggleHrefIndex < monthToggleLinkIndex);
+  assert.match(
+    source,
+    /const monthToggleHref = buildCalendarHref\(\s*getMonthStart\(selectedDateKey \? selectedDate : \(isWeekView \? weekMonday : monthStart\)\),\s*selectedPlan\.id,\s*selectedDateKey,\s*returnToParam\s*\);/
+  );
+  assert.match(source, /href=\{monthToggleHref\}/);
+});

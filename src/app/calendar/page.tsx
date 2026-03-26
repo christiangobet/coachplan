@@ -250,6 +250,12 @@ function addMonths(value: Date, delta: number) {
   return d;
 }
 
+function getMonthStart(value: Date) {
+  const d = normalizeDate(value);
+  d.setUTCDate(1);
+  return d;
+}
+
 /** Returns the ISO Monday (Mon=1) of the week containing `value`. */
 function getWeekMonday(value: Date): Date {
   const d = normalizeDate(value);
@@ -699,8 +705,7 @@ export default async function CalendarPage({
   const defaultMonth =
     requestedMonthDate
     || new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1));
-  const monthStart = normalizeDate(defaultMonth);
-  monthStart.setUTCDate(1);
+  const monthStart = getMonthStart(defaultMonth);
   const monthEnd = normalizeDate(new Date(Date.UTC(monthStart.getUTCFullYear(), monthStart.getUTCMonth() + 1, 0)));
 
   const gridStart = normalizeDate(monthStart);
@@ -717,6 +722,7 @@ export default async function CalendarPage({
 
   const parsedRequestedDate = parseDateParam(requestedDate);
   const hasSelectedDate = !!parsedRequestedDate;
+  const selectedDateKey = parsedRequestedDate ? dateKey(parsedRequestedDate) : null;
   const defaultSelectedDate =
     parsedRequestedDate
     || (
@@ -724,21 +730,33 @@ export default async function CalendarPage({
         ? today
         : monthStart
     );
-  const selectedDateKey = dateKey(defaultSelectedDate);
+  const highlightedDateKey = selectedDateKey || dateKey(defaultSelectedDate);
+  const selectedDate = selectedDateKey ? parsedRequestedDate! : defaultSelectedDate;
 
   const prevMonthHref = buildCalendarHref(addMonths(monthStart, -1), selectedPlan.id, selectedDateKey, returnToParam);
   const nextMonthHref = buildCalendarHref(addMonths(monthStart, 1), selectedPlan.id, selectedDateKey, returnToParam);
   const dashboardReturnHref = returnToDashboard ? `/dashboard?plan=${encodeURIComponent(selectedPlan.id)}` : null;
-  const collapseCardHref = dashboardReturnHref ?? buildCalendarHref(monthStart, selectedPlan.id, null, returnToParam);
+  const collapseCardHref = buildCalendarHref(monthStart, selectedPlan.id, null, returnToParam);
 
   // Week view: resolve the Monday of the displayed week
   const parsedWeekParam = parseDateParam(requestedWeek);
+  const fallbackWeekMonday = parsedWeekParam ? getWeekMonday(parsedWeekParam) : getWeekMonday(selectedDate);
+  const selectedWeekMonday = selectedDateKey ? getWeekMonday(selectedDate) : fallbackWeekMonday;
   const weekMonday = isWeekView
-    ? (parsedWeekParam ? getWeekMonday(parsedWeekParam) : getWeekMonday(today))
-    : getWeekMonday(today);
+    ? (selectedDateKey ? selectedWeekMonday : fallbackWeekMonday)
+    : getWeekMonday(selectedDate);
+  const monthToggleHref = buildCalendarHref(
+    getMonthStart(selectedDateKey ? selectedDate : (isWeekView ? weekMonday : monthStart)),
+    selectedPlan.id,
+    selectedDateKey,
+    returnToParam
+  );
+  const prevWeekSelectedDateKey = selectedDateKey ? dateKey(addWeeks(selectedDate, -1)) : null;
+  const nextWeekSelectedDateKey = selectedDateKey ? dateKey(addWeeks(selectedDate, 1)) : null;
+  const weekViewHref = buildWeekHref(selectedWeekMonday, selectedPlan.id, selectedDateKey, returnToParam);
 
-  const prevWeekHref = buildWeekHref(addWeeks(weekMonday, -1), selectedPlan.id, selectedDateKey, returnToParam);
-  const nextWeekHref = buildWeekHref(addWeeks(weekMonday, 1), selectedPlan.id, selectedDateKey, returnToParam);
+  const prevWeekHref = buildWeekHref(addWeeks(weekMonday, -1), selectedPlan.id, prevWeekSelectedDateKey, returnToParam);
+  const nextWeekHref = buildWeekHref(addWeeks(weekMonday, 1), selectedPlan.id, nextWeekSelectedDateKey, returnToParam);
 
   // Calendar shell uses summary-only external logs; selected-day media is fetched separately.
 
@@ -767,18 +785,16 @@ export default async function CalendarPage({
     externalByDate.set(key, row);
   }
 
-  const selectedDate = parsedRequestedDate || defaultSelectedDate;
-  const selectedDayInfo = dayInfoByDate.get(selectedDateKey) || null;
-  const selectedPlanActivities = activitiesByDate.get(selectedDateKey) || [];
-  const selectedIsPastOrToday = selectedDate.getTime() <= today.getTime();
+  const selectedDayInfo = selectedDateKey ? (dayInfoByDate.get(selectedDateKey) || null) : null;
+  const selectedPlanActivities = selectedDateKey ? (activitiesByDate.get(selectedDateKey) || []) : [];
+  const selectedIsPastOrToday = selectedDateKey ? selectedDate.getTime() <= today.getTime() : false;
   const selectedDayWindowStart = new Date(selectedDate);
   selectedDayWindowStart.setUTCDate(selectedDayWindowStart.getUTCDate() - 1);
   selectedDayWindowStart.setUTCHours(0, 0, 0, 0);
   const selectedDayWindowEnd = new Date(selectedDate);
   selectedDayWindowEnd.setUTCDate(selectedDayWindowEnd.getUTCDate() + 1);
   selectedDayWindowEnd.setUTCHours(23, 59, 59, 999);
-  const selectedExternalActivityRows = selectedIsPastOrToday
-    ? await prisma.externalActivity.findMany({
+  const selectedExternalActivityRows = selectedDateKey && selectedIsPastOrToday ? await prisma.externalActivity.findMany({
       where: {
         userId: user.id,
         startTime: {
@@ -804,8 +820,7 @@ export default async function CalendarPage({
         loadRatio: true,
         raw: true
       }
-    })
-    : [];
+    }) : [];
   const selectedExternalLogs = selectedExternalActivityRows
     .filter((item) => getExternalDateKey(item.raw, item.startTime) === selectedDateKey)
     .map((item) => ({
@@ -958,7 +973,7 @@ export default async function CalendarPage({
 
   return (
     <main
-      className={`dash cal-page${!isWeekView ? ' cal-month-view' : ''}${hasSelectedDate && !isWeekView ? ' cal-day-open' : ''}`}
+      className={`dash cal-page${!isWeekView ? ' cal-month-view' : ''}${selectedDateKey && !isWeekView ? ' cal-day-open' : ''}`}
       data-debug-id="TRL"
     >
       <ScreenPerfProbe
@@ -1035,11 +1050,11 @@ export default async function CalendarPage({
                 <div className="cal-view-toggle">
                   <Link
                     className={`cal-view-pill${!isWeekView ? " active" : ""}`}
-                    href={buildCalendarHref(monthStart, selectedPlan.id, selectedDateKey, returnToParam)}
+                    href={monthToggleHref}
                   >Month</Link>
                   <Link
                     className={`cal-view-pill${isWeekView ? " active" : ""}`}
-                    href={buildWeekHref(weekMonday, selectedPlan.id, selectedDateKey, returnToParam)}
+                    href={weekViewHref}
                   >Week</Link>
                 </div>
               </div>
@@ -1065,7 +1080,7 @@ export default async function CalendarPage({
                   prevWeekHref={prevWeekHref}
                   nextWeekHref={nextWeekHref}
                 />
-                {hasSelectedDate && (
+                {selectedDateKey && (
                   <div className="wsd-detail">
                     <div className="cal-detail-header">
                       <span className="cal-detail-date">
@@ -1191,7 +1206,7 @@ export default async function CalendarPage({
                 const dayLogs = externalByDate.get(key) || [];
                 const dayInfo = dayInfoByDate.get(key) || null;
                 const isToday = key === dateKey(today);
-                const isSelected = key === selectedDateKey;
+                const isSelected = key === highlightedDateKey;
                 const isOutMonth = date.getUTCMonth() !== monthStart.getUTCMonth();
                 const inPlan = planDateKeys.has(key);
                 const dayManualStatus = dayInfo?.manualStatus || 'OPEN';
@@ -1230,7 +1245,7 @@ export default async function CalendarPage({
                 const totalDayDistLabel = totalDayDist > 0
                   ? `${formatDistanceNumber(totalDayDist)}${distanceUnitLabel(viewerUnits)}`
                   : null;
-                const dayHref = `${buildCalendarHref(monthStart, selectedPlan.id, key, returnToParam)}#day-details-card`;
+                const dayHref = buildCalendarHref(monthStart, selectedPlan.id, key, returnToParam);
                 return (
                   <div
                     key={key}
@@ -1416,7 +1431,7 @@ export default async function CalendarPage({
         </section>
 
         <aside className="dash-right cal-right" data-debug-id="TSB">
-          {hasSelectedDate && !isWeekView && <div id="day-details-card" className="dash-card cal-info-card cal-day-details-card is-open" data-debug-id="TDL">
+          {selectedDateKey && !isWeekView && <div id="day-details-card" className="dash-card cal-info-card cal-day-details-card is-open" data-debug-id="TDL">
 
             {/* Header: date + status */}
             <div className="cal-detail-header">
@@ -1561,7 +1576,7 @@ export default async function CalendarPage({
                 <>
                   {selectedIsPastOrToday ? (
                     stravaAccount ? (
-                      <StravaDaySyncButton dateISO={selectedDateKey} planId={selectedPlan.id} className="cal-strava-sync-btn" />
+                      <StravaDaySyncButton dateISO={selectedDateKey!} planId={selectedPlan.id} className="cal-strava-sync-btn" />
                     ) : (
                       <Link href="/strava">Connect Strava to Sync Selected Day</Link>
                     )

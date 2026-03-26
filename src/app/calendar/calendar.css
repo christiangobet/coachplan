@@ -7,8 +7,8 @@
   min-width: 0;
 }
 
-/* Desktop: right pane shown as inline sidebar column when day is open */
-@media (min-width: 901px) {
+/* Tablet and desktop: right pane shown as inline sidebar column when day is open */
+@media (min-width: 769px) {
   /* Right pane column is hidden by default */
   .cal-page .cal-right {
     display: none;
@@ -25,10 +25,6 @@
     display: block;
   }
 
-  /* Hide close button on desktop (no full-screen overlay to close) */
-  .cal-detail-close {
-    display: none;
-  }
 }
 
 .cal-header {
@@ -1027,7 +1023,7 @@
 }
 
 .cal-detail-close {
-  display: none;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   min-width: 44px;
@@ -2025,23 +2021,6 @@
 
   .cal-day-detail-section {
     padding: 10px 14px;
-  }
-}
-
-/* ── P0 fix: un-hide aside when day panel is open (1380px breakpoint) ── */
-@media (max-width: 1380px) {
-  .cal-right:has(.cal-day-details-card.is-open) {
-    display: block !important;
-    width: 0;
-    height: 0;
-    overflow: visible;
-    padding: 0;
-    gap: 0;
-    border: none;
-    box-shadow: none;
-  }
-  .cal-right:has(.cal-day-details-card.is-open) > :not(#day-details-card) {
-    display: none;
   }
 }
 
