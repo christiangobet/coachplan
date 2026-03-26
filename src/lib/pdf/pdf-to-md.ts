@@ -38,7 +38,7 @@ export async function extractPlanMd(
               media_type: 'application/pdf',
               data: pdfBuffer.toString('base64')
             }
-          } as never,
+          } as never, // Anthropic SDK types don't yet include the 'document' content block — cast until types are updated
           {
             type: 'text',
             text: VISION_EXTRACTION_PROMPT
