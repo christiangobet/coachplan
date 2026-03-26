@@ -491,15 +491,19 @@ export async function maybeRunVisionExtract(
   // ── Step 2: Store plan.md as artifact ────────────────────────────────────
   let parseJobId: string | undefined;
   if (FLAGS.PARSE_DUAL_WRITE) {
-    const job = await createParseJob({ planId, parserVersion: 'vision-v1' });
-    parseJobId = job.id;
-    await saveParseArtifact({
-      parseJobId: job.id,
-      artifactType: 'EXTRACTED_MD',
-      schemaVersion: '1',
-      json: { md: planMd },
-      validationOk: true
-    });
+    try {
+      const job = await createParseJob({ planId, parserVersion: 'vision-v1' });
+      parseJobId = job.id;
+      await saveParseArtifact({
+        parseJobId: job.id,
+        artifactType: 'EXTRACTED_MD',
+        schemaVersion: '1',
+        json: { md: planMd },
+        validationOk: true
+      });
+    } catch (err) {
+      console.warn('[VisionExtract] Failed to create parse job/artifact', { error: err instanceof Error ? err.message : String(err) });
+    }
   }
 
   // ── Step 3: Chunk MD at ## Week N headers ─────────────────────────────────
@@ -545,18 +549,22 @@ export async function maybeRunVisionExtract(
     : null;
 
   if (parseJobId) {
-    await saveParseArtifact({
-      parseJobId,
-      artifactType: 'V4_OUTPUT',
-      schemaVersion: '1',
-      json: merged,
-      validationOk: validation.success
-    });
-    await updateParseJobStatus(
-      parseJobId,
-      validation.success ? 'SUCCESS' : 'FAILED',
-      parseWarning ?? undefined
-    );
+    try {
+      await saveParseArtifact({
+        parseJobId,
+        artifactType: 'V4_OUTPUT',
+        schemaVersion: '1',
+        json: merged,
+        validationOk: validation.success
+      });
+      await updateParseJobStatus(
+        parseJobId,
+        validation.success ? 'SUCCESS' : 'FAILED',
+        parseWarning ?? undefined
+      );
+    } catch (err) {
+      console.warn('[VisionExtract] Failed to save final artifact/status', { error: err instanceof Error ? err.message : String(err) });
+    }
   }
 
   console.info('[VisionExtract] Complete', { weeks: mergedWeeks.length, validated: validation.success });
