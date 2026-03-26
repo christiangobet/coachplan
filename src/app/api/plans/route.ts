@@ -1631,15 +1631,14 @@ export async function POST(req: Request) {
         const { data: visionResult, parseWarning: visionWarning } = await maybeRunVisionExtract(buffer, plan.id);
         visionData = visionResult;
         if (visionWarning && !parseWarning) parseWarning = visionWarning;
-      }
-
-      if (FLAGS.PARSER_VISION_EXTRACT && visionData) {
-        const { weeksCreated, activitiesCreated } = await populatePlanFromV4(plan.id, visionData);
-        console.info('[VisionExtract] Populated plan from vision pipeline', {
-          planId: plan.id,
-          weeksCreated,
-          activitiesCreated
-        });
+        if (visionData) {
+          const { weeksCreated, activitiesCreated } = await populatePlanFromV4(plan.id, visionData);
+          console.info('[VisionExtract] Populated plan from vision pipeline', {
+            planId: plan.id,
+            weeksCreated,
+            activitiesCreated
+          });
+        }
       }
 
       if (!((FLAGS.PARSER_V5_PRIMARY && v5Data) || (FLAGS.PARSER_V4_PRIMARY && v4Data) || (FLAGS.PARSER_VISION_EXTRACT && visionData))) {
