@@ -18,10 +18,12 @@
     "audit:screens:manual": "node scripts/capture-audit-manual.mjs",
     "audit:screens:manual:onboarding": "node scripts/capture-audit-manual.mjs --profile onboarding-athlete --out-dir artifacts/audit-shots-onboarding-manual",
     "test:parser-i18n": "node scripts/test-plan-parser-i18n.mjs",
+    "test:parsing": "node --test --experimental-transform-types scripts/md-chunker.test.ts scripts/pdf-to-md.test.ts",
     "make-admin": "node scripts/promote-admin.js",
     "backfill-plan-dates": "node scripts/backfill-plan-dates.js"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.80.0",
     "@clerk/nextjs": "^6.37.2",
     "@prisma/client": "^5.22.0",
     "@sentry/nextjs": "^10.43.0",

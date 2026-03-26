@@ -1,6 +1,5 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-// @ts-expect-error Node strip-types test runner resolves the TypeScript source file directly.
 const { MAX_RESOLVE_ROLE_RETRIES, decideResolveRoleAction } = await import('../src/lib/auth/resolve-role.ts');
 
 test('retries resolve-role when user is signed in but role context is temporarily unavailable', () => {

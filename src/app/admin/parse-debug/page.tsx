@@ -193,7 +193,7 @@ export default async function ParseDebugPage() {
                 </div>
 
                 {/* Quality summary row */}
-                {!summary.truncated && (
+                {!summary.truncated && artifact.artifactType !== 'EXTRACTED_MD' && (
                   <div
                     style={{
                       display: 'flex',
@@ -235,6 +235,7 @@ export default async function ParseDebugPage() {
 
                 {/* Anomalies detail */}
                 {!summary.truncated &&
+                  artifact.artifactType !== 'EXTRACTED_MD' &&
                   summary.qc?.anomalies &&
                   summary.qc.anomalies.length > 0 && (
                     <div
@@ -252,24 +253,45 @@ export default async function ParseDebugPage() {
                     </div>
                   )}
 
-                {/* Raw JSON viewer */}
-                <pre
-                  style={{
-                    background: '#f3f6f9',
-                    borderRadius: 8,
-                    padding: '10px 12px',
-                    fontSize: 11,
-                    lineHeight: 1.5,
-                    overflowX: 'auto',
-                    maxHeight: 400,
-                    overflowY: 'auto',
-                    whiteSpace: 'pre-wrap',
-                    wordBreak: 'break-word',
-                    margin: 0
-                  }}
-                >
-                  {JSON.stringify(artifact.json, null, 2)}
-                </pre>
+                {/* Extracted MD viewer */}
+                {artifact.artifactType === 'EXTRACTED_MD' ? (
+                  <pre
+                    style={{
+                      fontFamily: 'monospace',
+                      fontSize: 12,
+                      overflowX: 'auto',
+                      whiteSpace: 'pre-wrap',
+                      background: '#0d1117',
+                      color: '#e0e0e0',
+                      padding: '16px',
+                      borderRadius: '8px',
+                      margin: 0
+                    }}
+                  >
+                    {typeof artifact.json === 'object' && artifact.json !== null && 'md' in artifact.json
+                      ? (artifact.json as { md: string }).md
+                      : '[missing md field]'}
+                  </pre>
+                ) : (
+                  /* Raw JSON viewer */
+                  <pre
+                    style={{
+                      background: '#f3f6f9',
+                      borderRadius: 8,
+                      padding: '10px 12px',
+                      fontSize: 11,
+                      lineHeight: 1.5,
+                      overflowX: 'auto',
+                      maxHeight: 400,
+                      overflowY: 'auto',
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-word',
+                      margin: 0
+                    }}
+                  >
+                    {JSON.stringify(artifact.json, null, 2)}
+                  </pre>
+                )}
               </section>
             );
           })}

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { currentUser } from "@clerk/nextjs/server";
 import { prisma } from "@/lib/prisma";
 import { getDayDateFromWeekStart, resolveWeekBounds } from "@/lib/plan-dates";
@@ -70,6 +70,20 @@ function getSportPhotoUrl(sportType: string | null, provider: string, raw: unkno
 function getSportPhotoAlt(sportType: string | null): string {
   const code = mapStravaSportTypeToVisualCode(sportType);
   return SPORT_PHOTO[code]?.alt ?? "Activity";
+}
+
+function isAppleTouchUserAgent(userAgent: string | null) {
+  if (!userAgent) return false;
+  return /iP(hone|ad|od)/i.test(userAgent) || (/Macintosh/i.test(userAgent) && /Mobile/i.test(userAgent));
+}
+
+function resolveCalendarDefaultView(userAgent: string | null) {
+  return isAppleTouchUserAgent(userAgent) ? "week" : "month";
+}
+
+function resolveCalendarRequestedView(view: string | undefined, userAgent: string | null) {
+  if (typeof view === "string") return view;
+  return resolveCalendarDefaultView(userAgent);
 }
 
 const PACE_BUCKET_SHORT: Record<string, string> = {
@@ -289,6 +303,7 @@ function toDateInputValue(value: Date | null | undefined) {
 function buildCalendarHref(month: Date, planId: string, selectedDate?: string | null, returnTo?: string | null) {
   const params = new URLSearchParams();
   params.set("month", monthParam(month));
+  params.set("view", "month");
   if (planId) params.set("plan", planId);
   if (selectedDate) params.set("date", selectedDate);
   if (returnTo === "dashboard") params.set("returnTo", returnTo);
@@ -418,10 +433,11 @@ export default async function CalendarPage({
   searchParams?: Promise<CalendarSearchParams>;
 }) {
   // Stage 1: parallel — auth + params + cookies (no DB yet)
-  const [user, params, cookieStore] = await Promise.all([
+  const [user, params, cookieStore, headersList] = await Promise.all([
     currentUser(),
     searchParams ?? Promise.resolve({} as CalendarSearchParams),
     cookies(),
+    headers(),
   ]);
   if (!user) redirect("/sign-in");
 
@@ -432,7 +448,7 @@ export default async function CalendarPage({
   const requestedReturnTo = typeof params.returnTo === "string" ? params.returnTo : "";
   const returnToDashboard = requestedReturnTo === "dashboard";
   const returnToParam = returnToDashboard ? "dashboard" : null;
-  const requestedView = typeof params.view === "string" ? params.view : "month";
+  const requestedView = resolveCalendarRequestedView(typeof params.view === "string" ? params.view : undefined, headersList.get("user-agent"));
   const isWeekView = requestedView === "week";
   const requestedWeek = typeof params.week === "string" ? params.week : undefined;
   const cookiePlanId = cookieStore.get(SELECTED_PLAN_COOKIE)?.value || "";
@@ -941,7 +957,10 @@ export default async function CalendarPage({
     : monthParam(monthStart) === monthParam(todayMonthStart);
 
   return (
-    <main className={`dash cal-page${hasSelectedDate && !isWeekView ? ' cal-day-open' : ''}`} data-debug-id="TRL">
+    <main
+      className={`dash cal-page${!isWeekView ? ' cal-month-view' : ''}${hasSelectedDate && !isWeekView ? ' cal-day-open' : ''}`}
+      data-debug-id="TRL"
+    >
       <ScreenPerfProbe
         screen="calendar"
         actionSelector=".cal-grid a, .cal-view-pill, .cal-month-btn, .wsd-day-link"

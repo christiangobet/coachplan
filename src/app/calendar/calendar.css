@@ -1820,12 +1820,14 @@
 
 }
 
-@media (max-width: 768px) {
-  .cal-day-hit {
+@media (max-width: 767px) {
+  .cal-page.cal-month-view .cal-day-hit {
     pointer-events: none;
     cursor: default;
   }
+}
 
+@media (max-width: 768px) {
   body:has(.cal-page.cal-day-open) {
     overflow: hidden;
   }
