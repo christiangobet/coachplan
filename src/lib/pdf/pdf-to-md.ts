@@ -4,7 +4,7 @@ import { VISION_EXTRACTION_PROMPT } from '../prompts/plan-parser/vision-extracti
 
 export type AnthropicCreateFn = InstanceType<typeof Anthropic>['messages']['create'];
 
-const MODEL = 'claude-sonnet-4-5-20251022';
+const MODEL = process.env.VISION_EXTRACT_MODEL ?? 'claude-sonnet-4-6';
 const MAX_TOKENS = 16384;
 
 /**
