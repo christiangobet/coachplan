@@ -189,7 +189,7 @@ export async function populatePlanFromV4(
 
           const stepsInstructions = session.steps && session.steps.length > 0
             ? formatStepsAsInstructions(session.steps as SessionStep[])
-            : (session.instruction_text || null);
+            : (session.notes || session.raw_text || null);
 
           const stepsStructure = session.steps?.length ? session.steps : null;
 
