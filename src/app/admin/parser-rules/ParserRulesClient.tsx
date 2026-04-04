@@ -267,7 +267,8 @@ export default function ParserRulesClient({ initialFiles, initialAggregate, init
         <h3 style={{ margin: '0 0 12px', fontSize: 14, color: '#293a58', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
           Configuration
         </h3>
-        <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+        {/* Mode toggle */}
+        <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
           {(['cloud', 'local'] as const).map(m => (
             <button key={m} onClick={() => setUseCloud(m === 'cloud')} disabled={running} style={{
               padding: '5px 16px', borderRadius: 999, fontSize: 12, fontWeight: 700, cursor: running ? 'not-allowed' : 'pointer', border: 'none',
@@ -278,29 +279,37 @@ export default function ParserRulesClient({ initialFiles, initialAggregate, init
             </button>
           ))}
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 10, alignItems: 'end' }}>
-          {!useCloud && (<>
-          <label style={{ display: 'grid', gap: 5, fontSize: 12, color: '#65728a', fontWeight: 700 }}>
-            LLM Server URL
-            <input value={server} onChange={e => setServer(e.target.value)} placeholder="http://localhost:8080" style={inputStyle} disabled={running} />
-          </label>
-          <label style={{ display: 'grid', gap: 5, fontSize: 12, color: '#65728a', fontWeight: 700 }}>
-            Model name
-            <input value={model} onChange={e => setModel(e.target.value)} placeholder="local" style={inputStyle} disabled={running} />
-          </label>
-          </>)}
-          {useCloud && (
-            <div style={{ gridColumn: '1 / -1', fontSize: 12, color: '#65728a', background: '#f0f4ff', border: '1px solid #d5ddf5', borderRadius: 8, padding: '8px 12px' }}>
-              Uses <strong style={{ color: '#1a2a44' }}>OPENAI_API_KEY</strong> from .env.local · model: <code style={{ color: '#3730a3' }}>{process.env.NEXT_PUBLIC_OPENAI_MODEL ?? 'gpt-4.1-mini'}</code>
-            </div>
-          )}
-          <label style={{ display: 'grid', gap: 5, fontSize: 12, color: '#65728a', fontWeight: 700 }}>
-            Limit
+
+        {/* Cloud info row */}
+        {useCloud && (
+          <div style={{ fontSize: 12, color: '#65728a', background: '#f0f4ff', border: '1px solid #d5ddf5', borderRadius: 8, padding: '8px 12px', marginBottom: 12 }}>
+            Uses <strong style={{ color: '#1a2a44' }}>OPENAI_API_KEY</strong> from .env.local
+          </div>
+        )}
+
+        {/* Local LLM fields */}
+        {!useCloud && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
+            <label style={{ display: 'grid', gap: 5, fontSize: 12, color: '#65728a', fontWeight: 700 }}>
+              LLM Server URL
+              <input value={server} onChange={e => setServer(e.target.value)} placeholder="http://localhost:8080" style={inputStyle} disabled={running} />
+            </label>
+            <label style={{ display: 'grid', gap: 5, fontSize: 12, color: '#65728a', fontWeight: 700 }}>
+              Model name
+              <input value={model} onChange={e => setModel(e.target.value)} placeholder="local" style={inputStyle} disabled={running} />
+            </label>
+          </div>
+        )}
+
+        {/* Limit (always visible) */}
+        <div style={{ marginBottom: 4 }}>
+          <label style={{ display: 'inline-grid', gap: 5, fontSize: 12, color: '#65728a', fontWeight: 700 }}>
+            Limit PDFs
             <input
               value={limit}
               onChange={e => setLimit(e.target.value)}
               placeholder="all"
-              style={{ ...inputStyle, width: 72 }}
+              style={{ ...inputStyle, width: 90 }}
               disabled={running}
               type="number"
               min={1}
