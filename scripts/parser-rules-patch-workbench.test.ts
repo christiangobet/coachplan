@@ -397,3 +397,25 @@ test("workbench applies deterministic guardrails and selects a representative ev
   assert.equal(new Set(evalSet.map((row: { layout_type: string }) => row.layout_type)).size >= 3, true, "expected eval set to cover multiple layouts");
   assert.equal(new Set(evalSet.map((row: { source_units: string }) => row.source_units)).size >= 2, true, "expected eval set to cover multiple unit types");
 });
+
+test("patch-workbench route exposes streaming stage events and resumable bundle reads", () => {
+  const routeSource = readSource(PATCH_WORKBENCH_ROUTE);
+
+  assert.ok(routeSource.includes("createNdjsonStream"), "expected patch-workbench POST to use NDJSON streaming");
+  for (const eventName of [
+    "stage_start",
+    "stage_progress",
+    "stage_complete",
+    "candidate_preview",
+    "eval_result",
+    "complete",
+    "error",
+  ]) {
+    assert.ok(routeSource.includes(eventName), `expected route to emit ${eventName}`);
+  }
+
+  assert.ok(routeSource.includes("final-adjustment-bundle.json"), "expected GET route to read the saved final bundle");
+  assert.match(routeSource, /export\s+async\s+function\s+GET\b/, "expected resumable GET handler");
+  assert.match(routeSource, /export\s+async\s+function\s+POST\b/, "expected streaming POST handler");
+  assert.ok(!routeSource.includes("not_implemented"), "expected real workbench route implementation");
+});
