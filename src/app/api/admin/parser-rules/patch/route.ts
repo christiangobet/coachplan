@@ -110,10 +110,18 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: `Cannot reach LLM at ${server}: ${(err as Error).message}` }, { status: 502 });
   }
 
+  // Strip markdown fences if present, then parse
+  function extractJson(s: string): string {
+    const fenced = s.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (fenced) return fenced[1].trim();
+    const start = s.search(/[\[{]/);
+    return start !== -1 ? s.slice(start) : s;
+  }
+
   // Parse suggestions — handle both array and { suggestions: [...] }
   let parsed: unknown;
   try {
-    parsed = JSON.parse(raw);
+    parsed = JSON.parse(extractJson(raw));
   } catch {
     return Response.json({ error: 'LLM returned non-JSON response.', raw }, { status: 502 });
   }

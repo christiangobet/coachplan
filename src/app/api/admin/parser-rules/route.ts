@@ -160,6 +160,18 @@ async function callLlm(
   return data.choices?.[0]?.message?.content ?? '';
 }
 
+// ── JSON extraction helper ────────────────────────────────────────────────────
+// Some LLM responses wrap JSON in markdown fences even when json_object mode
+// is requested. Strip them before parsing.
+function extractJson(raw: string): string {
+  const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fenced) return fenced[1].trim();
+  // Find first { or [ and last matching } or ]
+  const start = raw.search(/[\[{]/);
+  if (start !== -1) return raw.slice(start);
+  return raw;
+}
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface PlanAnalysis {
   layout_type:         string;
@@ -279,7 +291,7 @@ export async function POST(req: NextRequest) {
           let analysis: PlanAnalysis;
           try {
             const raw = await callLlm(server, model, ANALYSIS_SYSTEM, analysisUserPrompt(file, text));
-            analysis  = JSON.parse(raw) as PlanAnalysis;
+            analysis  = JSON.parse(extractJson(raw)) as PlanAnalysis;
             emit({
               type:     'progress',
               file,
@@ -317,7 +329,7 @@ export async function POST(req: NextRequest) {
         let aggregate: unknown;
         try {
           const raw  = await callLlm(server, model, AGGREGATE_SYSTEM, aggregateUserPrompt(findings));
-          aggregate  = JSON.parse(raw);
+          aggregate  = JSON.parse(extractJson(raw));
           writeFileSync(path.join(OUT_DIR, 'aggregate.json'), JSON.stringify(aggregate, null, 2));
         } catch (err) {
           emit({ type: 'log', message: `Aggregation failed: ${(err as Error).message}` });
