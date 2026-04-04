@@ -3,6 +3,7 @@ import { requireAdminAccess } from '@/lib/admin';
 import { readdirSync, readFileSync, existsSync, mkdirSync, writeFileSync } from 'fs';
 import path from 'path';
 import { extractPdfText } from '@/lib/pdf/extract-text';
+import { resolveAIProvider, getDefaultAiModel, hasConfiguredAiProvider } from '@/lib/openai';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
@@ -131,27 +132,57 @@ Rank top_issues by frequency (most common first), then impact.
 Merge duplicate/similar issues from different plans into one entry.`;
 }
 
-// ── LLM call ──────────────────────────────────────────────────────────────────
-async function callLlm(
-  server: string,
-  model: string,
-  system: string,
-  user: string
-): Promise<string> {
-  const res = await fetch(`${server}/v1/chat/completions`, {
+// ── LLM call — supports local llama-server or cloud OpenAI/Gemini/Cloudflare ──
+const CLOUD = 'cloud';
+
+async function callLlm(opts: {
+  server: string;
+  model: string;
+  system: string;
+  user: string;
+  maxTokens?: number;
+}): Promise<string> {
+  const { server, system, user, maxTokens = 4096 } = opts;
+  const isCloud = server === CLOUD;
+
+  let url: string;
+  let headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  let modelName: string;
+
+  if (isCloud) {
+    const provider = resolveAIProvider();
+    modelName = getDefaultAiModel(provider);
+    if (provider === 'gemini') {
+      const key = process.env.GEMINI_API_KEY!;
+      url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${key}`;
+    } else if (provider === 'cloudflare') {
+      const accountId = process.env.CLOUDFLARE_ACCOUNT_ID!;
+      url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/${modelName}`;
+      headers['Authorization'] = `Bearer ${process.env.CLOUDFLARE_API_TOKEN!}`;
+    } else {
+      url = 'https://api.openai.com/v1/chat/completions';
+      headers['Authorization'] = `Bearer ${process.env.OPENAI_API_KEY!}`;
+    }
+  } else {
+    url = `${server}/v1/chat/completions`;
+    modelName = opts.model;
+  }
+
+  const res = await fetch(url, {
     method:  'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify({
-      model,
+      model:           modelName,
       messages: [
         { role: 'system', content: system },
         { role: 'user',   content: user   },
       ],
       temperature:     0.1,
-      max_tokens:      4096,
+      max_tokens:      maxTokens,
       response_format: { type: 'json_object' },
     }),
   });
+
   if (!res.ok) {
     const txt = await res.text();
     throw new Error(`LLM ${res.status}: ${txt.slice(0, 200)}`);
@@ -267,16 +298,25 @@ export async function POST(req: NextRequest) {
       }
 
       try {
-        // Health check
-        emit({ type: 'log', message: `Checking ${server}...` });
-        try {
-          const h = await fetch(`${server}/health`);
-          if (!h.ok) throw new Error(`HTTP ${h.status}`);
-          emit({ type: 'log', message: 'Server OK' });
-        } catch (err) {
-          emit({ type: 'error', message: `Cannot reach LLM server at ${server}: ${(err as Error).message}` });
-          controller.close();
-          return;
+        // Health / config check
+        if (server === CLOUD) {
+          if (!hasConfiguredAiProvider()) {
+            emit({ type: 'error', message: 'Cloud AI not configured — set OPENAI_API_KEY (or GEMINI_API_KEY / Cloudflare vars) in .env.local.' });
+            controller.close();
+            return;
+          }
+          emit({ type: 'log', message: `Using cloud AI (${resolveAIProvider()} / ${getDefaultAiModel()})` });
+        } else {
+          emit({ type: 'log', message: `Checking ${server}...` });
+          try {
+            const h = await fetch(`${server}/health`);
+            if (!h.ok) throw new Error(`HTTP ${h.status}`);
+            emit({ type: 'log', message: 'Server OK' });
+          } catch (err) {
+            emit({ type: 'error', message: `Cannot reach LLM server at ${server}: ${(err as Error).message}` });
+            controller.close();
+            return;
+          }
         }
 
         if (files.length === 0) {
@@ -310,7 +350,7 @@ export async function POST(req: NextRequest) {
           emit({ type: 'progress', file, step: 'analyze' });
           let analysis: PlanAnalysis;
           try {
-            const raw = await callLlm(server, model, ANALYSIS_SYSTEM, analysisUserPrompt(file, text));
+            const raw = await callLlm({ server, model, system: ANALYSIS_SYSTEM, user: analysisUserPrompt(file, text), maxTokens: server === CLOUD ? 8192 : 4096 });
             const cleaned = repairJson(extractJson(raw));
             analysis  = JSON.parse(cleaned) as PlanAnalysis;
             emit({
@@ -349,7 +389,7 @@ export async function POST(req: NextRequest) {
         emit({ type: 'log', message: `Aggregating ${findings.length} finding(s)...` });
         let aggregate: unknown;
         try {
-          const raw  = await callLlm(server, model, AGGREGATE_SYSTEM, aggregateUserPrompt(findings));
+          const raw  = await callLlm({ server, model, system: AGGREGATE_SYSTEM, user: aggregateUserPrompt(findings), maxTokens: server === CLOUD ? 8192 : 4096 });
           aggregate  = JSON.parse(repairJson(extractJson(raw)));
           writeFileSync(path.join(OUT_DIR, 'aggregate.json'), JSON.stringify(aggregate, null, 2));
         } catch (err) {

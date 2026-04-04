@@ -56,6 +56,7 @@ interface Props {
 }
 
 export default function ParserRulesClient({ initialFiles, initialAggregate, initialPerPlan }: Props) {
+  const [useCloud,  setUseCloud]  = useState(true);
   const [server,    setServer]    = useState('http://localhost:8080');
   const [model,     setModel]     = useState('local');
   const [limit,     setLimit]     = useState('');
@@ -93,7 +94,7 @@ export default function ParserRulesClient({ initialFiles, initialAggregate, init
       const res = await fetch('/api/admin/parser-rules/patch', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ server, model }),
+        body:    JSON.stringify(useCloud ? { server: 'cloud', model: 'cloud' } : { server, model }),
       });
       if (!res.ok) {
         const data = await res.json() as { error?: string };
@@ -175,7 +176,7 @@ export default function ParserRulesClient({ initialFiles, initialAggregate, init
     setRunning(true);
     setLog([]);
 
-    const body: Record<string, unknown> = { server, model };
+    const body: Record<string, unknown> = useCloud ? { server: 'cloud', model: 'cloud' } : { server, model };
     if (limit) body.limit = parseInt(limit, 10);
     if (selected.length > 0) body.files = selected;
 
@@ -266,27 +267,33 @@ export default function ParserRulesClient({ initialFiles, initialAggregate, init
         <h3 style={{ margin: '0 0 12px', fontSize: 14, color: '#293a58', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
           Configuration
         </h3>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+          {(['cloud', 'local'] as const).map(m => (
+            <button key={m} onClick={() => setUseCloud(m === 'cloud')} disabled={running} style={{
+              padding: '5px 16px', borderRadius: 999, fontSize: 12, fontWeight: 700, cursor: running ? 'not-allowed' : 'pointer', border: 'none',
+              background: (m === 'cloud') === useCloud ? '#fc4c02' : '#edf2fa',
+              color:      (m === 'cloud') === useCloud ? '#fff' : '#65728a',
+            }}>
+              {m === 'cloud' ? 'Cloud (OpenAI)' : 'Local LLM'}
+            </button>
+          ))}
+        </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 10, alignItems: 'end' }}>
+          {!useCloud && (<>
           <label style={{ display: 'grid', gap: 5, fontSize: 12, color: '#65728a', fontWeight: 700 }}>
             LLM Server URL
-            <input
-              value={server}
-              onChange={e => setServer(e.target.value)}
-              placeholder="http://localhost:8080"
-              style={inputStyle}
-              disabled={running}
-            />
+            <input value={server} onChange={e => setServer(e.target.value)} placeholder="http://localhost:8080" style={inputStyle} disabled={running} />
           </label>
           <label style={{ display: 'grid', gap: 5, fontSize: 12, color: '#65728a', fontWeight: 700 }}>
             Model name
-            <input
-              value={model}
-              onChange={e => setModel(e.target.value)}
-              placeholder="local"
-              style={inputStyle}
-              disabled={running}
-            />
+            <input value={model} onChange={e => setModel(e.target.value)} placeholder="local" style={inputStyle} disabled={running} />
           </label>
+          </>)}
+          {useCloud && (
+            <div style={{ gridColumn: '1 / -1', fontSize: 12, color: '#65728a', background: '#f0f4ff', border: '1px solid #d5ddf5', borderRadius: 8, padding: '8px 12px' }}>
+              Uses <strong style={{ color: '#1a2a44' }}>OPENAI_API_KEY</strong> from .env.local · model: <code style={{ color: '#3730a3' }}>{process.env.NEXT_PUBLIC_OPENAI_MODEL ?? 'gpt-4.1-mini'}</code>
+            </div>
+          )}
           <label style={{ display: 'grid', gap: 5, fontSize: 12, color: '#65728a', fontWeight: 700 }}>
             Limit
             <input

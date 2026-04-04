@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { requireAdminAccess } from '@/lib/admin';
 import { prisma } from '@/lib/prisma';
+import { resolveAIProvider, getDefaultAiModel, hasConfiguredAiProvider } from '@/lib/openai';
 import { existsSync, readFileSync } from 'fs';
 import path from 'path';
 
@@ -59,8 +60,13 @@ export async function POST(req: NextRequest) {
   if (!access.ok) return new Response('Unauthorized', { status: 401 });
 
   const body = await req.json() as { server?: string; model?: string };
-  const server = (body.server ?? 'http://localhost:8080').replace(/\/$/, '');
+  const isCloud = body.server === 'cloud';
+  const server = isCloud ? 'cloud' : (body.server ?? 'http://localhost:8080').replace(/\/$/, '');
   const model  = body.model ?? 'local';
+
+  if (isCloud && !hasConfiguredAiProvider()) {
+    return Response.json({ error: 'Cloud AI not configured — set OPENAI_API_KEY in .env.local.' }, { status: 400 });
+  }
 
   // Load active prompt from DB
   const activePrompt = await prisma.parserPrompt.findFirst({
@@ -83,20 +89,32 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: 'Failed to parse aggregate.json.' }, { status: 500 });
   }
 
-  // Call local LLM
+  // Call LLM (cloud or local)
   let raw: string;
   try {
-    const res = await fetch(`${server}/v1/chat/completions`, {
+    let url: string;
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    let modelName: string;
+    if (isCloud) {
+      const provider = resolveAIProvider();
+      modelName = getDefaultAiModel(provider);
+      url = 'https://api.openai.com/v1/chat/completions';
+      headers['Authorization'] = `Bearer ${process.env.OPENAI_API_KEY!}`;
+    } else {
+      url = `${server}/v1/chat/completions`;
+      modelName = model;
+    }
+    const res = await fetch(url, {
       method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({
-        model,
+        model:           modelName,
         messages: [
           { role: 'system', content: PATCH_SYSTEM },
           { role: 'user',   content: buildPatchUserPrompt(activePrompt.text, aggregate) },
         ],
         temperature:     0.1,
-        max_tokens:      4096,
+        max_tokens:      isCloud ? 8192 : 4096,
         response_format: { type: 'json_object' },
       }),
     });
