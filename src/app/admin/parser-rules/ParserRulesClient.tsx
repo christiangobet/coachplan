@@ -1,8 +1,7 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import Link from 'next/link';
-import type { PatchSuggestion } from '@/app/api/admin/parser-rules/patch/route';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface TopIssue {
@@ -48,14 +47,66 @@ interface LogEntry {
   message: string;
 }
 
+interface PatchCandidatePreview {
+  candidate_id: string;
+  cluster_id: string;
+  after_section: string;
+  insert_text: string;
+  rationale: string;
+  evidence_ids: string[];
+}
+
+interface PatchEvalResult {
+  candidate_id: string;
+  coverage_gain: string;
+  risk: string;
+  confidence: number;
+  representative_examples: string[];
+}
+
+interface FinalAdjustment {
+  candidate_id: string;
+  after_section: string;
+  insert_text: string;
+  rationale: string;
+  confidence: number;
+  risk: string;
+  coverage_gain: string;
+  evidence_ids: string[];
+}
+
+interface ReviewableAdjustment extends FinalAdjustment {
+  approved: boolean;
+}
+
+interface RejectedIdea {
+  candidate_id: string;
+  verdict: string;
+  reason: string;
+}
+
+interface FinalAdjustmentBundle {
+  generated_at: string;
+  final_adjustments: FinalAdjustment[];
+  rejected_or_merged: RejectedIdea[];
+}
+
+type StageProgressState = Record<string, {
+  status: 'running' | 'complete' | 'error';
+  message?: string;
+  meta?: string;
+}>;
+
 // ── Props ─────────────────────────────────────────────────────────────────────
 interface Props {
   initialFiles:     string[];
   initialAggregate: Aggregate | null;
   initialPerPlan:   Record<string, { analysis: PlanAnalysis }>;
+  cloudProvider:    string;
+  cloudModel:       string;
 }
 
-export default function ParserRulesClient({ initialFiles, initialAggregate, initialPerPlan }: Props) {
+export default function ParserRulesClient({ initialFiles, initialAggregate, initialPerPlan, cloudProvider, cloudModel }: Props) {
   const [useCloud,  setUseCloud]  = useState(true);
   const [server,    setServer]    = useState('http://localhost:8080');
   const [model,     setModel]     = useState('local');
@@ -68,14 +119,18 @@ export default function ParserRulesClient({ initialFiles, initialAggregate, init
   const [perPlan,   setPerPlan]   = useState<Record<string, { analysis: PlanAnalysis }>>(initialPerPlan);
   const [expanded,  setExpanded]  = useState<string | null>(null);
 
-  // Smart Patch state
-  const [patchLoading,     setPatchLoading]     = useState(false);
-  const [patchSuggestions, setPatchSuggestions] = useState<PatchSuggestion[]>([]);
-  const [patchStatus,      setPatchStatus]      = useState<{ ok: boolean; message: string } | null>(null);
-  const [patchSaving,      setPatchSaving]      = useState(false);
-  const [patchNewName,     setPatchNewName]     = useState('');
-  const [patchActivate,    setPatchActivate]    = useState(false);
-  const [patchBasePrompt,  setPatchBasePrompt]  = useState<string>('');  // name of the base prompt
+  // Patch workbench state
+  const [patchLoading,       setPatchLoading]       = useState(false);
+  const [patchStatus,        setPatchStatus]        = useState<{ ok: boolean; message: string } | null>(null);
+  const [patchSaving,        setPatchSaving]        = useState(false);
+  const [patchNewName,       setPatchNewName]       = useState('');
+  const [patchActivate,      setPatchActivate]      = useState(false);
+  const [patchBasePrompt,    setPatchBasePrompt]    = useState<string>('');
+  const [stageProgress,      setStageProgress]      = useState<StageProgressState>({});
+  const [candidatePreviews,  setCandidatePreviews]  = useState<PatchCandidatePreview[]>([]);
+  const [evalResults,        setEvalResults]        = useState<PatchEvalResult[]>([]);
+  const [finalBundle,        setFinalBundle]        = useState<FinalAdjustmentBundle | null>(null);
+  const [reviewAdjustments,  setReviewAdjustments]  = useState<ReviewableAdjustment[]>([]);
 
   const logIdRef = useRef(0);
   const logEndRef = useRef<HTMLDivElement>(null);
@@ -85,47 +140,174 @@ export default function ParserRulesClient({ initialFiles, initialAggregate, init
     setTimeout(() => logEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
   }
 
-  const fetchPatch = useCallback(async () => {
-    if (!aggregate) return;
+  const syncBundleState = useCallback((bundle: FinalAdjustmentBundle, promptName = '') => {
+    setFinalBundle(bundle);
+    setReviewAdjustments(bundle.final_adjustments.map((adjustment) => ({
+      ...adjustment,
+      approved: true,
+    })));
+    if (promptName) {
+      setPatchBasePrompt(promptName);
+      const date = new Date().toISOString().slice(0, 10);
+      setPatchNewName(`${promptName}_patch_${date}`);
+    }
+  }, []);
+
+  const loadSavedWorkbench = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/parser-rules/patch-workbench');
+      if (!res.ok) return;
+      const data = await res.json() as {
+        final_bundle?: FinalAdjustmentBundle;
+        candidates?: { candidates?: PatchCandidatePreview[] };
+        evaluation?: { evaluated_candidates?: PatchEvalResult[] };
+      };
+      if (data.final_bundle) {
+        syncBundleState(data.final_bundle);
+      }
+      if (data.candidates?.candidates) {
+        setCandidatePreviews(data.candidates.candidates);
+      }
+      if (data.evaluation?.evaluated_candidates) {
+        setEvalResults(data.evaluation.evaluated_candidates);
+      }
+    } catch {
+      // Ignore resumable load failures — the workbench can still run fresh.
+    }
+  }, [syncBundleState]);
+
+  useEffect(() => {
+    void loadSavedWorkbench();
+  }, [loadSavedWorkbench]);
+
+  const runPatchWorkbench = useCallback(async () => {
     setPatchLoading(true);
     setPatchStatus(null);
-    setPatchSuggestions([]);
+    setStageProgress({});
+    setCandidatePreviews([]);
+    setEvalResults([]);
+    setFinalBundle(null);
+    setReviewAdjustments([]);
+
+    const body = useCloud ? { server: 'cloud', model: 'cloud' } : { server, model };
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let sawStructuredError = false;
+
+    const updateStage = (stage: string, next: StageProgressState[string]) => {
+      setStageProgress((prev) => ({ ...prev, [stage]: next }));
+    };
+
+    const handleWorkbenchEvent = (msg: Record<string, unknown>) => {
+      switch (msg.type) {
+        case 'stage_start':
+          updateStage(msg.stage as string, { status: 'running' });
+          break;
+        case 'stage_progress':
+          updateStage(msg.stage as string, { status: 'running', message: msg.message as string });
+          break;
+        case 'stage_complete': {
+          const meta = [
+            typeof msg.row_count === 'number' ? `${msg.row_count} evidence rows` : null,
+            typeof msg.cluster_count === 'number' ? `${msg.cluster_count} clusters` : null,
+            typeof msg.candidate_count === 'number' ? `${msg.candidate_count} candidates` : null,
+            typeof msg.accepted_count === 'number' ? `${msg.accepted_count} accepted` : null,
+            typeof msg.rejected_count === 'number' ? `${msg.rejected_count} rejected` : null,
+            typeof msg.evaluated_count === 'number' ? `${msg.evaluated_count} evaluated` : null,
+            typeof msg.final_adjustment_count === 'number' ? `${msg.final_adjustment_count} final adjustments` : null,
+          ].filter(Boolean).join(' • ');
+          updateStage(msg.stage as string, { status: 'complete', meta });
+          break;
+        }
+        case 'candidate_preview':
+          setCandidatePreviews((prev) => [...prev, msg.candidate as PatchCandidatePreview]);
+          break;
+        case 'eval_result':
+          setEvalResults((prev) => [...prev, msg.evaluation as PatchEvalResult]);
+          break;
+        case 'complete': {
+          const prompt = msg.prompt as { name?: string } | undefined;
+          syncBundleState(msg.final_bundle as FinalAdjustmentBundle, prompt?.name ?? '');
+          setPatchStatus({ ok: true, message: 'Workbench complete. Review final adjustments before saving.' });
+          break;
+        }
+        case 'error':
+          sawStructuredError = true;
+          setPatchStatus({ ok: false, message: msg.message as string });
+          break;
+      }
+    };
+
+    const handleLine = (line: string) => {
+      if (!line.trim()) return;
+      try {
+        handleWorkbenchEvent(JSON.parse(line) as Record<string, unknown>);
+      } catch {
+        // Ignore malformed NDJSON chunks.
+      }
+    };
+
+    const flushBuffer = () => {
+      const trailing = buffer.trim();
+      buffer = '';
+      if (trailing) handleLine(trailing);
+    };
+
     try {
-      const res = await fetch('/api/admin/parser-rules/patch', {
+      const res = await fetch('/api/admin/parser-rules/patch-workbench', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify(useCloud ? { server: 'cloud', model: 'cloud' } : { server, model }),
+        body:    JSON.stringify(body),
       });
       if (!res.ok) {
         const data = await res.json() as { error?: string };
         throw new Error(data.error ?? `Error ${res.status}`);
       }
-      const data = await res.json() as { suggestions: PatchSuggestion[]; base_prompt_name: string };
-      setPatchSuggestions(data.suggestions);
-      setPatchBasePrompt(data.base_prompt_name);
-      const date = new Date().toISOString().slice(0, 10);
-      setPatchNewName(`${data.base_prompt_name}_patch_${date}`);
+
+      if (!res.body) {
+        throw new Error('Workbench response did not include a stream body.');
+      }
+
+      const reader = res.body.getReader();
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+        for (const line of lines) {
+          handleLine(line);
+        }
+      }
+
+      buffer += decoder.decode();
+      flushBuffer();
     } catch (err) {
-      setPatchStatus({ ok: false, message: (err as Error).message });
+      buffer += decoder.decode();
+      flushBuffer();
+      if (!sawStructuredError) {
+        setPatchStatus({ ok: false, message: (err as Error).message });
+      }
     } finally {
       setPatchLoading(false);
     }
-  }, [aggregate, server, model]);
+  }, [model, server, syncBundleState, useCloud]);
 
   const toggleApproval = useCallback((idx: number) => {
-    setPatchSuggestions(prev =>
+    setReviewAdjustments(prev =>
       prev.map((s, i) => i === idx ? { ...s, approved: !s.approved } : s)
     );
   }, []);
 
   const updateInsertText = useCallback((idx: number, text: string) => {
-    setPatchSuggestions(prev =>
+    setReviewAdjustments(prev =>
       prev.map((s, i) => i === idx ? { ...s, insert_text: text } : s)
     );
   }, []);
 
   const savePatch = useCallback(async () => {
-    const approved = patchSuggestions.filter(s => s.approved);
+    const approved = reviewAdjustments.filter(s => s.approved);
     if (!approved.length || !patchNewName) return;
     setPatchSaving(true);
     setPatchStatus(null);
@@ -142,7 +324,7 @@ export default function ParserRulesClient({ initialFiles, initialAggregate, init
         const idx = patched.indexOf(anchor);
         if (idx === -1) {
           // Anchor not found — append at end with comment
-          patched += `\n\n// [Patch: ${s.source_issue}]\n${s.insert_text}`;
+          patched += `\n\n// [Patch: ${s.candidate_id}]\n${s.insert_text}`;
         } else {
           const insertPos = idx + anchor.length;
           patched = patched.slice(0, insertPos) + '\n' + s.insert_text + patched.slice(insertPos);
@@ -164,13 +346,13 @@ export default function ParserRulesClient({ initialFiles, initialAggregate, init
           ? `Saved and activated as "${patchNewName}" (${approved.length} patch${approved.length !== 1 ? 'es' : ''} applied).`
           : `Saved as "${patchNewName}" (inactive). Activate in Prompt Manager.`,
       });
-      setPatchSuggestions([]);
+      setReviewAdjustments([]);
     } catch (err) {
       setPatchStatus({ ok: false, message: (err as Error).message });
     } finally {
       setPatchSaving(false);
     }
-  }, [patchSuggestions, patchNewName, patchActivate]);
+  }, [patchActivate, patchNewName, reviewAdjustments]);
 
   const runAnalysis = useCallback(async () => {
     setRunning(true);
@@ -179,6 +361,29 @@ export default function ParserRulesClient({ initialFiles, initialAggregate, init
     const body: Record<string, unknown> = useCloud ? { server: 'cloud', model: 'cloud' } : { server, model };
     if (limit) body.limit = parseInt(limit, 10);
     if (selected.length > 0) body.files = selected;
+
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let sawStructuredError = false;
+
+    const handleLine = (line: string) => {
+      if (!line.trim()) return;
+      try {
+        const msg = JSON.parse(line) as Record<string, unknown>;
+        if (msg.type === 'error' || msg.type === 'plan_error') {
+          sawStructuredError = true;
+        }
+        handleStreamEvent(msg);
+      } catch {
+        // Ignore malformed NDJSON lines so one bad chunk does not kill the whole run.
+      }
+    };
+
+    const flushBuffer = () => {
+      const trailing = buffer.trim();
+      buffer = '';
+      if (trailing) handleLine(trailing);
+    };
 
     try {
       const res = await fetch('/api/admin/parser-rules', {
@@ -194,8 +399,6 @@ export default function ParserRulesClient({ initialFiles, initialAggregate, init
       }
 
       const reader  = res.body.getReader();
-      const decoder = new TextDecoder();
-      let   buffer  = '';
 
       while (true) {
         const { value, done } = await reader.read();
@@ -206,20 +409,23 @@ export default function ParserRulesClient({ initialFiles, initialAggregate, init
         buffer = lines.pop() ?? '';
 
         for (const line of lines) {
-          if (!line.trim()) continue;
-          try {
-            const msg = JSON.parse(line) as Record<string, unknown>;
-            handleStreamEvent(msg);
-          } catch { /* skip malformed line */ }
+          handleLine(line);
         }
       }
+
+      buffer += decoder.decode();
+      flushBuffer();
     } catch (err) {
-      addLog('error', (err as Error).message);
+      buffer += decoder.decode();
+      flushBuffer();
+      if (!sawStructuredError) {
+        addLog('error', (err as Error).message);
+      }
     } finally {
       setRunning(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [server, model, limit, selected]);
+  }, [server, model, limit, selected, useCloud]);
 
   function handleStreamEvent(msg: Record<string, unknown>) {
     switch (msg.type) {
@@ -258,6 +464,14 @@ export default function ParserRulesClient({ initialFiles, initialAggregate, init
   const allFiles = initialFiles;
   const toggleFile = (f: string) =>
     setSelected(prev => prev.includes(f) ? prev.filter(x => x !== f) : [...prev, f]);
+  const orderedStages = [
+    ['evidence_ledger', 'Evidence Ledger'],
+    ['cluster_issues', 'Issue Clusters'],
+    ['draft_patch_candidates', 'Draft Candidates'],
+    ['critique_patch_candidates', 'Review Guardrails'],
+    ['evaluate_patch_candidates', 'Candidate Eval'],
+    ['final_adjustment_bundle', 'Final Bundle'],
+  ] as const;
 
   return (
     <div style={{ display: 'grid', gap: 14 }}>
@@ -275,7 +489,7 @@ export default function ParserRulesClient({ initialFiles, initialAggregate, init
               background: (m === 'cloud') === useCloud ? '#fc4c02' : '#edf2fa',
               color:      (m === 'cloud') === useCloud ? '#fff' : '#65728a',
             }}>
-              {m === 'cloud' ? 'Cloud (OpenAI)' : 'Local LLM'}
+              {m === 'cloud' ? `Cloud (${cloudProvider})` : 'Local LLM'}
             </button>
           ))}
         </div>
@@ -283,7 +497,7 @@ export default function ParserRulesClient({ initialFiles, initialAggregate, init
         {/* Cloud info row */}
         {useCloud && (
           <div style={{ fontSize: 12, color: '#65728a', background: '#f0f4ff', border: '1px solid #d5ddf5', borderRadius: 8, padding: '8px 12px', marginBottom: 12 }}>
-            Uses <strong style={{ color: '#1a2a44' }}>OPENAI_API_KEY</strong> from .env.local
+            Provider: <strong style={{ color: '#1a2a44' }}>{cloudProvider}</strong> — model: <strong style={{ color: '#1a2a44' }}>{cloudModel}</strong>
           </div>
         )}
 
@@ -492,116 +706,205 @@ export default function ParserRulesClient({ initialFiles, initialAggregate, init
         </div>
       )}
 
-      {/* Smart Patch */}
+      {/* Patch Workbench */}
       <div className="admin-card">
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: patchSuggestions.length > 0 ? 16 : 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: finalBundle ? 16 : 0 }}>
           <div>
-            <div style={{ fontSize: 14, fontWeight: 700, color: '#1a2a44' }}>Smart Patch</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: '#1a2a44' }}>Patch Workbench</div>
             <div style={{ fontSize: 12, color: '#65728a', marginTop: 2 }}>
-              Ask the LLM to suggest section-anchored insertions into the active prompt. Review and approve each before saving.
+              Run the staged patch workbench, watch stage progress live, then approve the final adjustment bundle before saving.
             </div>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
             {patchStatus && (
-              <span style={{ fontSize: 12, fontWeight: 600, color: patchStatus.ok ? '#0f8a47' : '#b42318', maxWidth: 260 }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: patchStatus.ok ? '#0f8a47' : '#b42318', maxWidth: 320 }}>
                 {patchStatus.message}
               </span>
             )}
-            {!aggregate && (
+            {!aggregate && !finalBundle && (
               <span style={{ fontSize: 12, color: '#65728a' }}>Run analysis first.</span>
             )}
-            {aggregate && patchSuggestions.length === 0 && (
+            {(aggregate || finalBundle) && (
               <button
-                onClick={fetchPatch}
+                onClick={runPatchWorkbench}
                 disabled={patchLoading}
                 style={patchLoading ? { ...runBtnStyle, height: 36, fontSize: 13, opacity: 0.6, cursor: 'not-allowed' } : { ...runBtnStyle, height: 36, fontSize: 13 }}
               >
-                {patchLoading ? 'Asking LLM…' : 'Suggest Patches'}
-              </button>
-            )}
-            {patchSuggestions.length > 0 && (
-              <button
-                onClick={() => { setPatchSuggestions([]); setPatchStatus(null); }}
-                style={{ height: 36, padding: '0 14px', background: 'none', border: '1px solid #d6deee', borderRadius: 10, fontSize: 13, color: '#65728a', cursor: 'pointer' }}
-              >
-                Clear
+                {patchLoading ? 'Running Workbench…' : 'Run Patch Workbench'}
               </button>
             )}
           </div>
         </div>
 
-        {patchSuggestions.length > 0 && (
-          <div style={{ display: 'grid', gap: 12 }}>
+        {(Object.keys(stageProgress).length > 0 || patchLoading) && (
+          <section style={{ marginBottom: 18 }}>
+            <SectionHeading>Workbench Progress</SectionHeading>
+            <div style={{ display: 'grid', gap: 8 }}>
+              {orderedStages.map(([stageKey, label]) => {
+                const stage = stageProgress[stageKey];
+                const color = stage?.status === 'complete'
+                  ? '#0f8a47'
+                  : stage?.status === 'running'
+                    ? '#3730a3'
+                    : '#94a3b8';
+                const background = stage?.status === 'complete'
+                  ? '#f0fdf4'
+                  : stage?.status === 'running'
+                    ? '#eef2ff'
+                    : '#f8fafc';
+                return (
+                  <div key={stageKey} style={{ border: `1px solid ${color}30`, background, borderRadius: 10, padding: '10px 12px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <strong style={{ fontSize: 13, color: '#1a2a44' }}>{label}</strong>
+                      <span style={{ marginLeft: 'auto', fontSize: 11, color, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                        {stage?.status ?? 'pending'}
+                      </span>
+                    </div>
+                    {stage?.message && (
+                      <div style={{ fontSize: 12, color: '#475569', marginTop: 4 }}>{stage.message}</div>
+                    )}
+                    {stage?.meta && (
+                      <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>{stage.meta}</div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        {finalBundle && (
+          <div style={{ display: 'grid', gap: 16 }}>
             {patchBasePrompt && (
               <div style={{ fontSize: 12, color: '#65728a', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px 12px' }}>
                 Base prompt: <strong style={{ color: '#1a2a44' }}>{patchBasePrompt}</strong>
                 <span style={{ marginLeft: 10, color: '#8899b4' }}>
-                  {patchSuggestions.filter(s => s.approved).length} / {patchSuggestions.length} approved
+                  {reviewAdjustments.filter(s => s.approved).length} / {reviewAdjustments.length} approved
                 </span>
               </div>
             )}
 
-            {/* Suggestion list */}
-            <div style={{ display: 'grid', gap: 8 }}>
-              {patchSuggestions.map((s, idx) => (
-                <div
-                  key={idx}
-                  style={{
-                    border:       `1px solid ${s.approved ? '#bbf7d0' : '#e2e8f0'}`,
-                    borderRadius: 10,
-                    background:   s.approved ? '#f0fdf4' : '#f8fafc',
-                    padding:      12,
-                    opacity:      s.approved ? 1 : 0.6,
-                    transition:   'opacity 0.15s, border-color 0.15s',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 8 }}>
-                    <button
-                      onClick={() => toggleApproval(idx)}
-                      style={{
-                        width: 22, height: 22, borderRadius: '50%', border: 'none', cursor: 'pointer', flexShrink: 0,
-                        background: s.approved ? '#0f8a47' : '#e2e8f0',
-                        color: s.approved ? '#fff' : '#8899b4',
-                        fontSize: 13, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      }}
-                      title={s.approved ? 'Click to reject' : 'Click to approve'}
-                    >
-                      {s.approved ? '✓' : '✗'}
-                    </button>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 11, color: '#065f46', fontWeight: 700, marginBottom: 3 }}>Insert after</div>
-                      <code style={{ fontSize: 11, background: '#fff', border: '1px solid #d5f5e3', borderRadius: 4, padding: '2px 6px', color: '#1a2a44', display: 'block', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
-                        {s.after_section}
-                      </code>
+            <section>
+              <SectionHeading>Final Adjustments</SectionHeading>
+              <div style={{ display: 'grid', gap: 8 }}>
+                {reviewAdjustments.map((s, idx) => (
+                  <div
+                    key={s.candidate_id}
+                    style={{
+                      border: `1px solid ${s.approved ? '#bbf7d0' : '#e2e8f0'}`,
+                      borderRadius: 10,
+                      background: s.approved ? '#f0fdf4' : '#f8fafc',
+                      padding: 12,
+                      opacity: s.approved ? 1 : 0.62,
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 8 }}>
+                      <button
+                        onClick={() => toggleApproval(idx)}
+                        style={{
+                          width: 22, height: 22, borderRadius: '50%', border: 'none', cursor: 'pointer', flexShrink: 0,
+                          background: s.approved ? '#0f8a47' : '#e2e8f0',
+                          color: s.approved ? '#fff' : '#8899b4',
+                          fontSize: 13, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}
+                        title={s.approved ? 'Click to reject' : 'Click to approve'}
+                      >
+                        {s.approved ? '✓' : '✗'}
+                      </button>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 11, color: '#065f46', fontWeight: 700, marginBottom: 3 }}>Insert after</div>
+                        <code style={{ fontSize: 11, background: '#fff', border: '1px solid #d5f5e3', borderRadius: 4, padding: '2px 6px', color: '#1a2a44', display: 'block', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+                          {s.after_section}
+                        </code>
+                      </div>
                     </div>
-                  </div>
 
-                  <div style={{ marginBottom: 8 }}>
-                    <div style={{ fontSize: 11, color: '#3730a3', fontWeight: 700, marginBottom: 4 }}>Text to insert</div>
-                    <textarea
-                      value={s.insert_text}
-                      onChange={e => updateInsertText(idx, e.target.value)}
-                      rows={3}
-                      spellCheck={false}
-                      style={{ width: '100%', boxSizing: 'border-box', borderRadius: 8, border: '1px solid #c7d2fe', background: '#fff', color: '#1e1b4b', padding: '7px 10px', fontFamily: 'monospace', fontSize: 12, lineHeight: 1.55, resize: 'vertical' }}
-                    />
-                  </div>
+                    <div style={{ marginBottom: 8 }}>
+                      <div style={{ fontSize: 11, color: '#3730a3', fontWeight: 700, marginBottom: 4 }}>Text to insert</div>
+                      <textarea
+                        value={s.insert_text}
+                        onChange={e => updateInsertText(idx, e.target.value)}
+                        rows={3}
+                        spellCheck={false}
+                        style={{ width: '100%', boxSizing: 'border-box', borderRadius: 8, border: '1px solid #c7d2fe', background: '#fff', color: '#1e1b4b', padding: '7px 10px', fontFamily: 'monospace', fontSize: 12, lineHeight: 1.55, resize: 'vertical' }}
+                      />
+                    </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                    <div>
-                      <div style={{ fontSize: 11, color: '#65728a', fontWeight: 700, marginBottom: 2 }}>Rationale</div>
-                      <div style={{ fontSize: 12, color: '#3d4f6e', lineHeight: 1.5 }}>{s.rationale}</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 8, marginBottom: 8 }}>
+                      <Metric label="Confidence" value={`${Math.round(s.confidence * 100)}%`} />
+                      <Metric label="Risk" value={s.risk} />
+                      <Metric label="Coverage" value={s.coverage_gain} />
+                      <Metric label="Evidence" value={String(s.evidence_ids.length)} />
                     </div>
-                    <div>
-                      <div style={{ fontSize: 11, color: '#65728a', fontWeight: 700, marginBottom: 2 }}>Source issue</div>
-                      <div style={{ fontSize: 12, color: '#92400e', lineHeight: 1.5 }}>{s.source_issue}</div>
-                    </div>
+
+                    <div style={{ fontSize: 12, color: '#3d4f6e', lineHeight: 1.5 }}>{s.rationale}</div>
                   </div>
+                ))}
+              </div>
+            </section>
+
+            <section>
+              <SectionHeading>Rejected or Merged Ideas</SectionHeading>
+              {finalBundle.rejected_or_merged.length === 0 ? (
+                <div style={{ fontSize: 12, color: '#64748b' }}>No rejected or merged ideas in the latest bundle.</div>
+              ) : (
+                <div style={{ display: 'grid', gap: 8 }}>
+                  {finalBundle.rejected_or_merged.map((item) => (
+                    <div key={item.candidate_id} style={{ border: '1px solid #e2e8f0', background: '#f8fafc', borderRadius: 10, padding: 12 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                        <strong style={{ fontSize: 13, color: '#1a2a44' }}>{item.candidate_id}</strong>
+                        <span style={{ fontSize: 11, color: '#92400e', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 999, padding: '2px 8px' }}>
+                          {item.verdict}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: 12, color: '#475569', lineHeight: 1.5 }}>{item.reason}</div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              )}
+            </section>
 
-            {/* Save controls */}
+            <section>
+              <SectionHeading>Evidence and Eval Details</SectionHeading>
+              <div style={{ display: 'grid', gap: 12 }}>
+                {candidatePreviews.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: 11, color: '#65728a', fontWeight: 700, marginBottom: 6 }}>Candidate previews</div>
+                    <div style={{ display: 'grid', gap: 8 }}>
+                      {candidatePreviews.map((candidate) => (
+                        <div key={candidate.candidate_id} style={{ border: '1px solid #e2e8f0', borderRadius: 10, padding: 10, background: '#fff' }}>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: '#1a2a44', marginBottom: 4 }}>{candidate.candidate_id}</div>
+                          <div style={{ fontSize: 12, color: '#475569', marginBottom: 4 }}>{candidate.rationale}</div>
+                          <code style={{ fontSize: 11, color: '#3730a3', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{candidate.insert_text}</code>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {evalResults.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: 11, color: '#65728a', fontWeight: 700, marginBottom: 6 }}>Eval results</div>
+                    <div style={{ display: 'grid', gap: 8 }}>
+                      {evalResults.map((result) => (
+                        <div key={result.candidate_id} style={{ border: '1px solid #e2e8f0', borderRadius: 10, padding: 10, background: '#fff' }}>
+                          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6 }}>
+                            <strong style={{ fontSize: 12, color: '#1a2a44' }}>{result.candidate_id}</strong>
+                            <Pill label={result.coverage_gain} color="#065f46" />
+                            <Pill label={result.risk} color="#92400e" />
+                            <Pill label={`${Math.round(result.confidence * 100)}%`} color="#1e40af" />
+                          </div>
+                          <div style={{ fontSize: 11, color: '#64748b' }}>
+                            Examples: {result.representative_examples.join(', ') || 'none'}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </section>
+
             <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 10, alignItems: 'end', paddingTop: 4 }}>
               <label style={{ display: 'grid', gap: 5, fontSize: 12, color: '#65728a', fontWeight: 700 }}>
                 New version name
@@ -620,12 +923,12 @@ export default function ParserRulesClient({ initialFiles, initialAggregate, init
             <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
               <button
                 onClick={savePatch}
-                disabled={patchSaving || !patchNewName || patchSuggestions.filter(s => s.approved).length === 0}
-                style={patchSaving || !patchNewName || patchSuggestions.filter(s => s.approved).length === 0
+                disabled={patchSaving || !patchNewName || reviewAdjustments.filter(s => s.approved).length === 0}
+                style={patchSaving || !patchNewName || reviewAdjustments.filter(s => s.approved).length === 0
                   ? { ...runBtnStyle, opacity: 0.5, cursor: 'not-allowed' }
                   : runBtnStyle}
               >
-                {patchSaving ? 'Saving…' : `Save ${patchSuggestions.filter(s => s.approved).length} patch${patchSuggestions.filter(s => s.approved).length !== 1 ? 'es' : ''}`}
+                {patchSaving ? 'Saving…' : `Save ${reviewAdjustments.filter(s => s.approved).length} patch${reviewAdjustments.filter(s => s.approved).length !== 1 ? 'es' : ''}`}
               </button>
               <Link href="/admin/parser-prompts" style={{ fontSize: 13, color: '#fc4c02', fontWeight: 600 }}>
                 Prompt Manager →
@@ -718,6 +1021,17 @@ function Pill({ label, color }: { label: string; color: string }) {
     <span style={{ fontSize: 11, fontWeight: 600, color, background: `${color}18`, border: `1px solid ${color}40`, borderRadius: 999, padding: '2px 7px', whiteSpace: 'nowrap' }}>
       {label}
     </span>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={{ border: '1px solid #e2e8f0', borderRadius: 8, background: '#fff', padding: '8px 10px' }}>
+      <div style={{ fontSize: 10, color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 3 }}>
+        {label}
+      </div>
+      <div style={{ fontSize: 12, color: '#1a2a44', fontWeight: 700 }}>{value}</div>
+    </div>
   );
 }
 

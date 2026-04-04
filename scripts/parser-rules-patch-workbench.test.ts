@@ -7,6 +7,7 @@ const ROOT = process.cwd();
 const LEGACY_PATCH_ROUTE = path.join(ROOT, "src/app/api/admin/parser-rules/patch/route.ts");
 const PATCH_WORKBENCH_ROUTE = path.join(ROOT, "src/app/api/admin/parser-rules/patch-workbench/route.ts");
 const PATCH_WORKBENCH_HELPER = path.join(ROOT, "src/lib/parser-rules/patch-workbench.ts");
+const PARSER_RULES_CLIENT = path.join(ROOT, "src/app/admin/parser-rules/ParserRulesClient.tsx");
 
 const ARTIFACT_FILENAMES = [
   "evidence-ledger.json",
@@ -418,4 +419,21 @@ test("patch-workbench route exposes streaming stage events and resumable bundle 
   assert.match(routeSource, /export\s+async\s+function\s+GET\b/, "expected resumable GET handler");
   assert.match(routeSource, /export\s+async\s+function\s+POST\b/, "expected streaming POST handler");
   assert.ok(!routeSource.includes("not_implemented"), "expected real workbench route implementation");
+});
+
+test("parser rules client uses the streaming patch workbench UX", () => {
+  const clientSource = readSource(PARSER_RULES_CLIENT);
+
+  assert.ok(
+    clientSource.includes("/api/admin/parser-rules/patch-workbench"),
+    "expected client to post to the patch-workbench route",
+  );
+  assert.ok(clientSource.includes("stageProgress"), "expected client state for stage progress");
+  assert.ok(clientSource.includes("candidatePreviews"), "expected client state for candidate previews");
+  assert.ok(clientSource.includes("evalResults"), "expected client state for eval results");
+  assert.ok(clientSource.includes("finalBundle"), "expected client state for final bundle");
+  assert.ok(clientSource.includes("Workbench Progress"), "expected progress panel heading");
+  assert.ok(clientSource.includes("Final Adjustments"), "expected final adjustments section");
+  assert.ok(clientSource.includes("Rejected or Merged Ideas"), "expected rejected ideas section");
+  assert.ok(clientSource.includes("Evidence and Eval Details"), "expected evidence and eval details section");
 });

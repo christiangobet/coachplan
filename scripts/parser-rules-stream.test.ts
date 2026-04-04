@@ -49,7 +49,7 @@ test("createNdjsonStream emits thrown errors as NDJSON instead of rejecting the 
 });
 
 test("createNdjsonStream preserves ordered multi-stage events in a workbench-style stream", async () => {
-  const stream = createNdjsonStream(async ({ emit }) => {
+  const stream = createNdjsonStream(async ({ emit }: NdjsonStreamTools) => {
     emit({ type: "stage_start", stage: "cluster" });
     emit({ type: "stage_progress", stage: "cluster", message: "Grouping evidence" });
     emit({ type: "stage_complete", stage: "cluster" });

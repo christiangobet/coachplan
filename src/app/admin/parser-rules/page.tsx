@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { requireAdminAccess } from '@/lib/admin';
+import { resolveAIProvider, getDefaultAiModel } from '@/lib/openai';
 import { readdirSync, readFileSync, existsSync } from 'fs';
 import path from 'path';
 import '../admin.css';
@@ -39,13 +40,16 @@ export default async function ParserRulesPage() {
     }
   }
 
+  const cloudProvider = resolveAIProvider();
+  const cloudModel    = getDefaultAiModel(cloudProvider);
+
   return (
     <main className="admin-page">
       <section className="admin-hero">
         <div>
           <h1>Parser Rule Finder</h1>
           <p>
-            Batch-analyse training plan PDFs with a local LLM to surface patterns
+            Batch-analyse training plan PDFs with cloud AI (or a local LLM) to surface patterns
             the V4 parser misses and generate prompt improvements.
           </p>
         </div>
@@ -61,7 +65,7 @@ export default async function ParserRulesPage() {
             Put training plan PDFs in{' '}
             <code style={codeStyle}>scripts/fixtures/plans/</code>
           </li>
-          <li>Select <strong style={{ color: '#1a2a44' }}>Cloud (OpenAI)</strong> mode (default) — or switch to Local LLM and run <code style={codeStyle}>npm run llm</code> first.</li>
+          <li>Select <strong style={{ color: '#1a2a44' }}>Cloud ({cloudProvider})</strong> mode (default) — or switch to Local LLM and run <code style={codeStyle}>npm run llm</code> first.</li>
           <li>Click <strong style={{ color: '#1a2a44' }}>Run Analysis</strong> below.</li>
         </ol>
         <p style={{ margin: '8px 0 0' }}>
@@ -75,6 +79,8 @@ export default async function ParserRulesPage() {
         initialFiles={files}
         initialAggregate={aggregate}
         initialPerPlan={perPlan as Record<string, { analysis: { layout_type: string; source_units: string; total_weeks_detected: number | null; unhandled_patterns: Array<{ pattern: string; issue: string; suggested_rule: string }>; new_abbreviations: Array<{ abbr: string; meaning: string }>; prompt_improvements: string[]; anomalies: string[] } }>}
+        cloudProvider={cloudProvider}
+        cloudModel={cloudModel}
       />
     </main>
   );
