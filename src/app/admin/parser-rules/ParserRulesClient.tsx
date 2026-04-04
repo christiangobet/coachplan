@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback } from 'react';
 import Link from 'next/link';
+import type { PatchSuggestion } from '@/app/api/admin/parser-rules/patch/route';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface TopIssue {
@@ -66,14 +67,14 @@ export default function ParserRulesClient({ initialFiles, initialAggregate, init
   const [perPlan,   setPerPlan]   = useState<Record<string, { analysis: PlanAnalysis }>>(initialPerPlan);
   const [expanded,  setExpanded]  = useState<string | null>(null);
 
-  // Apply-to-prompt state
-  const [applyOpen,      setApplyOpen]      = useState(false);
-  const [applyLoading,   setApplyLoading]   = useState(false);
-  const [applyAdditions, setApplyAdditions] = useState('');
-  const [applyNewName,   setApplyNewName]   = useState('');
-  const [applyActivate,  setApplyActivate]  = useState(false);
-  const [applyStatus,    setApplyStatus]    = useState<{ ok: boolean; message: string } | null>(null);
-  const [activePrompt,   setActivePrompt]   = useState<{ id: string; name: string; text: string } | null>(null);
+  // Smart Patch state
+  const [patchLoading,     setPatchLoading]     = useState(false);
+  const [patchSuggestions, setPatchSuggestions] = useState<PatchSuggestion[]>([]);
+  const [patchStatus,      setPatchStatus]      = useState<{ ok: boolean; message: string } | null>(null);
+  const [patchSaving,      setPatchSaving]      = useState(false);
+  const [patchNewName,     setPatchNewName]     = useState('');
+  const [patchActivate,    setPatchActivate]    = useState(false);
+  const [patchBasePrompt,  setPatchBasePrompt]  = useState<string>('');  // name of the base prompt
 
   const logIdRef = useRef(0);
   const logEndRef = useRef<HTMLDivElement>(null);
@@ -83,85 +84,92 @@ export default function ParserRulesClient({ initialFiles, initialAggregate, init
     setTimeout(() => logEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
   }
 
-  function buildAdditions(agg: Aggregate): string {
-    const lines: string[] = [];
-    const date = new Date().toISOString().slice(0, 10);
-    lines.push(`\n\n--------------------------------------------------`);
-    lines.push(`PARSER RULE FINDER ADDITIONS (${date})`);
-    lines.push(`--------------------------------------------------`);
-
-    if (agg.new_abbreviations_to_add?.length) {
-      lines.push('\nNEW ABBREVIATIONS:');
-      for (const a of agg.new_abbreviations_to_add) {
-        lines.push(`- ${a.abbr}=${a.meaning}`);
-      }
-    }
-
-    if (agg.top_issues?.length) {
-      lines.push('\nNEW RULES:');
-      for (const issue of agg.top_issues) {
-        if (issue.recommended_rule) {
-          lines.push(`\n// Issue: ${issue.issue} (${issue.frequency} plans)`);
-          lines.push(issue.recommended_rule);
-        }
-      }
-    }
-
-    if (agg.prompt_sections_to_update?.length) {
-      lines.push('\nSECTION ADDITIONS:');
-      for (const s of agg.prompt_sections_to_update) {
-        lines.push(`\n// ${s.section} — ${s.current_gap}`);
-        lines.push(s.addition);
-      }
-    }
-
-    return lines.join('\n');
-  }
-
-  const prepareApply = useCallback(async () => {
+  const fetchPatch = useCallback(async () => {
     if (!aggregate) return;
-    setApplyLoading(true);
-    setApplyStatus(null);
+    setPatchLoading(true);
+    setPatchStatus(null);
+    setPatchSuggestions([]);
     try {
-      const res = await fetch('/api/admin/parser-prompts/active');
-      if (!res.ok) throw new Error(res.status === 404 ? 'No active prompt found — create one in Prompt Manager first.' : `Error ${res.status}`);
-      const prompt = await res.json() as { id: string; name: string; text: string };
-      setActivePrompt(prompt);
-      setApplyAdditions(buildAdditions(aggregate));
-      const date = new Date().toISOString().slice(0, 10);
-      setApplyNewName(`${prompt.name}_rulefinder_${date}`);
-      setApplyOpen(true);
-    } catch (err) {
-      setApplyStatus({ ok: false, message: (err as Error).message });
-    } finally {
-      setApplyLoading(false);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [aggregate]);
-
-  const saveNewVersion = useCallback(async () => {
-    if (!activePrompt || !applyNewName) return;
-    setApplyLoading(true);
-    setApplyStatus(null);
-    try {
-      const newText = activePrompt.text + applyAdditions;
-      const res = await fetch('/api/admin/parser-prompts', {
+      const res = await fetch('/api/admin/parser-rules/patch', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ name: applyNewName, text: newText, activate: applyActivate }),
+        body:    JSON.stringify({ server, model }),
       });
       if (!res.ok) {
         const data = await res.json() as { error?: string };
         throw new Error(data.error ?? `Error ${res.status}`);
       }
-      setApplyStatus({ ok: true, message: applyActivate ? `Saved and activated as "${applyNewName}".` : `Saved as "${applyNewName}" (inactive). Activate it in Prompt Manager.` });
-      setApplyOpen(false);
+      const data = await res.json() as { suggestions: PatchSuggestion[]; base_prompt_name: string };
+      setPatchSuggestions(data.suggestions);
+      setPatchBasePrompt(data.base_prompt_name);
+      const date = new Date().toISOString().slice(0, 10);
+      setPatchNewName(`${data.base_prompt_name}_patch_${date}`);
     } catch (err) {
-      setApplyStatus({ ok: false, message: (err as Error).message });
+      setPatchStatus({ ok: false, message: (err as Error).message });
     } finally {
-      setApplyLoading(false);
+      setPatchLoading(false);
     }
-  }, [activePrompt, applyAdditions, applyNewName, applyActivate]);
+  }, [aggregate, server, model]);
+
+  const toggleApproval = useCallback((idx: number) => {
+    setPatchSuggestions(prev =>
+      prev.map((s, i) => i === idx ? { ...s, approved: !s.approved } : s)
+    );
+  }, []);
+
+  const updateInsertText = useCallback((idx: number, text: string) => {
+    setPatchSuggestions(prev =>
+      prev.map((s, i) => i === idx ? { ...s, insert_text: text } : s)
+    );
+  }, []);
+
+  const savePatch = useCallback(async () => {
+    const approved = patchSuggestions.filter(s => s.approved);
+    if (!approved.length || !patchNewName) return;
+    setPatchSaving(true);
+    setPatchStatus(null);
+    try {
+      // Fetch current active prompt text
+      const activeRes = await fetch('/api/admin/parser-prompts/active');
+      if (!activeRes.ok) throw new Error(activeRes.status === 404 ? 'No active prompt. Seed it in Prompt Manager first.' : `Error ${activeRes.status}`);
+      const { text: baseText } = await activeRes.json() as { text: string };
+
+      // Apply approved patches: insert each after its anchor section
+      let patched = baseText;
+      for (const s of approved) {
+        const anchor = s.after_section;
+        const idx = patched.indexOf(anchor);
+        if (idx === -1) {
+          // Anchor not found — append at end with comment
+          patched += `\n\n// [Patch: ${s.source_issue}]\n${s.insert_text}`;
+        } else {
+          const insertPos = idx + anchor.length;
+          patched = patched.slice(0, insertPos) + '\n' + s.insert_text + patched.slice(insertPos);
+        }
+      }
+
+      const res = await fetch('/api/admin/parser-prompts', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ name: patchNewName, text: patched, activate: patchActivate }),
+      });
+      if (!res.ok) {
+        const data = await res.json() as { error?: string };
+        throw new Error(data.error ?? `Error ${res.status}`);
+      }
+      setPatchStatus({
+        ok: true,
+        message: patchActivate
+          ? `Saved and activated as "${patchNewName}" (${approved.length} patch${approved.length !== 1 ? 'es' : ''} applied).`
+          : `Saved as "${patchNewName}" (inactive). Activate in Prompt Manager.`,
+      });
+      setPatchSuggestions([]);
+    } catch (err) {
+      setPatchStatus({ ok: false, message: (err as Error).message });
+    } finally {
+      setPatchSaving(false);
+    }
+  }, [patchSuggestions, patchNewName, patchActivate]);
 
   const runAnalysis = useCallback(async () => {
     setRunning(true);
@@ -468,87 +476,143 @@ export default function ParserRulesClient({ initialFiles, initialAggregate, init
         </div>
       )}
 
-      {/* Apply to prompt */}
+      {/* Smart Patch */}
       <div className="admin-card">
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: applyOpen ? 14 : 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: patchSuggestions.length > 0 ? 16 : 0 }}>
           <div>
-            <div style={{ fontSize: 14, fontWeight: 700, color: '#1a2a44' }}>Apply to Prompt</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: '#1a2a44' }}>Smart Patch</div>
             <div style={{ fontSize: 12, color: '#65728a', marginTop: 2 }}>
-              Appends the suggested rules to the active prompt and saves it as a new version.
+              Ask the LLM to suggest section-anchored insertions into the active prompt. Review and approve each before saving.
             </div>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
-            {applyStatus && (
-              <span style={{ fontSize: 12, fontWeight: 600, color: applyStatus.ok ? '#0f8a47' : '#b42318' }}>
-                {applyStatus.message}
+            {patchStatus && (
+              <span style={{ fontSize: 12, fontWeight: 600, color: patchStatus.ok ? '#0f8a47' : '#b42318', maxWidth: 260 }}>
+                {patchStatus.message}
               </span>
             )}
             {!aggregate && (
               <span style={{ fontSize: 12, color: '#65728a' }}>Run analysis first.</span>
             )}
-            {aggregate && !applyOpen && (
+            {aggregate && patchSuggestions.length === 0 && (
               <button
-                onClick={prepareApply}
-                disabled={applyLoading}
-                style={{ ...runBtnStyle, height: 36, fontSize: 13 }}
+                onClick={fetchPatch}
+                disabled={patchLoading}
+                style={patchLoading ? { ...runBtnStyle, height: 36, fontSize: 13, opacity: 0.6, cursor: 'not-allowed' } : { ...runBtnStyle, height: 36, fontSize: 13 }}
               >
-                {applyLoading ? 'Loading…' : 'Prepare patch'}
+                {patchLoading ? 'Asking LLM…' : 'Suggest Patches'}
               </button>
             )}
-            {applyOpen && (
+            {patchSuggestions.length > 0 && (
               <button
-                onClick={() => setApplyOpen(false)}
+                onClick={() => { setPatchSuggestions([]); setPatchStatus(null); }}
                 style={{ height: 36, padding: '0 14px', background: 'none', border: '1px solid #d6deee', borderRadius: 10, fontSize: 13, color: '#65728a', cursor: 'pointer' }}
               >
-                Cancel
+                Clear
               </button>
             )}
           </div>
         </div>
 
-        {applyOpen && activePrompt && (
+        {patchSuggestions.length > 0 && (
           <div style={{ display: 'grid', gap: 12 }}>
-            <div style={{ fontSize: 12, color: '#65728a', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px 12px' }}>
-              Base: <strong style={{ color: '#1a2a44' }}>{activePrompt.name}</strong>
-              <span style={{ color: '#8899b4', marginLeft: 8 }}>{activePrompt.text.length.toLocaleString()} chars</span>
+            {patchBasePrompt && (
+              <div style={{ fontSize: 12, color: '#65728a', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px 12px' }}>
+                Base prompt: <strong style={{ color: '#1a2a44' }}>{patchBasePrompt}</strong>
+                <span style={{ marginLeft: 10, color: '#8899b4' }}>
+                  {patchSuggestions.filter(s => s.approved).length} / {patchSuggestions.length} approved
+                </span>
+              </div>
+            )}
+
+            {/* Suggestion list */}
+            <div style={{ display: 'grid', gap: 8 }}>
+              {patchSuggestions.map((s, idx) => (
+                <div
+                  key={idx}
+                  style={{
+                    border:       `1px solid ${s.approved ? '#bbf7d0' : '#e2e8f0'}`,
+                    borderRadius: 10,
+                    background:   s.approved ? '#f0fdf4' : '#f8fafc',
+                    padding:      12,
+                    opacity:      s.approved ? 1 : 0.6,
+                    transition:   'opacity 0.15s, border-color 0.15s',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 8 }}>
+                    <button
+                      onClick={() => toggleApproval(idx)}
+                      style={{
+                        width: 22, height: 22, borderRadius: '50%', border: 'none', cursor: 'pointer', flexShrink: 0,
+                        background: s.approved ? '#0f8a47' : '#e2e8f0',
+                        color: s.approved ? '#fff' : '#8899b4',
+                        fontSize: 13, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}
+                      title={s.approved ? 'Click to reject' : 'Click to approve'}
+                    >
+                      {s.approved ? '✓' : '✗'}
+                    </button>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 11, color: '#065f46', fontWeight: 700, marginBottom: 3 }}>Insert after</div>
+                      <code style={{ fontSize: 11, background: '#fff', border: '1px solid #d5f5e3', borderRadius: 4, padding: '2px 6px', color: '#1a2a44', display: 'block', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+                        {s.after_section}
+                      </code>
+                    </div>
+                  </div>
+
+                  <div style={{ marginBottom: 8 }}>
+                    <div style={{ fontSize: 11, color: '#3730a3', fontWeight: 700, marginBottom: 4 }}>Text to insert</div>
+                    <textarea
+                      value={s.insert_text}
+                      onChange={e => updateInsertText(idx, e.target.value)}
+                      rows={3}
+                      spellCheck={false}
+                      style={{ width: '100%', boxSizing: 'border-box', borderRadius: 8, border: '1px solid #c7d2fe', background: '#fff', color: '#1e1b4b', padding: '7px 10px', fontFamily: 'monospace', fontSize: 12, lineHeight: 1.55, resize: 'vertical' }}
+                    />
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                    <div>
+                      <div style={{ fontSize: 11, color: '#65728a', fontWeight: 700, marginBottom: 2 }}>Rationale</div>
+                      <div style={{ fontSize: 12, color: '#3d4f6e', lineHeight: 1.5 }}>{s.rationale}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 11, color: '#65728a', fontWeight: 700, marginBottom: 2 }}>Source issue</div>
+                      <div style={{ fontSize: 12, color: '#92400e', lineHeight: 1.5 }}>{s.source_issue}</div>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
 
-            <label style={{ display: 'grid', gap: 5, fontSize: 12, color: '#65728a', fontWeight: 700 }}>
-              Additions to append
-              <textarea
-                value={applyAdditions}
-                onChange={e => setApplyAdditions(e.target.value)}
-                rows={14}
-                spellCheck={false}
-                style={{ borderRadius: 10, border: '1px solid #d6deee', background: '#0d1117', color: '#e0e0e0', padding: '10px 12px', fontFamily: 'monospace', fontSize: 12, lineHeight: 1.55, resize: 'vertical' }}
-              />
-            </label>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 10, alignItems: 'end' }}>
+            {/* Save controls */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 10, alignItems: 'end', paddingTop: 4 }}>
               <label style={{ display: 'grid', gap: 5, fontSize: 12, color: '#65728a', fontWeight: 700 }}>
                 New version name
                 <input
-                  value={applyNewName}
-                  onChange={e => setApplyNewName(e.target.value)}
+                  value={patchNewName}
+                  onChange={e => setPatchNewName(e.target.value)}
                   style={{ ...inputStyle }}
                 />
               </label>
               <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#3d4f6e', cursor: 'pointer', paddingBottom: 8 }}>
-                <input type="checkbox" checked={applyActivate} onChange={e => setApplyActivate(e.target.checked)} />
+                <input type="checkbox" checked={patchActivate} onChange={e => setPatchActivate(e.target.checked)} />
                 Activate immediately
               </label>
             </div>
 
             <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
               <button
-                onClick={saveNewVersion}
-                disabled={applyLoading || !applyNewName}
-                style={applyLoading || !applyNewName ? { ...runBtnStyle, opacity: 0.5, cursor: 'not-allowed' } : runBtnStyle}
+                onClick={savePatch}
+                disabled={patchSaving || !patchNewName || patchSuggestions.filter(s => s.approved).length === 0}
+                style={patchSaving || !patchNewName || patchSuggestions.filter(s => s.approved).length === 0
+                  ? { ...runBtnStyle, opacity: 0.5, cursor: 'not-allowed' }
+                  : runBtnStyle}
               >
-                {applyLoading ? 'Saving…' : 'Save new version'}
+                {patchSaving ? 'Saving…' : `Save ${patchSuggestions.filter(s => s.approved).length} patch${patchSuggestions.filter(s => s.approved).length !== 1 ? 'es' : ''}`}
               </button>
               <Link href="/admin/parser-prompts" style={{ fontSize: 13, color: '#fc4c02', fontWeight: 600 }}>
-                Open Prompt Manager →
+                Prompt Manager →
               </Link>
             </div>
           </div>
