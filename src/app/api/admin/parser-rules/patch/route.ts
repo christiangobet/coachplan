@@ -110,18 +110,27 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: `Cannot reach LLM at ${server}: ${(err as Error).message}` }, { status: 502 });
   }
 
-  // Strip markdown fences if present, then parse
+  // Strip markdown fences + repair common LLM JSON issues
   function extractJson(s: string): string {
     const fenced = s.match(/```(?:json)?\s*([\s\S]*?)```/);
     if (fenced) return fenced[1].trim();
     const start = s.search(/[\[{]/);
     return start !== -1 ? s.slice(start) : s;
   }
+  function repairJson(s: string): string {
+    s = s.replace(/\/\/[^\n"]*/g, '');
+    s = s.replace(/\/\*[\s\S]*?\*\//g, '');
+    s = s.replace(/,(\s*[}\]])/g, '$1');
+    s = s.replace(/"((?:[^"\\]|\\.)*)"/g, (_m, inner: string) =>
+      `"${inner.replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t')}"`
+    );
+    return s;
+  }
 
   // Parse suggestions — handle both array and { suggestions: [...] }
   let parsed: unknown;
   try {
-    parsed = JSON.parse(extractJson(raw));
+    parsed = JSON.parse(repairJson(extractJson(raw)));
   } catch {
     return Response.json({ error: 'LLM returned non-JSON response.', raw }, { status: 502 });
   }

@@ -160,16 +160,36 @@ async function callLlm(
   return data.choices?.[0]?.message?.content ?? '';
 }
 
-// ── JSON extraction helper ────────────────────────────────────────────────────
-// Some LLM responses wrap JSON in markdown fences even when json_object mode
-// is requested. Strip them before parsing.
+// ── JSON extraction + repair helpers ─────────────────────────────────────────
 function extractJson(raw: string): string {
   const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (fenced) return fenced[1].trim();
-  // Find first { or [ and last matching } or ]
   const start = raw.search(/[\[{]/);
   if (start !== -1) return raw.slice(start);
   return raw;
+}
+
+// Fix common LLM JSON issues before parsing:
+// - Single-line // comments
+// - Multi-line /* */ comments
+// - Trailing commas before } or ]
+// - Unescaped literal newlines inside string values
+function repairJson(s: string): string {
+  // Remove // comments (not inside strings — approximate but covers most cases)
+  s = s.replace(/\/\/[^\n"]*/g, '');
+  // Remove /* */ comments
+  s = s.replace(/\/\*[\s\S]*?\*\//g, '');
+  // Remove trailing commas before } or ]
+  s = s.replace(/,(\s*[}\]])/g, '$1');
+  // Replace unescaped literal newlines/tabs inside quoted strings
+  s = s.replace(/"((?:[^"\\]|\\.)*)"/g, (_match, inner: string) => {
+    const fixed = inner
+      .replace(/\n/g, '\\n')
+      .replace(/\r/g, '\\r')
+      .replace(/\t/g, '\\t');
+    return `"${fixed}"`;
+  });
+  return s;
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -291,7 +311,8 @@ export async function POST(req: NextRequest) {
           let analysis: PlanAnalysis;
           try {
             const raw = await callLlm(server, model, ANALYSIS_SYSTEM, analysisUserPrompt(file, text));
-            analysis  = JSON.parse(extractJson(raw)) as PlanAnalysis;
+            const cleaned = repairJson(extractJson(raw));
+            analysis  = JSON.parse(cleaned) as PlanAnalysis;
             emit({
               type:     'progress',
               file,
@@ -329,7 +350,7 @@ export async function POST(req: NextRequest) {
         let aggregate: unknown;
         try {
           const raw  = await callLlm(server, model, AGGREGATE_SYSTEM, aggregateUserPrompt(findings));
-          aggregate  = JSON.parse(extractJson(raw));
+          aggregate  = JSON.parse(repairJson(extractJson(raw)));
           writeFileSync(path.join(OUT_DIR, 'aggregate.json'), JSON.stringify(aggregate, null, 2));
         } catch (err) {
           emit({ type: 'log', message: `Aggregation failed: ${(err as Error).message}` });
