@@ -985,6 +985,9 @@ export default function DayLogCard({
                     <p className="day-log-instructions-text">{instructionText}</p>
                   </details>
                 )}
+                {activity.coachingNote && (
+                  <p className="day-log-coach-note">{activity.coachingNote}</p>
+                )}
                 {showForm && !planView && (
                   <ActivityRow
                     activity={activity}
@@ -1081,6 +1084,9 @@ export default function DayLogCard({
                           <summary className="day-log-instructions-toggle">How to execute</summary>
                           <p className="day-log-instructions-text">{instructionText}</p>
                         </details>
+                      )}
+                      {activity.coachingNote && (
+                        <p className="day-log-coach-note">{activity.coachingNote}</p>
                       )}
                       {showForm && !planView && (
                         <ActivityRow

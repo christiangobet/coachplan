@@ -79,7 +79,11 @@ export const SessionV1Schema = z.object({
   optional_alternatives: z.array(z.unknown()).optional().default([]),
 
   notes: z.string().nullable().optional(),
-  raw_text: z.string().catch('')
+  raw_text: z.string().catch(''),
+
+  // Coaching guidance fields (extracted by LLM from trainer notes / session context)
+  coaching_note: z.string().nullable().optional(),
+  session_focus: z.enum(['tempo', 'threshold', 'recovery', 'long_run', 'race_sim', 'strength', 'other']).nullable().optional().catch(null),
 });
 
 export type SessionV1 = z.infer<typeof SessionV1Schema>;
@@ -95,6 +99,9 @@ export const WeekV1Schema = z.object({
 
   total_weekly_mileage_min: z.coerce.number().nullable().optional(),
   total_weekly_mileage_max: z.coerce.number().nullable().optional(),
+
+  // Weekly coaching brief extracted from trainer notes
+  week_brief: z.string().nullable().optional(),
 
   sessions: z.array(SessionV1Schema)
 });

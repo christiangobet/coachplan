@@ -228,6 +228,7 @@ model PlanWeek {
   weekIndex Int
   startDate DateTime?
   endDate   DateTime?
+  coachBrief String?
 
   plan TrainingPlan @relation(fields: [planId], references: [id])
   days PlanDay[]
@@ -289,6 +290,8 @@ model PlanActivity {
   sessionInstructions String?
   sessionGroupId String?
   sessionOrder   Int?
+  coachingNote   String?
+  sessionFocus   String?
 
   plan TrainingPlan @relation(fields: [planId], references: [id])
   day  PlanDay @relation(fields: [dayId], references: [id])

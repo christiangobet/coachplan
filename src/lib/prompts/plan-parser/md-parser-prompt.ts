@@ -29,4 +29,7 @@ RULES:
 - Use the raw Session + Notes cell text as raw_text.
 - If a week has no table rows, skip it (do not output an empty week).
 - The ## Glossary, ## Strength & Conditioning, and ## Trainer Notes sections are context — do not output them as activities. However, for Strength activities referenced in the schedule, populate steps[] from the Strength & Conditioning section.
+- For each session, if the Notes column contains perceived-effort guidance, technique cues, pacing philosophy, or mental focus instructions, copy that text verbatim into coaching_note. Leave null if no coaching cue is present.
+- For each session, set session_focus to one of: tempo | threshold | recovery | long_run | race_sim | strength | other. Use null if the session type is Rest or the focus is unclear.
+- For each week, if the ## Trainer Notes section contains a note labelled "Week N:" that matches this week's number, copy that note verbatim into week_brief. Leave null if no per-week note exists.
 `;

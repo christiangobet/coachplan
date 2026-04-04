@@ -25,6 +25,7 @@ export type LogActivity = {
   distanceUnit: 'MILES' | 'KM' | null;
   paceTarget: string | null;
   sessionInstructions: string | null;
+  coachingNote: string | null;
   structure: unknown;
   sessionGroupId: string | null;
   sessionOrder: number | null;
@@ -103,6 +104,9 @@ export function buildLogActivities(rawActivities: any[], viewerUnits: DistanceUn
         paceTarget: activity.paceTarget ?? null,
         sessionInstructions: typeof activity.sessionInstructions === 'string' && activity.sessionInstructions.trim()
           ? activity.sessionInstructions.trim()
+          : null,
+        coachingNote: typeof activity.coachingNote === 'string' && activity.coachingNote.trim()
+          ? activity.coachingNote.trim()
           : null,
         structure: activity.structure ?? null,
         sessionGroupId: activity.sessionGroupId ?? null,

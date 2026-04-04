@@ -133,7 +133,8 @@ export async function populatePlanFromV4(
     const planWeek = await prisma.planWeek.create({
       data: {
         planId,
-        weekIndex: week.week_number
+        weekIndex: week.week_number,
+        coachBrief: week.week_brief ?? null,
       }
     });
 
@@ -215,7 +216,11 @@ export async function populatePlanFromV4(
             priority: priorityLevel,
             mustDo: priorityLevel === ActivityPriority.KEY,
             bailAllowed: priorityLevel === ActivityPriority.OPTIONAL,
-            structure: stepsStructure ?? Prisma.JsonNull
+            structure: stepsStructure ?? Prisma.JsonNull,
+            coachingNote: typeof session.coaching_note === 'string' && session.coaching_note.trim()
+              ? session.coaching_note.trim()
+              : null,
+            sessionFocus: session.session_focus ?? null,
           };
         });
 

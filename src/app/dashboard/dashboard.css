@@ -710,6 +710,18 @@ details[open] .day-log-instructions-toggle::before {
   border: 1px solid var(--d-border-light);
 }
 
+.day-log-coach-note {
+  margin: 6px 0 0;
+  font-size: 13px;
+  font-style: italic;
+  color: var(--d-muted);
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
 .dash-log-collapsed {
   margin: 0 -24px -24px;
 }

@@ -29,6 +29,7 @@ If no such section exists, omit this heading entirely.
 
 ## Trainer Notes
 Extract ALL coaching narrative, race strategy, phase goals, pacing guidance, nutrition tips, or any text block outside the schedule grid that represents advice from the coach or plan author.
+Prefix each week's coaching note with "Week N:" if it is specific to a particular week.
 If no such content exists, omit this heading entirely.
 
 ---
@@ -52,6 +53,7 @@ RULES FOR WEEK TABLES:
 7. Days with no session: write "Rest" in Session, "—" in other columns.
 8. If the plan uses color-coding or bold to indicate priority sessions, add "⭐ Key session" to Notes.
 9. Do NOT invent, infer, or add content that is not present in the PDF.
+10. If the coach or plan author includes perceived-effort guidance, technique cues, pacing philosophy, or mental focus instructions for a session, copy them verbatim into the Notes column (do not summarise or omit them).
 
 ---
 

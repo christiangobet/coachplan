@@ -1080,6 +1080,12 @@ export default async function CalendarPage({
                   prevWeekHref={prevWeekHref}
                   nextWeekHref={nextWeekHref}
                 />
+                {displayedPlanWeek?.coachBrief && (
+                  <details className="cal-week-coach-brief">
+                    <summary className="cal-week-coach-brief-toggle">Coach&rsquo;s note</summary>
+                    <p className="cal-week-coach-brief-text">{displayedPlanWeek.coachBrief}</p>
+                  </details>
+                )}
                 {selectedDateKey && (
                   <div className="wsd-detail">
                     <div className="cal-detail-header">
