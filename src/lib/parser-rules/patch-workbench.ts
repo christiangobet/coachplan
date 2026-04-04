@@ -1,6 +1,7 @@
 import { createHash } from 'crypto';
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'fs';
 import path from 'path';
+import { getDefaultAiModel, openaiJsonSchema } from '../openai.ts';
 
 const SAVED_ANALYSIS_DIR = path.join(process.cwd(), 'scripts', 'parser-analysis');
 
@@ -89,6 +90,130 @@ export interface EvidenceLedger {
   stats: EvidenceLedgerStats;
 }
 
+export interface IssueCluster {
+  cluster_id: string;
+  title: string;
+  evidence_ids: string[];
+  summary: string;
+}
+
+export interface IssueClustersArtifact {
+  generated_at: string;
+  clusters: IssueCluster[];
+}
+
+export interface PatchCandidate {
+  candidate_id: string;
+  cluster_id: string;
+  after_section: string;
+  insert_text: string;
+  rationale: string;
+  evidence_ids: string[];
+}
+
+export interface PatchCandidatesArtifact {
+  generated_at: string;
+  candidates: PatchCandidate[];
+}
+
+export interface PatchReviewDecision {
+  candidate_id: string;
+  verdict: string;
+  reason: string;
+}
+
+export interface PatchReviewArtifact {
+  generated_at: string;
+  accepted_candidates: PatchReviewDecision[];
+  rejected_candidates: PatchReviewDecision[];
+}
+
+export interface PatchEvaluationResult {
+  candidate_id: string;
+  coverage_gain: string;
+  risk: string;
+  confidence: number;
+  representative_examples: string[];
+}
+
+export interface PatchEvalArtifact {
+  generated_at: string;
+  evaluated_candidates: PatchEvaluationResult[];
+}
+
+export interface FinalAdjustment {
+  candidate_id: string;
+  after_section: string;
+  insert_text: string;
+  rationale: string;
+  confidence: number;
+  risk: string;
+  coverage_gain: string;
+  evidence_ids: string[];
+}
+
+export interface RejectedOrMergedIdea {
+  candidate_id: string;
+  verdict: string;
+  reason: string;
+}
+
+export interface FinalAdjustmentBundle {
+  generated_at: string;
+  final_adjustments: FinalAdjustment[];
+  rejected_or_merged: RejectedOrMergedIdea[];
+}
+
+type StageRunnerInput = {
+  stage: string;
+  prompt: string;
+  schema: {
+    name: string;
+    schema: Record<string, unknown>;
+  };
+};
+
+type StageRunner = <T>(input: StageRunnerInput) => Promise<T>;
+
+type ClusterIssuesArgs = {
+  ledger: EvidenceLedger;
+  promptText: string;
+  runStage?: StageRunner;
+};
+
+type DraftPatchCandidatesArgs = {
+  ledger: EvidenceLedger;
+  clusters: IssueClustersArtifact;
+  promptText: string;
+  runStage?: StageRunner;
+};
+
+type CritiquePatchCandidatesArgs = {
+  ledger: EvidenceLedger;
+  clusters: IssueClustersArtifact;
+  candidates: PatchCandidatesArtifact;
+  promptText: string;
+  runStage?: StageRunner;
+};
+
+type EvaluatePatchCandidatesArgs = {
+  ledger: EvidenceLedger;
+  clusters: IssueClustersArtifact;
+  candidates: PatchCandidatesArtifact;
+  review: PatchReviewArtifact;
+  promptText: string;
+  runStage?: StageRunner;
+};
+
+type BuildFinalAdjustmentBundleArgs = {
+  ledger: EvidenceLedger;
+  clusters: IssueClustersArtifact;
+  candidates: PatchCandidatesArtifact;
+  review: PatchReviewArtifact;
+  evaluation: PatchEvalArtifact;
+  promptText: string;
+};
+
 function hashEvidence(parts: Array<string | number | null | undefined>) {
   const normalized = parts.map((part) => String(part ?? '')).join('::');
   return createHash('sha1').update(normalized).digest('hex').slice(0, 12);
@@ -96,6 +221,31 @@ function hashEvidence(parts: Array<string | number | null | undefined>) {
 
 function normalizeText(value: string | null | undefined) {
   return value?.trim() || '';
+}
+
+function writeWorkbenchArtifact<T>(filename: string, payload: T) {
+  mkdirSync(PATCH_WORKBENCH_ARTIFACT_DIR, { recursive: true });
+  writeFileSync(
+    path.join(PATCH_WORKBENCH_ARTIFACT_DIR, filename),
+    JSON.stringify(payload, null, 2),
+  );
+  return payload;
+}
+
+function buildStageRunner(runStage?: StageRunner): StageRunner {
+  if (runStage) return runStage;
+
+  return async <T>({ prompt, schema }: StageRunnerInput) =>
+    openaiJsonSchema<T>({
+      model: getDefaultAiModel(),
+      input: prompt,
+      schema: {
+        name: schema.name,
+        schema: schema.schema,
+        strict: true,
+      },
+      maxOutputTokens: 4000,
+    });
 }
 
 function buildEvidenceId(
@@ -235,31 +385,294 @@ export async function buildEvidenceLedger(): Promise<EvidenceLedger> {
     stats,
   };
 
-  mkdirSync(PATCH_WORKBENCH_ARTIFACT_DIR, { recursive: true });
-  writeFileSync(
-    path.join(PATCH_WORKBENCH_ARTIFACT_DIR, PATCH_WORKBENCH_ARTIFACTS.evidenceLedger),
-    JSON.stringify(ledger, null, 2),
+  return writeWorkbenchArtifact(PATCH_WORKBENCH_ARTIFACTS.evidenceLedger, ledger);
+}
+
+function buildClusterPrompt(ledger: EvidenceLedger, promptText: string) {
+  return [
+    'Group parser evidence into issue clusters for prompt patch planning.',
+    'Focus on reusable issues, not one-off PDF quirks.',
+    `Current parser prompt:\n${promptText}`,
+    `Evidence rows:\n${JSON.stringify(ledger.rows, null, 2)}`,
+    'Return strict JSON with clusters[]. Each cluster needs cluster_id, title, evidence_ids, and summary.',
+  ].join('\n\n');
+}
+
+function buildDraftPrompt(
+  ledger: EvidenceLedger,
+  clusters: IssueClustersArtifact,
+  promptText: string,
+) {
+  return [
+    'Draft parser prompt insertions from clustered evidence.',
+    `Current parser prompt:\n${promptText}`,
+    `Issue clusters:\n${JSON.stringify(clusters, null, 2)}`,
+    `Supporting evidence:\n${JSON.stringify(ledger.rows, null, 2)}`,
+    'Return strict JSON with candidates[]. Each candidate needs candidate_id, cluster_id, after_section, insert_text, rationale, and evidence_ids.',
+  ].join('\n\n');
+}
+
+function buildCritiquePrompt(
+  clusters: IssueClustersArtifact,
+  candidates: PatchCandidatesArtifact,
+  promptText: string,
+) {
+  return [
+    'Critique parser prompt candidates for duplication, overfitting, and weak support.',
+    `Current parser prompt:\n${promptText}`,
+    `Issue clusters:\n${JSON.stringify(clusters, null, 2)}`,
+    `Candidate patches:\n${JSON.stringify(candidates, null, 2)}`,
+    'Return strict JSON with accepted_candidates[] and rejected_candidates[]. Each decision needs candidate_id, verdict, and reason.',
+  ].join('\n\n');
+}
+
+function buildEvalPrompt(
+  ledger: EvidenceLedger,
+  review: PatchReviewArtifact,
+  candidates: PatchCandidatesArtifact,
+  promptText: string,
+) {
+  return [
+    'Evaluate reviewed parser prompt candidates for coverage gain, risk, and confidence.',
+    `Current parser prompt:\n${promptText}`,
+    `Reviewed candidates:\n${JSON.stringify(review, null, 2)}`,
+    `Candidate details:\n${JSON.stringify(candidates, null, 2)}`,
+    `Evidence ledger:\n${JSON.stringify(ledger.rows, null, 2)}`,
+    'Return strict JSON with evaluated_candidates[]. Each result needs candidate_id, coverage_gain, risk, confidence, and representative_examples.',
+  ].join('\n\n');
+}
+
+const CLUSTER_SCHEMA = {
+  name: 'parser_rules_issue_clusters',
+  schema: {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      clusters: {
+        type: 'array',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            cluster_id: { type: 'string' },
+            title: { type: 'string' },
+            evidence_ids: { type: 'array', items: { type: 'string' } },
+            summary: { type: 'string' },
+          },
+          required: ['cluster_id', 'title', 'evidence_ids', 'summary'],
+        },
+      },
+    },
+    required: ['clusters'],
+  },
+} as const;
+
+const CANDIDATE_SCHEMA = {
+  name: 'parser_rules_patch_candidates',
+  schema: {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      candidates: {
+        type: 'array',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            candidate_id: { type: 'string' },
+            cluster_id: { type: 'string' },
+            after_section: { type: 'string' },
+            insert_text: { type: 'string' },
+            rationale: { type: 'string' },
+            evidence_ids: { type: 'array', items: { type: 'string' } },
+          },
+          required: ['candidate_id', 'cluster_id', 'after_section', 'insert_text', 'rationale', 'evidence_ids'],
+        },
+      },
+    },
+    required: ['candidates'],
+  },
+} as const;
+
+const REVIEW_SCHEMA = {
+  name: 'parser_rules_patch_review',
+  schema: {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      accepted_candidates: {
+        type: 'array',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            candidate_id: { type: 'string' },
+            verdict: { type: 'string' },
+            reason: { type: 'string' },
+          },
+          required: ['candidate_id', 'verdict', 'reason'],
+        },
+      },
+      rejected_candidates: {
+        type: 'array',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            candidate_id: { type: 'string' },
+            verdict: { type: 'string' },
+            reason: { type: 'string' },
+          },
+          required: ['candidate_id', 'verdict', 'reason'],
+        },
+      },
+    },
+    required: ['accepted_candidates', 'rejected_candidates'],
+  },
+} as const;
+
+const EVAL_SCHEMA = {
+  name: 'parser_rules_patch_eval',
+  schema: {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      evaluated_candidates: {
+        type: 'array',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            candidate_id: { type: 'string' },
+            coverage_gain: { type: 'string' },
+            risk: { type: 'string' },
+            confidence: { type: 'number' },
+            representative_examples: { type: 'array', items: { type: 'string' } },
+          },
+          required: ['candidate_id', 'coverage_gain', 'risk', 'confidence', 'representative_examples'],
+        },
+      },
+    },
+    required: ['evaluated_candidates'],
+  },
+} as const;
+
+export async function clusterIssues({
+  ledger,
+  promptText,
+  runStage,
+}: ClusterIssuesArgs): Promise<IssueClustersArtifact> {
+  const response = await buildStageRunner(runStage)<{ clusters: IssueCluster[] }>({
+    stage: 'cluster_issues',
+    prompt: buildClusterPrompt(ledger, promptText),
+    schema: CLUSTER_SCHEMA,
+  });
+
+  return writeWorkbenchArtifact(PATCH_WORKBENCH_ARTIFACTS.issueClusters, {
+    generated_at: new Date().toISOString(),
+    clusters: response.clusters ?? [],
+  });
+}
+
+export async function draftPatchCandidates({
+  ledger,
+  clusters,
+  promptText,
+  runStage,
+}: DraftPatchCandidatesArgs): Promise<PatchCandidatesArtifact> {
+  const response = await buildStageRunner(runStage)<{ candidates: PatchCandidate[] }>({
+    stage: 'draft_patch_candidates',
+    prompt: buildDraftPrompt(ledger, clusters, promptText),
+    schema: CANDIDATE_SCHEMA,
+  });
+
+  return writeWorkbenchArtifact(PATCH_WORKBENCH_ARTIFACTS.patchCandidates, {
+    generated_at: new Date().toISOString(),
+    candidates: response.candidates ?? [],
+  });
+}
+
+export async function critiquePatchCandidates({
+  ledger: _ledger,
+  clusters,
+  candidates,
+  promptText,
+  runStage,
+}: CritiquePatchCandidatesArgs): Promise<PatchReviewArtifact> {
+  const response = await buildStageRunner(runStage)<{
+    accepted_candidates: PatchReviewDecision[];
+    rejected_candidates: PatchReviewDecision[];
+  }>({
+    stage: 'critique_patch_candidates',
+    prompt: buildCritiquePrompt(clusters, candidates, promptText),
+    schema: REVIEW_SCHEMA,
+  });
+
+  return writeWorkbenchArtifact(PATCH_WORKBENCH_ARTIFACTS.patchReview, {
+    generated_at: new Date().toISOString(),
+    accepted_candidates: response.accepted_candidates ?? [],
+    rejected_candidates: response.rejected_candidates ?? [],
+  });
+}
+
+export async function evaluatePatchCandidates({
+  ledger,
+  clusters: _clusters,
+  candidates,
+  review,
+  promptText,
+  runStage,
+}: EvaluatePatchCandidatesArgs): Promise<PatchEvalArtifact> {
+  const response = await buildStageRunner(runStage)<{
+    evaluated_candidates: PatchEvaluationResult[];
+  }>({
+    stage: 'evaluate_patch_candidates',
+    prompt: buildEvalPrompt(ledger, review, candidates, promptText),
+    schema: EVAL_SCHEMA,
+  });
+
+  return writeWorkbenchArtifact(PATCH_WORKBENCH_ARTIFACTS.patchEval, {
+    generated_at: new Date().toISOString(),
+    evaluated_candidates: response.evaluated_candidates ?? [],
+  });
+}
+
+export async function buildFinalAdjustmentBundle({
+  candidates,
+  review,
+  evaluation,
+}: BuildFinalAdjustmentBundleArgs): Promise<FinalAdjustmentBundle> {
+  const candidateMap = new Map(candidates.candidates.map((candidate) => [candidate.candidate_id, candidate]));
+  const evaluationMap = new Map(
+    evaluation.evaluated_candidates.map((candidate) => [candidate.candidate_id, candidate]),
   );
 
-  return ledger;
-}
+  const finalAdjustments: FinalAdjustment[] = review.accepted_candidates.flatMap((decision) => {
+    const candidate = candidateMap.get(decision.candidate_id);
+    const evalResult = evaluationMap.get(decision.candidate_id);
+    if (!candidate || !evalResult) return [];
 
-export async function clusterIssues() {
-  return null;
-}
+    return [{
+      candidate_id: candidate.candidate_id,
+      after_section: candidate.after_section,
+      insert_text: candidate.insert_text,
+      rationale: candidate.rationale,
+      confidence: evalResult.confidence,
+      risk: evalResult.risk,
+      coverage_gain: evalResult.coverage_gain,
+      evidence_ids: candidate.evidence_ids,
+    }];
+  });
 
-export async function draftPatchCandidates() {
-  return null;
-}
+  const rejectedOrMerged = review.rejected_candidates.map((decision) => ({
+    candidate_id: decision.candidate_id,
+    verdict: decision.verdict,
+    reason: decision.reason,
+  }));
 
-export async function critiquePatchCandidates() {
-  return null;
-}
-
-export async function evaluatePatchCandidates() {
-  return null;
-}
-
-export async function buildFinalAdjustmentBundle() {
-  return null;
+  return writeWorkbenchArtifact(PATCH_WORKBENCH_ARTIFACTS.finalAdjustmentBundle, {
+    generated_at: new Date().toISOString(),
+    final_adjustments: finalAdjustments,
+    rejected_or_merged: rejectedOrMerged,
+  });
 }
