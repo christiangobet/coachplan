@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "prisma generate && next dev --port 3001",
+    "llm": "llama-server --model ~/.cache/huggingface/hub/models--bartowski--Qwen2.5-7B-Instruct-GGUF/snapshots/8911e8a47f92bac19d6f5c64a2e2095bd2f7d031/Qwen2.5-7B-Instruct-Q4_K_M.gguf --port 8080 --ctx-size 8192 --n-gpu-layers 99 --host 127.0.0.1",
     "build": "prisma generate && next build",
     "typecheck": "tsc --noEmit",
     "verify": "prisma generate && tsc --noEmit && next build",
@@ -19,6 +20,7 @@
     "audit:screens:manual:onboarding": "node scripts/capture-audit-manual.mjs --profile onboarding-athlete --out-dir artifacts/audit-shots-onboarding-manual",
     "test:parser-i18n": "node scripts/test-plan-parser-i18n.mjs",
     "test:parsing": "node --test --experimental-transform-types scripts/md-chunker.test.ts scripts/pdf-to-md.test.ts",
+    "derive-parser-rules": "node scripts/derive-parser-rules.mjs",
     "make-admin": "node scripts/promote-admin.js",
     "backfill-plan-dates": "node scripts/backfill-plan-dates.js"
   },
