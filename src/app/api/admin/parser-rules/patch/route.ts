@@ -6,6 +6,7 @@ import { existsSync, readFileSync } from 'fs';
 import path from 'path';
 
 export const dynamic = 'force-dynamic';
+export const PATCH_WORKBENCH_ROUTE = '/api/admin/parser-rules/patch-workbench';
 
 const OUT_DIR = path.join(process.cwd(), 'scripts', 'parser-analysis');
 
