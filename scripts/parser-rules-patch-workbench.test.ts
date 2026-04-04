@@ -209,3 +209,191 @@ test("workbench staged helpers write intermediate artifacts", async () => {
     assert.equal(existsSync(artifactPath), true, `expected ${artifact} artifact to be written`);
   }
 });
+
+test("workbench applies deterministic guardrails and selects a representative eval set", async () => {
+  const workbench = await import(patchWorkbenchModuleUrl);
+  const ledger = {
+    generated_at: "2026-04-04T00:00:00.000Z",
+    source_files: ["plan-a.pdf", "plan-b.pdf", "plan-c.pdf", "plan-d.pdf"],
+    rows: [
+      {
+        evidence_id: "evi-a1",
+        file: "plan-a.pdf",
+        evidence_kind: "unhandled_pattern",
+        layout_type: "calendar_grid",
+        source_units: "miles",
+        total_weeks_detected: 12,
+        summary: "Distance-only row",
+        detail: "Parser misses distance-only rows.",
+        suggested_rule: "Handle rows with only mileage.",
+        abbreviation: null,
+        example: null,
+      },
+      {
+        evidence_id: "evi-a2",
+        file: "plan-a.pdf",
+        evidence_kind: "prompt_improvement",
+        layout_type: "calendar_grid",
+        source_units: "miles",
+        total_weeks_detected: 12,
+        summary: "Handle rows with only mileage.",
+        detail: "Handle rows with only mileage.",
+        suggested_rule: "Handle rows with only mileage.",
+        abbreviation: null,
+        example: null,
+      },
+      {
+        evidence_id: "evi-b1",
+        file: "plan-b.pdf",
+        evidence_kind: "unhandled_pattern",
+        layout_type: "sequential_table",
+        source_units: "km",
+        total_weeks_detected: 10,
+        summary: "Branded workout block",
+        detail: "Named challenge blocks show up in the plan.",
+        suggested_rule: "Handle named challenge blocks.",
+        abbreviation: null,
+        example: null,
+      },
+      {
+        evidence_id: "evi-c1",
+        file: "plan-c.pdf",
+        evidence_kind: "session_note",
+        layout_type: "symbolic",
+        source_units: "mixed",
+        total_weeks_detected: 8,
+        summary: "Symbol key row",
+        detail: "Legend rows appear above the week grid.",
+        suggested_rule: null,
+        abbreviation: null,
+        example: null,
+      },
+      {
+        evidence_id: "evi-d1",
+        file: "plan-d.pdf",
+        evidence_kind: "new_abbreviation",
+        layout_type: "frequency_based",
+        source_units: "miles",
+        total_weeks_detected: 6,
+        summary: "ABC: aerobic base circuit",
+        detail: "Circuit shorthand appears in notes.",
+        suggested_rule: null,
+        abbreviation: "ABC",
+        example: "ABC + strides",
+      },
+    ],
+    stats: {
+      source_file_count: 4,
+      row_count: 5,
+      row_count_by_kind: {
+        unhandled_pattern: 2,
+        prompt_improvement: 1,
+        new_abbreviation: 1,
+        session_note: 1,
+      },
+    },
+  };
+
+  const candidates = {
+    generated_at: "2026-04-04T00:00:00.000Z",
+    candidates: [
+      {
+        candidate_id: "keep-1",
+        cluster_id: "cluster-1",
+        after_section: "RULES FOR WEEK TABLES:",
+        insert_text: "Handle rows with only mileage when the cell omits a workout label.",
+        rationale: "Improves distance-only row coverage.",
+        evidence_ids: ["evi-a1", "evi-a2"],
+      },
+      {
+        candidate_id: "duplicate-1",
+        cluster_id: "cluster-1",
+        after_section: "RULES FOR WEEK TABLES:",
+        insert_text: "Handle rows with only mileage.",
+        rationale: "Repeats existing prompt language.",
+        evidence_ids: ["evi-a1", "evi-a2"],
+      },
+      {
+        candidate_id: "anchor-1",
+        cluster_id: "cluster-2",
+        after_section: "SECTION THAT DOES NOT EXIST",
+        insert_text: "Handle legend rows before the main grid.",
+        rationale: "Needs a missing anchor check.",
+        evidence_ids: ["evi-c1"],
+      },
+      {
+        candidate_id: "support-1",
+        cluster_id: "cluster-3",
+        after_section: "RULES FOR WEEK TABLES:",
+        insert_text: "Interpret ABC as aerobic base circuit.",
+        rationale: "Only one supporting file should be rejected.",
+        evidence_ids: ["evi-d1"],
+      },
+      {
+        candidate_id: "brand-1",
+        cluster_id: "cluster-4",
+        after_section: "RULES FOR WEEK TABLES:",
+        insert_text: "Recognize Race Refueled by Milk challenge blocks as workouts.",
+        rationale: "Branded wording should be rejected.",
+        evidence_ids: ["evi-b1", "evi-c1"],
+      },
+    ],
+  };
+
+  const review = await workbench.critiquePatchCandidates({
+    ledger,
+    clusters: {
+      generated_at: "2026-04-04T00:00:00.000Z",
+      clusters: [],
+    },
+    candidates,
+    promptText: [
+      "RULES FOR WEEK TABLES:",
+      "Handle rows with only mileage.",
+      "Interpret legend rows before week tables.",
+    ].join("\n"),
+    runStage: async () => ({
+      accepted_candidates: candidates.candidates.map((candidate) => ({
+        candidate_id: candidate.candidate_id,
+        verdict: "keep",
+        reason: "LLM accepted it.",
+      })),
+      rejected_candidates: [],
+    }),
+  });
+
+  assert.deepEqual(
+    review.accepted_candidates.map((candidate: { candidate_id: string }) => candidate.candidate_id),
+    ["keep-1"],
+    "expected only the supported, non-duplicate, non-branded candidate to survive guardrails",
+  );
+  assert.equal(
+    review.rejected_candidates.some((candidate: { candidate_id: string; reason: string }) =>
+      candidate.candidate_id === "duplicate-1" && /duplicate/i.test(candidate.reason)),
+    true,
+    "expected duplicate-rule rejection reason",
+  );
+  assert.equal(
+    review.rejected_candidates.some((candidate: { candidate_id: string; reason: string }) =>
+      candidate.candidate_id === "anchor-1" && /anchor/i.test(candidate.reason)),
+    true,
+    "expected missing-anchor rejection reason",
+  );
+  assert.equal(
+    review.rejected_candidates.some((candidate: { candidate_id: string; reason: string }) =>
+      candidate.candidate_id === "support-1" && /support/i.test(candidate.reason)),
+    true,
+    "expected weak-support rejection reason",
+  );
+  assert.equal(
+    review.rejected_candidates.some((candidate: { candidate_id: string; reason: string }) =>
+      candidate.candidate_id === "brand-1" && /brand|specific/i.test(candidate.reason)),
+    true,
+    "expected branded-wording rejection reason",
+  );
+
+  const evalSet = workbench.selectRepresentativeEvalSet(ledger, 4);
+  assert.equal(evalSet.length, 4, "expected bounded eval-set size");
+  assert.equal(new Set(evalSet.map((row: { layout_type: string }) => row.layout_type)).size >= 3, true, "expected eval set to cover multiple layouts");
+  assert.equal(new Set(evalSet.map((row: { source_units: string }) => row.source_units)).size >= 2, true, "expected eval set to cover multiple unit types");
+});

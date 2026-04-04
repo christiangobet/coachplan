@@ -214,6 +214,15 @@ type BuildFinalAdjustmentBundleArgs = {
   promptText: string;
 };
 
+const MIN_SUPPORTING_EVIDENCE = 2;
+const BRANDED_WORDING_PATTERNS = [
+  /\brace refueled by milk\b/i,
+  /\bfind your strong\b/i,
+  /\bgo the distance\b/i,
+  /\bchallenge\b/i,
+  /\bclub\b/i,
+];
+
 function hashEvidence(parts: Array<string | number | null | undefined>) {
   const normalized = parts.map((part) => String(part ?? '')).join('::');
   return createHash('sha1').update(normalized).digest('hex').slice(0, 12);
@@ -432,12 +441,13 @@ function buildEvalPrompt(
   candidates: PatchCandidatesArtifact,
   promptText: string,
 ) {
+  const evalSet = selectRepresentativeEvalSet(ledger, 8);
   return [
     'Evaluate reviewed parser prompt candidates for coverage gain, risk, and confidence.',
     `Current parser prompt:\n${promptText}`,
     `Reviewed candidates:\n${JSON.stringify(review, null, 2)}`,
     `Candidate details:\n${JSON.stringify(candidates, null, 2)}`,
-    `Evidence ledger:\n${JSON.stringify(ledger.rows, null, 2)}`,
+    `Representative eval set:\n${JSON.stringify(evalSet, null, 2)}`,
     'Return strict JSON with evaluated_candidates[]. Each result needs candidate_id, coverage_gain, risk, confidence, and representative_examples.',
   ].join('\n\n');
 }
@@ -593,7 +603,7 @@ export async function draftPatchCandidates({
 }
 
 export async function critiquePatchCandidates({
-  ledger: _ledger,
+  ledger,
   clusters,
   candidates,
   promptText,
@@ -608,10 +618,31 @@ export async function critiquePatchCandidates({
     schema: REVIEW_SCHEMA,
   });
 
+  const deterministicRejections = new Map<string, PatchReviewDecision>();
+  for (const candidate of candidates.candidates) {
+    const reasons = getDeterministicReviewReasons(candidate, ledger, promptText);
+    if (reasons.length === 0) continue;
+    deterministicRejections.set(candidate.candidate_id, {
+      candidate_id: candidate.candidate_id,
+      verdict: 'reject',
+      reason: reasons.join(' '),
+    });
+  }
+
+  const acceptedCandidates = (response.accepted_candidates ?? [])
+    .filter((candidate) => !deterministicRejections.has(candidate.candidate_id));
+
+  const rejectedCandidates = [
+    ...(response.rejected_candidates ?? []).filter(
+      (candidate, index, list) => list.findIndex((item) => item.candidate_id === candidate.candidate_id) === index,
+    ),
+    ...deterministicRejections.values(),
+  ].filter((candidate, index, list) => list.findIndex((item) => item.candidate_id === candidate.candidate_id) === index);
+
   return writeWorkbenchArtifact(PATCH_WORKBENCH_ARTIFACTS.patchReview, {
     generated_at: new Date().toISOString(),
-    accepted_candidates: response.accepted_candidates ?? [],
-    rejected_candidates: response.rejected_candidates ?? [],
+    accepted_candidates: acceptedCandidates,
+    rejected_candidates: rejectedCandidates,
   });
 }
 
@@ -675,4 +706,110 @@ export async function buildFinalAdjustmentBundle({
     final_adjustments: finalAdjustments,
     rejected_or_merged: rejectedOrMerged,
   });
+}
+
+function countSupportingFiles(candidate: PatchCandidate, ledger: EvidenceLedger) {
+  const files = new Set(
+    ledger.rows
+      .filter((row) => candidate.evidence_ids.includes(row.evidence_id))
+      .map((row) => row.file),
+  );
+  return files.size;
+}
+
+export function selectRepresentativeEvalSet(ledger: EvidenceLedger, limit: number) {
+  const remaining = [...ledger.rows];
+  const selected: EvidenceLedgerRow[] = [];
+  const seenLayouts = new Set<string>();
+  const seenUnits = new Set<string>();
+  const seenKinds = new Set<string>();
+
+  while (remaining.length > 0 && selected.length < limit) {
+    remaining.sort((left, right) => {
+      const leftScore = scoreEvalRow(left, seenLayouts, seenUnits, seenKinds);
+      const rightScore = scoreEvalRow(right, seenLayouts, seenUnits, seenKinds);
+      return rightScore - leftScore || left.file.localeCompare(right.file) || left.evidence_id.localeCompare(right.evidence_id);
+    });
+
+    const next = remaining.shift();
+    if (!next) break;
+    selected.push(next);
+    if (next.layout_type) seenLayouts.add(next.layout_type);
+    if (next.source_units) seenUnits.add(next.source_units);
+    seenKinds.add(next.evidence_kind);
+  }
+
+  return selected;
+}
+
+function scoreEvalRow(
+  row: EvidenceLedgerRow,
+  seenLayouts: Set<string>,
+  seenUnits: Set<string>,
+  seenKinds: Set<string>,
+) {
+  let score = 0;
+  if (row.layout_type && !seenLayouts.has(row.layout_type)) score += 4;
+  if (row.source_units && !seenUnits.has(row.source_units)) score += 3;
+  if (!seenKinds.has(row.evidence_kind)) score += 2;
+  score += Math.min(row.summary.length, 80) / 80;
+  return score;
+}
+
+function getDeterministicReviewReasons(
+  candidate: PatchCandidate,
+  ledger: EvidenceLedger,
+  promptText: string,
+) {
+  const reasons: string[] = [];
+
+  if (isDuplicateExistingRule(candidate.insert_text, promptText)) {
+    reasons.push('Rejected as a duplicate of an existing prompt rule.');
+  }
+
+  if (!hasValidAnchor(candidate.after_section, promptText)) {
+    reasons.push('Rejected because the anchor text is missing or too fragile to place reliably.');
+  }
+
+  if (candidate.evidence_ids.length < MIN_SUPPORTING_EVIDENCE || countSupportingFiles(candidate, ledger) < 1) {
+    reasons.push('Rejected for weak support because it does not have enough supporting evidence.');
+  }
+
+  if (hasOverlySpecificOrBrandedWording(candidate.insert_text)) {
+    reasons.push('Rejected because the proposed wording is too brand-specific or overly specific.');
+  }
+
+  return reasons;
+}
+
+function normalizeRuleText(text: string) {
+  return text.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+export function isDuplicateExistingRule(insertText: string, promptText: string) {
+  const normalizedInsert = normalizeRuleText(insertText);
+  if (!normalizedInsert) return false;
+
+  return promptText
+    .split('\n')
+    .map((line) => normalizeRuleText(line))
+    .some((line) => {
+      if (!line) return false;
+      if (line === normalizedInsert) return true;
+      if (line.includes(normalizedInsert) || normalizedInsert.includes(line)) {
+        const difference = Math.abs(line.length - normalizedInsert.length);
+        return difference <= 12;
+      }
+      return false;
+    });
+}
+
+export function hasValidAnchor(anchor: string, promptText: string) {
+  const trimmedAnchor = anchor.trim();
+  if (!trimmedAnchor) return false;
+  return promptText.includes(trimmedAnchor);
+}
+
+export function hasOverlySpecificOrBrandedWording(insertText: string) {
+  return BRANDED_WORDING_PATTERNS.some((pattern) => pattern.test(insertText));
 }
