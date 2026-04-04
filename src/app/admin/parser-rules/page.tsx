@@ -58,18 +58,15 @@ export default async function ParserRulesPage() {
         <strong style={{ color: '#1a2a44' }}>Prerequisites</strong>
         <ol style={{ margin: '6px 0 0', paddingLeft: 20, display: 'grid', gap: 4 }}>
           <li>
-            Start a local LLM server:{' '}
-            <code style={codeStyle}>llama-server -hf ggml-org/Qwen2.5-7B-Instruct-GGUF --port 8080</code>
-          </li>
-          <li>
             Put training plan PDFs in{' '}
             <code style={codeStyle}>scripts/fixtures/plans/</code>
           </li>
-          <li>Click Run Analysis below.</li>
+          <li>Select <strong style={{ color: '#1a2a44' }}>Cloud (OpenAI)</strong> mode (default) — or switch to Local LLM and run <code style={codeStyle}>npm run llm</code> first.</li>
+          <li>Click <strong style={{ color: '#1a2a44' }}>Run Analysis</strong> below.</li>
         </ol>
         <p style={{ margin: '8px 0 0' }}>
           Results are saved to <code style={codeStyle}>scripts/parser-analysis/</code> and persist between page loads.
-          Copy the suggested rules into the{' '}
+          Use <strong style={{ color: '#1a2a44' }}>Suggest Patches</strong> to generate prompt improvements, then save via the{' '}
           <Link href="/admin/parser-prompts" style={{ color: '#fc4c02', fontWeight: 600 }}>Prompt Manager</Link>.
         </p>
       </div>
