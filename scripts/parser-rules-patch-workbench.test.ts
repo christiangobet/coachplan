@@ -437,3 +437,24 @@ test("parser rules client uses the streaming patch workbench UX", () => {
   assert.ok(clientSource.includes("Rejected or Merged Ideas"), "expected rejected ideas section");
   assert.ok(clientSource.includes("Evidence and Eval Details"), "expected evidence and eval details section");
 });
+
+test("legacy patch route is downgraded to a compatibility wrapper around the workbench", () => {
+  const legacySource = readSource(LEGACY_PATCH_ROUTE);
+
+  assert.ok(
+    legacySource.includes("patch-workbench"),
+    "expected legacy route to point callers at the patch-workbench flow",
+  );
+  assert.ok(
+    legacySource.includes("final-adjustment-bundle.json") || legacySource.includes("final_bundle"),
+    "expected legacy route to read or return the saved final bundle",
+  );
+  assert.ok(
+    legacySource.includes("deprecated") || legacySource.includes("compatibility"),
+    "expected legacy route to return a clear compatibility or deprecation response",
+  );
+  assert.ok(
+    !legacySource.includes("https://api.openai.com/v1/chat/completions"),
+    "expected legacy route to stop owning one-shot prompt generation",
+  );
+});
