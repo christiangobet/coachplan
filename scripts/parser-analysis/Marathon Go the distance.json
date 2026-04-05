@@ -1,0 +1,72 @@
+{
+  "file": "Marathon Go the distance.pdf",
+  "text_chars": 26989,
+  "analysis": {
+    "layout_type": "unclear",
+    "source_units": "miles",
+    "total_weeks_detected": 18,
+    "sessions_sample": [
+      {
+        "raw": "six runs that are 15 or more miles long",
+        "day": null,
+        "type": "Run",
+        "distance": "15 or more miles",
+        "parsing_note": "Distance is presented as a range without specific values."
+      },
+      {
+        "raw": "one 16–18 miler, one 18, one 18–20 miler, one straight-up 20 miler",
+        "day": null,
+        "type": "Run",
+        "distance": "16–20 miles",
+        "parsing_note": "Multiple runs with ranges and specific distances complicate parsing."
+      },
+      {
+        "raw": "two ways to sneak in more strength training: a fun circuit run once a week and SSSCs: Super Short Strength Circuits",
+        "day": null,
+        "type": "Strength",
+        "distance": null,
+        "parsing_note": "Strength training sessions are not clearly defined by day or distance."
+      },
+      {
+        "raw": "SSSCs three times a week",
+        "day": null,
+        "type": "Strength",
+        "distance": null,
+        "parsing_note": "Frequency of sessions is mentioned without specific days."
+      },
+      {
+        "raw": "prehab routine three or four times a week",
+        "day": null,
+        "type": "Other",
+        "distance": null,
+        "parsing_note": "Prehab routine lacks specific distance or duration."
+      }
+    ],
+    "unhandled_patterns": [
+      {
+        "pattern": "15 or more miles",
+        "issue": "The parser may not handle ranges without specific upper bounds.",
+        "suggested_rule": "Allow for distance descriptions that indicate a minimum without a maximum."
+      },
+      {
+        "pattern": "SSSCs: Super Short Strength Circuits",
+        "issue": "The abbreviation SSSCs is not recognized and may confuse the parser.",
+        "suggested_rule": "Add support for new abbreviations that describe specific training formats."
+      }
+    ],
+    "new_abbreviations": [
+      {
+        "abbr": "SSSCs",
+        "meaning": "Super Short Strength Circuits",
+        "example": "we’re introducing two ways to sneak in more strength training: a fun circuit run once a week and SSSCs: Super Short Strength Circuits"
+      }
+    ],
+    "prompt_improvements": [
+      "Allow for distance descriptions that indicate a minimum without a maximum.",
+      "Add support for new abbreviations that describe specific training formats."
+    ],
+    "anomalies": [
+      "The plan includes non-standard training formats like 'prehab routine' and 'SSSCs' which may not fit typical session types."
+    ]
+  }
+}

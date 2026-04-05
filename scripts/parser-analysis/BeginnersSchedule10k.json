@@ -1,0 +1,60 @@
+{
+  "file": "BeginnersSchedule10k.pdf",
+  "text_chars": 6037,
+  "analysis": {
+    "layout_type": "sequential_table",
+    "source_units": "miles",
+    "total_weeks_detected": 8,
+    "sessions_sample": [
+      {
+        "raw": "Jog 30 mins (or 3 miles)",
+        "day": "Tue",
+        "type": "Run",
+        "distance": "3 miles",
+        "parsing_note": null
+      },
+      {
+        "raw": "Jog 40 mins (or 4 miles)",
+        "day": "Sun",
+        "type": "Run",
+        "distance": "4 miles",
+        "parsing_note": null
+      },
+      {
+        "raw": "Jog 40 mins (or 4 miles) on hilly course",
+        "day": "Thu",
+        "type": "Run",
+        "distance": "4 miles",
+        "parsing_note": "The phrase 'on hilly course' may need special handling to ensure it doesn't affect distance parsing."
+      },
+      {
+        "raw": "Jog 60 mins (or 6 miles)",
+        "day": "Sun",
+        "type": "Run",
+        "distance": "6 miles",
+        "parsing_note": null
+      },
+      {
+        "raw": "Jog 25 mins (or 2.5 miles)",
+        "day": "Fri",
+        "type": "Run",
+        "distance": "2.5 miles",
+        "parsing_note": null
+      }
+    ],
+    "unhandled_patterns": [
+      {
+        "pattern": "Jog 40 mins (or 4 miles) on hilly course",
+        "issue": "The additional context 'on hilly course' may not be recognized and could be ignored.",
+        "suggested_rule": "Allow for additional descriptors after distance that do not affect the distance value."
+      }
+    ],
+    "new_abbreviations": [],
+    "prompt_improvements": [
+      "Recognize and retain additional context after distance values that do not alter the distance itself."
+    ],
+    "anomalies": [
+      "The plan includes optional sessions (e.g., 'Rest or brisk 30 min walk') which may complicate session parsing."
+    ]
+  }
+}

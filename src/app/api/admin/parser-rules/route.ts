@@ -4,6 +4,7 @@ import { readdirSync, readFileSync, existsSync, mkdirSync, writeFileSync } from 
 import path from 'path';
 import { extractPdfText } from '@/lib/pdf/extract-text';
 import { resolveAIProvider, getDefaultAiModel, hasConfiguredAiProvider } from '@/lib/openai';
+import { createNdjsonStream } from '@/lib/ndjson-stream';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
@@ -135,6 +136,25 @@ Merge duplicate/similar issues from different plans into one entry.`;
 // ── LLM call — supports local llama-server or cloud OpenAI/Gemini/Cloudflare ──
 const CLOUD = 'cloud';
 
+type ProviderErrorResponse = {
+  error?: { message?: string };
+  errors?: Array<{ message?: string }>;
+};
+
+async function readLlmErrorMessage(res: Response) {
+  const text = await res.text();
+
+  try {
+    const data = JSON.parse(text) as ProviderErrorResponse;
+    const message = data.error?.message ?? data.errors?.[0]?.message;
+    if (message) return message;
+  } catch {
+    // Fall back to the raw body preview below.
+  }
+
+  return text.slice(0, 200) || `HTTP ${res.status}`;
+}
+
 async function callLlm(opts: {
   server: string;
   model: string;
@@ -184,11 +204,14 @@ async function callLlm(opts: {
   });
 
   if (!res.ok) {
-    const txt = await res.text();
-    throw new Error(`LLM ${res.status}: ${txt.slice(0, 200)}`);
+    throw new Error(`LLM ${res.status}: ${await readLlmErrorMessage(res)}`);
   }
   const data = await res.json() as { choices?: Array<{ message?: { content?: string } }> };
-  return data.choices?.[0]?.message?.content ?? '';
+  const content = data.choices?.[0]?.message?.content;
+  if (!content) {
+    throw new Error('LLM response missing message content.');
+  }
+  return content;
 }
 
 // ── JSON extraction + repair helpers ─────────────────────────────────────────
@@ -290,19 +313,12 @@ export async function POST(req: NextRequest) {
 
   mkdirSync(OUT_DIR, { recursive: true });
 
-  const encoder = new TextEncoder();
-  const stream  = new ReadableStream({
-    async start(controller) {
-      function emit(obj: unknown) {
-        controller.enqueue(encoder.encode(JSON.stringify(obj) + '\n'));
-      }
-
+  const stream = createNdjsonStream(async ({ emit }) => {
       try {
         // Health / config check
         if (server === CLOUD) {
           if (!hasConfiguredAiProvider()) {
             emit({ type: 'error', message: 'Cloud AI not configured — set OPENAI_API_KEY (or GEMINI_API_KEY / Cloudflare vars) in .env.local.' });
-            controller.close();
             return;
           }
           emit({ type: 'log', message: `Using cloud AI (${resolveAIProvider()} / ${getDefaultAiModel()})` });
@@ -314,14 +330,12 @@ export async function POST(req: NextRequest) {
             emit({ type: 'log', message: 'Server OK' });
           } catch (err) {
             emit({ type: 'error', message: `Cannot reach LLM server at ${server}: ${(err as Error).message}` });
-            controller.close();
             return;
           }
         }
 
         if (files.length === 0) {
           emit({ type: 'error', message: `No PDFs found in ${PLANS_DIR}` });
-          controller.close();
           return;
         }
 
@@ -361,6 +375,7 @@ export async function POST(req: NextRequest) {
               abbrs:    analysis.new_abbreviations?.length  ?? 0,
             });
           } catch (err) {
+            console.error(`[parser-rules] analysis failed for ${file}`, err);
             emit({ type: 'plan_error', file, step: 'analyze', message: (err as Error).message });
             continue;
           }
@@ -381,7 +396,6 @@ export async function POST(req: NextRequest) {
 
         if (findings.length === 0) {
           emit({ type: 'error', message: 'No plans analysed successfully.' });
-          controller.close();
           return;
         }
 
@@ -393,17 +407,16 @@ export async function POST(req: NextRequest) {
           aggregate  = JSON.parse(repairJson(extractJson(raw)));
           writeFileSync(path.join(OUT_DIR, 'aggregate.json'), JSON.stringify(aggregate, null, 2));
         } catch (err) {
+          console.error('[parser-rules] aggregation failed', err);
           emit({ type: 'log', message: `Aggregation failed: ${(err as Error).message}` });
           aggregate = null;
         }
 
         emit({ type: 'complete', aggregate, count: findings.length });
       } catch (err) {
+        console.error('[parser-rules] stream failed', err);
         emit({ type: 'error', message: (err as Error).message });
-      } finally {
-        controller.close();
       }
-    },
   });
 
   return new Response(stream, {

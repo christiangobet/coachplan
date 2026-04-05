@@ -13,6 +13,8 @@ import {
 import { prisma } from "./prisma";
 import { extractPlanMd } from "./pdf/pdf-to-md";
 import { chunkMd } from "./parsing/md-chunker";
+import { alignProgramWeeksToExpectedChunk } from "./parsing/v4-week-alignment";
+import { runVisionMdChunkWithRetries } from "./parsing/vision-md-retry";
 import { MD_PARSER_PROMPT } from "./prompts/plan-parser/md-parser-prompt";
 import { ProgramJsonV1Schema, type ProgramJsonV1 } from "./schemas/program-json-v1";
 
@@ -517,8 +519,24 @@ export async function maybeRunVisionExtract(
   const passResults = await Promise.all(
     chunks.map(async (chunk) => {
       try {
-        const result = await runParserV4(chunk.text, MD_PARSER_PROMPT);
-        return { data: result.data };
+        return {
+          data: await runVisionMdChunkWithRetries(
+            chunk,
+            async (retryChunk) => {
+              const result = await runParserV4(
+                retryChunk.text,
+                MD_PARSER_PROMPT,
+                undefined,
+                undefined,
+                { expectedWeekNumbers: retryChunk.weekNumbers }
+              );
+              return result.data
+                ? alignProgramWeeksToExpectedChunk(result.data, retryChunk.weekNumbers)
+                : null;
+            },
+            [3, 2, 1],
+          )
+        };
       } catch (err) {
         console.error('[VisionExtract] runParserV4 chunk failed', {
           weeks: chunk.weekNumbers,
@@ -545,8 +563,17 @@ export async function maybeRunVisionExtract(
 
   // ── Step 5: Merge results ──────────────────────────────────────────────────
   const mergedWeeks = mergeWeeksFromPasses(successfulPasses);
+  const inferredPlanLengthWeeks = mergedWeeks.reduce((max, week) => {
+    return week.week_number > max ? week.week_number : max;
+  }, 0);
   const merged: ProgramJsonV1 = {
-    program: successfulPasses[0].data.program,
+    program: {
+      ...successfulPasses[0].data.program,
+      plan_length_weeks: Math.max(
+        successfulPasses[0].data.program.plan_length_weeks ?? 0,
+        inferredPlanLengthWeeks,
+      ),
+    },
     weeks: mergedWeeks,
     quality_checks: { weeks_detected: mergedWeeks.length, missing_days: [], anomalies: [] }
   };

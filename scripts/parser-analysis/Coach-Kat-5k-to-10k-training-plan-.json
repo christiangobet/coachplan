@@ -1,0 +1,66 @@
+{
+  "file": "Coach-Kat-5k-to-10k-training-plan-.pdf",
+  "text_chars": 6327,
+  "analysis": {
+    "layout_type": "sequential_table",
+    "source_units": "km",
+    "total_weeks_detected": 12,
+    "sessions_sample": [
+      {
+        "raw": "Easy Run:   3 km at a comfortable pace (zone 2/3).",
+        "day": null,
+        "type": "Run",
+        "distance": "3 km",
+        "parsing_note": null
+      },
+      {
+        "raw": "Tempo/Interval Run:   3 km (Within the run, include: 45 second faster reps with 1–2 minutes light jog recovery in between). Aim to spread these out as evenly as you can throughout the run (zone 3/4).",
+        "day": null,
+        "type": "Run",
+        "distance": "3 km",
+        "parsing_note": "The inclusion of specific interval instructions may complicate parsing for session role."
+      },
+      {
+        "raw": "Strength Training:   Bodyweight exercises (e.g., squats, lunges, planks, glute bridges, push press – 2 sets of 10–12 reps each).",
+        "day": null,
+        "type": "Strength",
+        "distance": null,
+        "parsing_note": "Strength training sessions include specific exercises and rep counts which may not fit standard session parsing."
+      },
+      {
+        "raw": "Long Run:   3 km at an easy, conversational pace (zone 2/3).",
+        "day": null,
+        "type": "Run",
+        "distance": "3 km",
+        "parsing_note": null
+      },
+      {
+        "raw": "Long Run:   10K (or your 10K event day – mai",
+        "day": null,
+        "type": "Run",
+        "distance": "10K",
+        "parsing_note": "The text is cut off, which may lead to incomplete parsing of the session."
+      }
+    ],
+    "unhandled_patterns": [
+      {
+        "pattern": "Zone 2/3",
+        "issue": "The parser may not recognize heart rate zones as relevant information for intensity.",
+        "suggested_rule": "Include heart rate zone descriptions as part of intensity parsing."
+      },
+      {
+        "pattern": "e.g., squats, lunges, planks, glute bridges, push press",
+        "issue": "The parser may not handle lists of exercises within strength training sessions.",
+        "suggested_rule": "Allow for lists of exercises in strength training sessions and parse them as an array."
+      }
+    ],
+    "new_abbreviations": [],
+    "prompt_improvements": [
+      "Recognize and parse heart rate zones (e.g., Zone 2/3) as part of intensity.",
+      "Allow for lists of exercises in strength training sessions and parse them as an array."
+    ],
+    "anomalies": [
+      "The plan includes a mix of running and strength training sessions with specific instructions that may not fit standard session formats."
+    ]
+  }
+}

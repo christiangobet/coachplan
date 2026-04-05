@@ -1,0 +1,66 @@
+{
+  "file": "BeginnersScheduleHalfMarathon.pdf",
+  "text_chars": 6861,
+  "analysis": {
+    "layout_type": "sequential_table",
+    "source_units": "miles",
+    "total_weeks_detected": 8,
+    "sessions_sample": [
+      {
+        "raw": "Jog 40 mins (or 4 miles)",
+        "day": "Tue",
+        "type": "Run",
+        "distance": "4 miles",
+        "parsing_note": null
+      },
+      {
+        "raw": "Jog 30 Mins (or 3 miles)",
+        "day": "Thu",
+        "type": "Run",
+        "distance": "3 miles",
+        "parsing_note": null
+      },
+      {
+        "raw": "Cross Train 45 mins - e.g. Cycle",
+        "day": "Fri",
+        "type": "CrossTraining",
+        "distance": null,
+        "parsing_note": "The example activity (Cycle) may not be parsed correctly as it is not a standard activity type."
+      },
+      {
+        "raw": "Jog 90 mins (or 9 miles)",
+        "day": "Sun",
+        "type": "Run",
+        "distance": "9 miles",
+        "parsing_note": null
+      },
+      {
+        "raw": "Jog 120 mins (or 12 miles)",
+        "day": "Sun",
+        "type": "Run",
+        "distance": "12 miles",
+        "parsing_note": null
+      }
+    ],
+    "unhandled_patterns": [
+      {
+        "pattern": "5 min brisk walk",
+        "issue": "The parser may not recognize 'brisk walk' as a valid activity type.",
+        "suggested_rule": "Recognize 'brisk walk' as a valid activity type equivalent to 'Walk'."
+      },
+      {
+        "pattern": "undulating route",
+        "issue": "The term 'undulating route' may not be parsed correctly as it does not fit existing activity descriptions.",
+        "suggested_rule": "Allow for additional notes in the session that describe the terrain or route type."
+      }
+    ],
+    "new_abbreviations": [],
+    "prompt_improvements": [
+      "Include 'brisk walk' as a recognized activity type equivalent to 'Walk'.",
+      "Allow for additional notes in the session that describe the terrain or route type, such as 'undulating route'."
+    ],
+    "anomalies": [
+      "The plan includes both 'Mins' and 'mins' inconsistently, which may confuse the parser."
+    ]
+  }
+}

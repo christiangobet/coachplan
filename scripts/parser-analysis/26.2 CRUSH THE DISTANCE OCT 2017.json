@@ -1,0 +1,65 @@
+{
+  "file": "26.2 CRUSH THE DISTANCE OCT 2017.pdf",
+  "text_chars": 19433,
+  "analysis": {
+    "layout_type": "unclear",
+    "source_units": "miles",
+    "total_weeks_detected": 18,
+    "sessions_sample": [
+      {
+        "raw": "you’ll do nine runs that are 15 or more miles long",
+        "day": null,
+        "type": "Run",
+        "distance": "15 or more miles",
+        "parsing_note": "Distance is presented as a range without specific values."
+      },
+      {
+        "raw": "two ways to sneak in more strength training: a fun circuit run once a week and SSSC’s: Super Short Strength Circuits, which we’ll demonstrate on video.",
+        "day": null,
+        "type": "Strength",
+        "distance": null,
+        "parsing_note": "Strength training sessions are mentioned but not detailed in terms of frequency or distance."
+      },
+      {
+        "raw": "we’ll ask you to do SSSC’s three times weekly.",
+        "day": null,
+        "type": "Strength",
+        "distance": null,
+        "parsing_note": "Frequency of strength training is specified but lacks a clear session structure."
+      },
+      {
+        "raw": "if the week reads 28.5 - 37 miles, and at the end of your long run, your week’s total is at 27.9, please do not go an extra .6 to get to 28.5 miles.",
+        "day": null,
+        "type": "Run",
+        "distance": "28.5 - 37 miles",
+        "parsing_note": "Weekly mileage is presented as a range, complicating total distance calculations."
+      }
+    ],
+    "unhandled_patterns": [
+      {
+        "pattern": "Three 20 - milers, one 18 miler , and two 16’ers.",
+        "issue": "The use of '20 - milers' and '16’ers' is not covered by existing rules for parsing distances.",
+        "suggested_rule": "Recognize and parse phrases like '20-milers' and '16’ers' as specific distance runs."
+      },
+      {
+        "pattern": "SSSC’s: Super Short Strength Circuits",
+        "issue": "The abbreviation SSSC is not defined in the existing rules.",
+        "suggested_rule": "Add a rule to recognize and define common training abbreviations like SSSC."
+      }
+    ],
+    "new_abbreviations": [
+      {
+        "abbr": "SSSC",
+        "meaning": "Super Short Strength Circuits",
+        "example": "we’ll ask you to do SSSC’s three times weekly."
+      }
+    ],
+    "prompt_improvements": [
+      "Add a rule to handle distance ranges presented in non-standard formats, such as '15 or more miles'.",
+      "Include a rule to recognize and parse training abbreviations that are not currently defined, such as SSSC."
+    ],
+    "anomalies": [
+      "The plan includes a mix of narrative and structured training advice, making it difficult to extract sessions directly."
+    ]
+  }
+}

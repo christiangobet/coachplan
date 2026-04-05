@@ -1,0 +1,77 @@
+{
+  "file": "Find-Your-Strong-Marathon-Training-Plan-FINAL.pdf",
+  "text_chars": 14751,
+  "analysis": {
+    "layout_type": "calendar_grid",
+    "source_units": "miles",
+    "total_weeks_detected": 18,
+    "sessions_sample": [
+      {
+        "raw": "E: 3 miles + 2 - 4 strides",
+        "day": "Mon",
+        "type": "Run",
+        "distance": "3 miles",
+        "parsing_note": "The '+' symbol indicates multiple activities in one session."
+      },
+      {
+        "raw": "Rest ; or XT",
+        "day": "Tue",
+        "type": "Rest",
+        "distance": null,
+        "parsing_note": "The 'or' clause indicates an optional alternative activity."
+      },
+      {
+        "raw": "1 - 2 mile WU; T: 1.5 miles; 1 - 2 mile CD",
+        "day": "Thu",
+        "type": "Run",
+        "distance": "1 - 2 mile WU; 1.5 miles; 1 - 2 mile CD",
+        "parsing_note": "Multiple components in one session with warm-up and cool-down included."
+      },
+      {
+        "raw": "LR: 10 miles, 5 - 10 min. strong finish",
+        "day": "Sun",
+        "type": "Run",
+        "distance": "10 miles",
+        "parsing_note": "The 'LR' abbreviation for long run and additional notes on pacing."
+      },
+      {
+        "raw": "NS: 8 miles (4, 4)",
+        "day": "Tue",
+        "type": "Run",
+        "distance": "8 miles",
+        "parsing_note": "The 'NS' abbreviation for negative splits and the format of distance with splits."
+      }
+    ],
+    "unhandled_patterns": [
+      {
+        "pattern": "Rest ; or XT",
+        "issue": "The parser may not correctly interpret the semicolon and 'or' as indicating optional activities.",
+        "suggested_rule": "Recognize 'Rest ; or XT' as indicating that either Rest or CrossTraining is acceptable."
+      },
+      {
+        "pattern": "1 - 2 mile WU; T: 1.5 miles; 1 - 2 mile CD",
+        "issue": "The parser may struggle with multiple session components separated by semicolons.",
+        "suggested_rule": "Allow for multiple session components in a single entry, separated by semicolons."
+      }
+    ],
+    "new_abbreviations": [
+      {
+        "abbr": "LR",
+        "meaning": "Long Run",
+        "example": "LR: 10 miles, 5 - 10 min. strong finish"
+      },
+      {
+        "abbr": "NS",
+        "meaning": "Negative Splits",
+        "example": "NS: 8 miles (4, 4)"
+      }
+    ],
+    "prompt_improvements": [
+      "Handle multiple session components in a single entry, separated by semicolons.",
+      "Recognize 'Rest ; or XT' as indicating that either Rest or CrossTraining is acceptable."
+    ],
+    "anomalies": [
+      "The plan includes optional components and varying formats for session descriptions that may confuse the parser."
+    ]
+  }
+}

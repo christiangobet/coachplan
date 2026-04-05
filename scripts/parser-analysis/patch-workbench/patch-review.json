@@ -1,0 +1,41 @@
+{
+  "generated_at": "2026-04-04T12:05:07.622Z",
+  "accepted_candidates": [
+    {
+      "candidate_id": "candidate_distance_handling_1",
+      "verdict": "accepted",
+      "reason": "Enhances accuracy by interpreting uncertain distances, improving overall parsing quality."
+    },
+    {
+      "candidate_id": "candidate_distance_handling_2",
+      "verdict": "accepted",
+      "reason": "Addresses scenarios with only lower bounds in distance descriptions, ensuring better parsing for those cases."
+    },
+    {
+      "candidate_id": "candidate_optional_alternatives_1",
+      "verdict": "accepted",
+      "reason": "Improves flexibility in capturing alternate session types, enhancing parsing capability."
+    },
+    {
+      "candidate_id": "candidate_session_structure_1",
+      "verdict": "accepted",
+      "reason": "Allows for more precise classification of session intensity, improving parsing effectiveness."
+    },
+    {
+      "candidate_id": "candidate_activity_types_1",
+      "verdict": "accepted",
+      "reason": "Incorporating non-standard terms broadens the range of activities accurately parsed."
+    },
+    {
+      "candidate_id": "candidate_timeframes_and_nutrition_1",
+      "verdict": "accepted",
+      "reason": "Incorporates critical nutritional advice into session details, improving plan comprehensiveness."
+    },
+    {
+      "candidate_id": "candidate_timeframes_and_nutrition_2",
+      "verdict": "accepted",
+      "reason": "Recognizes nutrition-related advice, facilitating more holistic training plans."
+    }
+  ],
+  "rejected_candidates": []
+}

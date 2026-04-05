@@ -5,115 +5,17 @@
  * Server-side only. Safe to call after V4 returns validated === true.
  */
 import { prisma } from '@/lib/prisma';
-import { ActivityType, ActivityPriority, Units, Prisma } from '@prisma/client';
-import type { ProgramJsonV1, SessionStep } from '@/lib/schemas/program-json-v1';
-import type { ProgramDocumentProfile } from '@/lib/plan-document-profile';
+import { ActivityType } from '@prisma/client';
+import type { ProgramJsonV1 } from '@/lib/schemas/program-json-v1';
+import { withParserPipelineProfile, type MdParseStatus, type ParserPersistenceSource, type ProgramDocumentProfile } from '@/lib/plan-document-profile';
 import {
-  deriveStructuredIntensityTargets,
-  extractEffortTargetFromText,
-  extractPaceTargetFromText
-} from '@/lib/intensity-targets';
+  buildActivityDraftFromSession,
+  derivePlanDayNotes,
+} from './v4-persistence-mapping';
 
 const DOW_MAP: Record<string, number> = {
   Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 7
 };
-
-const ACTIVITY_TYPE_MAP: Record<string, ActivityType> = {
-  Run: ActivityType.RUN,
-  Walk: ActivityType.OTHER,
-  CrossTraining: ActivityType.CROSS_TRAIN,
-  Strength: ActivityType.STRENGTH,
-  Rest: ActivityType.REST,
-  Race: ActivityType.RUN,
-  Mobility: ActivityType.MOBILITY,
-  Yoga: ActivityType.YOGA,
-  Hike: ActivityType.HIKE,
-  Other: ActivityType.OTHER
-};
-
-function formatStepsAsInstructions(steps: SessionStep[], indent = ''): string | null {
-  if (!steps || steps.length === 0) return null;
-  const lines: string[] = [];
-  for (const step of steps) {
-    if (step.type === 'repeat') {
-      const inner = formatStepsAsInstructions(step.steps || [], '  ');
-      lines.push(`${indent}${step.repetitions || 2}×`);
-      if (inner) inner.split('\n').forEach(l => lines.push(`  ${l}`));
-    } else {
-      const parts: string[] = [];
-      switch (step.type) {
-        case 'warmup':   parts.push('Warm-up'); break;
-        case 'cooldown': parts.push('Cool-down'); break;
-        case 'interval': parts.push('Interval'); break;
-        case 'tempo':    parts.push('Tempo'); break;
-        case 'recovery': parts.push('Recovery'); break;
-        case 'easy':     parts.push('Easy'); break;
-        case 'distance': parts.push('Run'); break;
-        case 'note':     lines.push(step.description ?? ''); continue;
-      }
-      if (step.distance_miles) parts.push(`${step.distance_miles} mi`);
-      else if (step.distance_km) parts.push(`${step.distance_km} km`);
-      if (step.duration_minutes) parts.push(`${step.duration_minutes} min`);
-      if (step.pace_target) parts.push(`@ ${step.pace_target}`);
-      if (step.effort) parts.push(`(${step.effort})`);
-      lines.push(`${indent}${parts.join(' ')}`);
-    }
-  }
-  return lines.filter(Boolean).join('\n') || null;
-}
-
-function computeTotalDistanceMiles(steps: SessionStep[]): number | null {
-  if (!steps?.length) return null;
-  let total = 0; let hasAny = false;
-  for (const step of steps) {
-    if (step.type === 'repeat') {
-      const inner = computeTotalDistanceMiles(step.steps || []);
-      if (inner != null) { total += inner * (step.repetitions || 1); hasAny = true; }
-    } else {
-      const d = step.distance_miles ?? (step.distance_km ? step.distance_km / 1.60934 : null);
-      if (d != null) { total += d; hasAny = true; }
-    }
-  }
-  return hasAny ? Math.round(total * 100) / 100 : null;
-}
-
-function deriveTitle(session: ProgramJsonV1['weeks'][number]['sessions'][number]): string {
-  if (session.session_role) return session.session_role;
-  switch (session.activity_type) {
-    case 'Run': return 'Run';
-    case 'Walk': return 'Walk';
-    case 'CrossTraining': return 'Cross Training';
-    case 'Strength': return 'Strength';
-    case 'Rest': return 'Rest';
-    case 'Race': return 'Race';
-    case 'Mobility': return 'Mobility';
-    case 'Yoga': return 'Yoga';
-    case 'Hike': return 'Hike';
-    default: return 'Workout';
-  }
-}
-
-function resolveDistance(
-  session: ProgramJsonV1['weeks'][number]['sessions'][number],
-  sourceUnits: string | null | undefined
-): { distance: number | null; distanceUnit: Units | null } {
-  const preferMiles = sourceUnits === 'miles' || (!session.distance_km && session.distance_miles);
-  const preferKm = sourceUnits === 'km' || (!session.distance_miles && session.distance_km);
-
-  if (preferMiles && session.distance_miles != null) {
-    return { distance: session.distance_miles, distanceUnit: Units.MILES };
-  }
-  if (preferKm && session.distance_km != null) {
-    return { distance: session.distance_km, distanceUnit: Units.KM };
-  }
-  if (session.distance_miles != null) {
-    return { distance: session.distance_miles, distanceUnit: Units.MILES };
-  }
-  if (session.distance_km != null) {
-    return { distance: session.distance_km, distanceUnit: Units.KM };
-  }
-  return { distance: null, distanceUnit: null };
-}
 
 /**
  * Writes V4 parsed plan data into the DB for the given planId.
@@ -122,7 +24,14 @@ function resolveDistance(
  */
 export async function populatePlanFromV4(
   planId: string,
-  data: ProgramJsonV1
+  data: ProgramJsonV1,
+  options?: {
+    parserPipeline?: {
+      persistenceSource: ParserPersistenceSource;
+      mdParseStatus: MdParseStatus;
+      extractedMdAttempted?: boolean;
+    };
+  },
 ): Promise<{ weeksCreated: number; activitiesCreated: number }> {
   const sourceUnits = data.program?.source_units;
   const sortedWeeks = [...data.weeks].sort((a, b) => a.week_number - b.week_number);
@@ -151,78 +60,26 @@ export async function populatePlanFromV4(
 
     for (const [dow, sessions] of byDay.entries()) {
       const rawText = sessions.map((s) => s.raw_text).filter(Boolean).join(' | ') || null;
+      const dayNotes = derivePlanDayNotes(sessions);
 
       const planDay = await prisma.planDay.create({
         data: {
           planId,
           weekId: planWeek.id,
           dayOfWeek: dow,
-          rawText
+          rawText,
+          notes: dayNotes,
         }
       });
 
       const activityRows = sessions
         .filter((s) => s.activity_type !== 'Rest')
-        .map((session) => {
-          const { distance, distanceUnit } = resolveDistance(session, sourceUnits);
-          const activityType = ACTIVITY_TYPE_MAP[session.activity_type] || ActivityType.OTHER;
-          const title = deriveTitle(session);
-          const duration = session.duration_minutes ?? null;
-          const paceTarget = extractPaceTargetFromText(session.intensity || session.raw_text || null);
-          const effortTarget = session.intensity
-            ? (extractEffortTargetFromText(session.intensity) || session.intensity || null)
-            : extractEffortTargetFromText(session.raw_text || null);
-          const structuredTargets = deriveStructuredIntensityTargets({
-            paceTarget,
-            effortTarget,
-            fallbackUnit: distanceUnit
-          });
-
-          const priorityLevel = (() => {
-            if (session.priority_level === 'KEY')      return ActivityPriority.KEY;
-            if (session.priority_level === 'MEDIUM')   return ActivityPriority.MEDIUM;
-            if (session.priority_level === 'OPTIONAL') return ActivityPriority.OPTIONAL;
-            // fallback from legacy bool fields
-            if (session.priority === true)  return ActivityPriority.KEY;
-            if (session.optional === true)  return ActivityPriority.OPTIONAL;
-            return ActivityPriority.MEDIUM;
-          })();
-
-          const stepsInstructions = session.steps && session.steps.length > 0
-            ? formatStepsAsInstructions(session.steps as SessionStep[])
-            : (session.notes || session.raw_text || null);
-
-          const stepsStructure = session.steps?.length ? session.steps : null;
-
-          // Use parser-provided distance if available, else compute from steps
-          const computedTotal = (!session.distance_miles && !session.distance_km && stepsStructure)
-            ? computeTotalDistanceMiles(session.steps as SessionStep[])
-            : null;
-
-          return {
-            planId,
-            dayId: planDay.id,
-            type: activityType,
-            subtype: session.activity_type === 'Race' ? 'race' : null,
-            title,
-            rawText: session.raw_text || null,
-            sessionInstructions: stepsInstructions,
-            distance: computedTotal != null && distance == null ? computedTotal : distance,
-            distanceUnit: computedTotal != null && distance == null ? Units.MILES : distanceUnit,
-            duration,
-            paceTarget,
-            effortTarget,
-            ...structuredTargets,
-            priority: priorityLevel,
-            mustDo: priorityLevel === ActivityPriority.KEY,
-            bailAllowed: priorityLevel === ActivityPriority.OPTIONAL,
-            structure: stepsStructure ?? Prisma.JsonNull,
-            coachingNote: typeof session.coaching_note === 'string' && session.coaching_note.trim()
-              ? session.coaching_note.trim()
-              : null,
-            sessionFocus: session.session_focus ?? null,
-          };
-        });
+        .map((session) => buildActivityDraftFromSession({
+          planId,
+          dayId: planDay.id,
+          sourceUnits,
+          session,
+        }));
 
       if (activityRows.length > 0) {
         await prisma.planActivity.createMany({ data: activityRows });
@@ -247,13 +104,20 @@ export async function populatePlanFromV4(
 
   // Derive parseProfile from V4 data so the review page profile card shows correctly
   const parseProfile = buildProfileFromV4(data, sortedWeeks);
+  const persistedProfile = options?.parserPipeline
+    ? withParserPipelineProfile(parseProfile, {
+      persistence_source: options.parserPipeline.persistenceSource,
+      md_parse_status: options.parserPipeline.mdParseStatus,
+      extracted_md_attempted: options.parserPipeline.extractedMdAttempted ?? true,
+    })
+    : parseProfile;
 
   // Update plan metadata from V4 program object
   await prisma.trainingPlan.update({
     where: { id: planId },
     data: {
       weekCount: sortedWeeks.length,
-      parseProfile,
+      parseProfile: persistedProfile,
       status: 'DRAFT'
     }
   });

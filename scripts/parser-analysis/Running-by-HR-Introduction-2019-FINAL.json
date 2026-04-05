@@ -1,0 +1,52 @@
+{
+  "file": "Running-by-HR-Introduction-2019-FINAL.pdf",
+  "text_chars": 38526,
+  "analysis": {
+    "layout_type": "unclear",
+    "source_units": "unclear",
+    "total_weeks_detected": 8,
+    "sessions_sample": [
+      {
+        "raw": "Your biggest week of training tops out at four hours and five minutes of running over five days; in addition, there is one 50-minute cross-training session.",
+        "day": null,
+        "type": "Run",
+        "distance": "4 hours 5 minutes",
+        "parsing_note": "Duration is provided in hours and minutes, which may not be directly convertible to distance."
+      },
+      {
+        "raw": "By the end of the program, you will run for 75 minutes continuously.",
+        "day": null,
+        "type": "Run",
+        "distance": "75 minutes",
+        "parsing_note": "Duration is given instead of distance, which is not standard."
+      },
+      {
+        "raw": "We have included 15-minute circuits to be completed two times a week; you can always do more of them if you’d like.",
+        "day": null,
+        "type": "Strength",
+        "distance": null,
+        "parsing_note": "Strength training sessions are mentioned without specific days or distances."
+      }
+    ],
+    "unhandled_patterns": [
+      {
+        "pattern": "four hours and five minutes",
+        "issue": "The parser may not recognize mixed duration formats as valid input for distance.",
+        "suggested_rule": "Allow durations expressed in hours and minutes to be treated as valid session durations."
+      },
+      {
+        "pattern": "75 minutes continuously",
+        "issue": "The parser may not convert durations to distance correctly when only time is provided.",
+        "suggested_rule": "If only duration is provided, store it as duration_minutes and set distance to null."
+      }
+    ],
+    "new_abbreviations": [],
+    "prompt_improvements": [
+      "Recognize and handle durations expressed in hours and minutes as valid session durations.",
+      "If a session specifies only a duration without a distance, store the duration in duration_minutes and set distance to null."
+    ],
+    "anomalies": [
+      "The plan does not provide specific daily sessions, making it difficult to assign activities to specific days of the week."
+    ]
+  }
+}

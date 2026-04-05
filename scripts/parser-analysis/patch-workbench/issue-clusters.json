@@ -1,0 +1,80 @@
+{
+  "generated_at": "2026-04-04T12:04:21.964Z",
+  "clusters": [
+    {
+      "cluster_id": "distance_handling",
+      "title": "Distance and Duration Parsing",
+      "evidence_ids": [
+        "evi_27c1b1de6545",
+        "evi_ed3bd9022d21",
+        "evi_ae4f4d0a3f78",
+        "evi_3813d3acb939",
+        "evi_f1d1cebba4da",
+        "evi_5f49a44b44ee",
+        "evi_f1d1cebba4da",
+        "evi_03a7e1fd8537",
+        "evi_c9ef0c923634"
+      ],
+      "summary": "Issues with recognizing and parsing various distance formats including ranges, pluralized distances, and approximate terms such as 'ish'."
+    },
+    {
+      "cluster_id": "session_structure",
+      "title": "Session Structure Recognition",
+      "evidence_ids": [
+        "evi_c7cbe3a79e2c",
+        "evi_4b23e1ef5925",
+        "evi_e08765ae791f",
+        "evi_4f59b3101aa4",
+        "evi_dc36385ba4de"
+      ],
+      "summary": "Challenges with extracting sessions from descriptions that combine multiple elements, such as warm-ups, cool-downs, and various types of activities."
+    },
+    {
+      "cluster_id": "activity_types",
+      "title": "Activity Type Recognition",
+      "evidence_ids": [
+        "evi_8d7e627ce21e",
+        "evi_e2a063d3bb61",
+        "evi_eaf3132f52fc",
+        "evi_c7cbe3a79e2c",
+        "evi_0c2a928421b2"
+      ],
+      "summary": "Parser unable to recognize certain activity terms and types, such as 'Circuit Runs' and new abbreviations related to training."
+    },
+    {
+      "cluster_id": "optional_alternatives",
+      "title": "Handling Optional and Alternative Activities",
+      "evidence_ids": [
+        "evi_dbcbf0cd93c1",
+        "evi_c89b0f3e84dd",
+        "evi_2fbb2847e40a",
+        "evi_29e9b6c0081d",
+        "evi_8411df255d28"
+      ],
+      "summary": "Problems with handling session descriptions that include optional alternatives and multiple activities expressed by 'or' or '+' clauses."
+    },
+    {
+      "cluster_id": "timeframes_and_nutrition",
+      "title": "Timeframes and Nutritional Guidelines",
+      "evidence_ids": [
+        "evi_73a654771678",
+        "evi_e02886f74fc6",
+        "evi_6a023deeb8dd",
+        "evi_8c862c5e0571",
+        "evi_d32a2c4f8231"
+      ],
+      "summary": "Issues with recognizing training-related timeframes and nutritional guidelines as relevant inputs within session descriptions."
+    },
+    {
+      "cluster_id": "complex_plan_formats",
+      "title": "Complex Plan Formats",
+      "evidence_ids": [
+        "evi_665284631e92",
+        "evi_f74ec1cd0b67",
+        "evi_f15d2539392a",
+        "evi_2ca62bdfe40b"
+      ],
+      "summary": "The parser struggles with complex plan formats that include multiple parts or are presented in non-standard ways, complicating structure recognition."
+    }
+  ]
+}

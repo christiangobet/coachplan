@@ -1,0 +1,65 @@
+{
+  "file": "26.2-GO-THE-DISTANCE.pdf",
+  "text_chars": 25056,
+  "analysis": {
+    "layout_type": "unclear",
+    "source_units": "miles",
+    "total_weeks_detected": 18,
+    "sessions_sample": [
+      {
+        "raw": "six runs that are 15 or more miles long",
+        "day": null,
+        "type": "Run",
+        "distance": "15 or more miles",
+        "parsing_note": "Distance is presented as a range without specific values."
+      },
+      {
+        "raw": "one 16 - 18 miler, one 18, one 18 - 20 miler, one straight - up 20 miler.",
+        "day": null,
+        "type": "Run",
+        "distance": "16 - 20 miles",
+        "parsing_note": "Multiple distances presented in a single sentence, requires extraction of individual values."
+      },
+      {
+        "raw": "SSSC’s: Super Short Strength Circuits, which we’ll demonstrate on video. By Super Short, we mean < 5 minutes for the whole circuit; we’ll ask you to do SSSC’s three times weekly.",
+        "day": null,
+        "type": "Strength",
+        "distance": null,
+        "parsing_note": "Strength training session lacks distance and duration, which may not fit existing rules."
+      },
+      {
+        "raw": "Pick three of each to each session and remember to shake it up from one session to the next.",
+        "day": null,
+        "type": "Other",
+        "distance": null,
+        "parsing_note": "Instructional text without clear session structure or specific activity types."
+      }
+    ],
+    "unhandled_patterns": [
+      {
+        "pattern": "37 - 39 miles",
+        "issue": "Distance range presented without clear upper or lower bounds for individual sessions.",
+        "suggested_rule": "Allow for distance ranges in total weekly mileage and specify how to handle them."
+      },
+      {
+        "pattern": "two ways to sneak in more strength training: a fun circuit run once a week and SSSC’s: Super Short Strength Circuits",
+        "issue": "Multiple training types mentioned in a single sentence without clear separation.",
+        "suggested_rule": "Recognize and parse multiple training types mentioned in a single context."
+      }
+    ],
+    "new_abbreviations": [
+      {
+        "abbr": "SSSC",
+        "meaning": "Super Short Strength Circuits",
+        "example": "we’ll ask you to do SSSC’s three times weekly."
+      }
+    ],
+    "prompt_improvements": [
+      "Allow for parsing of distance ranges in total weekly mileage and specify how to handle them.",
+      "Recognize and parse multiple training types mentioned in a single context."
+    ],
+    "anomalies": [
+      "The plan includes a mix of instructional text and session descriptions, making it difficult to extract structured session data."
+    ]
+  }
+}

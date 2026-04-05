@@ -1,0 +1,75 @@
+{
+  "generated_at": "2026-04-04T12:05:29.146Z",
+  "evaluated_candidates": [
+    {
+      "candidate_id": "candidate_distance_handling_1",
+      "coverage_gain": "Enhances accuracy in interpreting uncertain distances, improving overall parsing quality.",
+      "risk": "Possible misinterpretation of approximate terms leading to incorrect distance data.",
+      "confidence": 0.9,
+      "representative_examples": [
+        "Extracts '3 ish miles' correctly as 3 miles.",
+        "Handles variations such as 'around 5 km' to standardize distances."
+      ]
+    },
+    {
+      "candidate_id": "candidate_distance_handling_2",
+      "coverage_gain": "Addresses scenarios with only lower bounds in distance descriptions, ensuring better parsing for those cases.",
+      "risk": "Might introduce ambiguity if upper limits are not clarified, leading to underestimation of total distances.",
+      "confidence": 0.85,
+      "representative_examples": [
+        "Correctly parses 'at least 10 miles' ensuring minimum distance is captured.",
+        "Handles '10+ km' as an open-ended distance range."
+      ]
+    },
+    {
+      "candidate_id": "candidate_optional_alternatives_1",
+      "coverage_gain": "Improves flexibility in capturing alternate session types, enhancing parsing capability.",
+      "risk": "Overhead in managing optional alternatives could complicate session interpretation.",
+      "confidence": 0.8,
+      "representative_examples": [
+        "Parses '30 min run or bike' to include both activities correctly.",
+        "Recognizes diverse session types like 'run or walk' effectively."
+      ]
+    },
+    {
+      "candidate_id": "candidate_session_structure_1",
+      "coverage_gain": "Allows for more precise classification of session intensity, improving parsing effectiveness.",
+      "risk": "Risk of missing intensity details if improperly formatted within the document.",
+      "confidence": 0.88,
+      "representative_examples": [
+        "Identifies 'hard tempo run' session accurately as high-intensity.",
+        "Classifies 'easy recovery jog' as low-intensity correctly."
+      ]
+    },
+    {
+      "candidate_id": "candidate_activity_types_1",
+      "coverage_gain": "Incorporating non-standard terms broadens the range of activities accurately parsed.",
+      "risk": "Potential for misclassification if new terms are not well-defined or understood.",
+      "confidence": 0.87,
+      "representative_examples": [
+        "Correctly recognizes 'Circuit Runs' as an activity type in sessions.",
+        "Handles unique terms like 'trail runs' or 'hills' seamlessly."
+      ]
+    },
+    {
+      "candidate_id": "candidate_timeframes_and_nutrition_1",
+      "coverage_gain": "Incorporates critical nutritional advice into session details, improving plan comprehensiveness.",
+      "risk": "Nutritional aspects may distract from primary training objectives, affecting focus on sessions.",
+      "confidence": 0.8,
+      "representative_examples": [
+        "Integrates hydration advice effectively with workout sessions.",
+        "Captures nutritional timing around sessions accurately."
+      ]
+    },
+    {
+      "candidate_id": "candidate_timeframes_and_nutrition_2",
+      "coverage_gain": "Recognizes nutrition-related advice, facilitating more holistic training plans.",
+      "risk": "Could lead to cluttered session data if not clearly delineated from training activities.",
+      "confidence": 0.82,
+      "representative_examples": [
+        "Includes nutrition-focused sessions such as 'carbo-loading before race' as valid.",
+        "Identifies 'post-workout nutrition' recommendations alongside session details."
+      ]
+    }
+  ]
+}

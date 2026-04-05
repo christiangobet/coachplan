@@ -1,0 +1,73 @@
+{
+  "file": "half-marathon-training-plan PDF version .pdf",
+  "text_chars": 2257,
+  "analysis": {
+    "layout_type": "calendar_grid",
+    "source_units": "miles",
+    "total_weeks_detected": 10,
+    "sessions_sample": [
+      {
+        "raw": "3-4 miles",
+        "day": "Mon",
+        "type": "Run",
+        "distance": "3-4 miles",
+        "parsing_note": "Distance range needs to be handled correctly to extract upper bound."
+      },
+      {
+        "raw": "10 min @ tempo (7 out of 10 effort)",
+        "day": "Thu",
+        "type": "Run",
+        "distance": null,
+        "parsing_note": "Intensity description needs to be parsed separately from duration."
+      },
+      {
+        "raw": "3 x 1 minute at 9 out of 10 effort",
+        "day": "Wed",
+        "type": "Run",
+        "distance": null,
+        "parsing_note": "Multiple intervals with intensity need to be parsed correctly."
+      },
+      {
+        "raw": "10 minute warm up",
+        "day": "Tue",
+        "type": "Run",
+        "distance": null,
+        "parsing_note": "Warm-up duration needs to be recognized and stored."
+      },
+      {
+        "raw": "Race day!!",
+        "day": "Sun",
+        "type": "Race",
+        "distance": "13.1 Mi",
+        "parsing_note": "Race day needs to be identified and treated as a special session."
+      }
+    ],
+    "unhandled_patterns": [
+      {
+        "pattern": "(3-4ish Mi)",
+        "issue": "The term 'ish' may confuse the parser as it suggests uncertainty in distance.",
+        "suggested_rule": "Handle distance terms with 'ish' as approximate and extract the numeric part."
+      },
+      {
+        "pattern": "10 min cooldown.",
+        "issue": "The period at the end may cause the parser to misinterpret the end of the session text.",
+        "suggested_rule": "Ignore punctuation at the end of session descriptions when parsing."
+      }
+    ],
+    "new_abbreviations": [
+      {
+        "abbr": "Mi",
+        "meaning": "miles",
+        "example": "3 Mi"
+      }
+    ],
+    "prompt_improvements": [
+      "Recognize and extract intensity descriptions separately from duration in session text.",
+      "Handle distance terms with 'ish' as approximate and extract the numeric part.",
+      "Ignore punctuation at the end of session descriptions when parsing."
+    ],
+    "anomalies": [
+      "The plan includes both specific distances and ranges, which may require different parsing logic."
+    ]
+  }
+}

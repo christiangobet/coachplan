@@ -1,0 +1,72 @@
+{
+  "file": "Find-Your-Strong-Marathon-Training-Plan-FINAL 2.pdf",
+  "text_chars": 14751,
+  "analysis": {
+    "layout_type": "calendar_grid",
+    "source_units": "miles",
+    "total_weeks_detected": 18,
+    "sessions_sample": [
+      {
+        "raw": "E: 3 miles + 2 - 4 strides",
+        "day": "Mon",
+        "type": "Run",
+        "distance": "3 miles",
+        "parsing_note": "The '+' symbol indicates multiple activities in one session, which needs to be split."
+      },
+      {
+        "raw": "Rest ; or XT",
+        "day": "Tue",
+        "type": "Rest",
+        "distance": null,
+        "parsing_note": "The 'or' clause indicates an optional alternative that needs to be handled."
+      },
+      {
+        "raw": "1 - 2 mile WU; T: 1.5 miles; 1 - 2 mile CD",
+        "day": "Thu",
+        "type": "Run",
+        "distance": "1.5 miles",
+        "parsing_note": "Multiple activities with warm-up and cool-down need to be parsed separately."
+      },
+      {
+        "raw": "LR: 10 miles, 5 - 10 min. strong finish",
+        "day": "Sat",
+        "type": "Run",
+        "distance": "10 miles",
+        "parsing_note": "The 'strong finish' component may not be captured by existing rules."
+      },
+      {
+        "raw": "E: 3 miles + 6 - 10 strides",
+        "day": "Tue",
+        "type": "Run",
+        "distance": "3 miles",
+        "parsing_note": "The distance for strides is not clearly defined and may need special handling."
+      }
+    ],
+    "unhandled_patterns": [
+      {
+        "pattern": "Rest ; or XT",
+        "issue": "The parser may not recognize the 'or' clause correctly for optional activities.",
+        "suggested_rule": "Handle 'or' clauses as optional alternatives for activities."
+      },
+      {
+        "pattern": "1 - 2 mile WU; T: 1.5 miles; 1 - 2 mile CD",
+        "issue": "The parser may not split multiple activities correctly within a single session.",
+        "suggested_rule": "Split sessions with multiple activities separated by semicolons into individual entries."
+      }
+    ],
+    "new_abbreviations": [
+      {
+        "abbr": "TWM",
+        "meaning": "Total Weekly Mileage",
+        "example": "TWM 1"
+      }
+    ],
+    "prompt_improvements": [
+      "Add handling for 'or' clauses as optional alternatives for activities.",
+      "Split sessions with multiple activities separated by semicolons into individual entries."
+    ],
+    "anomalies": [
+      "The plan includes a mix of optional and mandatory components that may confuse the parser."
+    ]
+  }
+}

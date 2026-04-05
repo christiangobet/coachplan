@@ -1,0 +1,111 @@
+{
+  "top_issues": [
+    {
+      "rank": 1,
+      "issue": "Handling of 'or' clauses",
+      "frequency": 8,
+      "examples": [
+        "Rest or 30 min very easy cross-training",
+        "Optional: walk 2 min. every .5 mile",
+        "XT or Rest",
+        "Rest ; or XT"
+      ],
+      "recommended_rule": "Handle 'or' clauses as optional alternatives for activities."
+    },
+    {
+      "rank": 2,
+      "issue": "Parsing of distance ranges",
+      "frequency": 7,
+      "examples": [
+        "15 or more miles",
+        "37 - 39 miles",
+        "Distance can range from 10–13 miles",
+        "3 - 4 miles as 10 min. WU"
+      ],
+      "recommended_rule": "Allow for distance descriptions that indicate a minimum without a maximum."
+    },
+    {
+      "rank": 3,
+      "issue": "Recognition of multi-part sessions",
+      "frequency": 6,
+      "examples": [
+        "3 - 4 miles as 10 min. WU; I: 4 - 6 x 1 min. at Z4 w/2 min. recovery; 10 min. CD",
+        "1 - 2 mile WU; T: 1.5 miles; 1 - 2 mile CD",
+        "E: 3 miles + 6 strides; or XT"
+      ],
+      "recommended_rule": "Allow for multi-part session descriptions and parse each component separately."
+    },
+    {
+      "rank": 4,
+      "issue": "Parsing of new abbreviations",
+      "frequency": 5,
+      "examples": [
+        "SSSC’s: Super Short Strength Circuits",
+        "I: 4 - 6 x 1 min. at Z4 w/2 min. recovery",
+        "TWM: Total Weekly Mileage"
+      ],
+      "recommended_rule": "Add a rule to recognize and define common training abbreviations."
+    },
+    {
+      "rank": 5,
+      "issue": "Handling of additional context in sessions",
+      "frequency": 4,
+      "examples": [
+        "Jog 40 mins (or 4 miles) on hilly course",
+        "two ways to sneak in more strength training: a fun circuit run once a week and SSSC’s: Super Short Strength Circuits",
+        "5 min brisk walk on undulating route"
+      ],
+      "recommended_rule": "Allow for additional descriptors after distance that do not affect the distance value."
+    }
+  ],
+  "new_abbreviations_to_add": [
+    {
+      "abbr": "SSSC",
+      "meaning": "Super Short Strength Circuits",
+      "seen_in": [
+        "26.2 CRUSH THE DISTANCE OCT 2017.pdf",
+        "30K adapted to Aletsch.pdf"
+      ]
+    },
+    {
+      "abbr": "TWM",
+      "meaning": "Total Weekly Mileage",
+      "seen_in": [
+        "TLAM5k_Crush.pdf",
+        "Find-Your-Strong-Marathon-Training-Plan-FINAL.pdf"
+      ]
+    },
+    {
+      "abbr": "PU",
+      "meaning": "Pick Ups",
+      "seen_in": [
+        "TLAM5k_Crush.pdf"
+      ]
+    },
+    {
+      "abbr": "Z",
+      "meaning": "Zone (referring to intensity zones for training)",
+      "seen_in": [
+        "TLAM_GrandCanyon-1.pdf"
+      ]
+    }
+  ],
+  "prompt_sections_to_update": [
+    {
+      "section": "Session Parsing Rules",
+      "current_gap": "The current rules miss handling optional activities and multi-part sessions.",
+      "addition": "Handle 'or' clauses as optional alternatives for activities and allow for multi-part session descriptions."
+    },
+    {
+      "section": "Distance and Duration Handling",
+      "current_gap": "The parser does not adequately handle distance ranges and additional context.",
+      "addition": "Allow for distance descriptions that indicate a minimum without a maximum and retain additional context after distance values."
+    },
+    {
+      "section": "Abbreviation Recognition",
+      "current_gap": "New training abbreviations are not recognized.",
+      "addition": "Add a rule to recognize and define common training abbreviations."
+    }
+  ],
+  "summary": "The most impactful improvements focus on handling 'or' clauses and distance ranges more effectively, as well as recognizing multi-part sessions and new abbreviations. Updating the parser to accommodate these issues will enhance its ability to accurately interpret diverse training plan formats."
+}

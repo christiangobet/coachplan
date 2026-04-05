@@ -1,0 +1,52 @@
+{
+  "file": "Blue Ridge 30K FINAL.pdf",
+  "text_chars": 14156,
+  "analysis": {
+    "layout_type": "unclear",
+    "source_units": "miles",
+    "total_weeks_detected": 16,
+    "sessions_sample": [
+      {
+        "raw": "During Week 11, we have scheduled a training race so you can test nutrition, gear, race preparation and anything else that needs to be dialed in. Distance can range from 10–13 miles and needs to be on the surface on which you’re racing.",
+        "day": null,
+        "type": "Race",
+        "distance": "10–13 miles",
+        "parsing_note": "Distance range is not clearly defined as a single value."
+      },
+      {
+        "raw": "Sundays offer a hike/run option. Either works equally well; you will NOT lose fitness if you opt for the hike instead of the run.",
+        "day": "Sun",
+        "type": "Hike/Run",
+        "distance": null,
+        "parsing_note": "Ambiguity in session type as it offers two options."
+      },
+      {
+        "raw": "You have four different circuits during this training; Circuits #1 + #2 are for weeks 1–8, and circuits #3 + #4 are for weeks 9+.",
+        "day": null,
+        "type": "CrossTraining",
+        "distance": null,
+        "parsing_note": "Circuit training format is not explicitly defined in the schema."
+      }
+    ],
+    "unhandled_patterns": [
+      {
+        "pattern": "Distance can range from 10–13 miles",
+        "issue": "The parser may not handle ranges well if not explicitly defined in the rules.",
+        "suggested_rule": "Allow for distance ranges in session definitions, treating them as optional alternatives."
+      },
+      {
+        "pattern": "Circuits #1 + #2 are for weeks 1–8",
+        "issue": "The parser may not recognize the circuit format as a valid session type.",
+        "suggested_rule": "Recognize circuit training as a valid session type and allow for multiple circuits in a single session."
+      }
+    ],
+    "new_abbreviations": [],
+    "prompt_improvements": [
+      "Allow for distance ranges in session definitions, treating them as optional alternatives.",
+      "Recognize circuit training as a valid session type and allow for multiple circuits in a single session."
+    ],
+    "anomalies": [
+      "The plan includes a mix of hiking and running options, which may complicate session classification."
+    ]
+  }
+}

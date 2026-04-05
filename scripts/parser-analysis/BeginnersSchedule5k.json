@@ -1,0 +1,66 @@
+{
+  "file": "BeginnersSchedule5k.pdf",
+  "text_chars": 6742,
+  "analysis": {
+    "layout_type": "sequential_table",
+    "source_units": "miles",
+    "total_weeks_detected": 8,
+    "sessions_sample": [
+      {
+        "raw": "jog 1 min / walk 2 mins (repeat x 5)",
+        "day": "Tue",
+        "type": "Run",
+        "distance": "0.20",
+        "parsing_note": null
+      },
+      {
+        "raw": "jog 3 min / walk 2 mins (repeat x 4)",
+        "day": "Tue",
+        "type": "Run",
+        "distance": "0.25",
+        "parsing_note": null
+      },
+      {
+        "raw": "jog 1 mile / walk 2 mins (repeat x 2)",
+        "day": "Sun",
+        "type": "Run",
+        "distance": "0.33",
+        "parsing_note": null
+      },
+      {
+        "raw": "5 min brisk walk   jog 12 min / walk 2 mins (repeat x 3)",
+        "day": "Tue",
+        "type": "Run",
+        "distance": "0.47",
+        "parsing_note": "The session combines a warm-up and main activity in one line, which may confuse the parser."
+      },
+      {
+        "raw": "Rest or brisk 20 min walk",
+        "day": "Fri",
+        "type": "Rest",
+        "distance": null,
+        "parsing_note": "The presence of 'or' may lead to ambiguity in session type."
+      }
+    ],
+    "unhandled_patterns": [
+      {
+        "pattern": "Rest or brisk 20 min walk",
+        "issue": "The parser may not correctly interpret the 'or' clause, leading to confusion about whether it's a rest day or a walking session.",
+        "suggested_rule": "Handle 'or' clauses in session descriptions to allow for multiple valid interpretations."
+      },
+      {
+        "pattern": "5 min brisk walk   jog 12 min / walk 2 mins (repeat x 3)",
+        "issue": "The combination of warm-up and main session in one line may not be parsed correctly, as it lacks clear separation.",
+        "suggested_rule": "Recognize and separate warm-up activities from main session activities when they are presented in the same line."
+      }
+    ],
+    "new_abbreviations": [],
+    "prompt_improvements": [
+      "Handle 'or' clauses in session descriptions to allow for multiple valid interpretations.",
+      "Recognize and separate warm-up activities from main session activities when they are presented in the same line."
+    ],
+    "anomalies": [
+      "The plan includes a mix of running and walking sessions with specific repeat instructions, which may complicate parsing due to varied formats."
+    ]
+  }
+}

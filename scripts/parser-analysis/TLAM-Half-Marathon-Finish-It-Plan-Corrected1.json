@@ -1,0 +1,72 @@
+{
+  "file": "TLAM-Half-Marathon-Finish-It-Plan-Corrected1.pdf",
+  "text_chars": 6473,
+  "analysis": {
+    "layout_type": "calendar_grid",
+    "source_units": "miles",
+    "total_weeks_detected": 15,
+    "sessions_sample": [
+      {
+        "raw": "E: 4-5 miles",
+        "day": null,
+        "type": "Run",
+        "distance": "4-5 miles",
+        "parsing_note": "Distance range needs to be handled correctly to extract upper bound."
+      },
+      {
+        "raw": "3 miles as 10 minute WU; I: 6 x 30 sec at Z4-5 w/1 min. recovery; 10 min CD",
+        "day": null,
+        "type": "Run",
+        "distance": "3 miles",
+        "parsing_note": "Complex session with multiple components; needs to ensure all parts are parsed correctly."
+      },
+      {
+        "raw": "E: 3 miles + 6 strides; or XT",
+        "day": null,
+        "type": "Run",
+        "distance": "3 miles",
+        "parsing_note": "Multi-session cell with 'or' clause; needs to ensure both options are captured."
+      },
+      {
+        "raw": "LR: 10-12 miles",
+        "day": null,
+        "type": "Run",
+        "distance": "10-12 miles",
+        "parsing_note": "Distance range needs to be handled correctly to extract upper bound."
+      },
+      {
+        "raw": "E: 3 miles + 10 strides; or XT",
+        "day": null,
+        "type": "Run",
+        "distance": "3 miles",
+        "parsing_note": "Multi-session cell with 'or' clause; needs to ensure both options are captured."
+      }
+    ],
+    "unhandled_patterns": [
+      {
+        "pattern": "E: 3 miles + 6 strides; or XT",
+        "issue": "The parser may not correctly handle the '+' for multiple activities and the 'or' clause.",
+        "suggested_rule": "Allow for multiple activities in a session separated by '+' and handle 'or' clauses as optional alternatives."
+      },
+      {
+        "pattern": "3 miles as 10 minute WU; I: 6 x 30 sec at Z4-5 w/1 min. recovery; 10 min CD",
+        "issue": "Complex session descriptions may not be fully parsed, especially with warm-up and cool-down components.",
+        "suggested_rule": "Recognize and parse complex session descriptions that include warm-up, intervals, and cool-down components."
+      }
+    ],
+    "new_abbreviations": [
+      {
+        "abbr": "Z",
+        "meaning": "Zone (referring to intensity zones for training)",
+        "example": "I: 6 x 30 sec at Z4-5 w/1 min. recovery"
+      }
+    ],
+    "prompt_improvements": [
+      "Handle multi-session cells with '+' and 'or' clauses to ensure all options are captured.",
+      "Recognize and parse complex session descriptions that include warm-up, intervals, and cool-down components."
+    ],
+    "anomalies": [
+      "The plan includes a mix of structured workouts and casual language, which may confuse the parser regarding session types."
+    ]
+  }
+}

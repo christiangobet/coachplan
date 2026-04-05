@@ -1,0 +1,66 @@
+{
+  "file": "13.1-RACE-REFUELED-BY-MILK.pdf",
+  "text_chars": 24990,
+  "analysis": {
+    "layout_type": "unclear",
+    "source_units": "miles",
+    "total_weeks_detected": null,
+    "sessions_sample": [
+      {
+        "raw": "29.5 - 33 miles",
+        "day": null,
+        "type": null,
+        "distance": "29.5 - 33 miles",
+        "parsing_note": "Distance range may not be correctly parsed as it lacks specific session context."
+      },
+      {
+        "raw": "One 13 - miler, two 14 - milers, one 15 - miler.",
+        "day": null,
+        "type": null,
+        "distance": "13 - 15 miles",
+        "parsing_note": "Ambiguous phrasing makes it unclear how to categorize these distances into sessions."
+      },
+      {
+        "raw": "SSSC’s: Super Short Strength Circuits, which we’ll demonstrate on video.",
+        "day": null,
+        "type": "Strength",
+        "distance": null,
+        "parsing_note": "New abbreviation for strength training session may not be recognized."
+      },
+      {
+        "raw": "Pick three of each to each session and remember to shake it up from one session to the next.",
+        "day": null,
+        "type": null,
+        "distance": null,
+        "parsing_note": "Instructions for session variability may not fit into standard session parsing."
+      }
+    ],
+    "unhandled_patterns": [
+      {
+        "pattern": "3.5 miles during the Circuit Runs",
+        "issue": "The parser may not recognize 'Circuit Runs' as a specific activity type.",
+        "suggested_rule": "Recognize 'Circuit Runs' as a valid activity type for sessions."
+      },
+      {
+        "pattern": "two 14 - milers",
+        "issue": "The parser may struggle with pluralized session distances without clear session structure.",
+        "suggested_rule": "Allow for pluralized session distances to be parsed as multiple sessions."
+      }
+    ],
+    "new_abbreviations": [
+      {
+        "abbr": "SSSC",
+        "meaning": "Super Short Strength Circuit",
+        "example": "SSSC’s: Super Short Strength Circuits, which we’ll demonstrate on video."
+      }
+    ],
+    "prompt_improvements": [
+      "Add support for parsing distance ranges without clear session context.",
+      "Allow for pluralized session distances to be parsed as multiple sessions.",
+      "Recognize 'Circuit Runs' as a valid activity type for sessions."
+    ],
+    "anomalies": [
+      "The plan includes a mix of general advice and specific session details, making it difficult to extract structured data."
+    ]
+  }
+}

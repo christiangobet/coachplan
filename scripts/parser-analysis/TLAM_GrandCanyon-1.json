@@ -1,0 +1,77 @@
+{
+  "file": "TLAM_GrandCanyon-1.pdf",
+  "text_chars": 22537,
+  "analysis": {
+    "layout_type": "calendar_grid",
+    "source_units": "miles",
+    "total_weeks_detected": 20,
+    "sessions_sample": [
+      {
+        "raw": "30 min.: ER/BW  +  TLAM Circuit #1",
+        "day": "Mon",
+        "type": "CrossTraining",
+        "distance": null,
+        "parsing_note": "The session includes a combination of activities (ER/BW and TLAM Circuit) which may require splitting into multiple sessions."
+      },
+      {
+        "raw": "50 min.: XT  30 min. on SB as:  5 min.: WU  5x through:  4 min.: easy;  1 min.: hard climb",
+        "day": "Tues",
+        "type": "CrossTraining",
+        "distance": null,
+        "parsing_note": "The session has a complex structure with multiple components that need to be parsed correctly."
+      },
+      {
+        "raw": "45 min.: ER/BW  +  TLAM Circuit #5",
+        "day": "Mon",
+        "type": "CrossTraining",
+        "distance": null,
+        "parsing_note": "Similar to previous sessions, requires handling of multiple activities."
+      },
+      {
+        "raw": "20-30 min:  Light XT",
+        "day": "Fri",
+        "type": "CrossTraining",
+        "distance": null,
+        "parsing_note": "The distance is presented as a range, which needs to be handled correctly."
+      },
+      {
+        "raw": "110 min.: Hilly Workout  +  3x through:  8 SLS;  20 glute bridges;  1 min. plank",
+        "day": "Sat",
+        "type": "CrossTraining",
+        "distance": null,
+        "parsing_note": "Includes multiple exercises and a long duration that may complicate parsing."
+      }
+    ],
+    "unhandled_patterns": [
+      {
+        "pattern": "3x through:  40 squats;  1 min. plank;  20 lunges per leg;  15 push-ups;  25 glute bridges",
+        "issue": "The parser may not handle the '3x through' format correctly, as it implies repetition of a circuit.",
+        "suggested_rule": "Recognize 'x through' as a pattern indicating repeated sets of exercises."
+      },
+      {
+        "pattern": "10 min.: WU  20 min.: 50% effort  on climb;  70% effort on descent  10 min.: CD",
+        "issue": "The session includes specific effort levels which are not currently parsed.",
+        "suggested_rule": "Extract and categorize effort levels specified in sessions."
+      }
+    ],
+    "new_abbreviations": [
+      {
+        "abbr": "SLS",
+        "meaning": "Single-Leg Squat",
+        "example": "3x through:  40 squats;  1 min. plank;  20 lunges per leg;  15 push-ups;  25 glute bridges"
+      },
+      {
+        "abbr": "XT",
+        "meaning": "Cross Train",
+        "example": "50 min.: XT  30 min. on SB as:  5 min.: WU  5x through:  4 min.: easy;  1 min.: hard climb"
+      }
+    ],
+    "prompt_improvements": [
+      "Add handling for 'x through' patterns indicating repeated sets of exercises.",
+      "Extract and categorize effort levels specified in sessions."
+    ],
+    "anomalies": [
+      "The plan includes a mix of hiking and running sessions, which may confuse the parser regarding the primary activity type."
+    ]
+  }
+}

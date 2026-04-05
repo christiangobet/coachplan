@@ -70,8 +70,36 @@ type SmartTitleInput = {
   fallbackTitle?: string | null;
 };
 
+const NON_WORKOUT_TITLE_PATTERNS = [
+  /\bbail if necessary\b/i,
+  /\bbailing is not an option\b/i,
+  /\bkey session\b/i,
+  /\boptional workout\b/i,
+  /\bdo whatever it takes\b/i,
+  /\brest if your body is telling you\b/i,
+];
+
 function normalizeWhitespace(value: string | null | undefined): string {
   return String(value || '').replace(/\s+/g, ' ').trim();
+}
+
+export function isCoachingOrOptionalityText(value: string | null | undefined): boolean {
+  const normalized = normalizeWhitespace(value);
+  if (!normalized) return false;
+  const withoutSymbols = normalized.replace(/^[★♥☀☂]\s*/u, '').trim();
+  return NON_WORKOUT_TITLE_PATTERNS.some((pattern) => pattern.test(withoutSymbols));
+}
+
+function sanitizeWorkoutIdentityText(value: string | null | undefined): string {
+  const normalized = normalizeWhitespace(value);
+  if (!normalized) return '';
+
+  const withoutSymbols = normalized.replace(/^[★♥☀☂]\s*/gu, '').trim();
+  if (isCoachingOrOptionalityText(withoutSymbols)) return '';
+
+  return withoutSymbols
+    .replace(/^(?:bail if necessary|bailing is not an option|key session)\s*[:\-—–]*\s*/i, '')
+    .trim();
 }
 
 function normalizeToken(value: string): string {
@@ -232,9 +260,15 @@ export function isGenericActivityTitle(
 
 export function deriveSmartActivityTitle(input: SmartTitleInput): string {
   const activityType = normalizeActivityType(input.activityType);
-  const currentTitle = normalizeWhitespace(input.currentTitle);
+  const currentTitle = sanitizeWorkoutIdentityText(input.currentTitle);
   if (currentTitle && !isGenericActivityTitle(currentTitle, activityType)) {
     return currentTitle;
+  }
+
+  const fromRawText = compactTextSnippet(sanitizeWorkoutIdentityText(input.rawText));
+  const rawTextLooksCompoundWorkout = Boolean(fromRawText && /(?:\s\+\s)|\bfollowed by\b|\bthen\b/i.test(fromRawText));
+  if (rawTextLooksCompoundWorkout && !isGenericActivityTitle(fromRawText, activityType)) {
+    return fromRawText!;
   }
 
   const fromStructure = Array.isArray(input.structure)
@@ -249,17 +283,16 @@ export function deriveSmartActivityTitle(input: SmartTitleInput): string {
     return fromSubtype;
   }
 
-  const fromInstructions = compactTextSnippet(input.sessionInstructions);
+  const fromInstructions = compactTextSnippet(sanitizeWorkoutIdentityText(input.sessionInstructions));
   if (fromInstructions && !isGenericActivityTitle(fromInstructions, activityType)) {
     return fromInstructions;
   }
 
-  const fromRawText = compactTextSnippet(input.rawText);
   if (fromRawText && !isGenericActivityTitle(fromRawText, activityType)) {
     return fromRawText;
   }
 
-  const fallbackTitle = normalizeWhitespace(input.fallbackTitle);
+  const fallbackTitle = sanitizeWorkoutIdentityText(input.fallbackTitle);
   if (fallbackTitle && !isGenericActivityTitle(fallbackTitle, activityType)) {
     return fallbackTitle;
   }

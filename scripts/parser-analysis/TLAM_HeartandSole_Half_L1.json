@@ -1,0 +1,59 @@
+{
+  "file": "TLAM_HeartandSole_Half_L1.pdf",
+  "text_chars": 45964,
+  "analysis": {
+    "layout_type": "unclear",
+    "source_units": "unclear",
+    "total_weeks_detected": 20,
+    "sessions_sample": [
+      {
+        "raw": "You’ll spend plenty of time in the lower zones, building your endurance base; you’ll also spend some time climbing hills, finding different gears with pick-ups and intervals, and practicing your race pace so that you’re ready to thrive on race day.",
+        "day": null,
+        "type": "Other",
+        "distance": null,
+        "parsing_note": "Session details are not structured; lacks specific day, type, and distance."
+      },
+      {
+        "raw": "Most weeks in this program have two strength circuits, two rest days, and one day for cross-training.",
+        "day": null,
+        "type": "CrossTraining",
+        "distance": null,
+        "parsing_note": "General description of weekly structure, not a specific session."
+      },
+      {
+        "raw": "BIGGEST week of TRAINING 6 hours, 35 minutes (includes five runs + 2 strength circuits)",
+        "day": null,
+        "type": "Other",
+        "distance": null,
+        "parsing_note": "Not a specific session; general information about training volume."
+      },
+      {
+        "raw": "LONGEST long run DISTANCES 2 hours, 30 minutes",
+        "day": null,
+        "type": "Other",
+        "distance": null,
+        "parsing_note": "Not a specific session; general information about longest run."
+      }
+    ],
+    "unhandled_patterns": [
+      {
+        "pattern": "6 hours, 35 minutes",
+        "issue": "Duration is presented as a total for the week rather than a specific session.",
+        "suggested_rule": "Recognize total weekly training durations and categorize them appropriately."
+      },
+      {
+        "pattern": "two strength circuits, two rest days, and one day for cross-training",
+        "issue": "General weekly structure is described without specific session details.",
+        "suggested_rule": "Identify and extract general weekly structure descriptions and convert them into session formats."
+      }
+    ],
+    "new_abbreviations": [],
+    "prompt_improvements": [
+      "Add a rule to identify and extract general weekly structure descriptions and convert them into session formats.",
+      "Recognize total weekly training durations and categorize them appropriately."
+    ],
+    "anomalies": [
+      "The plan lacks specific day-by-day session details, making it difficult to parse individual training sessions."
+    ]
+  }
+}

@@ -12,6 +12,21 @@ type IntensityModel = 'pace' | 'hr' | 'rpe' | 'hybrid' | 'unknown';
 type Units = 'km' | 'miles' | 'unknown';
 type LanguageHint = 'en' | 'de' | 'fr' | 'mixed' | 'unknown';
 
+export type MdParseStatus = 'missing' | 'available' | 'succeeded' | 'failed';
+export type ParserPersistenceSource =
+  | 'markdown-primary'
+  | 'markdown-merged'
+  | 'candidate-program'
+  | 'legacy-fallback'
+  | 'legacy-fallback-with-md-enrichment'
+  | 'existing-plan-fallback';
+
+export type ParserPipelineProfile = {
+  persistence_source: ParserPersistenceSource;
+  md_parse_status: MdParseStatus;
+  extracted_md_attempted?: boolean;
+};
+
 export type ProgramDocumentProfile = {
   plan_length_weeks: number;
   days_per_week: number;
@@ -31,6 +46,7 @@ export type ProgramDocumentProfile = {
   peak_long_run_km: number | null;
   taper_weeks: number | null;
   structure_tags: string[];
+  parser_pipeline?: ParserPipelineProfile;
 };
 
 type DistanceSample = {
@@ -323,5 +339,15 @@ export function buildProgramDocumentProfile(args: {
     peak_long_run_km: peakLongRunKm !== null ? Number(peakLongRunKm.toFixed(1)) : null,
     taper_weeks: taperWeeks,
     structure_tags: [...new Set(structureTags)]
+  };
+}
+
+export function withParserPipelineProfile(
+  profile: ProgramDocumentProfile,
+  parserPipeline: ParserPipelineProfile,
+): ProgramDocumentProfile {
+  return {
+    ...profile,
+    parser_pipeline: parserPipeline,
   };
 }

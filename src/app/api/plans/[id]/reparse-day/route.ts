@@ -127,7 +127,7 @@ export async function POST(
     const existingActivities = targetDay.activities;
 
     if (parsedActivities.length === 0 || existingActivities.length === 0) {
-      return NextResponse.json({ activitiesUpdated: 0, dayId: targetDay.id });
+      return NextResponse.json({ mode: 'targeted_enrichment', activitiesUpdated: 0, dayId: targetDay.id });
     }
 
     const updatePromises: Promise<unknown>[] = [];
@@ -193,10 +193,10 @@ export async function POST(
       include: { activities: { orderBy: { id: 'asc' } } }
     });
 
-    return NextResponse.json({ activitiesUpdated, dayId: targetDay.id, day: refreshedDay });
+    return NextResponse.json({ mode: 'targeted_enrichment', activitiesUpdated, dayId: targetDay.id, day: refreshedDay });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unexpected error';
-    console.error('[reparse-day] Error:', message);
+    console.error('[reparse-day-enrichment] Error:', message);
     return NextResponse.json({ error: `Server error: ${message}` }, { status: 500 });
   }
 }

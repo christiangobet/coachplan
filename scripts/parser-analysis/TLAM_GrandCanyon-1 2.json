@@ -1,0 +1,77 @@
+{
+  "file": "TLAM_GrandCanyon-1 2.pdf",
+  "text_chars": 22537,
+  "analysis": {
+    "layout_type": "calendar_grid",
+    "source_units": "mixed",
+    "total_weeks_detected": 20,
+    "sessions_sample": [
+      {
+        "raw": "30 min.: ER/BW 1  +  TLAM Circuit #1",
+        "day": "Mon",
+        "type": "CrossTraining",
+        "distance": null,
+        "parsing_note": "The session includes a combination of activities with a duration but no specific distance."
+      },
+      {
+        "raw": "45 min.: ER/BW  +  TLAM Circuit #6",
+        "day": "Fri",
+        "type": "CrossTraining",
+        "distance": null,
+        "parsing_note": "Similar to the previous session, it has a duration and multiple activities without a distance."
+      },
+      {
+        "raw": "50 min.: TM as  10 min.: WU 0-2%;  Every 2 min., change incline as directed:  4, 5, 6, 7, 8%; 1%; 5, 6, 7,  8, 9, 10%;  6 min: CD @ 0-2%",
+        "day": "Sat",
+        "type": "Run",
+        "distance": null,
+        "parsing_note": "The session specifies a treadmill workout with incline changes but lacks a distance."
+      },
+      {
+        "raw": "20-30 min:  Light XT",
+        "day": "Thu",
+        "type": "CrossTraining",
+        "distance": null,
+        "parsing_note": "The session has a duration range but no specific distance."
+      },
+      {
+        "raw": "2 hours:  Hilly Workout  +  3x through: 8 SLS; 20 glute bridges; 1 min. plank",
+        "day": "Sun",
+        "type": "Hike",
+        "distance": null,
+        "parsing_note": "The session indicates a long duration for a workout but does not specify a distance."
+      }
+    ],
+    "unhandled_patterns": [
+      {
+        "pattern": "30-45 min.: ER/BW  +  TLAM Circuit #6",
+        "issue": "The parser may not handle duration ranges combined with multiple activities correctly.",
+        "suggested_rule": "Allow for duration ranges in sessions that include multiple activities."
+      },
+      {
+        "pattern": "TM as  10 min.: WU 0-2%;  Every 2 min., change incline as directed:  4, 5, 6, 7, 8%; 1%; 5, 6, 7,  8, 9, 10%;  6 min: CD @ 0-2%",
+        "issue": "The parser may not recognize detailed treadmill instructions and incline changes.",
+        "suggested_rule": "Recognize and parse detailed treadmill workout instructions, including incline changes."
+      }
+    ],
+    "new_abbreviations": [
+      {
+        "abbr": "SLS",
+        "meaning": "Single-Leg Squat",
+        "example": "3x through: 8 SLS; 20 glute bridges; 1 min. plank"
+      },
+      {
+        "abbr": "XT",
+        "meaning": "Cross Train",
+        "example": "20-30 min:  Light XT"
+      }
+    ],
+    "prompt_improvements": [
+      "Allow for multiple activities in a session that may include a duration range.",
+      "Recognize and parse detailed treadmill workout instructions, including incline changes."
+    ],
+    "anomalies": [
+      "The plan includes a mix of hiking and running sessions, which may confuse the parser regarding the primary activity type."
+    ]
+  }
+}

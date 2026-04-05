@@ -1,0 +1,82 @@
+{
+  "file": "AMR-Strava-Prove-It-10K-Challenge.pdf",
+  "text_chars": 23993,
+  "analysis": {
+    "layout_type": "calendar_grid",
+    "source_units": "miles",
+    "total_weeks_detected": 17,
+    "sessions_sample": [
+      {
+        "raw": "E: 2-3 miles;  walk 2 min  every .5 mile if necessary",
+        "day": "Mon",
+        "type": "Run",
+        "distance": "2-3 miles",
+        "parsing_note": "The session includes a walk break which may complicate distance parsing."
+      },
+      {
+        "raw": "E: 2-3 miles;  walk 2 min  every 1 mile if necessary",
+        "day": "Wed",
+        "type": "Run",
+        "distance": "2-3 miles",
+        "parsing_note": "Similar to previous, includes walk breaks affecting distance interpretation."
+      },
+      {
+        "raw": "3-4 miles as 10 min WU;  I: 4-6 x 1 min  in Z4 w/2 min recovery;  10 min CD",
+        "day": "Thu",
+        "type": "Run",
+        "distance": "3-4 miles",
+        "parsing_note": "Includes warm-up and interval details that may confuse session role."
+      },
+      {
+        "raw": "E: 2-3 miles;  walk as needed, but aim for mostly running",
+        "day": "Sun",
+        "type": "Run",
+        "distance": "2-3 miles",
+        "parsing_note": "The phrase 'walk as needed' adds ambiguity to the session's structure."
+      },
+      {
+        "raw": "E: 3-4 miles;  walk 1 min  every 1.5 miles if necessary",
+        "day": "Tue",
+        "type": "Run",
+        "distance": "3-4 miles",
+        "parsing_note": "Includes a walk break which complicates the distance parsing."
+      }
+    ],
+    "unhandled_patterns": [
+      {
+        "pattern": "walk 2 min  every .5 mile if necessary",
+        "issue": "The parser may not correctly interpret the walking breaks as part of the session's structure.",
+        "suggested_rule": "Recognize and parse walking breaks as part of the session's distance and structure."
+      },
+      {
+        "pattern": "as 10 min WU;  I: 4-6 x 1 min  in Z4 w/2 min recovery;  10 min CD",
+        "issue": "The session includes multiple components (warm-up, intervals, cool-down) that may not be parsed correctly.",
+        "suggested_rule": "Allow for multi-part sessions that include warm-ups, intervals, and cool-downs, and parse each component separately."
+      }
+    ],
+    "new_abbreviations": [
+      {
+        "abbr": "WU",
+        "meaning": "warm-up",
+        "example": "3-4 miles as 10 min WU;  I: 4-6 x 1 min  in Z4 w/2 min recovery;  10 min CD"
+      },
+      {
+        "abbr": "CD",
+        "meaning": "cool down",
+        "example": "3-4 miles as 10 min WU;  I: 4-6 x 1 min  in Z4 w/2 min recovery;  10 min CD"
+      },
+      {
+        "abbr": "I",
+        "meaning": "interval",
+        "example": "I: 4-6 x 1 min  in Z4 w/2 min recovery"
+      }
+    ],
+    "prompt_improvements": [
+      "Recognize and parse walking breaks as part of the session's distance and structure.",
+      "Allow for multi-part sessions that include warm-ups, intervals, and cool-downs, and parse each component separately."
+    ],
+    "anomalies": [
+      "The plan includes a mix of structured running sessions with walk breaks, which may not fit standard parsing expectations."
+    ]
+  }
+}

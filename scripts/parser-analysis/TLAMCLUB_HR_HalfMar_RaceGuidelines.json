@@ -1,0 +1,52 @@
+{
+  "file": "TLAMCLUB_HR_HalfMar_RaceGuidelines.pdf",
+  "text_chars": 8268,
+  "analysis": {
+    "layout_type": "unclear",
+    "source_units": "unclear",
+    "total_weeks_detected": null,
+    "sessions_sample": [
+      {
+        "raw": "RACE DAY: ONE WEEK OUT Follow the training program as written. What you do during race week cannot help your fitness but can hurt it; resist the urge to add intensity or duration to any workout.",
+        "day": null,
+        "type": "Other",
+        "distance": null,
+        "parsing_note": "Session lacks specific activity type and distance."
+      },
+      {
+        "raw": "RACE DAY: TWO DAYS OUT Rest + sleep + carb up. This is generally the best day to take off and rest your legs; aim to stay off of them as much as possible.",
+        "day": null,
+        "type": "Rest",
+        "distance": null,
+        "parsing_note": "Session lacks specific distance and structured format."
+      },
+      {
+        "raw": "RACE DAY: MORNING Eat + drink. Carry a water bottle to sip throughout the morning; add electrolytes if a hot or humid day is forecast.",
+        "day": null,
+        "type": "Other",
+        "distance": null,
+        "parsing_note": "Session lacks specific activity type and distance."
+      }
+    ],
+    "unhandled_patterns": [
+      {
+        "pattern": "RACE DAY: ONE WEEK OUT Follow the training program as written.",
+        "issue": "The phrase 'Follow the training program as written' does not specify any sessions or activities.",
+        "suggested_rule": "Any mention of following a training program should be treated as a session with an unspecified activity type."
+      },
+      {
+        "pattern": "RACE DAY: TWO DAYS OUT Rest + sleep + carb up.",
+        "issue": "The use of '+' in 'Rest + sleep + carb up' could confuse the parser as it does not fit existing rules for multi-session cells.",
+        "suggested_rule": "Treat '+' as a separator for multiple activities within a single session when they are listed together."
+      }
+    ],
+    "new_abbreviations": [],
+    "prompt_improvements": [
+      "Add a rule to handle sessions that mention following a training program without specifying activities.",
+      "Implement a rule to treat '+' as a separator for multiple activities within a single session."
+    ],
+    "anomalies": [
+      "The document does not follow a clear weekly structure, making it difficult to identify distinct weeks and sessions."
+    ]
+  }
+}

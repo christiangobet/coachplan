@@ -11,6 +11,7 @@ import {
   splitWeekRange,
   type WeekRange
 } from './v4-pass-strategy';
+import { isSinglePassIncomplete } from './v4-completeness';
 
 const PARSER_VERSION = 'v4';
 const TEXT_LIMIT = 40000;
@@ -143,7 +144,13 @@ const PROGRAM_JSON_V1_SCHEMA = {
                   intensity: { type: 'string' },
                   steps: { type: 'array', items: OUTER_STEP_SCHEMA },
                   optional_alternatives: { type: 'array', items: {} },
-                  raw_text: { type: 'string' }
+                  notes: { type: ['string', 'null'] },
+                  raw_text: { type: 'string' },
+                  coaching_note: { type: ['string', 'null'] },
+                  session_focus: {
+                    type: ['string', 'null'],
+                    enum: ['tempo', 'threshold', 'recovery', 'long_run', 'race_sim', 'strength', 'other', null]
+                  }
                 }
               }
             }
@@ -280,7 +287,10 @@ export async function runParserV4(
   fullText: string,
   promptText?: string,
   planLengthWeeks?: number,
-  planGuide?: string
+  planGuide?: string,
+  options?: {
+    expectedWeekNumbers?: number[];
+  }
 ): Promise<ParserV4Result> {
   const model = getDefaultAiModel();
   const resolvedPrompt = promptText ?? FALLBACK_DEFAULT_PROMPT;
@@ -298,12 +308,11 @@ export async function runParserV4(
   // Check if single pass result is complete — not just whether the JSON was cut off.
   // Before the 40k-truncation removal, `truncated` was always true for long plans,
   // which reliably triggered multi-pass. Now we must also check for missing weeks.
-  const singleIsIncomplete = (() => {
-    if (single.truncated) return true; // JSON parse error / output cut
-    if (!single.validated || !single.data) return false; // validation failed — multi-pass won't help
-    const expectedFromMeta = single.data.program?.plan_length_weeks ?? planLengthWeeks ?? 0;
-    return expectedFromMeta > 0 && findMissingWeekNumbers(single.data.weeks, expectedFromMeta).length > 0;
-  })();
+  const singleIsIncomplete = isSinglePassIncomplete(
+    single,
+    planLengthWeeks,
+    options?.expectedWeekNumbers,
+  );
 
   if (!singleIsIncomplete) {
     return single;

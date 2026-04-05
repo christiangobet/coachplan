@@ -1,0 +1,72 @@
+{
+  "file": "30K adapted to Aletsch.pdf",
+  "text_chars": 6150,
+  "analysis": {
+    "layout_type": "sequential_table",
+    "source_units": "km",
+    "total_weeks_detected": 16,
+    "sessions_sample": [
+      {
+        "raw": "Strength + 3 km easy run",
+        "day": "Mon",
+        "type": "Run",
+        "distance": "3 km",
+        "parsing_note": null
+      },
+      {
+        "raw": "Rest or 30 min very easy cross-training",
+        "day": "Tue",
+        "type": "CrossTraining",
+        "distance": null,
+        "parsing_note": "The 'or' clause may confuse the parser regarding session type."
+      },
+      {
+        "raw": "Hill repeats: 8 × 1 min steady uphill with easy walk/jog down + light strength",
+        "day": "Wed",
+        "type": "Run",
+        "distance": null,
+        "parsing_note": "The format of hill repeats and mixed activities may not be parsed correctly."
+      },
+      {
+        "raw": "45–60 min easy walk or hike",
+        "day": "Sun",
+        "type": "Hike",
+        "distance": null,
+        "parsing_note": "Duration range may not be handled correctly for session type."
+      },
+      {
+        "raw": "Training trail outing: 11–13 km on terrain similar to race, hike climbs, test all race gear",
+        "day": "Sat",
+        "type": "Run",
+        "distance": "11–13 km",
+        "parsing_note": "Distance range may cause confusion in parsing."
+      }
+    ],
+    "unhandled_patterns": [
+      {
+        "pattern": "Rest or 30 min very easy cross-training",
+        "issue": "The parser may not handle 'or' clauses correctly for session types.",
+        "suggested_rule": "Allow for 'or' clauses in session types to indicate optional alternatives."
+      },
+      {
+        "pattern": "Hill repeats: 8 × 1 min steady uphill with easy walk/jog down + light strength",
+        "issue": "The parser may not recognize mixed activities and their formats.",
+        "suggested_rule": "Recognize and parse mixed activity formats that include repetitions and additional activities."
+      },
+      {
+        "pattern": "45–60 min easy walk or hike",
+        "issue": "Duration ranges may not be correctly associated with session types.",
+        "suggested_rule": "Ensure that duration ranges are correctly linked to the appropriate session type."
+      }
+    ],
+    "new_abbreviations": [],
+    "prompt_improvements": [
+      "Allow for 'or' clauses in session types to indicate optional alternatives.",
+      "Recognize and parse mixed activity formats that include repetitions and additional activities.",
+      "Ensure that duration ranges are correctly linked to the appropriate session type."
+    ],
+    "anomalies": [
+      "The plan includes a mix of hiking and running sessions, which may complicate parsing due to varied activity types and formats."
+    ]
+  }
+}

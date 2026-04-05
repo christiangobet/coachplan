@@ -1,0 +1,78 @@
+{
+  "file": "TLAM5k_Crush.pdf",
+  "text_chars": 22143,
+  "analysis": {
+    "layout_type": "calendar_grid",
+    "source_units": "miles",
+    "total_weeks_detected": 12,
+    "sessions_sample": [
+      {
+        "raw": "TWM  EP: 3 miles 1  +  TLAM Circuit #1",
+        "day": "Mon",
+        "type": "Run",
+        "distance": "3 miles",
+        "parsing_note": "The '+' symbol indicates multiple activities in one session, which needs to be split."
+      },
+      {
+        "raw": "XT: 30 min.",
+        "day": "Wed",
+        "type": "CrossTraining",
+        "distance": null,
+        "parsing_note": "Duration is provided instead of distance, which may require special handling."
+      },
+      {
+        "raw": "EP: 5 miles   Rest",
+        "day": "Sat",
+        "type": "Run",
+        "distance": "5 miles",
+        "parsing_note": "The 'Rest' following the distance may confuse the parser regarding session type."
+      },
+      {
+        "raw": "XT or Rest",
+        "day": "Fri",
+        "type": "Other",
+        "distance": null,
+        "parsing_note": "The 'or' clause indicates optional alternatives, which needs to be recognized."
+      },
+      {
+        "raw": "EP: 4 miles  +  4 PU",
+        "day": "Sun",
+        "type": "Run",
+        "distance": "4 miles",
+        "parsing_note": "The 'PU' abbreviation needs to be defined and handled correctly."
+      }
+    ],
+    "unhandled_patterns": [
+      {
+        "pattern": "XT or Rest",
+        "issue": "The parser may not recognize 'or' clauses as optional alternatives.",
+        "suggested_rule": "Recognize 'or' clauses as indicating optional alternatives for session types."
+      },
+      {
+        "pattern": "1  +  TLAM Circuit #1",
+        "issue": "The '+' symbol may not be correctly interpreted as indicating multiple activities.",
+        "suggested_rule": "Split sessions that contain '+' into separate activities."
+      }
+    ],
+    "new_abbreviations": [
+      {
+        "abbr": "PU",
+        "meaning": "Pick Ups",
+        "example": "EP: 4 miles  +  4 PU"
+      },
+      {
+        "abbr": "TWM",
+        "meaning": "Total Weekly Mileage",
+        "example": "TWM  EP: 3 miles 1  +  TLAM Circuit #1"
+      }
+    ],
+    "prompt_improvements": [
+      "Recognize and handle '+' as a separator for multiple activities in a single session.",
+      "Identify and parse 'or' clauses as optional alternatives for session types.",
+      "Define and handle new abbreviations such as PU (Pick Ups) and TWM (Total Weekly Mileage)."
+    ],
+    "anomalies": [
+      "The plan includes both distance and duration in some sessions, which may require dual handling for parsing."
+    ]
+  }
+}

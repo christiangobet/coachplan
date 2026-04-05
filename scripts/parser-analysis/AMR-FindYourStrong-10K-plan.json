@@ -1,0 +1,82 @@
+{
+  "file": "AMR-FindYourStrong-10K-plan.pdf",
+  "text_chars": 9761,
+  "analysis": {
+    "layout_type": "calendar_grid",
+    "source_units": "miles",
+    "total_weeks_detected": 15,
+    "sessions_sample": [
+      {
+        "raw": "E: 2 - 3 miles  Optional: walk 2 min. every .5 mile",
+        "day": "Mon",
+        "type": "Run",
+        "distance": "2 - 3 miles",
+        "parsing_note": "The optional walk breaks may complicate parsing the session role."
+      },
+      {
+        "raw": "★ 4  LR: 3 miles  Optional: walk 2 min. every 1 mile",
+        "day": "Thu",
+        "type": "Run",
+        "distance": "3 miles",
+        "parsing_note": "The presence of a priority symbol and optional walk breaks may confuse session classification."
+      },
+      {
+        "raw": "E: 3 miles  Optional: walk 1 min. every 1 mile  XT",
+        "day": "Tue",
+        "type": "CrossTraining",
+        "distance": "3 miles",
+        "parsing_note": "The optional walk breaks could lead to ambiguity in session role."
+      },
+      {
+        "raw": "3 - 4 miles as 10 min. WU; I: 4 - 6 x 1 min. at Z4 w/2 min. recovery; 10 min. CD",
+        "day": "Fri",
+        "type": "Run",
+        "distance": "3 - 4 miles",
+        "parsing_note": "Complex structure with warm-up, intervals, and cool-down may complicate parsing."
+      },
+      {
+        "raw": "★ 3 miles as 10 min. WU; I: 6 - 10 x 1 min. at Z4 w/2 min. recovery; 10 min. CD",
+        "day": "Sat",
+        "type": "Run",
+        "distance": "3 miles",
+        "parsing_note": "Similar to previous session, the multi-part structure may confuse the parser."
+      }
+    ],
+    "unhandled_patterns": [
+      {
+        "pattern": "Optional: walk 2 min. every .5 mile",
+        "issue": "The parser may not correctly interpret the optional walking breaks as part of the session.",
+        "suggested_rule": "Recognize and parse optional walking breaks as part of the session details."
+      },
+      {
+        "pattern": "3 - 4 miles as 10 min. WU; I: 4 - 6 x 1 min. at Z4 w/2 min. recovery; 10 min. CD",
+        "issue": "The parser may struggle with sessions that include multiple components (WU, intervals, CD) in a single line.",
+        "suggested_rule": "Allow for multi-part session descriptions and parse each component separately."
+      }
+    ],
+    "new_abbreviations": [
+      {
+        "abbr": "WU",
+        "meaning": "Warm-up",
+        "example": "3 - 4 miles as 10 min. WU; I: 4 - 6 x 1 min. at Z4 w/2 min. recovery; 10 min. CD"
+      },
+      {
+        "abbr": "CD",
+        "meaning": "Cool-down",
+        "example": "3 - 4 miles as 10 min. WU; I: 4 - 6 x 1 min. at Z4 w/2 min. recovery; 10 min. CD"
+      },
+      {
+        "abbr": "I",
+        "meaning": "Interval",
+        "example": "I: 4 - 6 x 1 min. at Z4 w/2 min. recovery"
+      }
+    ],
+    "prompt_improvements": [
+      "Recognize and parse optional walking breaks as part of the session details.",
+      "Allow for multi-part session descriptions and parse each component separately."
+    ],
+    "anomalies": [
+      "The plan includes optional walk breaks that are not consistently formatted, which may lead to confusion in parsing."
+    ]
+  }
+}

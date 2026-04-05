@@ -1,0 +1,82 @@
+{
+  "generated_at": "2026-04-04T12:05:01.195Z",
+  "candidates": [
+    {
+      "candidate_id": "candidate_distance_handling_1",
+      "cluster_id": "distance_handling",
+      "after_section": "STEP 5 — DISTANCE & TIME NORMALIZATION",
+      "insert_text": "Handle distance terms featuring 'ish' as approximate distances by extracting the numeric part.",
+      "rationale": "This will ensure the parser interprets uncertain distances correctly, enhancing parsing accuracy.",
+      "evidence_ids": [
+        "evi_74eca34482ab",
+        "evi_9af9ae6a0305"
+      ]
+    },
+    {
+      "candidate_id": "candidate_distance_handling_2",
+      "cluster_id": "distance_handling",
+      "after_section": "STEP 5 — DISTANCE & TIME NORMALIZATION",
+      "insert_text": "Allow distance descriptions that indicate a minimum without a maximum.",
+      "rationale": "This addresses scenarios where only lower bounds are provided, ensuring such descriptions are properly parsed.",
+      "evidence_ids": [
+        "evi_c7246286050a",
+        "evi_da1befd04d8c"
+      ]
+    },
+    {
+      "candidate_id": "candidate_optional_alternatives_1",
+      "cluster_id": "optional_alternatives",
+      "after_section": "STEP 4 — SPECIAL PARSING MODES",
+      "insert_text": "Identify and parse 'or' clauses as optional alternatives for session types.",
+      "rationale": "This allows flexibility in capturing alternate session types, improving the overall parsing capability.",
+      "evidence_ids": [
+        "evi_29e9b6c0081d",
+        "evi_9c05a50372a4"
+      ]
+    },
+    {
+      "candidate_id": "candidate_session_structure_1",
+      "cluster_id": "session_structure",
+      "after_section": "STEP 3 — SESSION EXTRACTION",
+      "insert_text": "Extract and categorize effort levels specified in sessions.",
+      "rationale": "This will enable more precise classification of sessions according to their intensity, thus enhancing the parser's effectiveness.",
+      "evidence_ids": [
+        "evi_35057c5ba096",
+        "evi_9a7bb793d82c"
+      ]
+    },
+    {
+      "candidate_id": "candidate_activity_types_1",
+      "cluster_id": "activity_types",
+      "after_section": "STEP 3 — SESSION EXTRACTION",
+      "insert_text": "Recognize 'Circuit Runs' and other non-standard terms as valid activity types.",
+      "rationale": "Incorporating these terms will ensure that a wider range of activities can be accurately parsed.",
+      "evidence_ids": [
+        "evi_27c1b1de6545",
+        "evi_f1d1cebba4da"
+      ]
+    },
+    {
+      "candidate_id": "candidate_timeframes_and_nutrition_1",
+      "cluster_id": "timeframes_and_nutrition",
+      "after_section": "STEP 4 — SPECIAL PARSING MODES",
+      "insert_text": "Include hydration recommendations as part of training session details.",
+      "rationale": "This helps to improve the comprehensiveness of training plans by incorporating nutritional advice relevant to performance.",
+      "evidence_ids": [
+        "evi_8c862c5e0571",
+        "evi_f74ec1cd0b67"
+      ]
+    },
+    {
+      "candidate_id": "candidate_timeframes_and_nutrition_2",
+      "cluster_id": "timeframes_and_nutrition",
+      "after_section": "STEP 4 — SPECIAL PARSING MODES",
+      "insert_text": "Include nutrition-focused sessions in the training plan parsing.",
+      "rationale": "Recognizing the importance of nutrition-related advice within training sessions helps create more holistic plans for athletes.",
+      "evidence_ids": [
+        "evi_af4a72acf270",
+        "evi_fcf4da915d4e"
+      ]
+    }
+  ]
+}

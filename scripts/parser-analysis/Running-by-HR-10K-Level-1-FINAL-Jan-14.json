@@ -1,0 +1,52 @@
+{
+  "file": "Running-by-HR-10K-Level-1-FINAL-Jan-14.pdf",
+  "text_chars": 42264,
+  "analysis": {
+    "layout_type": "unclear",
+    "source_units": "mixed",
+    "total_weeks_detected": 15,
+    "sessions_sample": [
+      {
+        "raw": "two strength circuits, two rest days, and one day for cross-training.",
+        "day": null,
+        "type": "CrossTraining",
+        "distance": null,
+        "parsing_note": "The session does not specify exact days or distances, making it difficult to categorize."
+      },
+      {
+        "raw": "4 hours, 45 minutes (includes four runs, one-cross-training session + 2 strength circuits)",
+        "day": null,
+        "type": "Run",
+        "distance": null,
+        "parsing_note": "The total duration is provided, but individual session distances are not specified."
+      },
+      {
+        "raw": "75 minutes",
+        "day": null,
+        "type": "Run",
+        "distance": null,
+        "parsing_note": "Duration is given without a specific day or distance, complicating session extraction."
+      }
+    ],
+    "unhandled_patterns": [
+      {
+        "pattern": "two strength circuits, two rest days, and one day for cross-training.",
+        "issue": "The parser may not recognize this as a structured session due to lack of specific day and distance.",
+        "suggested_rule": "Recognize and parse general session descriptions that include multiple activities without specific days or distances."
+      },
+      {
+        "pattern": "4 hours, 45 minutes (includes four runs, one-cross-training session + 2 strength circuits)",
+        "issue": "The parser may misinterpret this as a single session instead of multiple sessions.",
+        "suggested_rule": "Identify and split sessions that are described as a total duration including multiple activities."
+      }
+    ],
+    "new_abbreviations": [],
+    "prompt_improvements": [
+      "Add a rule to handle sessions described in total durations that include multiple activities.",
+      "Add a rule to parse general session descriptions that do not specify exact days or distances."
+    ],
+    "anomalies": [
+      "The plan includes a mix of general descriptions and specific durations without clear session breakdowns, which may confuse the parser."
+    ]
+  }
+}

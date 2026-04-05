@@ -1,0 +1,51 @@
+{
+  "file": "Nutrition-for-Running-September-2019-FINAL.pdf",
+  "text_chars": 18374,
+  "analysis": {
+    "layout_type": "unclear",
+    "source_units": "unclear",
+    "total_weeks_detected": null,
+    "sessions_sample": [
+      {
+        "raw": "EAT:   Simple carbohydrates, ideally a 2:1 ratio of maltodextrin to fructose, which are two types of sugars. (Most sports products contain this ratio.)",
+        "day": null,
+        "type": "Other",
+        "distance": null,
+        "parsing_note": "Session type and distance are not clearly defined."
+      },
+      {
+        "raw": "AMOUNT:   50-100g carbohydrate immediately post-exercise.",
+        "day": null,
+        "type": "Other",
+        "distance": null,
+        "parsing_note": "No specific session day or type; focuses on nutrition rather than a workout."
+      },
+      {
+        "raw": "DURING LONG RUN OR RACE  GOAL:   To prevent a drop in blood glucose and provide energy.",
+        "day": null,
+        "type": "Other",
+        "distance": null,
+        "parsing_note": "Describes nutrition strategy rather than a specific training session."
+      }
+    ],
+    "unhandled_patterns": [
+      {
+        "pattern": "EAT:   Simple carbohydrates, ideally a 2:1 ratio of maltodextrin to fructose, which are two types of sugars.",
+        "issue": "The parser may not recognize nutrition-focused text as relevant training sessions.",
+        "suggested_rule": "Include nutrition advice as a valid session type if it relates to training or race preparation."
+      },
+      {
+        "pattern": "AMOUNT:   50-100g carbohydrate immediately post-exercise.",
+        "issue": "Nutritional amounts are not currently parsed as sessions.",
+        "suggested_rule": "Recognize nutritional guidelines as part of training plans and categorize them appropriately."
+      }
+    ],
+    "new_abbreviations": [],
+    "prompt_improvements": [
+      "Include nutrition-focused sessions in the training plan parsing to capture relevant dietary advice."
+    ],
+    "anomalies": [
+      "The document primarily focuses on nutrition rather than structured training sessions, which may confuse the parser."
+    ]
+  }
+}

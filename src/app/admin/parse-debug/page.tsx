@@ -83,7 +83,7 @@ export default async function ParseDebugPage() {
         <div>
           <h1>Parse Debug</h1>
           <p>
-            Recent Parser V4 jobs and their artifacts. Flag: <code>PARSER_V4=true</code>
+            Recent upload parser jobs and artifacts across orchestrated parser paths.
           </p>
         </div>
         <Link href="/admin" className="admin-hero-badge" style={{ textDecoration: 'none' }}>
@@ -93,7 +93,7 @@ export default async function ParseDebugPage() {
 
       {jobs.length === 0 && (
         <div className="admin-card" style={{ padding: 24, color: '#666' }}>
-          No parse jobs yet. Enable <code>PARSER_V4=true</code> and upload a PDF.
+          No parse jobs yet. Upload a PDF through the normal plan flow to populate this monitor.
         </div>
       )}
 

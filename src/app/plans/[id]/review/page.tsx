@@ -2,7 +2,9 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import './review.css';
 import {
   estimateGoalTimeFromEvidence,
@@ -14,6 +16,7 @@ import { inferPaceBucketFromText } from '@/lib/intensity-targets';
 import { normalizePaceForStorage, resolveDistanceUnitFromActivity } from '@/lib/unit-display';
 import PlanSourcePdfPane from '@/components/PlanSourcePdfPane';
 import SessionFlowStrip, { type SessionStepNode } from '@/components/SessionFlowStrip';
+import { buildCombinedGuideMarkdown } from '@/lib/plan-parse-context';
 
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const ACTIVITY_TYPES = ['RUN', 'STRENGTH', 'CROSS_TRAIN', 'REST', 'MOBILITY', 'YOGA', 'HIKE', 'OTHER'] as const;
@@ -138,6 +141,21 @@ type SourceDocumentMeta = {
   error: string | null;
 };
 
+type GuideViewMode = 'preview' | 'edit';
+
+type ReviewParseContext = {
+  planGuide: string | null;
+  extractedMd: string | null;
+  parseJobId: string | null;
+  parseJobCreatedAt: string | null;
+  extractedMdCreatedAt: string | null;
+  hasExtractedMd: boolean;
+  mdParseStatus: string | null;
+  persistenceSource: string | null;
+  canBackfillExtractedMd: boolean;
+  canApplyMdProgram: boolean;
+};
+
 function toFiniteNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
@@ -154,6 +172,21 @@ function humanizeToken(value: string | null) {
     .replace(/[_-]+/g, ' ')
     .toLowerCase()
     .replace(/\b[a-z]/g, (match) => match.toUpperCase());
+}
+
+function buildDayActivityPreview(day: ReviewDay) {
+  const activities = day.activities || [];
+  if (activities.length === 0) return 'No activities';
+
+  const first = activities[0];
+  const firstLabel = (
+    first.title?.trim()
+    || humanizeToken(first.type)
+    || 'Session'
+  );
+
+  if (activities.length === 1) return firstLabel;
+  return `${firstLabel} +${activities.length - 1} more`;
 }
 
 type ActivityDraft = {
@@ -508,7 +541,6 @@ function toDateInputValue(value: string | Date | null | undefined) {
 export default function PlanReviewPage() {
   const params = useParams<{ id: string }>();
   const searchParams = useSearchParams();
-  const router = useRouter();
   const planId = Array.isArray(params?.id) ? params?.id[0] : params?.id;
   const arrivedFromUpload = searchParams?.get('fromUpload') === '1';
   const parseWarningMsg = searchParams?.get('parseWarningMsg');
@@ -565,6 +597,8 @@ export default function PlanReviewPage() {
   );
   const [showSourcePdf, setShowSourcePdf] = useState(false);
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
+  const [selectedWeekId, setSelectedWeekId] = useState<string | null>(null);
+  const [selectedDayId, setSelectedDayId] = useState<string | null>(null);
   const [sourceDocumentChecked, setSourceDocumentChecked] = useState(false);
   const [sourceDocument, setSourceDocument] = useState<SourceDocumentMeta>({
     loading: false,
@@ -576,13 +610,26 @@ export default function PlanReviewPage() {
   });
 
   const [planGuide, setPlanGuide] = useState('');
+  const [extractedMd, setExtractedMd] = useState('');
+  const [guideViewMode, setGuideViewMode] = useState<GuideViewMode>('preview');
+  const [parseContextLoading, setParseContextLoading] = useState(false);
+  const [parseContextError, setParseContextError] = useState<string | null>(null);
+  const [parseContextMeta, setParseContextMeta] = useState<Pick<ReviewParseContext, 'parseJobId' | 'parseJobCreatedAt' | 'extractedMdCreatedAt' | 'hasExtractedMd' | 'mdParseStatus' | 'persistenceSource' | 'canBackfillExtractedMd' | 'canApplyMdProgram'>>({
+    parseJobId: null,
+    parseJobCreatedAt: null,
+    extractedMdCreatedAt: null,
+    hasExtractedMd: false,
+    mdParseStatus: null,
+    persistenceSource: null,
+    canBackfillExtractedMd: false,
+    canApplyMdProgram: false
+  });
   const [guideSaving, setGuideSaving] = useState(false);
   const [guideSaved, setGuideSaved] = useState(false);
   const [extractingGuide, setExtractingGuide] = useState(false);
   const [extractGuideError, setExtractGuideError] = useState<string | null>(null);
-  const [reparsing, setReparsing] = useState(false);
-  const [reparseResult, setReparseResult] = useState<{ weeksProcessed: number; activitiesUpdated: number } | null>(null);
-  const [reparseError, setReparseError] = useState<string | null>(null);
+  const [backfillingExtractedMd, setBackfillingExtractedMd] = useState(false);
+  const [backfillExtractedMdError, setBackfillExtractedMdError] = useState<string | null>(null);
   const [expandedSessionInstructions, setExpandedSessionInstructions] = useState<Record<string, boolean>>({});
   const [activeFlowEditor, setActiveFlowEditor] = useState<{ activityId: string; path: number[] } | null>(null);
   const [recheckingDayId, setRecheckingDayId] = useState<string | null>(null);
@@ -593,6 +640,27 @@ export default function PlanReviewPage() {
   const guideSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const guideSavedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sourceToggleStorageKey = planId ? `review-source-pane:${planId}` : null;
+  const combinedGuideMarkdown = useMemo(
+    () => buildCombinedGuideMarkdown(planGuide, extractedMd),
+    [planGuide, extractedMd]
+  );
+  const extractedMdMetaLabel = useMemo(() => {
+    if (!parseContextMeta.extractedMdCreatedAt) return null;
+    const parsed = new Date(parseContextMeta.extractedMdCreatedAt);
+    if (Number.isNaN(parsed.getTime())) return null;
+    return parsed.toLocaleString(undefined, {
+      dateStyle: 'medium',
+      timeStyle: 'short'
+    });
+  }, [parseContextMeta.extractedMdCreatedAt]);
+  const mdParseStatusLabel = useMemo(() => {
+    if (!parseContextMeta.mdParseStatus) return 'Unknown';
+    return humanizeToken(parseContextMeta.mdParseStatus);
+  }, [parseContextMeta.mdParseStatus]);
+  const persistenceSourceLabel = useMemo(() => {
+    if (!parseContextMeta.persistenceSource) return 'Unknown';
+    return humanizeToken(parseContextMeta.persistenceSource);
+  }, [parseContextMeta.persistenceSource]);
 
   const initializeDrafts = useCallback((nextPlan: ReviewPlan, fallbackUnit: DistanceUnitValue) => {
     const nextDayDrafts: Record<string, string> = {};
@@ -656,6 +724,39 @@ export default function PlanReviewPage() {
     }
   }, [planId, initializeDrafts]);
 
+  const loadParseContext = useCallback(async () => {
+    if (!planId) return;
+    setParseContextLoading(true);
+    setParseContextError(null);
+
+    try {
+      const res = await fetch(`/api/plans/${planId}/parse-context`, {
+        cache: 'no-store'
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        setParseContextError(data?.error || 'Failed to load parse context.');
+        return;
+      }
+
+      setExtractedMd(typeof data?.extractedMd === 'string' ? data.extractedMd : '');
+      setParseContextMeta({
+        parseJobId: typeof data?.parseJobId === 'string' ? data.parseJobId : null,
+        parseJobCreatedAt: typeof data?.parseJobCreatedAt === 'string' ? data.parseJobCreatedAt : null,
+        extractedMdCreatedAt: typeof data?.extractedMdCreatedAt === 'string' ? data.extractedMdCreatedAt : null,
+        hasExtractedMd: data?.hasExtractedMd === true,
+        mdParseStatus: typeof data?.mdParseStatus === 'string' ? data.mdParseStatus : null,
+        persistenceSource: typeof data?.persistenceSource === 'string' ? data.persistenceSource : null,
+        canBackfillExtractedMd: data?.canBackfillExtractedMd === true,
+        canApplyMdProgram: data?.canApplyMdProgram === true,
+      });
+    } catch {
+      setParseContextError('Failed to load parse context.');
+    } finally {
+      setParseContextLoading(false);
+    }
+  }, [planId]);
+
   const loadProfilePaces = useCallback(async () => {
     try {
       const res = await fetch('/api/me');
@@ -670,6 +771,10 @@ export default function PlanReviewPage() {
   useEffect(() => {
     loadPlan();
   }, [loadPlan]);
+
+  useEffect(() => {
+    void loadParseContext();
+  }, [loadParseContext]);
 
   useEffect(() => {
     void loadProfilePaces();
@@ -853,6 +958,29 @@ export default function PlanReviewPage() {
     return [...plan.weeks].sort((a, b) => a.weekIndex - b.weekIndex);
   }, [plan]);
 
+  useEffect(() => {
+    if (weeks.length === 0) {
+      setSelectedWeekId(null);
+      setSelectedDayId(null);
+      return;
+    }
+
+    const hasSelectedWeek = selectedWeekId && weeks.some((week) => week.id === selectedWeekId);
+    if (!hasSelectedWeek) {
+      const firstWeek = weeks[0];
+      setSelectedWeekId(firstWeek.id);
+      const firstDay = sortDays(firstWeek.days || [])[0];
+      setSelectedDayId(firstDay?.id ?? null);
+      return;
+    }
+
+    const activeWeek = weeks.find((week) => week.id === selectedWeekId) ?? null;
+    if (!activeWeek) return;
+    if (selectedDayId && !activeWeek.days.some((day) => day.id === selectedDayId)) {
+      setSelectedDayId(null);
+    }
+  }, [selectedDayId, selectedWeekId, weeks]);
+
   const unassigned = useMemo(() => {
     // weekId is non-nullable in the schema; all days are week-assigned.
     // Kept as empty array for UI safety.
@@ -867,6 +995,28 @@ export default function PlanReviewPage() {
     const unassignedCount = unassigned?.length || 0;
     return { totalWeeks, totalActivities, runActivities, unassignedCount };
   }, [plan, unassigned]);
+
+  const selectedWeek = useMemo(
+    () => weeks.find((week) => week.id === selectedWeekId) ?? weeks[0] ?? null,
+    [selectedWeekId, weeks],
+  );
+
+  const selectedWeekDays = useMemo(
+    () => sortDays(selectedWeek?.days || []),
+    [selectedWeek],
+  );
+
+  const selectedDay = useMemo(
+    () => selectedWeekDays.find((day) => day.id === selectedDayId) ?? null,
+    [selectedDayId, selectedWeekDays],
+  );
+
+  const visibleDays = useMemo(
+    () => (selectedDay ? [selectedDay] : selectedWeekDays),
+    [selectedDay, selectedWeekDays],
+  );
+
+  const singleDayFocus = visibleDays.length === 1;
 
   const parseProfile = useMemo<ReviewProgramProfile | null>(() => {
     const source = plan?.parseProfile;
@@ -1300,41 +1450,27 @@ export default function PlanReviewPage() {
     }
   }, [planId, extractingGuide]);
 
-  const handleReparse = useCallback(async () => {
-    if (!planId || reparsing) return;
-    setReparsing(true);
-    setReparseResult(null);
-    setReparseError(null);
+  const handleBackfillExtractedMd = useCallback(async () => {
+    if (!planId || backfillingExtractedMd) return;
+    setBackfillingExtractedMd(true);
+    setBackfillExtractedMdError(null);
     try {
-      const res = await fetch(`/api/plans/${planId}/reparse`, { method: 'POST' });
+      const res = await fetch(`/api/plans/${planId}/parse-context/backfill`, {
+        method: 'POST',
+      });
       const data = await res.json().catch(() => null);
       if (!res.ok) {
-        setReparseError(data?.error || 'Re-parse failed');
+        setBackfillExtractedMdError(data?.error || 'Markdown backfill failed.');
         return;
       }
-      setReparseResult({
-        weeksProcessed: Number(data?.weeksProcessed ?? 0),
-        activitiesUpdated: Number(data?.activitiesUpdated ?? 0)
-      });
-      router.refresh();
-      const refreshedPlan = await loadPlan();
-      if (refreshedPlan) {
-        const expanded: Record<string, boolean> = {};
-        for (const week of refreshedPlan.weeks) {
-          for (const day of week.days) {
-            for (const activity of day.activities) {
-              if (activity.sessionInstructions) expanded[activity.id] = true;
-            }
-          }
-        }
-        if (Object.keys(expanded).length > 0) setExpandedSessionInstructions(expanded);
-      }
+      await loadPlan();
+      await loadParseContext();
     } catch {
-      setReparseError('Re-parse failed');
+      setBackfillExtractedMdError('Markdown backfill failed.');
     } finally {
-      setReparsing(false);
+      setBackfillingExtractedMd(false);
     }
-  }, [loadPlan, planId, reparsing, router]);
+  }, [backfillingExtractedMd, loadParseContext, loadPlan, planId]);
 
   const handleRecheckDay = useCallback(async (dayId: string, weekIndex: number, dayOfWeek: number) => {
     if (!planId || recheckingDayId) return;
@@ -1865,61 +2001,38 @@ export default function PlanReviewPage() {
             <strong>{summary.runActivities}</strong>
             <span>Run activities</span>
           </div>
+          <div>
+            <strong>{(hasParseWarning ? 1 : 0) + summary.unassignedCount}</strong>
+            <span>Needs attention</span>
+          </div>
         </div>
 
-        {parseProfile && (
-          <div className="review-profile-panel">
-            <div className="review-profile-head">
-              <h3>Detected Plan Profile</h3>
-              <p>Auto-inferred document context used to guide structured parsing.</p>
+        {!isActivated && (
+          <div className="review-glance-row">
+            <div className="review-glance-card">
+              <span className="review-glance-kicker">Workflow</span>
+              <strong>Guide, review, activate</strong>
+              <p>Start with the plan guide, then validate the flagged weeks and days before going live.</p>
             </div>
-            <div className="review-profile-grid">
-              <div>
-                <strong>{parseProfile.plan_length_weeks ?? summary.totalWeeks}</strong>
-                <span>Plan length (weeks)</span>
-              </div>
-              <div>
-                <strong>{parseProfile.days_per_week ?? '—'}</strong>
-                <span>Days per week</span>
-              </div>
-              <div>
-                <strong>{humanizeToken(parseProfile.distance_type)}</strong>
-                <span>Distance type</span>
-              </div>
-              <div>
-                <strong>{humanizeToken(parseProfile.intensity_model)}</strong>
-                <span>Intensity model</span>
-              </div>
-              <div>
-                <strong>{humanizeToken(parseProfile.units)}</strong>
-                <span>Units</span>
-              </div>
-              <div>
-                <strong>{humanizeToken(parseProfile.language_hint)}</strong>
-                <span>Language hint</span>
-              </div>
-              <div>
-                <strong>{parseProfile.peak_week_km !== null ? `${parseProfile.peak_week_km.toFixed(1)} km` : '—'}</strong>
-                <span>Peak week</span>
-              </div>
-              <div>
-                <strong>{parseProfile.peak_long_run_km !== null ? `${parseProfile.peak_long_run_km.toFixed(1)} km` : '—'}</strong>
-                <span>Peak long run</span>
-              </div>
-              <div>
-                <strong>{parseProfile.taper_weeks ?? '—'}</strong>
-                <span>Taper weeks</span>
-              </div>
-            </div>
-
-            {(qualityFlags.length > 0 || parseProfile.structure_tags.length > 0) && (
-              <div className="review-profile-tags">
-                {qualityFlags.map((label) => (
-                  <span key={`quality-${label}`} className="review-profile-tag">{label}</span>
-                ))}
-                {parseProfile.structure_tags.map((tag) => (
-                  <span key={`tag-${tag}`} className="review-profile-tag alt">{humanizeToken(tag)}</span>
-                ))}
+            {parseProfile && (
+              <div className="review-glance-card review-glance-card-profile">
+                <span className="review-glance-kicker">Parser snapshot</span>
+                <div className="review-glance-metrics">
+                  <span>{parseProfile.days_per_week ?? '—'} days/week</span>
+                  <span>{humanizeToken(parseProfile.distance_type)}</span>
+                  <span>{humanizeToken(parseProfile.intensity_model)}</span>
+                  <span>{humanizeToken(parseProfile.units)}</span>
+                </div>
+                {(qualityFlags.length > 0 || parseProfile.structure_tags.length > 0) && (
+                  <div className="review-profile-tags">
+                    {qualityFlags.map((label) => (
+                      <span key={`quality-${label}`} className="review-profile-tag">{label}</span>
+                    ))}
+                    {parseProfile.structure_tags.slice(0, 3).map((tag) => (
+                      <span key={`tag-${tag}`} className="review-profile-tag alt">{humanizeToken(tag)}</span>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -2393,142 +2506,276 @@ export default function PlanReviewPage() {
             <div>
               <h3>Plan Context Guide</h3>
               <p>
-                This guide is used to expand abbreviations and write session instructions during parsing.
-                Correct any errors, then re-parse.
+                Review the saved guide and the latest extracted markdown together. Edit only the guide section, then run targeted enrichment.
               </p>
             </div>
             {guideSaving && <span className="review-guide-status">Saving&hellip;</span>}
             {!guideSaving && guideSaved && <span className="review-guide-status saved">Saved &#10003;</span>}
           </div>
-          {!planGuide && (
-            <div className="review-guide-extract">
-              <button
-                className="review-save-btn"
-                type="button"
-                onClick={handleExtractGuide}
-                disabled={extractingGuide}
-              >
-                {extractingGuide ? 'Extracting guide\u2026 (30\u201360s)' : '\u2728 Extract Guide from PDF'}
-              </button>
-              {extractGuideError && <p className="review-error">{extractGuideError}</p>}
-              <p className="review-guide-warning">
-                Extracts abbreviations, pace zones, and session context from the original PDF. Review and correct before re-parsing.
+          <div className="review-guide-tabs" role="tablist" aria-label="Plan context guide modes">
+            <button
+              className={`review-guide-tab${guideViewMode === 'preview' ? ' active' : ''}`}
+              type="button"
+              role="tab"
+              aria-selected={guideViewMode === 'preview'}
+              onClick={() => setGuideViewMode('preview')}
+            >
+              Preview
+            </button>
+            <button
+              className={`review-guide-tab${guideViewMode === 'edit' ? ' active' : ''}`}
+              type="button"
+              role="tab"
+              aria-selected={guideViewMode === 'edit'}
+              onClick={() => setGuideViewMode('edit')}
+            >
+              Edit Guide
+            </button>
+          </div>
+          {guideViewMode === 'preview' ? (
+            <div className="review-guide-surface">
+              <div className="review-guide-meta">
+                <span>Guide is editable in the next tab. Extracted markdown is read-only.</span>
+                <span>MD parse status: {mdParseStatusLabel}</span>
+                <span>Persistence source: {persistenceSourceLabel}</span>
+                {extractedMdMetaLabel && <span>Latest extracted markdown: {extractedMdMetaLabel}</span>}
+              </div>
+              {parseContextLoading && <p className="review-guide-empty">Loading extracted markdown&hellip;</p>}
+              {parseContextError && <p className="review-error">{parseContextError}</p>}
+              {!parseContextLoading && parseContextMeta.canApplyMdProgram && (
+                <div className="review-guide-extract">
+                  <button
+                    className="review-save-btn"
+                    type="button"
+                    onClick={handleBackfillExtractedMd}
+                    disabled={backfillingExtractedMd}
+                  >
+                    {backfillingExtractedMd ? 'Applying markdown parse…' : 'Apply Markdown Parse to Plan'}
+                  </button>
+                  {backfillExtractedMdError && <p className="review-error">{backfillExtractedMdError}</p>}
+                  <p className="review-guide-warning">
+                    A successful markdown-backed parse is available for this plan, but the saved plan is still using fallback data. Applying it will rebuild the weeks, days, and activities from the markdown parse.
+                  </p>
+                </div>
+              )}
+              {!parseContextLoading && !parseContextMeta.hasExtractedMd && parseContextMeta.canBackfillExtractedMd && (
+                <div className="review-guide-extract">
+                  <button
+                    className="review-save-btn"
+                    type="button"
+                    onClick={handleBackfillExtractedMd}
+                    disabled={backfillingExtractedMd}
+                  >
+                    {backfillingExtractedMd ? 'Backfilling extracted markdown…' : 'Backfill Extracted Markdown'}
+                  </button>
+                  {backfillExtractedMdError && <p className="review-error">{backfillExtractedMdError}</p>}
+                  <p className="review-guide-warning">
+                    This plan has no stored extracted markdown yet. Backfill regenerates it from the source PDF and reruns the markdown-first parse.
+                  </p>
+                </div>
+              )}
+              <div className="review-guide-markdown">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  {combinedGuideMarkdown}
+                </ReactMarkdown>
+              </div>
+            </div>
+          ) : (
+            <div className="review-guide-edit-shell">
+              {!planGuide && (
+                <div className="review-guide-extract">
+                  <button
+                    className="review-save-btn"
+                    type="button"
+                    onClick={handleExtractGuide}
+                    disabled={extractingGuide}
+                  >
+                    {extractingGuide ? 'Extracting guide\u2026 (30\u201360s)' : '\u2728 Extract Guide from PDF'}
+                  </button>
+                  {extractGuideError && <p className="review-error">{extractGuideError}</p>}
+                  <p className="review-guide-warning">
+                    Extracts abbreviations, pace zones, and session context from the original PDF. Review and correct before re-parsing.
+                  </p>
+                </div>
+              )}
+              <p className="review-guide-edit-note">
+                Only this guide text is editable. The extracted markdown shown in Preview stays read-only as the faithful parse artifact.
               </p>
+              <label className="review-field">
+                <span className="review-visually-hidden">Plan guide content</span>
+                <textarea
+                  className="review-guide-textarea"
+                  value={planGuide}
+                  onChange={(event) => handleGuideChange(event.target.value)}
+                  rows={6}
+                  placeholder="No guide extracted yet. Click &quot;Extract Guide from PDF&quot; above, or paste abbreviations and pace zone definitions here."
+                />
+              </label>
             </div>
           )}
-          <label className="review-field">
-            <span className="review-visually-hidden">Plan guide content</span>
-            <textarea
-              className="review-guide-textarea"
-              value={planGuide}
-              onChange={(event) => handleGuideChange(event.target.value)}
-              rows={6}
-              placeholder="No guide extracted yet. Click &quot;Extract Guide from PDF&quot; above, or paste abbreviations and pace zone definitions here."
-            />
-          </label>
-          <div className="review-guide-actions">
-            <button
-              className="review-save-btn"
-              type="button"
-              onClick={handleReparse}
-              disabled={reparsing || autosaveState.busy || guideSaving}
-            >
-              {reparsing ? 'Re-parsing\u2026 (this may take 30\u201360s)' : '\u21BA Re-parse Schedule with Current Guide'}
-            </button>
-            {reparseResult && (
-              <span className="review-guide-result">
-                &#10003; Re-parsed: {reparseResult.weeksProcessed} weeks &middot; {reparseResult.activitiesUpdated} activities updated
-              </span>
-            )}
-          </div>
-          {reparseError && <p className="review-error">{reparseError}</p>}
-          <p className="review-guide-warning">
-            Re-parse updates activity titles, instructions, and pace targets. It does not change logged data or planned distances.
-          </p>
         </section>
       )}
       {!isActivated && (
-        <section className="review-week-grid" id="review-week-grid">
-          {weeks.map((week) => {
-          const days = sortDays(week.days || []);
-          const weekActivityCount = days.reduce((sum, day) => sum + (day.activities?.length || 0), 0);
-          return (
-            <article key={week.id} className="review-page-card review-week-card">
-              <div className="review-week-head">
-                <h2>Week {week.weekIndex}</h2>
-                <span>{weekActivityCount} activities</span>
-              </div>
-
-              {days.length === 0 && <p className="review-muted">No days parsed for this week.</p>}
-
-              {days.map((day) => {
-                const notesOpen = expandedDayNotes[day.id] ?? false;
+        <section className="review-page-card review-cockpit-shell" id="review-week-grid">
+          <aside className="review-cockpit-rail">
+            <div className="review-cockpit-rail-head">
+              <h3>Review Outline</h3>
+              <p>Move through the plan week by week, then drill into the days that need edits.</p>
+            </div>
+            <div className="review-cockpit-week-list">
+              {weeks.map((week) => {
+                const weekDays = sortDays(week.days || []);
+                const weekActivityCount = weekDays.reduce((sum, day) => sum + (day.activities?.length || 0), 0);
+                const activeWeek = week.id === selectedWeek?.id;
                 return (
-                  <div key={day.id} className="review-day-block">
-                    <div className="review-day-head">
-                      <span className="review-day-pill">{DAY_LABELS[(day.dayOfWeek || 1) - 1] || 'Day'}</span>
-                      <div className="review-day-actions">
+                  <div key={week.id} className={`review-cockpit-week-item${activeWeek ? ' active' : ''}`}>
+                    <button
+                      type="button"
+                      className={`review-cockpit-week-button${activeWeek ? ' active' : ''}`}
+                      onClick={() => {
+                        setSelectedWeekId(week.id);
+                        setSelectedDayId(weekDays[0]?.id ?? null);
+                      }}
+                    >
+                      <span>Week {week.weekIndex}</span>
+                      <strong>{weekActivityCount} activities</strong>
+                    </button>
+                    {activeWeek && weekDays.length > 0 && (
+                      <div className="review-cockpit-day-list">
                         <button
-                          className="review-save-btn secondary"
                           type="button"
-                          onClick={() =>
-                            setExpandedDayNotes((prev) => ({ ...prev, [day.id]: !notesOpen }))
-                          }
+                          className={`review-cockpit-day-button${selectedDayId === null ? ' active' : ''}`}
+                          onClick={() => setSelectedDayId(null)}
                         >
-                          {notesOpen ? 'Hide Notes' : 'Day Notes'}
+                          <span>Full week</span>
+                          <strong>{weekDays.length} days</strong>
                         </button>
-                        <button
-                          className="review-save-btn secondary"
-                          type="button"
-                          onClick={() => void handleRecheckDay(day.id, week.weekIndex, day.dayOfWeek)}
-                          disabled={recheckingDayId === day.id || reparsing}
-                          title="Re-parse this day's activities from stored source text"
-                        >
-                          {recheckingDayId === day.id ? 'Checking…' : '↺ Re-check'}
-                        </button>
-                        <button
-                          className="review-save-btn"
-                          type="button"
-                          onClick={() => addActivity(day.id)}
-                          disabled={creatingDayId === day.id}
-                        >
-                          {creatingDayId === day.id ? 'Adding…' : 'Add Activity'}
-                        </button>
+                        {weekDays.map((day) => (
+                          <button
+                            key={day.id}
+                            type="button"
+                            className={`review-cockpit-day-button${selectedDayId === day.id ? ' active' : ''}`}
+                            onClick={() => setSelectedDayId(day.id)}
+                          >
+                            <span>{DAY_LABELS[(day.dayOfWeek || 1) - 1] || 'Day'}</span>
+                            <strong>{buildDayActivityPreview(day)}</strong>
+                          </button>
+                        ))}
                       </div>
-                    </div>
-
-                    {recheckErrors[day.id] && (
-                      <p className="review-error review-error-inline">{recheckErrors[day.id]}</p>
                     )}
+                  </div>
+                );
+              })}
+            </div>
+          </aside>
 
-                    {notesOpen && (
-                      <label className="review-field review-day-notes">
-                        <span>Day source notes</span>
-                        <textarea
-                          value={dayDrafts[day.id] || ''}
-                          onChange={(event) =>
-                            setDayDraftField(day.id, event.target.value)
-                          }
-                          rows={1}
-                          placeholder="Short source note for this day"
-                        />
-                      </label>
-                    )}
+          <div className="review-cockpit-canvas">
+            <div className="review-cockpit-canvas-head">
+              <div>
+                <h2>
+                  {selectedWeek
+                    ? `Week ${selectedWeek.weekIndex}${selectedDay ? ` · ${DAY_LABELS[(selectedDay.dayOfWeek || 1) - 1] || 'Day'}` : ''}`
+                    : 'Review Workspace'}
+                </h2>
+                <p>
+                  {selectedDay
+                    ? 'Focus on one day at a time with notes, execution, and source fields visible together.'
+                    : 'Scan the selected week, then open a day for focused cleanup.'}
+                </p>
+              </div>
+              {selectedDay && (
+                <button
+                  type="button"
+                  className="review-save-btn secondary"
+                  onClick={() => setSelectedDayId(null)}
+                >
+                  Show Full Week
+                </button>
+              )}
+            </div>
 
-                    <div className="review-activity-list">
-                      {(day.activities || []).length > 0 && (
-                        <div className="review-activity-head-row" aria-hidden="true">
-                          <span>Activity</span>
-                          <span>Type</span>
-                          <span>Distance</span>
-                          <span>Duration</span>
-                          <span>Actions</span>
+            {selectedWeek && visibleDays.length === 0 && (
+              <p className="review-muted">No days parsed for this week.</p>
+            )}
+
+            {selectedWeek && visibleDays.length > 0 && (
+              <article className="review-week-card review-week-card-focus">
+                {visibleDays.map((day) => {
+                  const notesOpen = singleDayFocus ? true : (expandedDayNotes[day.id] ?? false);
+                  return (
+                    <div key={day.id} className="review-day-block">
+                      <div className="review-day-head">
+                        <div className="review-day-title">
+                          <span className="review-day-pill">{DAY_LABELS[(day.dayOfWeek || 1) - 1] || 'Day'}</span>
+                          <div className="review-day-meta">
+                            <strong>{day.activities?.length || 0} activities</strong>
+                            <span>{selectedWeek ? `Week ${selectedWeek.weekIndex}` : 'Selected day'}</span>
+                          </div>
                         </div>
+                        <div className="review-day-actions">
+                          {!singleDayFocus && (
+                            <button
+                              className="review-save-btn secondary"
+                              type="button"
+                              onClick={() =>
+                                setExpandedDayNotes((prev) => ({ ...prev, [day.id]: !notesOpen }))
+                              }
+                            >
+                              {notesOpen ? 'Hide Notes' : 'Day Notes'}
+                            </button>
+                          )}
+                          <button
+                            className="review-save-btn secondary"
+                            type="button"
+                            onClick={() => void handleRecheckDay(day.id, selectedWeek.weekIndex, day.dayOfWeek)}
+                            disabled={recheckingDayId === day.id}
+                            title="Re-parse this day's activities from stored source text"
+                          >
+                            {recheckingDayId === day.id ? 'Checking…' : '↺ Re-check'}
+                          </button>
+                          <button
+                            className="review-save-btn"
+                            type="button"
+                            onClick={() => addActivity(day.id)}
+                            disabled={creatingDayId === day.id}
+                          >
+                            {creatingDayId === day.id ? 'Adding…' : 'Add Activity'}
+                          </button>
+                        </div>
+                      </div>
+
+                      {recheckErrors[day.id] && (
+                        <p className="review-error review-error-inline">{recheckErrors[day.id]}</p>
                       )}
-                      {(day.activities || []).map((activity) => {
-                        const draft = activityDrafts[activity.id] || toActivityDraft(activity, viewerUnits);
-                        const flowStructure = draft.structure;
-                        const flowEditorPath = activeFlowEditor?.activityId === activity.id ? activeFlowEditor.path : null;
+
+                      {notesOpen && (
+                        <label className="review-field review-day-notes">
+                          <span>Day notes and source context</span>
+                          <textarea
+                            value={dayDrafts[day.id] || ''}
+                            onChange={(event) =>
+                              setDayDraftField(day.id, event.target.value)
+                            }
+                            rows={singleDayFocus ? 3 : 1}
+                            placeholder="Shared note for this day, including parser context and execution cues."
+                          />
+                        </label>
+                      )}
+
+                      <div className="review-activity-list">
+                        {!singleDayFocus && (day.activities || []).length > 0 && (
+                          <div className="review-activity-head-row" aria-hidden="true">
+                            <span>Activity</span>
+                            <span>Type</span>
+                            <span>Distance</span>
+                            <span>Duration</span>
+                            <span>Actions</span>
+                          </div>
+                        )}
+                        {(day.activities || []).map((activity, activityIndex) => {
+                          const draft = activityDrafts[activity.id] || toActivityDraft(activity, viewerUnits);
+                          const flowStructure = draft.structure;
+                          const flowEditorPath = activeFlowEditor?.activityId === activity.id ? activeFlowEditor.path : null;
                         const selectedFlowStep = flowEditorPath ? getStepAtPath(flowStructure, flowEditorPath) : null;
                         const flowTarget = flowEditorPath
                           ? getStepContainerAtPath(cloneStructureSteps(flowStructure), flowEditorPath)
@@ -2540,18 +2787,55 @@ export default function PlanReviewPage() {
                         const paceUnitLabel = (draft.distanceUnit || viewerUnits) === 'KM' ? 'km' : 'mi';
                         const hasDistance = draft.distance.trim() !== '';
                         const isRunActivity = draft.type === 'RUN';
-                        const hasPaceTarget = draft.paceTarget.trim() !== '';
-                        const showPaceField = isRunActivity || hasPaceTarget;
-                        const detailsOpen = expandedActivityDetails[activity.id] ?? false;
-                        const sessionInstructionsOpen = expandedSessionInstructions[activity.id] ?? false;
+                          const hasPaceTarget = draft.paceTarget.trim() !== '';
+                          const showPaceField = isRunActivity || hasPaceTarget;
+                        const detailsOpen = singleDayFocus ? true : (expandedActivityDetails[activity.id] ?? false);
+                        const sessionInstructionsOpen = singleDayFocus ? true : (expandedSessionInstructions[activity.id] ?? false);
                         const activitySaving = Boolean(savingActivityIds[activity.id] || queuedActivityIds[activity.id]);
                         const activityDisplayType = draft.type.replace(/_/g, ' ');
                         return (
                           <div key={activity.id} className="review-activity-item review-activity-item-compact">
+                            <div className="review-activity-card-head">
+                              <div className="review-activity-card-title">
+                                <span className="review-activity-card-kicker">Activity {activityIndex + 1}</span>
+                                <strong>{draft.title.trim() || activityDisplayType}</strong>
+                              </div>
+                              <div className="review-activity-card-toolbar">
+                                <span className="review-activity-type-pill">{activityDisplayType}</span>
+                                {activitySaving && <span className="review-inline-status">Saving…</span>}
+                                <button
+                                  className="review-save-btn secondary review-details-toggle"
+                                  type="button"
+                                  onClick={() =>
+                                    setExpandedSessionInstructions((prev) => ({ ...prev, [activity.id]: !sessionInstructionsOpen }))
+                                  }
+                                >
+                                  {sessionInstructionsOpen ? 'Hide Execution' : 'Execution'}
+                                </button>
+                                <button
+                                  className="review-save-btn secondary review-details-toggle"
+                                  type="button"
+                                  onClick={() =>
+                                    setExpandedActivityDetails((prev) => ({ ...prev, [activity.id]: !detailsOpen }))
+                                  }
+                                >
+                                  {detailsOpen ? 'Hide Details' : 'Details'}
+                                </button>
+                                <button
+                                  className="review-delete-btn ghost"
+                                  type="button"
+                                  onClick={() => deleteActivity(activity.id)}
+                                  disabled={deletingActivityId === activity.id}
+                                >
+                                  {deletingActivityId === activity.id ? 'Deleting…' : 'Delete'}
+                                </button>
+                              </div>
+                            </div>
+
                             <div className="review-activity-quick-grid">
                               <div className="review-col-activity review-col-activity-stack">
                                 <label className="review-field review-field-inline">
-                                  <span className="review-visually-hidden">Activity</span>
+                                  <span className={singleDayFocus ? '' : 'review-visually-hidden'}>Activity name</span>
                                   <input
                                     type="text"
                                     value={draft.title}
@@ -2766,7 +3050,7 @@ export default function PlanReviewPage() {
                               </div>
 
                               <label className="review-field review-col-type review-field-inline">
-                                <span className="review-visually-hidden">Workout type</span>
+                                <span className={singleDayFocus ? '' : 'review-visually-hidden'}>Workout type</span>
                                 <select
                                   value={draft.type}
                                   onChange={(event) =>
@@ -2808,7 +3092,7 @@ export default function PlanReviewPage() {
                               </label>
 
                               <label className="review-field review-col-distance review-field-inline">
-                                <span className="review-visually-hidden">Distance</span>
+                                <span className={singleDayFocus ? '' : 'review-visually-hidden'}>Distance</span>
                                 <div className={`review-distance-input-row${hasDistance ? '' : ' single'}`}>
                                   <input
                                     type="number"
@@ -2836,7 +3120,7 @@ export default function PlanReviewPage() {
                               </label>
 
                               <label className="review-field review-col-duration review-field-inline">
-                                <span className="review-visually-hidden">Duration in minutes</span>
+                                <span className={singleDayFocus ? '' : 'review-visually-hidden'}>Duration in minutes</span>
                                 <input
                                   type="number"
                                   min={0}
@@ -2848,56 +3132,26 @@ export default function PlanReviewPage() {
                                   }
                                 />
                               </label>
-
-                              <div className="review-col-actions review-activity-actions-compact">
-                                {activitySaving && <span className="review-inline-status">Saving…</span>}
-                                <button
-                                  className="review-save-btn secondary review-details-toggle"
-                                  type="button"
-                                  onClick={() =>
-                                    setExpandedSessionInstructions((prev) => ({ ...prev, [activity.id]: !sessionInstructionsOpen }))
-                                  }
-                                >
-                                  {sessionInstructionsOpen ? 'Hide Execution' : 'Execution'}
-                                </button>
-                                <button
-                                  className="review-save-btn secondary review-details-toggle"
-                                  type="button"
-                                  onClick={() =>
-                                    setExpandedActivityDetails((prev) => ({ ...prev, [activity.id]: !detailsOpen }))
-                                  }
-                                >
-                                  {detailsOpen ? 'Less' : 'Details'}
-                                </button>
-                                <button
-                                  className="review-delete-btn ghost"
-                                  type="button"
-                                  onClick={() => deleteActivity(activity.id)}
-                                  disabled={deletingActivityId === activity.id}
-                                >
-                                  {deletingActivityId === activity.id ? 'Deleting…' : 'Delete'}
-                                </button>
-                              </div>
                             </div>
 
                             {sessionInstructionsOpen && (
-                              <div className="review-session-instructions-panel">
+                              <div className="review-session-instructions-panel review-detail-band">
                                 <label className="review-field">
-                                  <span>Execution notes</span>
+                                  <span>Execution and coaching</span>
                                   <textarea
                                     value={draft.sessionInstructions}
                                     onChange={(event) =>
                                       setActivityDraftField(activity.id, 'sessionInstructions', event.target.value)
                                     }
-                                    rows={2}
-                                    placeholder="Short execution guidance for this activity."
+                                    rows={singleDayFocus ? 4 : 2}
+                                    placeholder="Execution detail, race strategy, or how this session should be done."
                                   />
                                 </label>
                               </div>
                             )}
 
                             {detailsOpen && (
-                              <div className={`review-activity-details${showPaceField ? '' : ' no-pace'}`}>
+                              <div className={`review-activity-details review-detail-band${showPaceField ? '' : ' no-pace'}`}>
                                 <label className="review-field review-col-instructions">
                                   <span>Source snippet</span>
                                   <textarea
@@ -2947,11 +3201,11 @@ export default function PlanReviewPage() {
                       })}
                     </div>
                   </div>
-                );
-              })}
-            </article>
-          );
-          })}
+                  );
+                })}
+              </article>
+            )}
+          </div>
         </section>
       )}
 

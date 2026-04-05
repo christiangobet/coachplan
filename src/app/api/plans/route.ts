@@ -12,12 +12,21 @@ import { extractPlanGuide } from '@/lib/ai-guide-extractor';
 import { extractPdfText } from '@/lib/pdf/extract-text';
 import { FLAGS } from '@/lib/feature-flags';
 import { populatePlanFromV4 } from '@/lib/parsing/v4-to-plan';
+import { enrichLegacyDayDraftsFromProgram } from '@/lib/parsing/legacy-program-enrichment';
+import {
+  deriveUploadDocumentSignals,
+  orchestrateUploadParsing,
+  scoreProgramJsonForTables,
+  type UploadParserKey,
+  type UploadParserRun,
+} from '@/lib/parsing/upload-orchestrator';
+import { runTimedUploadCandidate } from '@/lib/parsing/upload-candidate-runner';
 import { canonicalizeTableLabel, extractWeekNumber, normalizePlanText } from '@/lib/plan-parser-i18n.mjs';
 import { normalizeWhitespace, titleCase, planNameFromFilename, decodeActivityText, normalizeMatchText, chooseActivityRawText, expandAlternatives, splitCombinedActivities } from '@/lib/parsing/upload-normalizers';
 import { SUBTYPE_TITLES, normalizeSubtypeToken, inferSubtype, mapActivityType, mapAiTypeToActivityType, mapAiSessionTypeToSubtype, mapAiPrimarySportToType } from '@/lib/parsing/activity-type-mapper';
 import { type UnitPreference, convertDistanceToStorageUnit, resolveDistanceFromValueUnit, resolveDistanceFromSegmentMetrics, inferDominantDistanceUnit, resolveDistanceFromText, parseStructure, resolveDistanceFromStructure, resolveDurationFromText } from '@/lib/parsing/distance-parser';
 import { hasConfiguredAiProvider } from '@/lib/openai';
-import { buildProgramDocumentProfile, type ProgramDocumentProfile } from '@/lib/plan-document-profile';
+import { buildProgramDocumentProfile, withParserPipelineProfile, type ProgramDocumentProfile } from '@/lib/plan-document-profile';
 import {
   deriveStructuredIntensityTargets,
   extractEffortTargetFromText,
@@ -53,7 +62,9 @@ function parseBoundedNumber(value: string | undefined, fallback: number, min: nu
   return Math.min(max, Math.max(min, parsed));
 }
 
-const UPLOAD_PARSE_TIMEOUT_MS = parseTimeoutMs(process.env.UPLOAD_PARSE_TIMEOUT_MS, 120000);
+const UPLOAD_PARSE_TIMEOUT_MS = parseTimeoutMs(process.env.UPLOAD_PARSE_TIMEOUT_MS, 180000);
+const UPLOAD_AI_CANDIDATE_TIMEOUT_MS = parseTimeoutMs(process.env.UPLOAD_AI_CANDIDATE_TIMEOUT_MS, 90000);
+const UPLOAD_LEGACY_CANDIDATE_TIMEOUT_MS = parseTimeoutMs(process.env.UPLOAD_LEGACY_CANDIDATE_TIMEOUT_MS, 60000);
 const AI_WEEK_PARSE_TIMEOUT_MS = parseTimeoutMs(process.env.AI_WEEK_PARSE_TIMEOUT_MS, 8000);
 const AI_WEEK_PARSE_TOTAL_BUDGET_MS = parseTimeoutMs(process.env.AI_WEEK_PARSE_TOTAL_BUDGET_MS, 30000);
 const AI_WEEK_PARSE_MODEL = process.env.AI_WEEK_PARSE_MODEL?.trim() || undefined;
@@ -248,6 +259,7 @@ type ActivityDraft = {
   subtype: string | null;
   title: string;
   rawText: string | null;
+  notes?: string | null;
   sessionInstructions?: string | null;
   distance: number | null;
   distanceUnit: 'MILES' | 'KM' | null;
@@ -272,6 +284,8 @@ type ActivityDraft = {
   mustDo: boolean;
   sessionGroupId?: string | null;
   sessionOrder?: number | null;
+  coachingNote?: string | null;
+  sessionFocus?: 'tempo' | 'threshold' | 'recovery' | 'long_run' | 'race_sim' | 'strength' | 'other' | null;
 };
 
 function ensureDistanceConsistency(activity: ActivityDraft): ActivityDraft {
@@ -1578,77 +1592,267 @@ export async function POST(req: Request) {
       const pdfPath = path.join(uploadDir, `${plan.id}.pdf`);
       await fs.writeFile(pdfPath, buffer);
 
-      // Extract guide FIRST — gives v4 parser full plan context (abbreviations, week count, etc.)
+      // Extract guide first so the orchestrator and candidate parsers share the same context artifact.
       let planGuide = '';
+      let pdfFullText = '';
+      let visionSeedRun: UploadParserRun | null = null;
+      let visionExtractedMd: string | null = null;
       try {
-        const { fullText: pdfFullText } = await extractPdfText(buffer);
-        planGuide = await extractPlanGuide(pdfFullText);
-        if (planGuide) {
-          await prisma.trainingPlan.update({ where: { id: plan.id }, data: { planGuide } });
+        ({ fullText: pdfFullText } = await extractPdfText(buffer));
+      } catch { /* non-fatal */ }
+
+      if (FLAGS.PARSER_VISION_EXTRACT) {
+        visionSeedRun = await runTimedUploadCandidate({
+          parser: 'vision',
+          kind: 'program',
+          timeoutMs: UPLOAD_AI_CANDIDATE_TIMEOUT_MS,
+          timeoutMessage: 'Vision parser timed out before completion.',
+          onTimeout: async () => {
+            await prisma.parseJob.updateMany({
+              where: {
+                planId: plan.id,
+                parserVersion: 'vision-v1',
+                status: 'RUNNING',
+              },
+              data: {
+                status: 'FAILED',
+                errorMessage: 'Vision parser timed out before completion.',
+              },
+            });
+          },
+          run: async () => {
+            const { data, parseWarning: visionWarning, extractedMd } = await maybeRunVisionExtract(buffer, plan.id);
+            visionExtractedMd = extractedMd;
+            return {
+              parser: 'vision',
+              kind: 'program',
+              viable: Boolean(data),
+              quality: scoreProgramJsonForTables(data),
+              data,
+              warning: visionWarning,
+            } satisfies UploadParserRun;
+          },
+        });
+      }
+
+      try {
+        const guideSource = visionExtractedMd || pdfFullText;
+        if (guideSource) {
+          planGuide = await extractPlanGuide(guideSource);
+          if (planGuide) {
+            await prisma.trainingPlan.update({ where: { id: plan.id }, data: { planGuide } });
+          }
         }
       } catch { /* non-fatal */ }
 
-      // Parser V5: context-primed 2-phase parser (survey + parallel week extraction).
-      // V5 supersedes V4 when PARSER_V5_PRIMARY is set.
-      let v5Data: import('@/lib/schemas/program-json-v1').ProgramJsonV1 | null = null;
-      if (FLAGS.PARSER_V5) {
-        const { data: v5Result, parseWarning: v5ParseWarning } = await maybeRunParserV5(buffer, plan.id);
-        v5Data = v5Result;
-        if (v5ParseWarning) parseWarning = v5ParseWarning;
-      }
+      const parserCandidates: UploadParserKey[] = [];
+      if (FLAGS.PARSER_VISION_EXTRACT) parserCandidates.push('vision');
+      if (FLAGS.PARSER_V5) parserCandidates.push('v5');
+      if (FLAGS.PARSER_V4) parserCandidates.push('v4');
+      parserCandidates.push('legacy');
 
-      if (FLAGS.PARSER_V5_PRIMARY && v5Data) {
-        const { weeksCreated, activitiesCreated } = await populatePlanFromV4(plan.id, v5Data);
-        console.info('[ParserV5] Primary mode: populated plan from V5', {
-          planId: plan.id,
-          weeksCreated,
-          activitiesCreated
-        });
-        // Draft upload/review mode: defer calendar date materialization until activation.
-      }
+      const orchestrated = await withTimeout(
+        orchestrateUploadParsing({
+          signals: deriveUploadDocumentSignals(visionExtractedMd || pdfFullText || name),
+          budgetMs: UPLOAD_PARSE_TIMEOUT_MS,
+          candidates: parserCandidates,
+          seedRuns: visionSeedRun ? [visionSeedRun] : [],
+          runCandidate: async (parser) => {
+            if (parser === 'vision') {
+              if (visionSeedRun) return visionSeedRun;
+              return runTimedUploadCandidate({
+                parser,
+                kind: 'program',
+                timeoutMs: UPLOAD_AI_CANDIDATE_TIMEOUT_MS,
+                timeoutMessage: 'Vision parser timed out before completion.',
+                onTimeout: async () => {
+                  await prisma.parseJob.updateMany({
+                    where: {
+                      planId: plan.id,
+                      parserVersion: 'vision-v1',
+                      status: 'RUNNING',
+                    },
+                    data: {
+                      status: 'FAILED',
+                      errorMessage: 'Vision parser timed out before completion.',
+                    },
+                  });
+                },
+                run: async () => {
+                  const { data, parseWarning } = await maybeRunVisionExtract(buffer, plan.id);
+                  return {
+                    parser,
+                    kind: 'program',
+                    viable: Boolean(data),
+                    quality: scoreProgramJsonForTables(data),
+                    data,
+                    warning: parseWarning,
+                  } satisfies UploadParserRun;
+                },
+              });
+            }
 
-      // Parser V4: run with guide context so the AI knows total week count and abbreviations.
-      // Skipped when V5 is primary and returned data.
-      const { data: v4Data, promptName: v4PromptNameResult, parseWarning: v4ParseWarning } = await maybeRunParserV4(buffer, plan.id, planGuide);
-      v4PromptName = v4PromptNameResult;
-      if (v4ParseWarning && !parseWarning) parseWarning = v4ParseWarning;
+            if (parser === 'v5') {
+              return runTimedUploadCandidate({
+                parser,
+                kind: 'program',
+                timeoutMs: UPLOAD_AI_CANDIDATE_TIMEOUT_MS,
+                timeoutMessage: 'Parser V5 timed out before completion.',
+                onTimeout: async () => {
+                  await prisma.parseJob.updateMany({
+                    where: {
+                      planId: plan.id,
+                      parserVersion: 'v5',
+                      status: 'RUNNING',
+                    },
+                    data: {
+                      status: 'FAILED',
+                      errorMessage: 'Parser V5 timed out before completion.',
+                    },
+                  });
+                },
+                run: async () => {
+                  const { data, parseWarning } = await maybeRunParserV5(buffer, plan.id);
+                  return {
+                    parser,
+                    kind: 'program',
+                    viable: Boolean(data),
+                    quality: scoreProgramJsonForTables(data),
+                    data,
+                    warning: parseWarning,
+                  } satisfies UploadParserRun;
+                },
+              });
+            }
 
-      // When V4 is primary and returned validated data, use it to populate the plan
-      // and skip the legacy per-week parser entirely.
-      if (FLAGS.PARSER_V4_PRIMARY && v4Data) {
-        const { weeksCreated, activitiesCreated } = await populatePlanFromV4(plan.id, v4Data);
-        console.info('[ParserV4] Primary mode: populated plan from V4', {
-          planId: plan.id,
-          weeksCreated,
-          activitiesCreated
-        });
-        // Draft upload/review mode: defer calendar date materialization until activation.
-      }
+            if (parser === 'v4') {
+              return runTimedUploadCandidate({
+                parser,
+                kind: 'program',
+                timeoutMs: UPLOAD_AI_CANDIDATE_TIMEOUT_MS,
+                timeoutMessage: 'Parser V4 timed out before completion.',
+                onTimeout: async () => {
+                  await prisma.parseJob.updateMany({
+                    where: {
+                      planId: plan.id,
+                      parserVersion: 'v4',
+                      status: 'RUNNING',
+                    },
+                    data: {
+                      status: 'FAILED',
+                      errorMessage: 'Parser V4 timed out before completion.',
+                    },
+                  });
+                },
+                run: async () => {
+                  const { data, promptName, parseWarning } = await maybeRunParserV4(buffer, plan.id, planGuide);
+                  return {
+                    parser,
+                    kind: 'program',
+                    viable: Boolean(data),
+                    quality: scoreProgramJsonForTables(data),
+                    data,
+                    promptName,
+                    warning: parseWarning,
+                  } satisfies UploadParserRun;
+                },
+              });
+            }
 
-      // Vision extract: PDF -> enriched MD -> simplified V4 parser (no guide needed - Claude reads the PDF directly).
-      let visionData: import('@/lib/schemas/program-json-v1').ProgramJsonV1 | null = null;
-      if (FLAGS.PARSER_VISION_EXTRACT) {
-        const { data: visionResult, parseWarning: visionWarning } = await maybeRunVisionExtract(buffer, plan.id);
-        visionData = visionResult;
-        if (visionWarning && !parseWarning) parseWarning = visionWarning;
-        // Only populate from vision if V5/V4 primary haven't already done so
-        if (visionData && !(FLAGS.PARSER_V5_PRIMARY && v5Data) && !(FLAGS.PARSER_V4_PRIMARY && v4Data)) {
-          const { weeksCreated, activitiesCreated } = await populatePlanFromV4(plan.id, visionData);
-          console.info('[VisionExtract] Populated plan from vision pipeline', {
-            planId: plan.id,
-            weeksCreated,
-            activitiesCreated
-          });
-        }
-      }
-
-      if (!((FLAGS.PARSER_V5_PRIMARY && v5Data) || (FLAGS.PARSER_V4_PRIMARY && v4Data) || (FLAGS.PARSER_VISION_EXTRACT && visionData))) {
-
-      const parsed = await withTimeout(
-        parsePdfToJson(plan.id, pdfPath, name),
+            return runTimedUploadCandidate({
+              parser,
+              kind: 'legacy',
+              timeoutMs: UPLOAD_LEGACY_CANDIDATE_TIMEOUT_MS,
+              timeoutMessage: 'Legacy parser timed out before completion.',
+              run: async () => {
+                const parsed = await parsePdfToJson(plan.id, pdfPath, name);
+                const parseMeta = parsed && typeof parsed === 'object'
+                  ? (parsed as {
+                    parse_meta?: {
+                      selectedParser?: string;
+                      quality?: ParseQuality;
+                      selectedDiagnostics?: Record<string, unknown> | null;
+                      candidates?: Array<{
+                        parser: string;
+                        quality: ParseQuality;
+                        diagnostics?: Record<string, unknown> | null;
+                      }>;
+                    };
+                  }).parse_meta
+                  : undefined;
+                const parseQuality = parseMeta?.quality || scoreParsedResult(parsed);
+                const viable = parseQuality.weekCount > 0
+                  && parseQuality.score >= PARSE_MIN_QUALITY_SCORE
+                  && parseQuality.dayCoverage >= PARSE_MIN_DAY_COVERAGE;
+                return {
+                  parser,
+                  kind: 'legacy',
+                  viable,
+                  quality: {
+                    score: parseQuality.score,
+                    weekCount: parseQuality.weekCount,
+                    dayCoverage: parseQuality.dayCoverage,
+                  },
+                  data: parsed,
+                  warning: viable
+                    ? null
+                    : `Parsed content confidence too low (parser=legacy, score=${parseQuality.score}, weekCount=${parseQuality.weekCount}, dayCoverage=${parseQuality.dayCoverage.toFixed(2)}).`,
+                } satisfies UploadParserRun;
+              },
+            });
+          },
+        }),
         UPLOAD_PARSE_TIMEOUT_MS,
         'PDF parse timed out. Please try a smaller/simpler PDF.'
       );
+
+      v4PromptName = orchestrated.promptName;
+      const finalWarning = orchestrated.candidateRuns.find((run) => run.parser === orchestrated.finalParser)?.warning ?? null;
+      const bestProgramEnricher =
+        orchestrated.candidateRuns
+          .filter((run): run is Extract<UploadParserRun, { kind: 'program' }> => run.kind === 'program' && Boolean(run.data))
+          .sort((left, right) => right.quality.score - left.quality.score)[0] ?? null;
+      if (finalWarning) parseWarning = finalWarning;
+
+      console.info('[UploadParser] Orchestrated parse complete', {
+        planId: plan.id,
+        selectedBaseParser: orchestrated.selectedBaseParser,
+        finalParser: orchestrated.finalParser,
+        resultKind: orchestrated.resultKind,
+        usedFallback: orchestrated.usedFallback,
+        usedEnrichers: orchestrated.usedEnrichers,
+        candidateRuns: orchestrated.candidateRuns.map((run) => ({
+          parser: run.parser,
+          kind: run.kind,
+          viable: run.viable,
+          score: run.quality.score,
+          warning: run.warning,
+          promptName: run.promptName ?? null,
+        })),
+      });
+
+      if (orchestrated.resultKind === 'program' && orchestrated.program) {
+        const persistenceSource = orchestrated.finalParser === 'vision'
+          ? 'markdown-primary'
+          : 'candidate-program';
+        const { weeksCreated, activitiesCreated } = await populatePlanFromV4(plan.id, orchestrated.program, {
+          parserPipeline: {
+            persistenceSource,
+            mdParseStatus: visionSeedRun?.viable ? 'succeeded' : (visionExtractedMd ? 'available' : 'missing'),
+            extractedMdAttempted: FLAGS.PARSER_VISION_EXTRACT,
+          },
+        });
+        console.info('[UploadParser] Populated plan from orchestrated program parser', {
+          planId: plan.id,
+          parser: orchestrated.finalParser,
+          weeksCreated,
+          activitiesCreated,
+          usedEnrichers: orchestrated.usedEnrichers,
+        });
+      }
+
+      if (orchestrated.resultKind === 'legacy' && orchestrated.legacy) {
+      const parsed = orchestrated.legacy as ParsedPlanOutput;
       const parseMeta = parsed && typeof parsed === 'object'
         ? (parsed as {
           parse_meta?: {
@@ -1787,7 +1991,26 @@ export async function POST(req: Request) {
           const mergedActivities = aiDrafts.length
             ? mergeDayActivitiesWithAI(deterministicActivities, aiDrafts)
             : deterministicActivities;
-          activities.push(...mergedActivities.map((activity) => withStructuredIntensityTargets(activity)));
+          const enrichedFromProgram = enrichLegacyDayDraftsFromProgram({
+            planId: plan.id,
+            dayId: day.id,
+            sourceUnits: bestProgramEnricher?.data?.program?.source_units,
+            weekNumber: i + 1,
+            dayOfWeek: d + 1,
+            baseActivities: mergedActivities,
+            program: bestProgramEnricher?.data ?? null,
+          });
+
+          if (enrichedFromProgram.dayNotes) {
+            await prisma.planDay.update({
+              where: { id: day.id },
+              data: { notes: enrichedFromProgram.dayNotes },
+            });
+          }
+
+          activities.push(
+            ...enrichedFromProgram.activities.map((activity) => withStructuredIntensityTargets(activity))
+          );
         }
       }
 
@@ -1799,7 +2022,11 @@ export async function POST(req: Request) {
         where: { id: plan.id },
         data: {
           weekCount: weeks.length || null,
-          parseProfile: programProfile,
+          parseProfile: withParserPipelineProfile(programProfile, {
+            persistence_source: bestProgramEnricher ? 'legacy-fallback-with-md-enrichment' : 'legacy-fallback',
+            md_parse_status: visionSeedRun?.viable ? 'succeeded' : (visionExtractedMd ? 'available' : (FLAGS.PARSER_VISION_EXTRACT ? 'failed' : 'missing')),
+            extracted_md_attempted: FLAGS.PARSER_VISION_EXTRACT,
+          }),
           status: 'DRAFT'
         }
       });
@@ -1811,11 +2038,32 @@ export async function POST(req: Request) {
           budgetMs: AI_WEEK_PARSE_TOTAL_BUDGET_MS
         });
       }
-      } // end if (legacy parser path — skipped when V5 or V4 is primary)
+      } // end if (legacy parser path)
+
+      if (orchestrated.resultKind === 'none' || (!orchestrated.program && !orchestrated.legacy)) {
+        throw new Error('No viable parser output was produced by the upload orchestrator.');
+      }
     } catch (error) {
       const reason = (error as Error).message || 'Unknown parser error';
       parseWarning = reason;
       console.error('Plan parse failed, creating fallback editable skeleton', { planId: plan.id, reason });
+      try {
+        await prisma.parseJob.updateMany({
+          where: {
+            planId: plan.id,
+            status: 'RUNNING',
+          },
+          data: {
+            status: 'FAILED',
+            errorMessage: reason,
+          },
+        });
+      } catch (jobUpdateError) {
+        console.error('Could not mark running parse jobs as failed', {
+          planId: plan.id,
+          error: jobUpdateError instanceof Error ? jobUpdateError.message : String(jobUpdateError),
+        });
+      }
 
       const existingWeeks = await prisma.planWeek.count({ where: { planId: plan.id } });
       if (existingWeeks === 0) {

@@ -195,7 +195,9 @@ async function openAIJsonSchema<T>(opts: JsonSchemaRequest) {
     {
       model: opts.model,
       input: opts.input,
-      response_format: buildResponseFormat(opts.schema, "openai"),
+      text: {
+        format: buildResponseFormat(opts.schema, "openai"),
+      },
       ...(opts.maxOutputTokens ? { max_output_tokens: opts.maxOutputTokens } : {})
     },
     {
