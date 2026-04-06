@@ -1,7 +1,69 @@
 # MyTrainingPlan — Implementation Status & Handover
 
-> Last updated: 2026-03-20
+> Last updated: 2026-04-06
 > Scope: status synced to current codebase implementation
+
+---
+
+## ACTIVE STATUS — Markdown-native parser migration complete (2026-04-06)
+
+> The chunked whole-plan AI parse bottleneck has been eliminated.
+> The pipeline now uses a deterministic markdown-first path as the primary route.
+
+### What changed
+
+The old parse path was:
+```
+EXTRACTED_MD → gpt-4o-mini chunks (4 calls, batched) → ProgramJsonV1 → DB
+```
+Each chunk took >60s on `gpt-4o-mini`, causing the entire pipeline to timeout at the 290s wall.
+
+The new parse path is:
+```
+EXTRACTED_MD → markdown-program-parser (deterministic, ~1ms) → optional per-session enrichment → ProgramJsonV1 → DB
+```
+
+AI is now only invoked for individual sessions that need enrichment (steps, coaching notes),
+not for whole-week structural parsing. This eliminates the timeout entirely.
+
+### Key files in the new path
+
+| File | Role |
+|------|------|
+| `src/lib/parsing/markdown-program-parser.ts` | Deterministic week/table/session parser; converts EXTRACTED_MD → ProgramJsonV1 skeleton |
+| `src/lib/parsing/markdown-session-enricher.ts` | Narrow per-session AI enrichment (steps, session_role, coaching_note); optional |
+| `src/lib/ai-plan-parser.ts` | Wires EXTRACTED_MD into the deterministic parser; enrichment optional; validation/completeness/persistence unchanged |
+| `src/lib/parsing/markdown-upload-enforcement.ts` | Upload guardrails: rejects partial, missing, or invalid programs |
+| `src/lib/parsing/program-week-completeness.ts` | Week-level completeness check; used by both `populatePlanFromV4` and `evaluateMarkdownFirstUpload` |
+
+### Test coverage (36 tests, all passing)
+
+```bash
+node --test --experimental-transform-types \
+  scripts/markdown-program-parser.test.ts \
+  scripts/markdown-first-budget.test.ts \
+  scripts/program-week-completeness.test.ts \
+  scripts/markdown-upload-enforcement.test.ts \
+  scripts/upload-page-async-ui.test.ts \
+  scripts/plan-parse-context.test.ts \
+  scripts/review-guide-ui.test.ts
+```
+
+### Remaining follow-up work (backlog)
+
+1. **Richer rule coverage** — The deterministic parser handles the most common session patterns (easy run, tempo, long run, intervals, rest). Plans using unusual notation (e.g. pace zones as `Z2`, structured intervals like `6×800m`) will produce sessions with `raw_text` preserved but minimal extracted fields. Session enrichment fills the gap via AI but broader rule coverage reduces AI calls.
+
+2. **Shrink or cache enrichment calls** — `markdown-session-enricher.ts` currently calls the AI for every session that doesn't have fully deterministic fields. Caching by session hash or tightening the enrichment trigger would reduce cost and latency.
+
+3. **Dead chunk-budget code cleanup** — `ai-plan-parser.ts` still contains the old chunked MD parse infrastructure (`chunkMd`, `VISION_PARSE_BUDGET_MS`, batch/concurrency logic). This is now a dead code path for the primary EXTRACTED_MD route. It can be removed in a cleanup pass once the new path has been validated in production.
+
+4. **Production validation** — Run a real PDF upload end-to-end to confirm the new path completes within the 290s wall without hitting the old timeout. Look for:
+   ```
+   [MarkdownParser] parsed N weeks deterministically
+   [UploadParser] Orchestrated parse complete { finalParser: 'vision', resultKind: 'program' }
+   ```
+
+---
 
 ---
 
