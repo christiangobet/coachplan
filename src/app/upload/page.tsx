@@ -3,41 +3,17 @@
 import Link from 'next/link';
 import { SignedIn, SignedOut, useUser } from '@clerk/nextjs';
 import { useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+
 import AthleteSidebar from '@/components/AthleteSidebar';
 import UploadFlowStepper from '@/components/UploadFlowStepper';
 import { getFirstName } from '@/lib/display-name';
 import '../dashboard/dashboard.css';
 import '../athlete-pages.css';
 
-const UPLOAD_STAGES = [
-  {
-    afterMs: 0,
-    title: 'Uploading plan file',
-    detail: 'Sending your PDF securely.'
-  },
-  {
-    afterMs: 4000,
-    title: 'Extracting workout text',
-    detail: 'Reading page structure and week labels.'
-  },
-  {
-    afterMs: 12000,
-    title: 'Structuring weeks and sessions',
-    detail: 'Converting text into training days and activities.'
-  },
-  {
-    afterMs: 22000,
-    title: 'Scoring parse quality',
-    detail: 'Checking confidence and preparing fallback if needed.'
-  },
-  {
-    afterMs: 35000,
-    title: 'Finalizing review workspace',
-    detail: 'Preparing editable plan details before activation.'
-  }
-] as const;
-const CLIENT_UPLOAD_TIMEOUT_MS = 295000;
+const CLIENT_UPLOAD_START_TIMEOUT_MS = 30000;
 const UPLOAD_FLOW_STEPS = [
   {
     title: 'Upload PDF',
@@ -61,7 +37,100 @@ const UPLOAD_FLOW_STEPS = [
   }
 ] as const;
 
+const UPLOAD_STAGE_META = {
+  queued: {
+    title: 'Upload queued',
+    detail: 'Creating your draft plan and preparing the background parser.',
+    progress: 10,
+  },
+  extracting_markdown: {
+    title: 'Extracting markdown',
+    detail: 'Reading the PDF and turning it into structured markdown.',
+    progress: 35,
+  },
+  markdown_available: {
+    title: 'Markdown ready',
+    detail: 'The extracted markdown is available below while final parsing continues.',
+    progress: 55,
+  },
+  parsing_markdown: {
+    title: 'Parsing markdown into plan data',
+    detail: 'Building weeks, days, and activities from the extracted markdown.',
+    progress: 78,
+  },
+  persisting_plan: {
+    title: 'Saving review workspace',
+    detail: 'Writing the parsed plan into your editable draft.',
+    progress: 92,
+  },
+  completed: {
+    title: 'Plan ready',
+    detail: 'Opening the review workspace now.',
+    progress: 100,
+  },
+  failed: {
+    title: 'Parsing paused',
+    detail: 'The markdown preview is preserved below even though final plan persistence failed.',
+    progress: 100,
+  },
+} as const;
+
+type UploadStage = keyof typeof UPLOAD_STAGE_META;
+type UploadViewStatus = 'idle' | 'starting' | 'processing' | 'completed' | 'failed';
+
+const STAGE_ORDER: Exclude<UploadStage, 'failed'>[] = [
+  'queued',
+  'extracting_markdown',
+  'markdown_available',
+  'parsing_markdown',
+  'persisting_plan',
+  'completed',
+];
+
+const STAGE_CHECKLIST_LABELS: Record<Exclude<UploadStage, 'failed'>, string> = {
+  queued: 'Creating draft plan',
+  extracting_markdown: 'Reading PDF and extracting markdown',
+  markdown_available: 'Markdown extracted',
+  parsing_markdown: 'Parsing weeks, days, and sessions',
+  persisting_plan: 'Saving parsed plan',
+  completed: 'Ready to review',
+};
+
+type UploadStatusResponse = {
+  uploadId: string;
+  planId: string | null;
+  status: 'processing' | 'completed' | 'failed';
+  stage: UploadStage;
+  failureReason: string | null;
+  hasExtractedMd: boolean;
+  extractedMdAvailable: boolean;
+  extractedMdPreview: string | null;
+  completedPlanId: string | null;
+  weekCount: number | null;
+  sessionCount: number | null;
+};
+
+function humanizeFailureReason(reason: string | null) {
+  switch (reason) {
+    case 'markdown_program_missing':
+      return 'The markdown was extracted, but the structured plan could not be completed yet.';
+    case 'markdown_program_invalid':
+      return 'The markdown parse returned invalid plan data.';
+    case 'extracted_md_missing':
+      return 'The parser never produced extracted markdown for this upload.';
+    case 'vision_not_enabled':
+      return 'Vision extraction is not enabled for this environment.';
+    case 'extracted_md_not_attempted':
+      return 'Markdown extraction was not attempted for this upload.';
+    case 'source_document_missing':
+      return 'The uploaded PDF could not be found for background processing.';
+    default:
+      return reason ? reason.replace(/_/g, ' ') : 'Upload failed';
+  }
+}
+
 export default function UploadPage() {
+  const router = useRouter();
   const { user } = useUser();
   const searchParams = useSearchParams();
   const debugMode = searchParams?.get('debug') === '1';
@@ -69,29 +138,34 @@ export default function UploadPage() {
   const [raceName, setRaceName] = useState('');
   const [raceDate, setRaceDate] = useState('');
   const [file, setFile] = useState<File | null>(null);
-  const [status, setStatus] = useState<'idle' | 'saving' | 'error'>('idle');
+  const [status, setStatus] = useState<UploadViewStatus>('idle');
   const [message, setMessage] = useState('');
   const [uploadStartedAt, setUploadStartedAt] = useState<number | null>(null);
   const [elapsedSec, setElapsedSec] = useState(0);
-  const [stageIndex, setStageIndex] = useState(0);
+  const [uploadId, setUploadId] = useState<string | null>(null);
+  const [planId, setPlanId] = useState<string | null>(null);
+  const [uploadStage, setUploadStage] = useState<UploadStage>('queued');
+  const [failureReason, setFailureReason] = useState<string | null>(null);
+  const [extractedMdAvailable, setExtractedMdAvailable] = useState(false);
+  const [extractedMd, setExtractedMd] = useState<string | null>(null);
+  const [extractedMdLoading, setExtractedMdLoading] = useState(false);
+  const [weekCount, setWeekCount] = useState<number | null>(null);
+  const [sessionCount, setSessionCount] = useState<number | null>(null);
 
   const deriveNameFromFile = (filename: string) =>
     filename.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim();
 
+  // Resume polling if the page is refreshed mid-upload
   useEffect(() => {
-    if (status !== 'saving') {
-      setStageIndex(0);
-      return;
+    const saved = sessionStorage.getItem('coachplan_upload_id');
+    if (saved) {
+      setUploadId(saved);
+      setStatus('processing');
     }
-    setStageIndex(0);
-    const timers = UPLOAD_STAGES.slice(1).map((stage, index) => (
-      window.setTimeout(() => setStageIndex(index + 1), stage.afterMs)
-    ));
-    return () => timers.forEach((timer) => window.clearTimeout(timer));
-  }, [status]);
+  }, []);
 
   useEffect(() => {
-    if (status !== 'saving' || !uploadStartedAt) {
+    if (!uploadStartedAt || (status !== 'starting' && status !== 'processing')) {
       setElapsedSec(0);
       return;
     }
@@ -101,38 +175,146 @@ export default function UploadPage() {
     return () => window.clearInterval(interval);
   }, [status, uploadStartedAt]);
 
-  const stage = UPLOAD_STAGES[Math.min(stageIndex, UPLOAD_STAGES.length - 1)];
-  const stageProgress = Math.min(92, Math.round(((stageIndex + 1) / UPLOAD_STAGES.length) * 100));
-  const isFinalStage = stageIndex >= UPLOAD_STAGES.length - 1;
-  const progressLabel = isFinalStage ? 'Final step' : `${stageProgress}%`;
-  const flowActiveStep = status === 'saving' ? 2 : 1;
+  useEffect(() => {
+    if (!uploadId || (status !== 'starting' && status !== 'processing')) {
+      return;
+    }
+
+    let cancelled = false;
+    let nextPoll: number | null = null;
+
+    const poll = async () => {
+      try {
+        const res = await fetch(`/api/plans/uploads/${uploadId}/status`, { cache: 'no-store' });
+        const data = await res.json() as Partial<UploadStatusResponse> & { error?: string };
+        if (!res.ok) {
+          throw new Error(data?.error || 'Failed to load upload progress');
+        }
+        if (cancelled) return;
+
+        const nextStage = (data.stage || 'queued') as UploadStage;
+        setPlanId(data.planId || planId || null);
+        setUploadStage(nextStage);
+        setFailureReason(data.failureReason || null);
+        setExtractedMdAvailable(Boolean(data.extractedMdAvailable));
+        if (data.weekCount != null) setWeekCount(data.weekCount);
+        if (data.sessionCount != null) setSessionCount(data.sessionCount);
+
+        if (data.status === 'completed') {
+          sessionStorage.removeItem('coachplan_upload_id');
+          setStatus('completed');
+          const completedPlanId = data.completedPlanId || data.planId;
+          if (completedPlanId) {
+            router.push(`/plans/${completedPlanId}/review?fromUpload=1${debugMode ? '&debug=1' : ''}`);
+          }
+          return;
+        }
+
+        if (data.status === 'failed') {
+          sessionStorage.removeItem('coachplan_upload_id');
+          setStatus('failed');
+          setMessage(humanizeFailureReason(data.failureReason || null));
+          return;
+        }
+
+        setStatus('processing');
+        nextPoll = window.setTimeout(poll, nextStage === 'queued' ? 1500 : 3000);
+      } catch (err) {
+        if (cancelled) return;
+        sessionStorage.removeItem('coachplan_upload_id');
+        setStatus('failed');
+        setMessage(err instanceof Error ? err.message : 'Failed to monitor upload progress');
+      }
+    };
+
+    void poll();
+
+    return () => {
+      cancelled = true;
+      if (nextPoll) window.clearTimeout(nextPoll);
+    };
+  }, [debugMode, planId, status, uploadId]);
+
+  useEffect(() => {
+    if (!uploadId || !extractedMdAvailable || extractedMd || extractedMdLoading) return;
+
+    let cancelled = false;
+    setExtractedMdLoading(true);
+
+    void fetch(`/api/plans/uploads/${uploadId}/extracted-md`, { cache: 'no-store' })
+      .then(async (res) => {
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data?.error || 'Failed to load extracted markdown');
+        }
+        if (!cancelled) {
+          setExtractedMd(typeof data?.extractedMd === 'string' ? data.extractedMd : null);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setExtractedMd(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setExtractedMdLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [extractedMd, extractedMdAvailable, extractedMdLoading, uploadId]);
+
+  const stageMeta = UPLOAD_STAGE_META[uploadStage];
+  const stageProgress = stageMeta.progress;
+  const isWorking = status === 'starting' || status === 'processing';
+  const flowActiveStep = isWorking || status === 'completed' || status === 'failed' ? 2 : 1;
   const timeHint = useMemo(() => {
-    if (elapsedSec >= 90) return 'Still working. Complex PDFs can take up to 4 minutes.';
+    if (uploadStage === 'extracting_markdown') return 'Vision extraction can take a couple of minutes on long PDFs.';
+    if (uploadStage === 'parsing_markdown') return 'The parser is now turning the markdown into weeks, days, and activities.';
+    if (uploadStage === 'markdown_available') return 'You can already inspect the extracted markdown below while parsing continues.';
     if (elapsedSec >= 30) return 'Still parsing. Thanks for waiting.';
-    return 'Most plans finish in under a minute.';
-  }, [elapsedSec]);
+    return 'The draft is processing in the background.';
+  }, [elapsedSec, uploadStage]);
 
   const handleSubmit = async () => {
     if (!name.trim()) {
-      setStatus('error');
+      setStatus('failed');
       setMessage('Please add a plan name.');
       return;
     }
-    setStatus('saving');
+    if (!file) {
+      setStatus('failed');
+      setMessage('Please choose a PDF to upload.');
+      return;
+    }
+
+    setStatus('starting');
     setMessage('');
     setUploadStartedAt(Date.now());
     setElapsedSec(0);
+    setUploadId(null);
+    setPlanId(null);
+    setUploadStage('queued');
+    setFailureReason(null);
+    setExtractedMdAvailable(false);
+    setExtractedMd(null);
+    setWeekCount(null);
+    setSessionCount(null);
+
     let timeoutId: number | null = null;
     try {
       const controller = new AbortController();
-      timeoutId = window.setTimeout(() => controller.abort(), CLIENT_UPLOAD_TIMEOUT_MS);
+      timeoutId = window.setTimeout(() => controller.abort(), CLIENT_UPLOAD_START_TIMEOUT_MS);
       const form = new FormData();
       form.append('name', name.trim());
       if (raceName.trim()) form.append('raceName', raceName.trim());
       if (raceDate) form.append('raceDate', raceDate);
-      if (file) form.append('file', file);
+      form.append('file', file);
 
-      const res = await fetch('/api/plans', {
+      const res = await fetch('/api/plans/upload-start', {
         method: 'POST',
         body: form,
         signal: controller.signal
@@ -142,34 +324,25 @@ export default function UploadPage() {
         const details = data?.details ? `: ${data.details}` : '';
         throw new Error((data?.error || 'Upload failed') + details);
       }
-      if (!data?.plan?.id) {
-        throw new Error('Upload finished but no plan was returned. Please retry.');
+      if (!data?.uploadId || !data?.planId) {
+        throw new Error('Upload started but no upload tracking info was returned. Please retry.');
       }
-      if (data?.plan?.id) {
-        if (file) {
-          const parseWarning = typeof data?.parseWarning === 'string' ? data.parseWarning : '';
-          const parseParams = parseWarning
-            ? `&parseWarning=1&parseWarningMsg=${encodeURIComponent(parseWarning.slice(0, 220))}`
-            : '';
-          const debugParams = debugMode && data?.parserPromptName
-            ? `&debug=1&parserPromptName=${encodeURIComponent(data.parserPromptName)}`
-            : '';
-          window.location.href = `/plans/${data.plan.id}/review?fromUpload=1${parseParams}${debugParams}`;
-        } else {
-          window.location.href = `/plans/${data.plan.id}`;
-        }
-      }
+
+      const newUploadId = String(data.uploadId);
+      sessionStorage.setItem('coachplan_upload_id', newUploadId);
+      setUploadId(newUploadId);
+      setPlanId(String(data.planId));
+      setUploadStage((data.stage || 'queued') as UploadStage);
+      setStatus('processing');
     } catch (err: unknown) {
-      setStatus('error');
+      setStatus('failed');
       if (err instanceof DOMException && err.name === 'AbortError') {
-        setMessage('Upload timed out before parsing finished. Please retry or use a smaller/simpler PDF.');
+        setMessage('Upload start timed out before background processing was queued. Please retry.');
       } else {
         setMessage(err instanceof Error ? err.message : 'Upload failed');
       }
     } finally {
       if (timeoutId) window.clearTimeout(timeoutId);
-      setStatus('idle');
-      setUploadStartedAt(null);
     }
   };
 
@@ -261,35 +434,62 @@ export default function UploadPage() {
                   </label>
                 </div>
                 <div style={{ marginTop: 12 }}>
-                  <button className="cta" onClick={handleSubmit} disabled={status === 'saving'}>
-                    {status === 'saving' ? 'Uploading…' : 'Upload and parse'}
+                  <button className="cta" onClick={handleSubmit} disabled={isWorking}>
+                    {isWorking ? 'Uploading…' : 'Upload and parse'}
                   </button>
                 </div>
-                {status === 'saving' && (
+                {(isWorking || status === 'failed') && (
                   <div className="upload-progress-card" role="status" aria-live="polite">
                     <div className="upload-progress-head">
-                      <strong>{stage.title}</strong>
-                      <span>{progressLabel}</span>
+                      <strong>{stageMeta.title}</strong>
+                      <span>{status === 'failed' ? 'Paused' : `${stageProgress}%`}</span>
                     </div>
-                    <p>{stage.detail}</p>
                     <div className="upload-progress-track" aria-hidden="true">
                       <div
-                        className={`upload-progress-fill${isFinalStage ? ' indeterminate' : ''}`}
-                        style={isFinalStage ? undefined : { width: `${stageProgress}%` }}
+                        className={`upload-progress-fill${isWorking && uploadStage !== 'completed' ? ' indeterminate' : ''}`}
+                        style={uploadStage === 'completed' ? { width: '100%' } : undefined}
                       />
                     </div>
+
+                    {/* Stage checklist */}
+                    <ol className="upload-stage-list">
+                      {STAGE_ORDER.map((stage) => {
+                        const currentIdx = STAGE_ORDER.indexOf(uploadStage === 'failed' ? 'queued' : uploadStage as Exclude<UploadStage, 'failed'>);
+                        const stageIdx = STAGE_ORDER.indexOf(stage);
+                        const isDone = stageIdx < currentIdx || uploadStage === 'completed';
+                        const isActive = stageIdx === currentIdx && uploadStage !== 'completed' && uploadStage !== 'failed';
+                        const showStats = isDone && stage === 'parsing_markdown' && weekCount != null;
+                        return (
+                          <li key={stage} className={`upload-stage-item${isDone ? ' done' : isActive ? ' active' : ' pending'}`}>
+                            <span className="upload-stage-icon" aria-hidden="true">
+                              {isDone ? '✓' : isActive ? '…' : '○'}
+                            </span>
+                            <span className="upload-stage-label">{STAGE_CHECKLIST_LABELS[stage]}</span>
+                            {showStats && (
+                              <span className="upload-stage-stat">{weekCount}w · {sessionCount ?? 0}s</span>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ol>
+
                     <p className="upload-progress-meta">
                       Elapsed: {elapsedSec}s · {timeHint}
                     </p>
-                    {isFinalStage && (
+                    {failureReason && (
                       <p className="upload-progress-meta upload-progress-meta-strong">
-                        Waiting for parser response. Keep this tab open.
+                        {humanizeFailureReason(failureReason)}
+                      </p>
+                    )}
+                    {extractedMdAvailable && (
+                      <p className="upload-progress-meta upload-progress-meta-strong">
+                        Extracted markdown is ready below.
                       </p>
                     )}
                   </div>
                 )}
                 {message && (
-                  <p className="muted" style={{ marginTop: 10, color: status === 'error' ? '#b42318' : undefined }}>
+                  <p className="muted" style={{ marginTop: 10, color: status === 'failed' ? '#b42318' : undefined }}>
                     {message}
                   </p>
                 )}
@@ -302,6 +502,37 @@ export default function UploadPage() {
                 <UploadFlowStepper steps={UPLOAD_FLOW_STEPS} activeStep={flowActiveStep} />
               </div>
             </div>
+
+            {(uploadId || extractedMd || extractedMdAvailable) && (
+              <div className="dash-card athlete-page-card upload-preview-card">
+                <div className="section-title">
+                  <h3>Extracted Training Plan Markdown</h3>
+                </div>
+                {!extractedMdAvailable && (
+                  <p className="muted">Waiting for markdown extraction to finish.</p>
+                )}
+                {extractedMdAvailable && extractedMdLoading && (
+                  <p className="muted">Loading extracted markdown preview…</p>
+                )}
+                {extractedMdAvailable && !extractedMdLoading && !extractedMd && (
+                  <p className="muted">The markdown exists, but the preview is not available yet. Keep this tab open.</p>
+                )}
+                {extractedMd && (
+                  <div className="upload-markdown-preview">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {extractedMd}
+                    </ReactMarkdown>
+                  </div>
+                )}
+                {status === 'failed' && planId && (
+                  <div className="upload-preview-actions">
+                    <Link className="cta secondary" href={`/plans/${planId}/review?fromUpload=1`}>
+                      Open review draft
+                    </Link>
+                  </div>
+                )}
+              </div>
+            )}
           </SignedIn>
         </section>
 

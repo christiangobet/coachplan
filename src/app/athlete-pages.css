@@ -456,6 +456,71 @@
   color: #475569;
 }
 
+.upload-preview-card {
+  margin-top: 18px;
+}
+
+.upload-markdown-preview {
+  margin-top: 10px;
+  max-height: 640px;
+  overflow: auto;
+  border: 1px solid #d9e3ef;
+  border-radius: 14px;
+  background: #fbfdff;
+  padding: 16px 18px;
+}
+
+.upload-markdown-preview h1,
+.upload-markdown-preview h2,
+.upload-markdown-preview h3 {
+  color: #1f2f4a;
+  margin-top: 1.2em;
+  margin-bottom: 0.45em;
+}
+
+.upload-markdown-preview h1:first-child,
+.upload-markdown-preview h2:first-child,
+.upload-markdown-preview h3:first-child {
+  margin-top: 0;
+}
+
+.upload-markdown-preview p,
+.upload-markdown-preview li {
+  color: #334155;
+  line-height: 1.6;
+}
+
+.upload-markdown-preview table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 14px 0;
+  font-size: 13px;
+}
+
+.upload-markdown-preview th,
+.upload-markdown-preview td {
+  border: 1px solid #dbe4f0;
+  padding: 8px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.upload-markdown-preview th {
+  background: #f4f7fc;
+  color: #1f2f4a;
+}
+
+.upload-markdown-preview code {
+  font-size: 12px;
+  background: #eef3fa;
+  padding: 1px 5px;
+  border-radius: 6px;
+}
+
+.upload-preview-actions {
+  margin-top: 14px;
+}
+
 @keyframes uploadProgressIndeterminate {
   0% {
     transform: translateX(-80%);

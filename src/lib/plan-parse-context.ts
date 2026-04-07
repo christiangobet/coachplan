@@ -1,3 +1,11 @@
+import { assessProgramWeekCompleteness } from "./parsing/program-week-completeness.ts";
+import { ProgramJsonV1Schema } from "./schemas/program-json-v1.ts";
+import {
+  selectLatestUploadLifecycleArtifact,
+  type UploadLifecycleStage,
+  type UploadLifecycleStatus,
+} from "./upload-progress.ts";
+
 export type ExtractedMdArtifactLike = {
   artifactType: string;
   validationOk: boolean;
@@ -22,10 +30,16 @@ export type LatestExtractedMd = {
 
 export type ParseContextSummary = LatestExtractedMd & {
   hasExtractedMd: boolean;
-  mdParseStatus: 'missing' | 'available' | 'succeeded' | 'failed';
+  mdParseStatus: 'missing' | 'available' | 'partial' | 'succeeded' | 'failed';
   persistenceSource: string | null;
   canBackfillExtractedMd: boolean;
   canApplyMdProgram: boolean;
+  missingWeekNumbers: number[];
+  uploadStatus: UploadLifecycleStatus | null;
+  uploadStage: UploadLifecycleStage | null;
+  uploadFailureReason: string | null;
+  uploadWeekCount: number | null;
+  uploadSessionCount: number | null;
 };
 
 export function selectLatestExtractedMd(jobs: ExtractedMdJobLike[]): LatestExtractedMd {
@@ -78,10 +92,28 @@ export function buildParseContextSummary(args: {
   const extracted = selectLatestExtractedMd(args.jobs);
   const hasExtractedMd = Boolean(extracted.extractedMd);
   const latestVisionJob = args.jobs.find((job) => job.parserVersion === 'vision-v1') ?? null;
-  const latestSuccessfulMdProgramJob = args.jobs.find((job) => {
-    if (job.parserVersion !== 'vision-v1') return false;
-    return job.artifacts.some((artifact) => artifact.artifactType === 'V4_OUTPUT' && artifact.validationOk);
-  }) ?? null;
+  const latestUploadJob = args.jobs.find((job) => job.parserVersion === 'upload-async') ?? null;
+  const latestUploadLifecycle = latestUploadJob
+    ? selectLatestUploadLifecycleArtifact(latestUploadJob.artifacts)
+    : null;
+  const latestVisionProgramArtifact = args.jobs
+    .filter((job) => job.parserVersion === 'vision-v1')
+    .flatMap((job) => job.artifacts
+      .filter((artifact) => artifact.artifactType === 'V4_OUTPUT')
+      .map((artifact) => ({ job, artifact })))
+    .sort((a, b) => String(b.artifact.createdAt).localeCompare(String(a.artifact.createdAt)))[0] ?? null;
+  const latestVisionProgram = latestVisionProgramArtifact
+    ? ProgramJsonV1Schema.safeParse(latestVisionProgramArtifact.artifact.json)
+    : null;
+  const latestVisionCompleteness = latestVisionProgram?.success
+    ? assessProgramWeekCompleteness(latestVisionProgram.data)
+    : null;
+  const latestSuccessfulMdProgramJob = latestVisionProgramArtifact
+    && latestVisionProgram?.success
+    && latestVisionProgramArtifact.artifact.validationOk
+    && latestVisionCompleteness?.isComplete
+      ? latestVisionProgramArtifact.job
+      : null;
   const latestFailedMdProgramJob = args.jobs.find((job) => {
     if (job.parserVersion !== 'vision-v1') return false;
     if (job.status === 'FAILED') return true;
@@ -91,6 +123,8 @@ export function buildParseContextSummary(args: {
   let mdParseStatus: ParseContextSummary['mdParseStatus'] = 'missing';
   if (hasExtractedMd && latestSuccessfulMdProgramJob) {
     mdParseStatus = 'succeeded';
+  } else if (hasExtractedMd && latestVisionCompleteness && !latestVisionCompleteness.isComplete) {
+    mdParseStatus = 'partial';
   } else if (hasExtractedMd && latestFailedMdProgramJob) {
     mdParseStatus = 'failed';
   } else if (hasExtractedMd) {
@@ -109,6 +143,18 @@ export function buildParseContextSummary(args: {
       latestSuccessfulMdProgramJob &&
       !['markdown-primary', 'markdown-merged'].includes(readPersistenceSource(args.parseProfile) || '')
     ),
+    missingWeekNumbers: latestVisionCompleteness?.missingWeekNumbers ?? [],
+    uploadStatus: latestUploadLifecycle?.status ?? (latestUploadJob?.status === 'SUCCESS'
+      ? 'completed'
+      : latestUploadJob?.status === 'FAILED'
+        ? 'failed'
+        : latestUploadJob?.status === 'RUNNING'
+          ? 'processing'
+          : null),
+    uploadStage: latestUploadLifecycle?.stage ?? null,
+    uploadFailureReason: latestUploadLifecycle?.failureReason ?? null,
+    uploadWeekCount: latestUploadLifecycle?.weekCount ?? null,
+    uploadSessionCount: latestUploadLifecycle?.sessionCount ?? null,
   };
 }
 

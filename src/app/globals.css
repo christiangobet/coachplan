@@ -854,3 +854,45 @@ tbody tr:nth-child(odd) {
 [data-theme="dark"] .account-disabled-card p {
   color: #94a3b8;
 }
+
+/* Upload stage checklist — used on both upload page and review parsing-in-progress screen */
+.upload-stage-list {
+  list-style: none;
+  margin: 2px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.upload-stage-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+}
+
+.upload-stage-icon {
+  width: 14px;
+  text-align: center;
+  flex-shrink: 0;
+  font-size: 11px;
+}
+
+.upload-stage-item.done .upload-stage-icon { color: #22c55e; }
+.upload-stage-item.active .upload-stage-icon { color: #fc4c02; }
+.upload-stage-item.pending .upload-stage-icon { color: #cbd5e1; }
+
+.upload-stage-label { color: inherit; }
+.upload-stage-item.done .upload-stage-label { color: #374151; }
+.upload-stage-item.active .upload-stage-label { color: #1f2f4a; font-weight: 600; }
+.upload-stage-item.pending .upload-stage-label { color: #94a3b8; }
+
+.upload-stage-stat {
+  margin-left: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #64748b;
+  background: #e7eef9;
+  padding: 1px 5px;
+  border-radius: 999px;
+}

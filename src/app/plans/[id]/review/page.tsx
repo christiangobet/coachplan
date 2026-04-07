@@ -154,6 +154,12 @@ type ReviewParseContext = {
   persistenceSource: string | null;
   canBackfillExtractedMd: boolean;
   canApplyMdProgram: boolean;
+  missingWeekNumbers: number[];
+  uploadStatus: 'processing' | 'completed' | 'failed' | null;
+  uploadStage: string | null;
+  uploadFailureReason: string | null;
+  uploadWeekCount: number | null;
+  uploadSessionCount: number | null;
 };
 
 function toFiniteNumber(value: unknown): number | null {
@@ -172,6 +178,27 @@ function humanizeToken(value: string | null) {
     .replace(/[_-]+/g, ' ')
     .toLowerCase()
     .replace(/\b[a-z]/g, (match) => match.toUpperCase());
+}
+
+function formatWeekRanges(weekNumbers: number[]) {
+  if (!weekNumbers.length) return null;
+  const ranges: string[] = [];
+  let start = weekNumbers[0];
+  let end = weekNumbers[0];
+
+  for (let index = 1; index < weekNumbers.length; index += 1) {
+    const current = weekNumbers[index];
+    if (current === end + 1) {
+      end = current;
+      continue;
+    }
+    ranges.push(start === end ? String(start) : `${start}-${end}`);
+    start = current;
+    end = current;
+  }
+
+  ranges.push(start === end ? String(start) : `${start}-${end}`);
+  return ranges.join(', ');
 }
 
 function buildDayActivityPreview(day: ReviewDay) {
@@ -614,7 +641,7 @@ export default function PlanReviewPage() {
   const [guideViewMode, setGuideViewMode] = useState<GuideViewMode>('preview');
   const [parseContextLoading, setParseContextLoading] = useState(false);
   const [parseContextError, setParseContextError] = useState<string | null>(null);
-  const [parseContextMeta, setParseContextMeta] = useState<Pick<ReviewParseContext, 'parseJobId' | 'parseJobCreatedAt' | 'extractedMdCreatedAt' | 'hasExtractedMd' | 'mdParseStatus' | 'persistenceSource' | 'canBackfillExtractedMd' | 'canApplyMdProgram'>>({
+  const [parseContextMeta, setParseContextMeta] = useState<Pick<ReviewParseContext, 'parseJobId' | 'parseJobCreatedAt' | 'extractedMdCreatedAt' | 'hasExtractedMd' | 'mdParseStatus' | 'persistenceSource' | 'canBackfillExtractedMd' | 'canApplyMdProgram' | 'missingWeekNumbers'>>({
     parseJobId: null,
     parseJobCreatedAt: null,
     extractedMdCreatedAt: null,
@@ -622,8 +649,17 @@ export default function PlanReviewPage() {
     mdParseStatus: null,
     persistenceSource: null,
     canBackfillExtractedMd: false,
-    canApplyMdProgram: false
+    canApplyMdProgram: false,
+    missingWeekNumbers: [],
   });
+  const [uploadState, setUploadState] = useState<Pick<ReviewParseContext, 'uploadStatus' | 'uploadStage' | 'uploadFailureReason' | 'uploadWeekCount' | 'uploadSessionCount'>>({
+    uploadStatus: null,
+    uploadStage: null,
+    uploadFailureReason: null,
+    uploadWeekCount: null,
+    uploadSessionCount: null,
+  });
+  const [uploadPollStalled, setUploadPollStalled] = useState(false);
   const [guideSaving, setGuideSaving] = useState(false);
   const [guideSaved, setGuideSaved] = useState(false);
   const [extractingGuide, setExtractingGuide] = useState(false);
@@ -661,6 +697,10 @@ export default function PlanReviewPage() {
     if (!parseContextMeta.persistenceSource) return 'Unknown';
     return humanizeToken(parseContextMeta.persistenceSource);
   }, [parseContextMeta.persistenceSource]);
+  const missingWeeksLabel = useMemo(
+    () => formatWeekRanges(parseContextMeta.missingWeekNumbers),
+    [parseContextMeta.missingWeekNumbers],
+  );
 
   const initializeDrafts = useCallback((nextPlan: ReviewPlan, fallbackUnit: DistanceUnitValue) => {
     const nextDayDrafts: Record<string, string> = {};
@@ -685,22 +725,25 @@ export default function PlanReviewPage() {
     setExpandedActivityDetails(nextExpandedActivityDetails);
   }, []);
 
-  const loadPlan = useCallback(async () => {
+  const loadPlan = useCallback(async (options?: { silent?: boolean }) => {
     if (!planId) return;
-    setLoading(true);
-    setError(null);
-    setNotice(null);
-    setSavingDayIds({});
-    setQueuedDayIds({});
-    setSavingActivityIds({});
-    setQueuedActivityIds({});
-    Object.values(daySaveTimersRef.current).forEach((timer) => clearTimeout(timer));
-    Object.values(activitySaveTimersRef.current).forEach((timer) => clearTimeout(timer));
-    daySaveTimersRef.current = {};
-    activitySaveTimersRef.current = {};
+    const silent = options?.silent === true;
+    if (!silent) {
+      setLoading(true);
+      setError(null);
+      setNotice(null);
+      setSavingDayIds({});
+      setQueuedDayIds({});
+      setSavingActivityIds({});
+      setQueuedActivityIds({});
+      Object.values(daySaveTimersRef.current).forEach((timer) => clearTimeout(timer));
+      Object.values(activitySaveTimersRef.current).forEach((timer) => clearTimeout(timer));
+      daySaveTimersRef.current = {};
+      activitySaveTimersRef.current = {};
+    }
 
     try {
-      const res = await fetch(`/api/plans/${planId}`);
+      const res = await fetch(`/api/plans/${planId}`, { cache: 'no-store' });
       const data = await res.json().catch(() => null);
       if (!res.ok) {
         setError(data?.error || 'Failed to load plan.');
@@ -720,7 +763,9 @@ export default function PlanReviewPage() {
     } catch {
       setError('Failed to load plan.');
     } finally {
-      setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
     }
   }, [planId, initializeDrafts]);
 
@@ -749,6 +794,18 @@ export default function PlanReviewPage() {
         persistenceSource: typeof data?.persistenceSource === 'string' ? data.persistenceSource : null,
         canBackfillExtractedMd: data?.canBackfillExtractedMd === true,
         canApplyMdProgram: data?.canApplyMdProgram === true,
+        missingWeekNumbers: Array.isArray(data?.missingWeekNumbers)
+          ? data.missingWeekNumbers.filter((value: unknown): value is number => typeof value === 'number')
+          : [],
+      });
+      setUploadState({
+        uploadStatus: data?.uploadStatus === 'processing' || data?.uploadStatus === 'completed' || data?.uploadStatus === 'failed'
+          ? data.uploadStatus
+          : null,
+        uploadStage: typeof data?.uploadStage === 'string' ? data.uploadStage : null,
+        uploadFailureReason: typeof data?.uploadFailureReason === 'string' ? data.uploadFailureReason : null,
+        uploadWeekCount: typeof data?.uploadWeekCount === 'number' ? data.uploadWeekCount : null,
+        uploadSessionCount: typeof data?.uploadSessionCount === 'number' ? data.uploadSessionCount : null,
       });
     } catch {
       setParseContextError('Failed to load parse context.');
@@ -775,6 +832,39 @@ export default function PlanReviewPage() {
   useEffect(() => {
     void loadParseContext();
   }, [loadParseContext]);
+
+  // When arriving from the upload flow the redirect already confirmed completion —
+  // never block on upload status in that case (avoids transient read-ordering issues).
+  const reviewBlockedByUpload = Boolean(
+    !arrivedFromUpload
+    && plan
+    && plan.weeks.length === 0
+    && uploadState.uploadStatus === 'processing'
+  );
+
+  useEffect(() => {
+    if (!reviewBlockedByUpload || !planId) return;
+
+    setUploadPollStalled(false);
+    let consecutiveErrors = 0;
+
+    const interval = window.setInterval(async () => {
+      // loadPlan returns the plan object on success, undefined on any failure
+      const [planResult] = await Promise.all([
+        loadPlan({ silent: true }),
+        loadParseContext(),
+      ]);
+      if (planResult !== undefined) {
+        consecutiveErrors = 0;
+        setUploadPollStalled(false);
+      } else {
+        consecutiveErrors += 1;
+        if (consecutiveErrors >= 3) setUploadPollStalled(true);
+      }
+    }, 3000);
+
+    return () => window.clearInterval(interval);
+  }, [reviewBlockedByUpload, planId, loadPlan, loadParseContext]);
 
   useEffect(() => {
     void loadProfilePaces();
@@ -1861,6 +1951,81 @@ export default function PlanReviewPage() {
     );
   }
 
+  if (reviewBlockedByUpload) {
+    const uploadStageOrder = [
+      'queued',
+      'extracting_markdown',
+      'markdown_available',
+      'parsing_markdown',
+      'persisting_plan',
+      'completed',
+    ] as const;
+    const uploadStageLabels: Record<typeof uploadStageOrder[number], string> = {
+      queued: 'Creating draft plan',
+      extracting_markdown: 'Reading PDF and extracting markdown',
+      markdown_available: 'Markdown extracted',
+      parsing_markdown: 'Parsing weeks, days, and sessions',
+      persisting_plan: 'Saving parsed plan',
+      completed: 'Ready to review',
+    };
+    const currentStage = (uploadState.uploadStage ?? 'queued') as typeof uploadStageOrder[number];
+    const currentIdx = uploadStageOrder.indexOf(currentStage);
+
+    return (
+      <main className="review-page-shell">
+        <section className="review-page-card">
+          <h1>Parsing In Progress</h1>
+          <p className="review-muted">
+            This screen will refresh automatically when weeks and activities are ready.
+          </p>
+
+          <ol className="upload-stage-list" style={{ margin: '16px 0' }}>
+            {uploadStageOrder.map((stage, i) => {
+              const isDone = i < currentIdx;
+              const isActive = i === currentIdx;
+              const showStats = isDone && stage === 'parsing_markdown' && uploadState.uploadWeekCount != null;
+              return (
+                <li key={stage} className={`upload-stage-item${isDone ? ' done' : isActive ? ' active' : ' pending'}`}>
+                  <span className="upload-stage-icon" aria-hidden="true">
+                    {isDone ? '✓' : isActive ? '…' : '○'}
+                  </span>
+                  <span className="upload-stage-label">{uploadStageLabels[stage]}</span>
+                  {showStats && (
+                    <span className="upload-stage-stat">
+                      {uploadState.uploadWeekCount}w · {uploadState.uploadSessionCount ?? 0}s
+                    </span>
+                  )}
+                </li>
+              );
+            })}
+          </ol>
+
+          {uploadPollStalled ? (
+            <div style={{ marginTop: 12 }}>
+              <p className="review-muted" style={{ color: '#b45309', marginBottom: 8 }}>
+                Auto-refresh is having trouble reaching the server. Your session may have expired.
+              </p>
+              <div className="review-mobile-guard-actions">
+                <button className="cta" type="button" onClick={() => window.location.reload()}>
+                  Refresh page
+                </button>
+                <Link className="cta secondary" href="/upload">
+                  Back to Upload
+                </Link>
+              </div>
+            </div>
+          ) : (
+            <div className="review-mobile-guard-actions">
+              <Link className="cta secondary" href="/upload">
+                Back to Upload
+              </Link>
+            </div>
+          )}
+        </section>
+      </main>
+    );
+  }
+
   if (!isWideScreen) {
     return (
       <main className="review-page-shell review-mobile-guard-shell">
@@ -2539,6 +2704,7 @@ export default function PlanReviewPage() {
                 <span>MD parse status: {mdParseStatusLabel}</span>
                 <span>Persistence source: {persistenceSourceLabel}</span>
                 {extractedMdMetaLabel && <span>Latest extracted markdown: {extractedMdMetaLabel}</span>}
+                {missingWeeksLabel && <span>Missing weeks: {missingWeeksLabel}</span>}
               </div>
               {parseContextLoading && <p className="review-guide-empty">Loading extracted markdown&hellip;</p>}
               {parseContextError && <p className="review-error">{parseContextError}</p>}

@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { ensureUserFromAuth } from "@/lib/user-sync";
 import { buildParseContextSummary } from "@/lib/plan-parse-context";
 import { resolveSourceDocument } from "@/lib/resolve-source-document";
+import { isAsyncUploadProcessing, scheduleAsyncUploadProcessing } from "@/lib/parsing/async-upload-processor";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const authUser = await currentUser();
@@ -57,6 +58,12 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     }),
     resolveSourceDocument(id),
   ]);
+
+  const latestUploadJob = jobs.find((job) => job.parserVersion === "upload-async") ?? null;
+  if (latestUploadJob?.status === "RUNNING" && !isAsyncUploadProcessing(latestUploadJob.id)) {
+    scheduleAsyncUploadProcessing(latestUploadJob.id);
+  }
+
   const summary = buildParseContextSummary({
     jobs,
     parseProfile: plan.parseProfile,
@@ -74,5 +81,11 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     persistenceSource: summary.persistenceSource,
     canBackfillExtractedMd: summary.canBackfillExtractedMd,
     canApplyMdProgram: summary.canApplyMdProgram,
+    missingWeekNumbers: summary.missingWeekNumbers,
+    uploadStatus: summary.uploadStatus,
+    uploadStage: summary.uploadStage,
+    uploadFailureReason: summary.uploadFailureReason,
+    uploadWeekCount: summary.uploadWeekCount,
+    uploadSessionCount: summary.uploadSessionCount,
   });
 }

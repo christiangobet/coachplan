@@ -17,6 +17,25 @@ type Week = {
   sessions?: unknown[];
 };
 
+type UploadPipelineStatusArtifact = {
+  status?: string;
+  stage?: string;
+  uploadStatus?: string;
+  failureReason?: string | null;
+  visionEnabled?: boolean;
+  visionAttempted?: boolean;
+  hasExtractedMd?: boolean;
+  extractedMdAvailable?: boolean;
+  mdParseStatus?: string;
+  completedPlanId?: string | null;
+  selectedBaseParser?: string | null;
+  finalParser?: string | null;
+  resultKind?: string;
+  usedFallback?: boolean;
+  usedEnrichers?: string[];
+  missingWeekNumbers?: number[];
+};
+
 function extractSummary(json: unknown): {
   weeksDetected: number | null;
   weekNumbers: number[];
@@ -192,8 +211,8 @@ export default async function ParseDebugPage() {
                   </div>
                 </div>
 
-                {/* Quality summary row */}
-                {!summary.truncated && (
+                {/* Quality summary row — skip for MD-only artifacts (no week data to summarise) */}
+                {!summary.truncated && artifact.artifactType !== 'UPLOAD_PIPELINE_STATUS' && artifact.artifactType !== 'EXTRACTED_MD' && (
                   <div
                     style={{
                       display: 'flex',
@@ -235,6 +254,7 @@ export default async function ParseDebugPage() {
 
                 {/* Anomalies detail */}
                 {!summary.truncated &&
+                  artifact.artifactType !== 'UPLOAD_PIPELINE_STATUS' &&
                   summary.qc?.anomalies &&
                   summary.qc.anomalies.length > 0 && (
                     <div
@@ -275,6 +295,47 @@ export default async function ParseDebugPage() {
                     >
                       {(artifact.json as { md: string }).md}
                     </pre>
+                  </div>
+                )}
+
+                {artifact.artifactType === 'UPLOAD_PIPELINE_STATUS' && artifact.json && typeof artifact.json === 'object' && (
+                  <div
+                    style={{
+                      display: 'grid',
+                      gap: 8,
+                      marginBottom: 12,
+                      padding: '10px 12px',
+                      background: '#f8fafc',
+                      border: '1px solid #d9e3ef',
+                      borderRadius: 8,
+                    }}
+                  >
+                    {(() => {
+                      const uploadStatus = artifact.json as UploadPipelineStatusArtifact;
+                      return (
+                        <>
+                          <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: 12 }}>
+                            <span><strong>status:</strong> {uploadStatus.status || '—'}</span>
+                            <span><strong>stage:</strong> {uploadStatus.stage || '—'}</span>
+                            <span><strong>uploadStatus:</strong> {uploadStatus.uploadStatus || '—'}</span>
+                            <span><strong>failureReason:</strong> {uploadStatus.failureReason || '—'}</span>
+                            <span><strong>visionAttempted:</strong> {String(uploadStatus.visionAttempted ?? false)}</span>
+                            <span><strong>hasExtractedMd:</strong> {String(uploadStatus.hasExtractedMd ?? false)}</span>
+                            <span><strong>extractedMdAvailable:</strong> {String(uploadStatus.extractedMdAvailable ?? false)}</span>
+                            <span><strong>mdParseStatus:</strong> {uploadStatus.mdParseStatus || '—'}</span>
+                            <span><strong>missingWeeks:</strong> {(uploadStatus.missingWeekNumbers || []).join(', ') || '—'}</span>
+                          </div>
+                          <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: 12 }}>
+                            <span><strong>selectedBaseParser:</strong> {uploadStatus.selectedBaseParser || '—'}</span>
+                            <span><strong>finalParser:</strong> {uploadStatus.finalParser || '—'}</span>
+                            <span><strong>resultKind:</strong> {uploadStatus.resultKind || '—'}</span>
+                            <span><strong>usedFallback:</strong> {String(uploadStatus.usedFallback ?? false)}</span>
+                            <span><strong>usedEnrichers:</strong> {(uploadStatus.usedEnrichers || []).join(', ') || '—'}</span>
+                            <span><strong>completedPlanId:</strong> {uploadStatus.completedPlanId || '—'}</span>
+                          </div>
+                        </>
+                      );
+                    })()}
                   </div>
                 )}
 
