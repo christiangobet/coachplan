@@ -833,20 +833,40 @@ export default function PlanReviewPage() {
     void loadParseContext();
   }, [loadParseContext]);
 
-  // When arriving from the upload flow the redirect already confirmed completion —
-  // never block on upload status in that case (avoids transient read-ordering issues).
+  // Show the "Parsing In Progress" screen and poll for plan data when:
+  // - The plan exists in state but has 0 weeks, AND
+  // - One of the following is true:
+  //   a) uploadStatus === 'processing' — upload pipeline is actively running
+  //   b) uploadStatus === 'completed' — server finished but weeks may not yet be visible
+  //      (DB write race; we poll until weeks appear or the stall detector triggers)
+  //   c) uploadStatus === null AND arrivedFromUpload — parse context hasn't loaded yet;
+  //      ?fromUpload=1 means we came from the upload flow and should expect weeks soon
+  //
+  // 'failed' is intentionally excluded: let the page render normally (0 weeks)
+  // so the user can see parse-debug tools and retry.
   const reviewBlockedByUpload = Boolean(
-    !arrivedFromUpload
-    && plan
+    plan
     && plan.weeks.length === 0
-    && uploadState.uploadStatus === 'processing'
+    && (uploadState.uploadStatus === 'processing' || uploadState.uploadStatus === 'completed' || (uploadState.uploadStatus === null && arrivedFromUpload))
   );
+
+  // When the server reports upload completed, immediately re-fetch the plan
+  // so the page transitions as quickly as possible rather than waiting for
+  // the next 3-second poll tick.
+  useEffect(() => {
+    if (uploadState.uploadStatus !== 'completed' || !planId) return;
+    void loadPlan({ silent: true });
+  }, [uploadState.uploadStatus, planId, loadPlan]);
 
   useEffect(() => {
     if (!reviewBlockedByUpload || !planId) return;
 
     setUploadPollStalled(false);
     let consecutiveErrors = 0;
+    // Track how many successful polls returned 0 weeks after upload completed.
+    // After enough of these, something went wrong server-side and we surface a
+    // manual-refresh option via the existing uploadPollStalled UI.
+    let completedPollsWithNoWeeks = 0;
 
     const interval = window.setInterval(async () => {
       // loadPlan returns the plan object on success, undefined on any failure
@@ -856,7 +876,15 @@ export default function PlanReviewPage() {
       ]);
       if (planResult !== undefined) {
         consecutiveErrors = 0;
-        setUploadPollStalled(false);
+        if (planResult.weeks.length === 0 && uploadState.uploadStatus === 'completed') {
+          // Server says done but DB still has no weeks — count towards stall
+          completedPollsWithNoWeeks += 1;
+          // After ~15 seconds (5 polls × 3s) show the stall/refresh UI
+          if (completedPollsWithNoWeeks >= 5) setUploadPollStalled(true);
+        } else {
+          completedPollsWithNoWeeks = 0;
+          setUploadPollStalled(false);
+        }
       } else {
         consecutiveErrors += 1;
         if (consecutiveErrors >= 3) setUploadPollStalled(true);
@@ -864,7 +892,7 @@ export default function PlanReviewPage() {
     }, 3000);
 
     return () => window.clearInterval(interval);
-  }, [reviewBlockedByUpload, planId, loadPlan, loadParseContext]);
+  }, [reviewBlockedByUpload, planId, loadPlan, loadParseContext, uploadState.uploadStatus]);
 
   useEffect(() => {
     void loadProfilePaces();
@@ -2003,7 +2031,9 @@ export default function PlanReviewPage() {
           {uploadPollStalled ? (
             <div style={{ marginTop: 12 }}>
               <p className="review-muted" style={{ color: '#b45309', marginBottom: 8 }}>
-                Auto-refresh is having trouble reaching the server. Your session may have expired.
+                {uploadState.uploadStatus === 'completed'
+                  ? 'Parsing finished on the server but the plan appears empty. Try refreshing to load it.'
+                  : 'Auto-refresh is having trouble reaching the server. Your session may have expired.'}
               </p>
               <div className="review-mobile-guard-actions">
                 <button className="cta" type="button" onClick={() => window.location.reload()}>

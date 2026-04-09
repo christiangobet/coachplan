@@ -259,6 +259,10 @@ export function isGenericActivityTitle(
 }
 
 export function deriveSmartActivityTitle(input: SmartTitleInput): string {
+  return capitalizeFirst(_deriveSmartActivityTitle(input));
+}
+
+function _deriveSmartActivityTitle(input: SmartTitleInput): string {
   const activityType = normalizeActivityType(input.activityType);
   const currentTitle = sanitizeWorkoutIdentityText(input.currentTitle);
   if (currentTitle && !isGenericActivityTitle(currentTitle, activityType)) {
@@ -299,4 +303,9 @@ export function deriveSmartActivityTitle(input: SmartTitleInput): string {
 
   if (currentTitle) return currentTitle;
   return fallbackTypeTitle(activityType);
+}
+
+function capitalizeFirst(s: string): string {
+  if (!s) return s;
+  return s.charAt(0).toUpperCase() + s.slice(1);
 }
