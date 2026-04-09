@@ -9,7 +9,6 @@ import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { parseWeekWithAI, maybeRunParserV4, maybeRunParserV5, maybeRunVisionExtract } from '@/lib/ai-plan-parser';
 import { extractPlanGuide } from '@/lib/ai-guide-extractor';
-import { extractPdfText } from '@/lib/pdf/extract-text';
 import { FLAGS } from '@/lib/feature-flags';
 import { populatePlanFromV4 } from '@/lib/parsing/v4-to-plan';
 import { enrichLegacyDayDraftsFromProgram } from '@/lib/parsing/legacy-program-enrichment';
@@ -21,6 +20,18 @@ import {
   type UploadParserRun,
 } from '@/lib/parsing/upload-orchestrator';
 import { runTimedUploadCandidate } from '@/lib/parsing/upload-candidate-runner';
+import { resolveUploadAiCandidateTimeoutMs } from '@/lib/parsing/upload-timeouts';
+import { assessProgramWeekCompleteness } from '@/lib/parsing/program-week-completeness';
+import {
+  createParseJob,
+  saveParseArtifact,
+  updateParseJobStatus,
+} from '@/lib/parsing/parse-artifacts';
+import { saveUploadLifecycleStatus, scheduleAsyncUploadProcessing } from '@/lib/parsing/async-upload-processor';
+import {
+  evaluateMarkdownFirstUpload,
+  type MarkdownUploadPipelineStatus,
+} from '@/lib/parsing/markdown-upload-enforcement';
 import { canonicalizeTableLabel, extractWeekNumber, normalizePlanText } from '@/lib/plan-parser-i18n.mjs';
 import { normalizeWhitespace, titleCase, planNameFromFilename, decodeActivityText, normalizeMatchText, chooseActivityRawText, expandAlternatives, splitCombinedActivities } from '@/lib/parsing/upload-normalizers';
 import { SUBTYPE_TITLES, normalizeSubtypeToken, inferSubtype, mapActivityType, mapAiTypeToActivityType, mapAiSessionTypeToSubtype, mapAiPrimarySportToType } from '@/lib/parsing/activity-type-mapper';
@@ -38,11 +49,22 @@ import {
 } from '@/lib/intensity-targets';
 import { normalizePaceForStorage } from '@/lib/unit-display';
 import { deriveSmartActivityTitle, isGenericActivityTitle } from '@/lib/activity-title';
+import { ProgramJsonV1Schema, type ProgramJsonV1 } from '@/lib/schemas/program-json-v1';
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { pathToFileURL } from 'url';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
+
+class MarkdownUploadRejectedError extends Error {
+  readonly status: MarkdownUploadPipelineStatus;
+
+  constructor(status: MarkdownUploadPipelineStatus) {
+    super(`Markdown-first upload rejected: ${status.failureReason ?? 'unknown'}`);
+    this.name = 'MarkdownUploadRejectedError';
+    this.status = status;
+  }
+}
 
 const execFileAsync = promisify(execFile);
 const DAY_KEYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
@@ -62,8 +84,11 @@ function parseBoundedNumber(value: string | undefined, fallback: number, min: nu
   return Math.min(max, Math.max(min, parsed));
 }
 
-const UPLOAD_PARSE_TIMEOUT_MS = parseTimeoutMs(process.env.UPLOAD_PARSE_TIMEOUT_MS, 180000);
-const UPLOAD_AI_CANDIDATE_TIMEOUT_MS = parseTimeoutMs(process.env.UPLOAD_AI_CANDIDATE_TIMEOUT_MS, 90000);
+const UPLOAD_PARSE_TIMEOUT_MS = parseTimeoutMs(process.env.UPLOAD_PARSE_TIMEOUT_MS, 290000);
+const UPLOAD_AI_CANDIDATE_TIMEOUT_MS = resolveUploadAiCandidateTimeoutMs(
+  process.env.UPLOAD_AI_CANDIDATE_TIMEOUT_MS,
+  UPLOAD_PARSE_TIMEOUT_MS,
+);
 const UPLOAD_LEGACY_CANDIDATE_TIMEOUT_MS = parseTimeoutMs(process.env.UPLOAD_LEGACY_CANDIDATE_TIMEOUT_MS, 60000);
 const AI_WEEK_PARSE_TIMEOUT_MS = parseTimeoutMs(process.env.AI_WEEK_PARSE_TIMEOUT_MS, 8000);
 const AI_WEEK_PARSE_TOTAL_BUDGET_MS = parseTimeoutMs(process.env.AI_WEEK_PARSE_TOTAL_BUDGET_MS, 30000);
@@ -1547,6 +1572,64 @@ export async function POST(req: Request) {
     }
   }
 
+  if (file && uploadedPdfBuffer) {
+    const checksumSha256 = createHash('sha256').update(uploadedPdfBuffer).digest('hex');
+    const plan = await prisma.trainingPlan.create({
+      data: {
+        name,
+        raceName: raceName || null,
+        raceDate: raceDate,
+        isTemplate: false,
+        status: 'DRAFT',
+        ownerId: user.id,
+        athleteId: user.id
+      }
+    });
+
+    await prisma.planSourceDocument.create({
+      data: {
+        planId: plan.id,
+        fileName: file.name || `${name}.pdf`,
+        mimeType: 'application/pdf',
+        fileSize: uploadedPdfBuffer.byteLength,
+        checksumSha256,
+        content: uploadedPdfBuffer,
+      },
+    });
+
+    const uploadJob = await createParseJob({
+      planId: plan.id,
+      parserVersion: 'upload-async',
+    });
+
+    await saveUploadLifecycleStatus(uploadJob.id, {
+      stage: 'queued',
+      planId: plan.id,
+      hasExtractedMd: false,
+      extractedMdAvailable: false,
+    });
+
+    scheduleAsyncUploadProcessing(uploadJob.id);
+
+    console.info('[plans-route] async PDF upload shim engaged', {
+      planId: plan.id,
+      uploadId: uploadJob.id,
+      fileName: file.name || null,
+      fileSize: file.size || 0,
+      contentType,
+    });
+
+    return NextResponse.json({
+      plan,
+      planId: plan.id,
+      uploadId: uploadJob.id,
+      status: 'processing',
+      stage: 'queued',
+      asyncUpload: true,
+      reviewUrl: `/plans/${plan.id}/review?fromUpload=1`,
+    });
+  }
+
   const plan = await prisma.trainingPlan.create({
     data: {
       name,
@@ -1563,6 +1646,7 @@ export async function POST(req: Request) {
   let v4PromptName: string | null = null;
   if (file && file.size > 0) {
     const uploadDir = path.join(os.tmpdir(), 'coachplan', 'uploads');
+    let uploadPipelineJobId: string | null = null;
 
     try {
       await fs.mkdir(uploadDir, { recursive: true });
@@ -1591,15 +1675,23 @@ export async function POST(req: Request) {
       });
       const pdfPath = path.join(uploadDir, `${plan.id}.pdf`);
       await fs.writeFile(pdfPath, buffer);
+      try {
+        const uploadPipelineJob = await createParseJob({
+          planId: plan.id,
+          parserVersion: 'upload-orchestrator',
+        });
+        uploadPipelineJobId = uploadPipelineJob.id;
+      } catch (jobError) {
+        console.error('Could not create upload orchestrator parse job', {
+          planId: plan.id,
+          error: jobError instanceof Error ? jobError.message : String(jobError),
+        });
+      }
 
       // Extract guide first so the orchestrator and candidate parsers share the same context artifact.
       let planGuide = '';
-      let pdfFullText = '';
       let visionSeedRun: UploadParserRun | null = null;
       let visionExtractedMd: string | null = null;
-      try {
-        ({ fullText: pdfFullText } = await extractPdfText(buffer));
-      } catch { /* non-fatal */ }
 
       if (FLAGS.PARSER_VISION_EXTRACT) {
         visionSeedRun = await runTimedUploadCandidate({
@@ -1620,8 +1712,9 @@ export async function POST(req: Request) {
               },
             });
           },
-          run: async () => {
-            const { data, parseWarning: visionWarning, extractedMd } = await maybeRunVisionExtract(buffer, plan.id);
+          run: async (signal) => {
+            const outerDeadlineMs = Date.now() + UPLOAD_AI_CANDIDATE_TIMEOUT_MS;
+            const { data, parseWarning: visionWarning, extractedMd } = await maybeRunVisionExtract(buffer, plan.id, signal, outerDeadlineMs);
             visionExtractedMd = extractedMd;
             return {
               parser: 'vision',
@@ -1636,9 +1729,8 @@ export async function POST(req: Request) {
       }
 
       try {
-        const guideSource = visionExtractedMd || pdfFullText;
-        if (guideSource) {
-          planGuide = await extractPlanGuide(guideSource);
+        if (visionExtractedMd) {
+          planGuide = await extractPlanGuide(visionExtractedMd);
           if (planGuide) {
             await prisma.trainingPlan.update({ where: { id: plan.id }, data: { planGuide } });
           }
@@ -1653,7 +1745,7 @@ export async function POST(req: Request) {
 
       const orchestrated = await withTimeout(
         orchestrateUploadParsing({
-          signals: deriveUploadDocumentSignals(visionExtractedMd || pdfFullText || name),
+          signals: deriveUploadDocumentSignals(visionExtractedMd || name),
           budgetMs: UPLOAD_PARSE_TIMEOUT_MS,
           candidates: parserCandidates,
           seedRuns: visionSeedRun ? [visionSeedRun] : [],
@@ -1678,8 +1770,12 @@ export async function POST(req: Request) {
                     },
                   });
                 },
-                run: async () => {
-                  const { data, parseWarning } = await maybeRunVisionExtract(buffer, plan.id);
+                run: async (signal) => {
+                  const outerDeadlineMs = Date.now() + UPLOAD_AI_CANDIDATE_TIMEOUT_MS;
+                  const { data, parseWarning, extractedMd } = await maybeRunVisionExtract(buffer, plan.id, signal, outerDeadlineMs);
+                  if (extractedMd) {
+                    visionExtractedMd = extractedMd;
+                  }
                   return {
                     parser,
                     kind: 'program',
@@ -1711,7 +1807,7 @@ export async function POST(req: Request) {
                     },
                   });
                 },
-                run: async () => {
+                run: async (_signal) => {
                   const { data, parseWarning } = await maybeRunParserV5(buffer, plan.id);
                   return {
                     parser,
@@ -1744,7 +1840,7 @@ export async function POST(req: Request) {
                     },
                   });
                 },
-                run: async () => {
+                run: async (_signal) => {
                   const { data, promptName, parseWarning } = await maybeRunParserV4(buffer, plan.id, planGuide);
                   return {
                     parser,
@@ -1764,7 +1860,7 @@ export async function POST(req: Request) {
               kind: 'legacy',
               timeoutMs: UPLOAD_LEGACY_CANDIDATE_TIMEOUT_MS,
               timeoutMessage: 'Legacy parser timed out before completion.',
-              run: async () => {
+              run: async (_signal) => {
                 const parsed = await parsePdfToJson(plan.id, pdfPath, name);
                 const parseMeta = parsed && typeof parsed === 'object'
                   ? (parsed as {
@@ -1831,20 +1927,130 @@ export async function POST(req: Request) {
         })),
       });
 
-      if (orchestrated.resultKind === 'program' && orchestrated.program) {
-        const persistenceSource = orchestrated.finalParser === 'vision'
-          ? 'markdown-primary'
-          : 'candidate-program';
-        const { weeksCreated, activitiesCreated } = await populatePlanFromV4(plan.id, orchestrated.program, {
+      if (!visionExtractedMd && orchestrated.candidateRuns.some((run) => run.parser === 'vision')) {
+        try {
+          const latestVisionMdArtifact = await prisma.parseArtifact.findFirst({
+            where: {
+              artifactType: 'EXTRACTED_MD',
+              validationOk: true,
+              parseJob: {
+                planId: plan.id,
+                parserVersion: 'vision-v1',
+              },
+            },
+            orderBy: { createdAt: 'desc' },
+            select: { json: true },
+          });
+          const persistedMd = latestVisionMdArtifact?.json && typeof latestVisionMdArtifact.json === 'object'
+            ? (latestVisionMdArtifact.json as { md?: unknown }).md
+            : null;
+          if (typeof persistedMd === 'string' && persistedMd.trim()) {
+            visionExtractedMd = persistedMd;
+          }
+        } catch (artifactLookupError) {
+          console.error('Could not hydrate extracted markdown from parse artifacts', {
+            planId: plan.id,
+            error: artifactLookupError instanceof Error ? artifactLookupError.message : String(artifactLookupError),
+          });
+        }
+      }
+
+      let effectiveResultKind = orchestrated.resultKind;
+      let effectiveProgram = orchestrated.program;
+      let effectiveFinalParser = orchestrated.finalParser;
+      let effectiveUsedFallback = orchestrated.usedFallback;
+
+      const visionTimedOut = orchestrated.candidateRuns.some((run) =>
+        run.parser === 'vision' && run.warning === 'Vision parser timed out before completion.'
+      );
+
+      if (!effectiveProgram && visionTimedOut) {
+        try {
+          const latestVisionProgramArtifact = await prisma.parseArtifact.findFirst({
+            where: {
+              artifactType: 'V4_OUTPUT',
+              validationOk: true,
+              parseJob: {
+                planId: plan.id,
+                parserVersion: 'vision-v1',
+              },
+            },
+            orderBy: { createdAt: 'desc' },
+            select: { json: true },
+          });
+
+          const recoveredProgram = ProgramJsonV1Schema.safeParse(latestVisionProgramArtifact?.json);
+          if (recoveredProgram.success && assessProgramWeekCompleteness(recoveredProgram.data).isComplete) {
+            effectiveProgram = recoveredProgram.data as ProgramJsonV1;
+            effectiveResultKind = 'program';
+            effectiveFinalParser = 'vision';
+            effectiveUsedFallback = false;
+            console.info('[UploadParser] Recovered completed vision program from saved artifact after timeout race', {
+              planId: plan.id,
+              weekCount: recoveredProgram.data.weeks.length,
+            });
+          }
+        } catch (artifactLookupError) {
+          console.error('Could not hydrate markdown program from parse artifacts', {
+            planId: plan.id,
+            error: artifactLookupError instanceof Error ? artifactLookupError.message : String(artifactLookupError),
+          });
+        }
+      }
+
+      const markdownUpload = evaluateMarkdownFirstUpload({
+        hasPdf: true,
+        visionEnabled: FLAGS.PARSER_VISION_EXTRACT,
+        visionAttempted: Boolean(visionSeedRun) || orchestrated.candidateRuns.some((run) => run.parser === 'vision'),
+        extractedMd: visionExtractedMd,
+        resultKind: effectiveResultKind,
+        program: effectiveProgram,
+        finalParser: effectiveFinalParser,
+        selectedBaseParser: orchestrated.selectedBaseParser,
+        usedFallback: effectiveUsedFallback,
+        usedEnrichers: orchestrated.usedEnrichers,
+        candidateRuns: orchestrated.candidateRuns,
+      });
+
+      if (uploadPipelineJobId) {
+        try {
+          await saveParseArtifact({
+            parseJobId: uploadPipelineJobId,
+            artifactType: 'UPLOAD_PIPELINE_STATUS',
+            schemaVersion: 'v1',
+            json: markdownUpload.status,
+            validationOk: markdownUpload.ok,
+          });
+        } catch (artifactError) {
+          console.error('Could not save upload pipeline status artifact', {
+            planId: plan.id,
+            error: artifactError instanceof Error ? artifactError.message : String(artifactError),
+          });
+        }
+      }
+
+      if (!markdownUpload.ok) {
+        if (uploadPipelineJobId) {
+          await updateParseJobStatus(
+            uploadPipelineJobId,
+            'FAILED',
+            `Markdown-first upload rejected: ${markdownUpload.status.failureReason}`,
+          ).catch(() => {});
+        }
+        throw new MarkdownUploadRejectedError(markdownUpload.status);
+      }
+
+      if (effectiveResultKind === 'program' && effectiveProgram) {
+        const { weeksCreated, activitiesCreated } = await populatePlanFromV4(plan.id, effectiveProgram, {
           parserPipeline: {
-            persistenceSource,
-            mdParseStatus: visionSeedRun?.viable ? 'succeeded' : (visionExtractedMd ? 'available' : 'missing'),
-            extractedMdAttempted: FLAGS.PARSER_VISION_EXTRACT,
+            persistenceSource: 'markdown-primary',
+            mdParseStatus: 'succeeded',
+            extractedMdAttempted: true,
           },
         });
         console.info('[UploadParser] Populated plan from orchestrated program parser', {
           planId: plan.id,
-          parser: orchestrated.finalParser,
+          parser: effectiveFinalParser,
           weeksCreated,
           activitiesCreated,
           usedEnrichers: orchestrated.usedEnrichers,
@@ -2043,10 +2249,14 @@ export async function POST(req: Request) {
       if (orchestrated.resultKind === 'none' || (!orchestrated.program && !orchestrated.legacy)) {
         throw new Error('No viable parser output was produced by the upload orchestrator.');
       }
+
+      if (uploadPipelineJobId) {
+        await updateParseJobStatus(uploadPipelineJobId, 'SUCCESS').catch(() => {});
+      }
     } catch (error) {
       const reason = (error as Error).message || 'Unknown parser error';
       parseWarning = reason;
-      console.error('Plan parse failed, creating fallback editable skeleton', { planId: plan.id, reason });
+      console.error('Plan parse failed', { planId: plan.id, reason });
       try {
         await prisma.parseJob.updateMany({
           where: {
@@ -2065,34 +2275,31 @@ export async function POST(req: Request) {
         });
       }
 
-      const existingWeeks = await prisma.planWeek.count({ where: { planId: plan.id } });
-      if (existingWeeks === 0) {
-        const fallbackWeek = await prisma.planWeek.create({
-          data: {
-            planId: plan.id,
-            weekIndex: 1
-          }
-        });
+      await prisma.parseJob.updateMany({
+        where: { planId: plan.id },
+        data: { planId: null },
+      }).catch(() => {});
+      await prisma.trainingPlan.delete({ where: { id: plan.id } }).catch(() => {});
 
-        await prisma.planDay.createMany({
-          data: Array.from({ length: 7 }).map((_, idx) => ({
-            planId: plan.id,
-            weekId: fallbackWeek.id,
-            dayOfWeek: idx + 1,
-            rawText: idx === 0
-              ? 'Parser fallback mode: add/edit activities manually for this plan.'
-              : null
-          }))
-        });
-
-        await prisma.trainingPlan.update({
-          where: { id: plan.id },
-          data: {
-            weekCount: 1,
-            status: 'DRAFT'
-          }
-        });
+      if (error instanceof MarkdownUploadRejectedError) {
+        return NextResponse.json(
+          {
+            error: 'Markdown-first parsing failed for this PDF upload.',
+            details: error.status.failureReason,
+            failureReason: error.status.failureReason,
+            uploadPipeline: error.status,
+          },
+          { status: 422 },
+        );
       }
+
+      return NextResponse.json(
+        {
+          error: 'Upload parsing failed before a markdown-backed plan could be created.',
+          details: reason,
+        },
+        { status: 422 },
+      );
     }
   }
 

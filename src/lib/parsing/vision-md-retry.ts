@@ -5,57 +5,81 @@ import { mergeWeeksFromPasses } from "./v4-pass-strategy.ts";
 
 export type VisionMdChunkParser = (chunk: MdChunk) => Promise<ProgramJsonV1 | null>;
 
+export type VisionMdChunkOptions = {
+  signal?: AbortSignal;
+};
+
+/**
+ * Parse a markdown chunk, then retry only missing weeks individually (single-week chunks).
+ * Replaces the old recursive [3, 2, 1] retry cascade, capping worst-case at
+ * 1 (initial) + N (one per missing week) calls, where N <= chunk size (usually 5).
+ */
 export async function runVisionMdChunkWithRetries(
   chunk: MdChunk,
   parseChunk: VisionMdChunkParser,
-  retryChunkSizes: number[] = [3, 2, 1],
+  options?: VisionMdChunkOptions,
 ): Promise<ProgramJsonV1 | null> {
+  if (options?.signal?.aborted) return null;
+
   const initial = await parseAndAlignChunk(chunk, parseChunk);
+
   if (initial && hasAllExpectedWeeks(initial, chunk.weekNumbers)) {
     return initial;
   }
 
-  for (const retrySize of retryChunkSizes) {
-    if (chunk.weekNumbers.length <= retrySize) continue;
+  // Determine which week numbers are still missing
+  const parsedWeekNumbers = new Set(initial?.weeks.map((w) => w.week_number) ?? []);
+  const missingWeekNumbers = chunk.weekNumbers.filter((n) => !parsedWeekNumbers.has(n));
 
-    const subChunks = chunkMd(chunk.text, retrySize).filter((subChunk) => subChunk.weekNumbers.length > 0);
-    const subPrograms = await Promise.all(
-      subChunks.map((subChunk) => runVisionMdChunkWithRetries(subChunk, parseChunk, retryChunkSizes.filter((size) => size < retrySize))),
+  if (missingWeekNumbers.length === 0) {
+    return initial;
+  }
+
+  // Retry each missing week individually (sequential to keep concurrency bounded)
+  const recoveredPrograms: ProgramJsonV1[] = initial ? [initial] : [];
+
+  for (const weekNumber of missingWeekNumbers) {
+    if (options?.signal?.aborted) break;
+
+    const singleWeekChunks = chunkMd(chunk.text, 1).filter(
+      (c) => c.weekNumbers.includes(weekNumber),
     );
-    const successfulPrograms = subPrograms.filter((program): program is ProgramJsonV1 => program !== null);
-    if (successfulPrograms.length === 0) continue;
+    if (singleWeekChunks.length === 0) continue;
 
-    const mergedWeeks = mergeWeeksFromPasses(successfulPrograms.map((program) => ({ data: program })));
-    const inferredPlanLengthWeeks = mergedWeeks.reduce((max, week) => {
-      return week.week_number > max ? week.week_number : max;
-    }, 0);
-
-    const merged: ProgramJsonV1 = {
-      program: {
-        ...successfulPrograms[0].program,
-        plan_length_weeks: Math.max(
-          successfulPrograms[0].program.plan_length_weeks ?? 0,
-          inferredPlanLengthWeeks,
-        ),
-      },
-      weeks: mergedWeeks,
-      quality_checks: {
-        weeks_detected: mergedWeeks.length,
-        missing_days: [],
-        anomalies: [],
-      },
-    };
-
-    if (hasAllExpectedWeeks(merged, chunk.weekNumbers)) {
-      return merged;
-    }
-
-    if (!initial) {
-      return merged;
+    const singleChunk = singleWeekChunks[0];
+    try {
+      const result = await parseAndAlignChunk(singleChunk, parseChunk);
+      if (result) {
+        recoveredPrograms.push(result);
+      }
+    } catch (err) {
+      const isAbort = err instanceof Error && err.name === "AbortError";
+      if (isAbort) break;
+      console.warn("[VisionMdRetry] single-week retry failed", { weekNumber, error: err instanceof Error ? err.message : String(err) });
     }
   }
 
-  return initial;
+  if (recoveredPrograms.length === 0) return null;
+  if (recoveredPrograms.length === 1) return recoveredPrograms[0];
+
+  const mergedWeeks = mergeWeeksFromPasses(recoveredPrograms.map((p) => ({ data: p })));
+  const inferredPlanLengthWeeks = mergedWeeks.reduce((max, w) => (w.week_number > max ? w.week_number : max), 0);
+
+  return {
+    program: {
+      ...recoveredPrograms[0].program,
+      plan_length_weeks: Math.max(
+        recoveredPrograms[0].program.plan_length_weeks ?? 0,
+        inferredPlanLengthWeeks,
+      ),
+    },
+    weeks: mergedWeeks,
+    quality_checks: {
+      weeks_detected: mergedWeeks.length,
+      missing_days: [],
+      anomalies: [],
+    },
+  };
 }
 
 async function parseAndAlignChunk(

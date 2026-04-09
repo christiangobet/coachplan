@@ -12,6 +12,8 @@ export interface MdChunk {
 }
 
 const SUPPLEMENTARY_HEADERS = ['## Glossary', '## Strength & Conditioning', '## Trainer Notes'];
+const COMPACT_HEADERS = ['## Glossary', '## Trainer Notes'];
+const CHUNK_CONTEXT_MAX_CHARS = 4000;
 
 /**
  * Extract the supplementary sections from the MD (everything before the first ## Week N).
@@ -37,6 +39,46 @@ export function extractSupplementary(md: string): string {
 }
 
 /**
+ * Extract the compact chunk context used for markdown parsing.
+ * Keeps glossary and trainer notes, but omits detailed strength routines
+ * that are expensive to repeat in every week chunk.
+ */
+export function extractChunkContext(md: string): string {
+  const firstWeekIdx = md.search(/^## Week \d+/m);
+  if (firstWeekIdx === -1) return md.trim();
+
+  const before = md.slice(0, firstWeekIdx);
+  const lines = before.split('\n');
+  const kept: string[] = [];
+  let activeSection: string | null = null;
+
+  for (const line of lines) {
+    const matchingHeader = SUPPLEMENTARY_HEADERS.find((header) => line.startsWith(header)) ?? null;
+    if (matchingHeader) {
+      activeSection = COMPACT_HEADERS.includes(matchingHeader) ? matchingHeader : null;
+    }
+    if (activeSection) kept.push(line);
+  }
+
+  const compact = kept.join('\n').trim();
+  if (compact.length <= CHUNK_CONTEXT_MAX_CHARS) {
+    return compact;
+  }
+
+  const glossaryOnlyLines: string[] = [];
+  let inGlossary = false;
+  for (const line of lines) {
+    const matchingHeader = SUPPLEMENTARY_HEADERS.find((header) => line.startsWith(header)) ?? null;
+    if (matchingHeader) {
+      inGlossary = matchingHeader === '## Glossary';
+    }
+    if (inGlossary) glossaryOnlyLines.push(line);
+  }
+
+  return glossaryOnlyLines.join('\n').trim();
+}
+
+/**
  * Split the MD into chunks of `chunkSize` weeks each.
  * Each chunk is prefixed with the supplementary sections.
  *
@@ -44,7 +86,7 @@ export function extractSupplementary(md: string): string {
  * @param chunkSize Maximum number of weeks per chunk (default: 5).
  */
 export function chunkMd(md: string, chunkSize = 5): MdChunk[] {
-  const supplementary = extractSupplementary(md);
+  const supplementary = extractChunkContext(md);
 
   const weekSections: Array<{ weekNumber: number; text: string }> = [];
   const weekRegex = /^(## Week (\d+)(?:(?!\n## Week \d)[\s\S])*)/gm;

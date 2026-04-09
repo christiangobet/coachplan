@@ -17,6 +17,8 @@ import {
 import { enrichLegacyDayDraftsFromProgram } from '@/lib/parsing/legacy-program-enrichment';
 import { withParserPipelineProfile } from '@/lib/plan-document-profile';
 import type { ProgramDocumentProfile } from '@/lib/plan-document-profile';
+import { assessProgramWeekCompleteness } from '@/lib/parsing/program-week-completeness';
+import { ProgramJsonV1Schema } from '@/lib/schemas/program-json-v1';
 
 export async function POST(
   _req: Request,
@@ -67,7 +69,8 @@ export async function POST(
 
   const successfulProgramArtifact = latestVisionJob?.artifacts.find((artifact) => {
     if (artifact.artifactType !== 'V4_OUTPUT' || !artifact.validationOk) return false;
-    return Array.isArray((artifact.json as { weeks?: unknown }).weeks);
+    const parsed = ProgramJsonV1Schema.safeParse(artifact.json);
+    return parsed.success && assessProgramWeekCompleteness(parsed.data).isComplete;
   }) ?? null;
   const successfulExtractedMdArtifact = latestVisionJob?.artifacts.find((artifact) => {
     if (artifact.artifactType !== 'EXTRACTED_MD' || !artifact.validationOk) return false;
@@ -117,7 +120,7 @@ export async function POST(
   if (!data) {
     return NextResponse.json({
       markdownCreated: Boolean(extractedMd),
-      mdParseStatus: extractedMd ? 'available' : 'failed',
+      mdParseStatus: extractedMd ? (parseWarning?.includes('missing weeks') ? 'partial' : 'available') : 'failed',
       persistedFrom: 'existing-plan-fallback',
       usedFallback: true,
       parseWarning: parseWarning ?? null,

@@ -12,6 +12,7 @@ import {
   type WeekRange
 } from './v4-pass-strategy';
 import { isSinglePassIncomplete } from './v4-completeness';
+import { shouldUseChunkedFallback } from './parser-v4-mode';
 
 const PARSER_VERSION = 'v4';
 const TEXT_LIMIT = 40000;
@@ -225,7 +226,9 @@ async function runSinglePass(
   promptText: string,
   weekRange?: string,
   planLengthWeeks?: number,
-  planGuide?: string
+  planGuide?: string,
+  signal?: AbortSignal,
+  maxOutputTokens = 16384,
 ): Promise<ParserV4Result> {
   const input = buildInput(promptText, fullText, weekRange, planLengthWeeks, planGuide);
 
@@ -235,7 +238,8 @@ async function runSinglePass(
       input,
       schema: PROGRAM_JSON_V1_SCHEMA,
       model,
-      maxOutputTokens: 16384
+      maxOutputTokens,
+      signal,
     });
   } catch (err) {
     if (err instanceof JsonParseError) {
@@ -283,6 +287,8 @@ async function runSinglePass(
  *
  * @param promptText  Optional prompt text override. Falls back to V4_MASTER_PROMPT constant.
  */
+export { shouldUseChunkedFallback } from './parser-v4-mode';
+
 export async function runParserV4(
   fullText: string,
   promptText?: string,
@@ -290,6 +296,8 @@ export async function runParserV4(
   planGuide?: string,
   options?: {
     expectedWeekNumbers?: number[];
+    signal?: AbortSignal;
+    maxOutputTokens?: number;
   }
 ): Promise<ParserV4Result> {
   const model = getDefaultAiModel();
@@ -302,8 +310,10 @@ export async function runParserV4(
     truncated: textTruncated
   });
 
+  const maxOutputTokens = options?.maxOutputTokens ?? 16384;
+
   // ── Pass 1: try parsing everything in one shot ──────────────────────────────
-  const single = await runSinglePass(fullText, model, resolvedPrompt, undefined, planLengthWeeks, planGuide);
+  const single = await runSinglePass(fullText, model, resolvedPrompt, undefined, planLengthWeeks, planGuide, options?.signal, maxOutputTokens);
 
   // Check if single pass result is complete — not just whether the JSON was cut off.
   // Before the 40k-truncation removal, `truncated` was always true for long plans,
@@ -318,6 +328,10 @@ export async function runParserV4(
     return single;
   }
 
+  if (!shouldUseChunkedFallback(options)) {
+    return single;
+  }
+
   // ── Multi-pass fallback (strict 5-week chunks + targeted retries) ──────────
   // Single-pass either truncated or returned incomplete weeks; chunking keeps each call bounded.
   const maxWeek = planLengthWeeks ? planLengthWeeks + 2 : 25; // +2 buffer for taper/race
@@ -329,7 +343,7 @@ export async function runParserV4(
   const initialPasses = await Promise.all(
     initialRanges.map(async (range) => ({
       range,
-      result: await runSinglePass(fullText, model, resolvedPrompt, formatWeekRange(range), planLengthWeeks, planGuide)
+      result: await runSinglePass(fullText, model, resolvedPrompt, formatWeekRange(range), planLengthWeeks, planGuide, options?.signal, maxOutputTokens)
     }))
   );
 
@@ -356,7 +370,7 @@ export async function runParserV4(
     const retryPasses = await Promise.all(
       retryRanges.map(async (range) => ({
         range,
-        result: await runSinglePass(fullText, model, resolvedPrompt, formatWeekRange(range), planLengthWeeks, planGuide)
+        result: await runSinglePass(fullText, model, resolvedPrompt, formatWeekRange(range), planLengthWeeks, planGuide, options?.signal, maxOutputTokens)
       }))
     );
 
@@ -382,7 +396,7 @@ export async function runParserV4(
         result: await runSinglePass(
           fullText, model, resolvedPrompt,
           `${weekNum} through ${weekNum}`,
-          planLengthWeeks, planGuide
+          planLengthWeeks, planGuide, options?.signal, maxOutputTokens,
         )
       }))
     );

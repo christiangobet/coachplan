@@ -12,7 +12,7 @@ type IntensityModel = 'pace' | 'hr' | 'rpe' | 'hybrid' | 'unknown';
 type Units = 'km' | 'miles' | 'unknown';
 type LanguageHint = 'en' | 'de' | 'fr' | 'mixed' | 'unknown';
 
-export type MdParseStatus = 'missing' | 'available' | 'succeeded' | 'failed';
+export type MdParseStatus = 'missing' | 'available' | 'partial' | 'succeeded' | 'failed';
 export type ParserPersistenceSource =
   | 'markdown-primary'
   | 'markdown-merged'

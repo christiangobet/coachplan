@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chunkMd, extractSupplementary } from "../src/lib/parsing/md-chunker.ts";
+import { chunkMd, extractSupplementary, extractChunkContext } from "../src/lib/parsing/md-chunker.ts";
 
 const SAMPLE_MD = `## Glossary
 | Code | Full Description |
@@ -81,6 +81,36 @@ test("every chunk includes supplementary sections as prefix", () => {
     assert.ok(chunk.text.startsWith("## Glossary"), `chunk for weeks ${chunk.weekNumbers} missing Glossary prefix`);
     assert.ok(chunk.text.includes("## Trainer Notes"), `chunk for weeks ${chunk.weekNumbers} missing Trainer Notes`);
   }
+});
+
+test("chunkMd uses compact chunk context and omits the heavy strength section prefix", () => {
+  const context = extractChunkContext(SAMPLE_MD);
+  assert.ok(context.includes("## Glossary"));
+  assert.ok(context.includes("## Trainer Notes"));
+  assert.ok(!context.includes("## Strength & Conditioning"));
+
+  const chunks = chunkMd(SAMPLE_MD, 2);
+  for (const chunk of chunks) {
+    assert.ok(chunk.text.startsWith("## Glossary"), `chunk for weeks ${chunk.weekNumbers} missing compact context`);
+    assert.ok(!chunk.text.includes("## Strength & Conditioning"), `chunk for weeks ${chunk.weekNumbers} should omit strength section`);
+  }
+});
+
+test("extractChunkContext falls back to glossary-only when trainer notes are too large", () => {
+  const hugeTrainerNotes = `## Glossary
+| Code | Full Description |
+| EZ | Easy |
+
+## Trainer Notes
+${"Long trainer note.\n".repeat(400)}
+
+## Week 1
+| Day | Session |
+| Mon | Easy run |
+`;
+  const context = extractChunkContext(hugeTrainerNotes);
+  assert.ok(context.includes("## Glossary"));
+  assert.ok(!context.includes("## Trainer Notes"));
 });
 
 test("chunkMd single-week mode produces one chunk per week", () => {

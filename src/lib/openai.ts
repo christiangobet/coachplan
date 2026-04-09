@@ -111,6 +111,7 @@ type JsonSchemaRequest = {
   schema: JsonSchemaFormat;
   model: string;
   maxOutputTokens?: number;
+  signal?: AbortSignal;
 };
 
 function buildResponseFormat(schema: JsonSchemaFormat, style: "openai" | "cloudflare_nested") {
@@ -150,7 +151,8 @@ function stripJsonFences(text: string): string {
 async function requestJsonSchema<T>(
   endpoint: string,
   payload: Record<string, unknown>,
-  extraHeaders?: Record<string, string>
+  extraHeaders?: Record<string, string>,
+  signal?: AbortSignal,
 ) {
   const res = await fetch(endpoint, {
     method: "POST",
@@ -158,7 +160,8 @@ async function requestJsonSchema<T>(
       "Content-Type": "application/json",
       ...(extraHeaders || {})
     },
-    body: JSON.stringify(payload)
+    body: JSON.stringify(payload),
+    signal,
   });
 
   const data = (await res.json()) as WrappedProviderResponse;
@@ -202,7 +205,8 @@ async function openAIJsonSchema<T>(opts: JsonSchemaRequest) {
     },
     {
       Authorization: `Bearer ${apiKey}`
-    }
+    },
+    opts.signal,
   );
 }
 
@@ -228,7 +232,8 @@ async function cloudflareJsonSchema<T>(opts: JsonSchemaRequest) {
       },
       {
         Authorization: `Bearer ${apiToken}`
-      }
+      },
+      opts.signal,
     );
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message.toLowerCase() : "";
@@ -246,7 +251,8 @@ async function cloudflareJsonSchema<T>(opts: JsonSchemaRequest) {
       },
       {
         Authorization: `Bearer ${apiToken}`
-      }
+      },
+      opts.signal,
     );
   }
 }
@@ -278,7 +284,8 @@ async function geminiJsonSchema<T>(opts: JsonSchemaRequest) {
       },
       {
         "x-goog-api-key": apiKey
-      }
+      },
+      opts.signal,
     );
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message.toLowerCase() : "";
@@ -308,7 +315,8 @@ async function geminiJsonSchema<T>(opts: JsonSchemaRequest) {
       },
       {
         "x-goog-api-key": apiKey
-      }
+      },
+      opts.signal,
     );
   }
 }
@@ -318,6 +326,7 @@ export async function openaiJsonSchema<T>(opts: {
   schema: JsonSchemaFormat;
   model?: string;
   maxOutputTokens?: number;
+  signal?: AbortSignal;
 }) {
   const provider = resolveAIProvider();
   const model = opts.model || getDefaultAiModel(provider);

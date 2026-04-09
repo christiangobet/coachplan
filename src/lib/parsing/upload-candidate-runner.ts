@@ -5,7 +5,7 @@ type TimedCandidateOptions = {
   kind: "program" | "legacy";
   timeoutMs: number;
   timeoutMessage: string;
-  run: () => Promise<UploadParserRun>;
+  run: (signal: AbortSignal) => Promise<UploadParserRun>;
   onTimeout?: () => Promise<void> | void;
 };
 
@@ -14,8 +14,10 @@ export async function runTimedUploadCandidate(
 ): Promise<UploadParserRun> {
   const { parser, kind, timeoutMs, timeoutMessage, run, onTimeout } = options;
 
+  const controller = new AbortController();
+
   try {
-    return await withTimeout(run(), timeoutMs, timeoutMessage);
+    return await withTimeout(run(controller.signal), timeoutMs, timeoutMessage, controller);
   } catch (error) {
     const warning = error instanceof Error ? error.message : String(error);
     if (warning === timeoutMessage) {
@@ -55,10 +57,14 @@ async function withTimeout<T>(
   promise: Promise<T>,
   timeoutMs: number,
   timeoutMessage: string,
+  controller: AbortController,
 ): Promise<T> {
   let timeoutId: ReturnType<typeof setTimeout> | null = null;
   const timeoutPromise = new Promise<never>((_, reject) => {
-    timeoutId = setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
+    timeoutId = setTimeout(() => {
+      controller.abort();
+      reject(new Error(timeoutMessage));
+    }, timeoutMs);
   });
 
   try {

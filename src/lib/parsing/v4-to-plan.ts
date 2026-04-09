@@ -12,6 +12,7 @@ import {
   buildActivityDraftFromSession,
   derivePlanDayNotes,
 } from './v4-persistence-mapping';
+import { buildProgramWeekCompletenessWarning } from './program-week-completeness';
 
 const DOW_MAP: Record<string, number> = {
   Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 7
@@ -33,6 +34,11 @@ export async function populatePlanFromV4(
     };
   },
 ): Promise<{ weeksCreated: number; activitiesCreated: number }> {
+  const completenessWarning = buildProgramWeekCompletenessWarning(data);
+  if (completenessWarning) {
+    throw new Error(completenessWarning.message);
+  }
+
   const sourceUnits = data.program?.source_units;
   const sortedWeeks = [...data.weeks].sort((a, b) => a.week_number - b.week_number);
 

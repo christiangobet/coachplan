@@ -4,7 +4,7 @@ import { FLAGS } from "./feature-flags";
 import { extractPdfText } from "./pdf/extract-text";
 import { runParserV4 } from "./parsing/plan-parser-v4";
 import { runParserV5 } from "./parsing/plan-parser-v5";
-import { parsePlanLengthFromGuide, mergeWeeksFromPasses } from "./parsing/v4-pass-strategy";
+import { parsePlanLengthFromGuide } from "./parsing/v4-pass-strategy";
 import {
   createParseJob,
   updateParseJobStatus,
@@ -12,10 +12,9 @@ import {
 } from "./parsing/parse-artifacts";
 import { prisma } from "./prisma";
 import { extractPlanMd } from "./pdf/pdf-to-md";
-import { chunkMd } from "./parsing/md-chunker";
-import { alignProgramWeeksToExpectedChunk } from "./parsing/v4-week-alignment";
-import { runVisionMdChunkWithRetries } from "./parsing/vision-md-retry";
-import { MD_PARSER_PROMPT } from "./prompts/plan-parser/md-parser-prompt";
+import { buildProgramWeekCompletenessWarning } from "./parsing/program-week-completeness";
+import { enrichMarkdownSession } from "./parsing/markdown-session-enricher";
+import { parseMarkdownProgram } from "./parsing/markdown-program-parser";
 import { ProgramJsonV1Schema, type ProgramJsonV1 } from "./schemas/program-json-v1";
 
 const WEEK_SCHEMA = {
@@ -461,30 +460,23 @@ export async function maybeRunParserV5(
   };
 }
 
-/**
- * Vision extraction pipeline: PDF → enriched MD → simplified V4 parser.
- * Always resolves — never throws.
- * Only runs when FLAGS.PARSER_VISION_EXTRACT is true.
- *
- * Flow:
- *   1. extractPlanMd() — Claude vision call, returns enriched plan.md
- *   2. Store plan.md as ParseArtifact type "EXTRACTED_MD"
- *   3. chunkMd() — split at ## Week N headers (5-week chunks)
- *   4. runParserV4() per chunk with MD_PARSER_PROMPT
- *   5. Merge results, return ProgramJsonV1
- */
 export async function maybeRunVisionExtract(
   pdfBuffer: Buffer,
-  planId?: string
+  planId?: string,
+  signal?: AbortSignal,
+  /** Absolute timestamp (Date.now()) by which the entire call must complete. */
+  outerDeadlineMs?: number,
 ): Promise<{ data: ProgramJsonV1 | null; parseWarning: string | null; extractedMd: string | null }> {
   if (!FLAGS.PARSER_VISION_EXTRACT) {
     return { data: null, parseWarning: null, extractedMd: null };
   }
 
   // ── Step 1: PDF → enriched MD ──────────────────────────────────────────────
+  const visionStartMs = Date.now();
   let planMd: string;
   try {
     planMd = await extractPlanMd(pdfBuffer);
+    console.info('[VisionExtract] extractPlanMd complete', { durationMs: Date.now() - visionStartMs, chars: planMd.length });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error('[VisionExtract] extractPlanMd failed', { error: msg });
@@ -511,78 +503,67 @@ export async function maybeRunVisionExtract(
     }
   }
 
-  // ── Step 3: Chunk MD at ## Week N headers ──────────────────────────────────
-  const chunks = chunkMd(planMd, 5);
-  console.info('[VisionExtract] MD chunked', { chunks: chunks.length });
-
-  // ── Step 4: Run V4 parser on each chunk with simplified prompt ─────────────
-  const passResults = await Promise.all(
-    chunks.map(async (chunk) => {
-      try {
-        return {
-          data: await runVisionMdChunkWithRetries(
-            chunk,
-            async (retryChunk) => {
-              const result = await runParserV4(
-                retryChunk.text,
-                MD_PARSER_PROMPT,
-                undefined,
-                undefined,
-                { expectedWeekNumbers: retryChunk.weekNumbers }
-              );
-              return result.data
-                ? alignProgramWeeksToExpectedChunk(result.data, retryChunk.weekNumbers)
-                : null;
-            },
-            [3, 2, 1],
-          )
-        };
-      } catch (err) {
-        console.error('[VisionExtract] runParserV4 chunk failed', {
-          weeks: chunk.weekNumbers,
-          error: err instanceof Error ? err.message : String(err)
-        });
-        return { data: null };
-      }
-    })
+  const { data, parseWarning } = await parseExtractedMarkdownToProgram(
+    planMd,
+    parseJobId,
+    signal,
+    outerDeadlineMs,
   );
 
-  const successfulPasses = passResults.filter(
-    (p): p is { data: ProgramJsonV1 } => p.data !== null
-  );
+  return { data, parseWarning, extractedMd: planMd };
+}
 
-  if (successfulPasses.length === 0) {
-    const warning = 'Vision pipeline: all V4 chunk passes failed';
+export async function parseExtractedMarkdownToProgram(
+  planMd: string,
+  parseJobId?: string,
+  signal?: AbortSignal,
+  outerDeadlineMs?: number,
+): Promise<{ data: ProgramJsonV1 | null; parseWarning: string | null; missingWeekNumbers: number[] }> {
+  if (signal?.aborted) {
+    const warning = 'Vision pipeline aborted';
     if (parseJobId) {
       try {
         await updateParseJobStatus(parseJobId, 'FAILED', warning);
       } catch { /* non-fatal */ }
     }
-    return { data: null, parseWarning: warning, extractedMd: planMd };
+    return { data: null, parseWarning: warning, missingWeekNumbers: [] };
   }
 
-  // ── Step 5: Merge results ──────────────────────────────────────────────────
-  const mergedWeeks = mergeWeeksFromPasses(successfulPasses);
-  const inferredPlanLengthWeeks = mergedWeeks.reduce((max, week) => {
-    return week.week_number > max ? week.week_number : max;
-  }, 0);
-  const merged: ProgramJsonV1 = {
-    program: {
-      ...successfulPasses[0].data.program,
-      plan_length_weeks: Math.max(
-        successfulPasses[0].data.program.plan_length_weeks ?? 0,
-        inferredPlanLengthWeeks,
-      ),
-    },
-    weeks: mergedWeeks,
-    quality_checks: { weeks_detected: mergedWeeks.length, missing_days: [], anomalies: [] }
-  };
+  const parsedProgram = await parseMarkdownProgram({ markdown: planMd });
+  if (outerDeadlineMs != null && Date.now() > outerDeadlineMs) {
+    const warning = 'Vision pipeline deadline exceeded';
+    if (parseJobId) {
+      try {
+        await updateParseJobStatus(parseJobId, 'FAILED', warning);
+      } catch { /* non-fatal */ }
+    }
+    return { data: null, parseWarning: warning, missingWeekNumbers: [] };
+  }
+  const enrichedProgram = await enrichProgramMarkdownSessions(parsedProgram, signal);
+  console.info('[VisionExtract] Markdown parsed', {
+    weeks: enrichedProgram.weeks.length,
+    sessions: enrichedProgram.weeks.reduce((count, week) => count + week.sessions.length, 0),
+  });
 
-  const validation = ProgramJsonV1Schema.safeParse(merged);
-  const data = validation.success ? validation.data : null;
+  const validation = ProgramJsonV1Schema.safeParse(enrichedProgram);
+  const completenessWarning = validation.success
+    ? buildProgramWeekCompletenessWarning(validation.data)
+    : null;
+  const data = validation.success && !completenessWarning ? validation.data : null;
   const parseWarning = !validation.success
     ? `Vision pipeline validation failed: ${validation.error.message}`
-    : null;
+    : completenessWarning?.message ?? null;
+  const missingWeekNumbers = completenessWarning?.missingWeekNumbers ?? [];
+
+  const artifactValidationOk = validation.success && !completenessWarning;
+
+  if (completenessWarning) {
+    console.warn("[VisionExtract] Incomplete merged markdown program", {
+      expectedWeekCount: completenessWarning.expectedWeekCount,
+      observedWeekNumbers: completenessWarning.observedWeekNumbers,
+      missingWeekNumbers: completenessWarning.missingWeekNumbers,
+    });
+  }
 
   if (parseJobId) {
     try {
@@ -590,13 +571,96 @@ export async function maybeRunVisionExtract(
         parseJobId,
         artifactType: 'V4_OUTPUT',
         schemaVersion: 'v1',
-        json: merged,
-        validationOk: validation.success
+        json: validation.success ? validation.data : enrichedProgram,
+        validationOk: artifactValidationOk
       });
-      await updateParseJobStatus(parseJobId, validation.success ? 'SUCCESS' : 'FAILED', parseWarning ?? undefined);
+      await updateParseJobStatus(parseJobId, artifactValidationOk ? 'SUCCESS' : 'FAILED', parseWarning ?? undefined);
     } catch { /* non-fatal */ }
   }
 
-  console.info('[VisionExtract] Complete', { weeks: mergedWeeks.length, validated: validation.success });
-  return { data, parseWarning, extractedMd: planMd };
+  console.info('[VisionExtract] Complete', {
+    weeks: enrichedProgram.weeks.length,
+    validated: validation.success,
+    complete: !completenessWarning,
+    missingWeekNumbers,
+  });
+  return { data, parseWarning, missingWeekNumbers };
+}
+
+async function enrichProgramMarkdownSessions(
+  program: ProgramJsonV1,
+  signal?: AbortSignal,
+): Promise<ProgramJsonV1> {
+  let enrichedSessions = 0;
+  const weeks: ProgramJsonV1["weeks"] = [];
+
+  for (const week of program.weeks) {
+    const sessions: ProgramJsonV1["weeks"][number]["sessions"] = [];
+
+    for (const session of week.sessions) {
+      if (signal?.aborted) {
+        return program;
+      }
+
+      if (!shouldEnrichMarkdownSession(session)) {
+        sessions.push(session);
+        continue;
+      }
+
+      const result = await enrichMarkdownSession({
+        session,
+        context: {
+          planName: program.program.title ?? null,
+          weekNumber: week.week_number,
+          dayLabel: formatDayLabel(session.day_of_week),
+        },
+        signal,
+      });
+
+      sessions.push(result.session);
+      if (result.session !== session) {
+        enrichedSessions += 1;
+      }
+    }
+
+    weeks.push({
+      ...week,
+      sessions,
+    });
+  }
+
+  console.info('[VisionExtract] Session enrichment complete', { enrichedSessions });
+
+  return {
+    ...program,
+    weeks,
+  };
+}
+
+function shouldEnrichMarkdownSession(
+  session: ProgramJsonV1["weeks"][number]["sessions"][number],
+): boolean {
+  if (session.activity_type !== 'Run') return false;
+  if (session.optional) return false;
+  if (session.raw_text.length < 24) return false;
+
+  const text = session.raw_text.toLowerCase();
+  const looksStructured = /\b(wu|cd|tempo|interval|hill|race pace|negative splits|strong finish)\b/i.test(text);
+  const hasShorthandMarkers = /[+;:/]/.test(text) || /\b\d+\s*(?:x|×)\b/.test(text);
+
+  return looksStructured || hasShorthandMarkers;
+}
+
+function formatDayLabel(dayOfWeek: ProgramJsonV1["weeks"][number]["sessions"][number]["day_of_week"]): string {
+  if (!dayOfWeek) return "Unknown day";
+  const labels: Record<NonNullable<typeof dayOfWeek>, string> = {
+    Mon: 'Monday',
+    Tue: 'Tuesday',
+    Wed: 'Wednesday',
+    Thu: 'Thursday',
+    Fri: 'Friday',
+    Sat: 'Saturday',
+    Sun: 'Sunday',
+  };
+  return labels[dayOfWeek];
 }
