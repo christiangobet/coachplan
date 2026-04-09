@@ -137,22 +137,12 @@ export function parseWeekTables(section: MarkdownWeekSection): WeekV1 {
  * activity type (e.g. "WU 1 mile + Tempo 3 miles + CD 1 mile" is one Run
  * session, not three separate activities).
  *
- * Session-flow pre-check: if the text contains structured-session indicators
- * (WU/CD keywords, interval notation like "4 x 90 seconds", or pipe "|"
- * phase separators), the entire text describes ONE session's internal workout
- * structure. In that case we return immediately without splitting, regardless
- * of any top-level '+' signs, because '+' in that context is a workout-phase
- * separator, not an activity separator.
- *
- * Examples that must stay as ONE activity:
- *   "Hills: WU 10 min flat ground, then 4 x 90 seconds up hill | 8 x 1 minute up hill | 4 x 30 seconds flat and fast, CD 10 min"
- *   "⭐ Key session — WU 1 mile + Tempo 3 miles + CD 1 mile"
+ * The heterogeneous-type check handles all single-session cases:
+ *   - "WU 1 mile + Tempo 3 miles + CD 1 mile" → all Run → keep as one session
+ *   - "Hills: WU 10 min | 4 x 90 sec up hill | CD 10 min" → no ' + ' at depth 0 → single part → keep as one
+ *   - "Incline Treadmill: WU...CD...; + Strength 2 (...)" → CrossTraining + Strength → split
  */
 export function splitCompoundSessionText(text: string): string[] {
-  // Pre-check: structured single-session indicators → never split
-  const SESSION_FLOW_RE =
-    /\bWU\b|\bCD\b|\bwarm.?up\b|\bcool.?down\b|\d+\s*x\s*\d|\|/i;
-  if (SESSION_FLOW_RE.test(text)) return [text];
 
   const parts: string[] = [];
   let depth = 0;
