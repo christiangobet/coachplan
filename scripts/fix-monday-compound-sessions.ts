@@ -7,6 +7,7 @@
  */
 import { PrismaClient } from "@prisma/client";
 import { parseMarkdownProgram } from "../src/lib/parsing/markdown-program-parser.ts";
+import { enrichProgramMarkdownSessions } from "../src/lib/ai-plan-parser.ts";
 import { resetPlanSchedule } from "../src/lib/parsing/reset-plan-schedule.ts";
 import { populatePlanFromV4 } from "../src/lib/parsing/v4-to-plan.ts";
 
@@ -60,12 +61,20 @@ async function main() {
       }
     }
 
-    // 4. Reset and repopulate
+    // 4. Enrich sessions with structured steps via AI
+    console.log("\nEnriching sessions with session flow steps...");
+    const enriched = await enrichProgramMarkdownSessions(parsed);
+    const enrichedStepCount = enriched.weeks
+      .flatMap((w) => w.sessions)
+      .reduce((n, s) => n + (s.steps?.length ?? 0), 0);
+    console.log(`Enrichment complete. Total steps extracted: ${enrichedStepCount}`);
+
+    // 5. Reset and repopulate
     console.log("\nResetting plan schedule...");
     await resetPlanSchedule(PLAN_ID);
 
-    console.log("Repopulating from parsed data...");
-    const result = await populatePlanFromV4(PLAN_ID, parsed, {
+    console.log("Repopulating from enriched data...");
+    const result = await populatePlanFromV4(PLAN_ID, enriched, {
       parserPipeline: {
         persistenceSource: "markdown-primary",
         mdParseStatus: "succeeded",

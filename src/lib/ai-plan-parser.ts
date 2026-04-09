@@ -587,7 +587,7 @@ export async function parseExtractedMarkdownToProgram(
   return { data, parseWarning, missingWeekNumbers };
 }
 
-async function enrichProgramMarkdownSessions(
+export async function enrichProgramMarkdownSessions(
   program: ProgramJsonV1,
   signal?: AbortSignal,
 ): Promise<ProgramJsonV1> {
@@ -640,12 +640,15 @@ async function enrichProgramMarkdownSessions(
 function shouldEnrichMarkdownSession(
   session: ProgramJsonV1["weeks"][number]["sessions"][number],
 ): boolean {
-  if (session.activity_type !== 'Run') return false;
+  // Enrich Run, CrossTraining, Walk, and Hike — all can have WU/CD/interval session flows.
+  // Strength sessions are not enriched: their circuit detail comes from the plan guide, not step extraction.
+  const ENRICHABLE_TYPES = new Set(['Run', 'CrossTraining', 'Walk', 'Hike']);
+  if (!ENRICHABLE_TYPES.has(session.activity_type)) return false;
   if (session.optional) return false;
   if (session.raw_text.length < 24) return false;
 
   const text = session.raw_text.toLowerCase();
-  const looksStructured = /\b(wu|cd|tempo|interval|hill|race pace|negative splits|strong finish)\b/i.test(text);
+  const looksStructured = /\b(wu|cd|tempo|interval|hill|treadmill|incline|race pace|negative splits|strong finish)\b/i.test(text);
   const hasShorthandMarkers = /[+;:/]/.test(text) || /\b\d+\s*(?:x|×)\b/.test(text);
 
   return looksStructured || hasShorthandMarkers;
